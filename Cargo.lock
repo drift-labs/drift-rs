@@ -1059,8 +1059,8 @@ dependencies = [
 
 [[package]]
 name = "drift"
-version = "2.53.0"
-source = "git+https://github.com/drift-labs/protocol-v2.git?tag=v2.53.0#376187a77283ae8095027a48e4a75a2511c33b12"
+version = "2.61.0"
+source = "git+https://github.com/drift-labs/protocol-v2.git?tag=v2.61.0#45f3fba38b1479f2f96c535fb6f0645837f006d4"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
@@ -2430,7 +2430,7 @@ dependencies = [
 [[package]]
 name = "phoenix-v1"
 version = "0.2.4"
-source = "git+https://github.com/drift-labs/phoenix-v1?rev=4c65c9#4c65c97cd62493e27425ea2830447c833152bed1"
+source = "git+https://github.com/drift-labs/phoenix-v1?rev=bf6b84#bf6b8447047aa16485d8d976528e43f5d53331d9"
 dependencies = [
  "borsh 0.9.3",
  "bytemuck",
@@ -2540,7 +2540,7 @@ dependencies = [
 [[package]]
 name = "pyth"
 version = "0.1.0"
-source = "git+https://github.com/drift-labs/protocol-v2.git?tag=v2.53.0#376187a77283ae8095027a48e4a75a2511c33b12"
+source = "git+https://github.com/drift-labs/protocol-v2.git?tag=v2.61.0#45f3fba38b1479f2f96c535fb6f0645837f006d4"
 dependencies = [
  "anchor-lang",
  "arrayref",

@@ -244,18 +244,23 @@ pub fn calculate_unrealized_pnl_inner(
         false,
     );
 
-    let (_perp_margin_requirement, weighted_pnl, _worst_case_base_asset_value) =
-        calculate_perp_position_value_and_pnl(
-            position,
-            &perp_market,
-            oracle_map
-                .get_price_data(&perp_market.amm.oracle)
-                .map_err(|_| SdkError::InvalidOracle)?,
-            &strict_quote_price,
-            MarginRequirementType::Maintenance,
-            0,
-        )
-        .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
+    let (
+        _perp_margin_requirement,
+        weighted_pnl,
+        _worst_case_base_asset_value,
+        _open_order_margin_requirement,
+    ) = calculate_perp_position_value_and_pnl(
+        position,
+        &perp_market,
+        oracle_map
+            .get_price_data(&perp_market.amm.oracle)
+            .map_err(|_| SdkError::InvalidOracle)?,
+        &strict_quote_price,
+        MarginRequirementType::Maintenance,
+        0,
+        false,
+    )
+    .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
 
     Ok(weighted_pnl)
 }
