@@ -1,0 +1,42 @@
+[package]
+name = "drift-sdk"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+rpc_tests = []
+test_utils = []
+
+[dependencies]
+anchor-lang = "0.27.0"
+bytemuck = "1.13.0"
+base64 = "0.13"
+drift = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.53.0", features = [
+    "mainnet-beta",
+] }
+env_logger = "0.10.1"
+fnv = "1.0.7"
+futures-util = "0.3.29"
+log = "0.4.20"
+reqwest = "*"
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"
+solana-account-decoder = "1.14"
+solana-client = "1.14"
+solana-sdk = "1.14"
+solana-transaction-status = "1.14"
+thiserror = "1.0.38"
+tokio = { version = "1.34.0", features = ["full"] }
+tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
+regex = "1.10.2"
+
+[dev-dependencies]
+anchor-client = "0.27.0"
+anchor-lang = "*"
+bytes = "*"
+pyth = { path = "../programs/pyth" }
+borsh = "*"
+hex = "*"
+hex-literal = "*"
+serde_json = "*"
+spl-associated-token-account = "1.1.2"
