@@ -1,0 +1,41 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "**.rs"
+      - "**.toml"
+      - "**.lock"
+      - ".github/workflows/*.yml"
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - "**.rs"
+      - "**.toml"
+      - "**.lock"
+      - ".github/workflows/*.yml"
+
+jobs:
+  format-build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v2
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          components: rustfmt
+          default: true
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Build
+        run: cargo check --all
+      - name: Test
+        run: cargo test --all
