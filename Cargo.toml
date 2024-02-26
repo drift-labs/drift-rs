@@ -31,12 +31,12 @@ tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
 regex = "1.10.2"
 
 [dev-dependencies]
-anchor-client = "0.27.0"
-anchor-lang = "*"
-bytes = "*"
-pyth = { path = "../programs/pyth" }
+pyth = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.53.0" }
 borsh = "*"
 hex = "*"
 hex-literal = "*"
 serde_json = "*"
 spl-associated-token-account = "1.1.2"
+anchor-client = "0.27.0"
+anchor-lang = "*"
+bytes = "*"

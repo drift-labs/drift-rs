@@ -560,6 +560,7 @@ mod tests {
         user.perp_positions[0] = PerpPosition {
             market_index: sol_perp_index,
             base_asset_amount: 5 * BASE_PRECISION_I64,
+            quote_asset_amount: -5 * (100 * QUOTE_PRECISION_I64),
             ..Default::default()
         };
         user.spot_positions[0] = SpotPosition {
@@ -642,6 +643,7 @@ mod tests {
         user.perp_positions[0] = PerpPosition {
             market_index: sol_perp_index,
             base_asset_amount: 5 * BASE_PRECISION_I64,
+            quote_asset_amount: -5 * (100 * QUOTE_PRECISION_I64),
             ..Default::default()
         };
         user.spot_positions[0] = SpotPosition {

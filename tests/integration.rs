@@ -31,16 +31,15 @@ async fn get_oracle_prices() {
 
 #[tokio::test]
 async fn place_and_cancel_orders() {
-    let client = DriftClient::new_with_opts(
+    let wallet: Wallet = test_keypair().into();
+    let client = DriftClient::new(
         Context::DevNet,
         RpcAccountProvider::new("https://api.devnet.solana.com"),
-        Keypair::new().into(),
-        ClientOpts::default(),
+        wallet.clone(),
     )
     .await
     .expect("connects");
 
-    let wallet: Wallet = test_keypair().into();
     let sol_perp = client.market_lookup("sol-perp").expect("exists");
     let sol_spot = client.market_lookup("sol").expect("exists");
 
@@ -51,13 +50,13 @@ async fn place_and_cancel_orders() {
         .cancel_all_orders()
         .place_orders(vec![
             NewOrder::limit(sol_perp)
-                .amount(-1 * BASE_PRECISION_I64)
-                .price(200 * PRICE_PRECISION_U64)
+                .amount(1 * BASE_PRECISION_I64)
+                .price(40 * PRICE_PRECISION_U64)
                 .post_only(drift_sdk::types::PostOnlyParam::MustPostOnly)
                 .build(),
             NewOrder::limit(sol_spot)
-                .amount(1 * LAMPORTS_PER_SOL_I64)
-                .price(44 * PRICE_PRECISION_U64)
+                .amount(-1 * LAMPORTS_PER_SOL_I64)
+                .price(400 * PRICE_PRECISION_U64)
                 .post_only(drift_sdk::types::PostOnlyParam::MustPostOnly)
                 .build(),
         ])
