@@ -393,9 +393,8 @@ mod tests {
     use bytes::BytesMut;
     use drift::{
         math::constants::{
-            AMM_RESERVE_PRECISION, LIQUIDATION_FEE_PRECISION, PEG_PRECISION, PRICE_PRECISION,
-            PRICE_PRECISION_I64, SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64,
-            SPOT_CUMULATIVE_INTEREST_PRECISION,
+            AMM_RESERVE_PRECISION, LIQUIDATION_FEE_PRECISION, PEG_PRECISION,
+            SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64, SPOT_CUMULATIVE_INTEREST_PRECISION,
         },
         state::{
             oracle::{HistoricalOracleData, OracleSource},
@@ -560,6 +559,7 @@ mod tests {
         user.perp_positions[0] = PerpPosition {
             market_index: sol_perp_index,
             base_asset_amount: 5 * BASE_PRECISION_I64,
+            quote_asset_amount: -5 * (100 * QUOTE_PRECISION_I64),
             ..Default::default()
         };
         user.spot_positions[0] = SpotPosition {
@@ -642,6 +642,7 @@ mod tests {
         user.perp_positions[0] = PerpPosition {
             market_index: sol_perp_index,
             base_asset_amount: 5 * BASE_PRECISION_I64,
+            quote_asset_amount: -5 * (100 * QUOTE_PRECISION_I64),
             ..Default::default()
         };
         user.spot_positions[0] = SpotPosition {

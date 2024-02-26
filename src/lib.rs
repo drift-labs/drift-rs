@@ -472,7 +472,11 @@ impl<T: AccountProvider> DriftClient<T> {
 
     /// Get the latest recent_block_hash
     pub async fn get_latest_blockhash(&self) -> SdkResult<Hash> {
-        self.backend.client().get_latest_blockhash().await.map_err(SdkError::Rpc)
+        self.backend
+            .client()
+            .get_latest_blockhash()
+            .await
+            .map_err(SdkError::Rpc)
     }
 
     /// Sign and send a tx to the network
@@ -1519,10 +1523,10 @@ mod tests {
         let backend = DriftClientBackend {
             rpc_client: RpcClient::new_mock_with_mocks(DEVNET_ENDPOINT.to_string(), rpc_mocks),
             account_provider: RpcAccountProvider {
-                client: RpcClient::new_mock_with_mocks(
+                client: Arc::new(RpcClient::new_mock_with_mocks(
                     DEVNET_ENDPOINT.to_string(),
                     account_provider_mocks,
-                ),
+                )),
             },
             program_data: ProgramData::uninitialized(),
         };
