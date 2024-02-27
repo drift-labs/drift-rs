@@ -1157,17 +1157,23 @@ impl<'a> TransactionBuilder<'a> {
     /// Add a place and make instruction
     ///
     /// `order` the order to place
-    /// `taker` taker account address
+    /// `taker_info` taker account address and data
     /// `taker_order_id` the id of the taker's order to match with
+    /// `referrer` pukey of the taker's referrer account, if any
     /// `fulfilment_type` type of fill for spot orders, ignored for perp orders
     pub fn place_and_make(
         mut self,
         order: OrderParams,
-        taker: &Pubkey,
+        taker_info: &(Pubkey, User),
         taker_order_id: u32,
+        referrer: Option<Pubkey>,
         fulfillment_type: Option<SpotFulfillmentType>,
     ) -> Self {
-        let accounts = build_accounts(
+        let (taker, taker_account) = taker_info;
+        let is_perp = order.market_type == MarketType::Perp;
+        let perp_writable = [MarketId::perp(order.market_index)];
+        let spot_writable = [MarketId::spot(order.market_index), MarketId::QUOTE_SPOT];
+        let mut accounts = build_accounts(
             self.program_data,
             drift::accounts::PlaceAndMake {
                 state: *state_account(),
@@ -1177,10 +1183,22 @@ impl<'a> TransactionBuilder<'a> {
                 taker: *taker,
                 taker_stats: Wallet::derive_stats_account(taker, &constants::PROGRAM_ID),
             },
-            &[self.account_data.as_ref()],
+            &[self.account_data.as_ref(), &taker_account],
             &[],
-            &[],
+            if is_perp {
+                &perp_writable
+            } else {
+                &spot_writable
+            },
         );
+
+        if let Some(referrer) = referrer {
+            accounts.push(AccountMeta::new(
+                Wallet::derive_stats_account(&referrer, &constants::PROGRAM_ID),
+                false,
+            ));
+            accounts.push(AccountMeta::new(referrer, false));
+        }
 
         let ix = if order.market_type == MarketType::Perp {
             Instruction {
@@ -1210,13 +1228,26 @@ impl<'a> TransactionBuilder<'a> {
     /// Add a place and take instruction
     ///
     /// `order` the order to place
+    /// `maker_info` pubkey of the maker/counterparty to take against and account data
+    /// `referrer` pubkey of the maker's referrer account, if any
     /// `fulfilment_type` type of fill for spot orders, ignored for perp orders
     pub fn place_and_take(
         mut self,
         order: OrderParams,
+        maker_info: Option<(Pubkey, User)>,
+        referrer: Option<Pubkey>,
         fulfillment_type: Option<SpotFulfillmentType>,
     ) -> Self {
-        let accounts = build_accounts(
+        let mut user_accounts = vec![self.account_data.as_ref()];
+        if let Some((ref _maker_pubkey, ref maker)) = maker_info {
+            user_accounts.push(maker);
+        }
+
+        let is_perp = order.market_type == MarketType::Perp;
+        let perp_writable = [MarketId::perp(order.market_index)];
+        let spot_writable = [MarketId::spot(order.market_index), MarketId::QUOTE_SPOT];
+
+        let mut accounts = build_accounts(
             self.program_data,
             drift::accounts::PlaceAndTake {
                 state: *state_account(),
@@ -1224,12 +1255,25 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.sub_account, &constants::PROGRAM_ID),
             },
-            &[self.account_data.as_ref()],
+            user_accounts.as_slice(),
             &[],
-            &[],
+            if is_perp {
+                &perp_writable
+            } else {
+                &spot_writable
+            },
         );
 
-        let ix = if order.market_type == MarketType::Perp {
+        if referrer.is_some_and(|r| !maker_info.is_some_and(|(m, _)| m == r)) {
+            let referrer = referrer.unwrap();
+            accounts.push(AccountMeta::new(
+                Wallet::derive_stats_account(&referrer, &constants::PROGRAM_ID),
+                false,
+            ));
+            accounts.push(AccountMeta::new(referrer, false));
+        }
+
+        let ix = if is_perp {
             Instruction {
                 program_id: constants::PROGRAM_ID,
                 accounts,

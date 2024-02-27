@@ -292,8 +292,8 @@ pub fn calculate_liquidation_price_inner(
 
     let margin_calculation = calculate_margin_requirement_and_total_collateral_and_liability_info(
         user,
-        &perp_market_map,
-        &spot_market_map,
+        perp_market_map,
+        spot_market_map,
         oracle_map,
         MarginContext::standard(MarginRequirementType::Maintenance),
     )
