@@ -42,15 +42,20 @@ impl DLOBClient {
         }
     }
     /// Query L2 Orderbook for given `market`
-    pub async fn get_l2(&self, market: MarketId) -> Result<L2Orderbook, SdkError> {
+    pub async fn get_l2(
+        &self,
+        market: MarketId,
+        depth: Option<u8>,
+    ) -> Result<L2Orderbook, SdkError> {
         let market_type = match market.kind {
             MarketType::Perp => "perp",
             MarketType::Spot => "spot",
         };
+        let depth = depth.map(|d| format!("&depth={d}")).unwrap_or_default();
         let response = self
             .client
             .get(format!(
-                "{}/l2?marketType={}&marketIndex={}",
+                "{}/l2?marketType={}&marketIndex={}{depth}",
                 &self.url, market_type, market.index
             ))
             .send()
@@ -89,7 +94,8 @@ impl DLOBClient {
             async move {
                 loop {
                     let _ = interval.tick().await;
-                    if tx.try_send(client.get_l2(market).await).is_err() {
+                    let book = client.get_l2(market, None).await;
+                    if tx.try_send(book).is_err() {
                         // capacity reached or receiver closed, end the subscription task
                         break;
                     }
