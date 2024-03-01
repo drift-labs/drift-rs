@@ -97,6 +97,7 @@ pub struct NewOrder {
     ioc: bool,
     amount: u64,
     price: u64,
+    user_order_id: u8,
 }
 
 impl NewOrder {
@@ -149,6 +150,11 @@ impl NewOrder {
         self.post_only = value;
         self
     }
+    /// Set user order id
+    pub fn user_order_id(mut self, user_order_id: u8) -> Self {
+        self.user_order_id = user_order_id;
+        self
+    }
     /// Call to complete building the Order
     pub fn build(self) -> OrderParams {
         OrderParams {
@@ -161,6 +167,7 @@ impl NewOrder {
             direction: self.direction,
             immediate_or_cancel: self.ioc,
             post_only: self.post_only,
+            user_order_id: self.user_order_id,
             ..Default::default()
         }
     }

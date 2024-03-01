@@ -1228,8 +1228,11 @@ impl<'a> TransactionBuilder<'a> {
     /// Add a place and take instruction
     ///
     /// `order` the order to place
+    ///
     /// `maker_info` pubkey of the maker/counterparty to take against and account data
+    ///
     /// `referrer` pubkey of the maker's referrer account, if any
+    ///
     /// `fulfilment_type` type of fill for spot orders, ignored for perp orders
     pub fn place_and_take(
         mut self,
