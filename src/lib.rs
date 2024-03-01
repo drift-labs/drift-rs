@@ -462,11 +462,12 @@ impl<T: AccountProvider> DriftClient<T> {
         self.backend.get_account(&user_pubkey).await
     }
 
-    /// Get user stats account of current wallet
+    /// Get a stats account 
     ///
     /// Returns the deserialized account data (`UserStats`)
-    pub async fn get_user_stats(&self) -> SdkResult<UserStats> {
-        self.backend.get_account(&self.wallet.stats).await
+    pub async fn get_user_stats(&self, authority: &Pubkey) -> SdkResult<UserStats> {
+        let user_stats_pubkey = Wallet::derive_stats_account(authority, &constants::PROGRAM_ID);
+        self.backend.get_account(&user_stats_pubkey).await
     }
 
     /// Get the latest recent_block_hash
