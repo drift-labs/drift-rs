@@ -1,6 +1,6 @@
 use drift::math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64};
 use drift_sdk::{
-    types::{ClientOpts, Context, MarketId, NewOrder},
+    types::{Context, MarketId, NewOrder},
     DriftClient, RpcAccountProvider, Wallet,
 };
 use solana_sdk::signature::Keypair;
@@ -13,11 +13,10 @@ fn test_keypair() -> Keypair {
 
 #[tokio::test]
 async fn get_oracle_prices() {
-    let client = DriftClient::new_with_opts(
+    let client = DriftClient::new(
         Context::DevNet,
         RpcAccountProvider::new("https://api.devnet.solana.com"),
         Keypair::new().into(),
-        ClientOpts::default(),
     )
     .await
     .expect("connects");
@@ -64,6 +63,35 @@ async fn place_and_cancel_orders() {
         .build();
 
     dbg!(tx.clone());
+
+    let result = client.sign_and_send(tx).await;
+    dbg!(&result);
+    assert!(result.is_ok());
+}
+
+#[tokio::test]
+async fn place_and_take() {
+    let wallet: Wallet = test_keypair().into();
+    let client = DriftClient::new(
+        Context::DevNet,
+        RpcAccountProvider::new("https://api.devnet.solana.com"),
+        wallet.clone(),
+    )
+    .await
+    .expect("connects");
+
+    let sol_perp = client.market_lookup("sol-perp").expect("exists");
+
+    let order = NewOrder::limit(sol_perp)
+        .amount(1 * BASE_PRECISION_I64)
+        .price(40 * PRICE_PRECISION_U64)
+        .build();
+    let tx = client
+        .init_tx(&wallet.default_sub_account(), false)
+        .await
+        .unwrap()
+        .place_and_take(order, None, None, None)
+        .build();
 
     let result = client.sign_and_send(tx).await;
     dbg!(&result);
