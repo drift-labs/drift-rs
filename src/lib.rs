@@ -1256,7 +1256,7 @@ impl<'a> TransactionBuilder<'a> {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
-                user_stats: Wallet::derive_stats_account(&self.sub_account, &constants::PROGRAM_ID),
+                user_stats: Wallet::derive_stats_account(&self.authority, &constants::PROGRAM_ID),
             },
             user_accounts.as_slice(),
             &[],

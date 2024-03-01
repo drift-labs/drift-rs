@@ -1,6 +1,6 @@
 use drift::math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64};
 use drift_sdk::{
-    types::{ClientOpts, Context, MarketId, NewOrder},
+    types::{Context, MarketId, NewOrder},
     DriftClient, RpcAccountProvider, Wallet,
 };
 use solana_sdk::signature::Keypair;
@@ -13,11 +13,10 @@ fn test_keypair() -> Keypair {
 
 #[tokio::test]
 async fn get_oracle_prices() {
-    let client = DriftClient::new_with_opts(
+    let client = DriftClient::new(
         Context::DevNet,
         RpcAccountProvider::new("https://api.devnet.solana.com"),
         Keypair::new().into(),
-        ClientOpts::default(),
     )
     .await
     .expect("connects");
