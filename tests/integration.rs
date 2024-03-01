@@ -85,7 +85,6 @@ async fn place_and_take() {
     let order = NewOrder::limit(sol_perp)
         .amount(1 * BASE_PRECISION_I64)
         .price(40 * PRICE_PRECISION_U64)
-        .post_only(drift_sdk::types::PostOnlyParam::MustPostOnly)
         .build();
     let tx = client
         .init_tx(&wallet.default_sub_account(), false)

@@ -462,12 +462,11 @@ impl<T: AccountProvider> DriftClient<T> {
         self.backend.get_account(&user_pubkey).await
     }
 
-    /// Get your user stats account
+    /// Get user stats account of current wallet
     ///
-    /// Returns the deserialize account data (`UserStats`)
-    pub async fn get_user_stats(&self, authority: &Pubkey) -> SdkResult<UserStats> {
-        let user_stats_pubkey = Wallet::derive_stats_account(authority, &constants::PROGRAM_ID);
-        self.backend.get_account(&user_stats_pubkey).await
+    /// Returns the deserialized account data (`UserStats`)
+    pub async fn get_user_stats(&self) -> SdkResult<UserStats> {
+        self.backend.get_account(&self.wallet.stats).await
     }
 
     /// Get the latest recent_block_hash
@@ -1179,7 +1178,7 @@ impl<'a> TransactionBuilder<'a> {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
-                user_stats: Wallet::derive_stats_account(&self.sub_account, &constants::PROGRAM_ID),
+                user_stats: Wallet::derive_stats_account(&self.authority, &constants::PROGRAM_ID),
                 taker: *taker,
                 taker_stats: Wallet::derive_stats_account(taker, &constants::PROGRAM_ID),
             },
@@ -1335,7 +1334,7 @@ impl<'a> TransactionBuilder<'a> {
 ///
 /// `markets_readable` IDs of markets to include as readable
 ///
-/// `markets_writable` ` IDs of markets to include as writable (takes priority over readable)
+/// `markets_writable` IDs of markets to include as writable (takes priority over readable)
 ///
 /// # Panics
 ///  if the user has positions in an unknown market (i.e unsupported by the SDK)

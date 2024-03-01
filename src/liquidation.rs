@@ -505,38 +505,24 @@ mod tests {
         }
     }
 
+    #[ignore]
     #[tokio::test]
     async fn calculate_liq_price() {
         let wallet = Wallet::read_only(
-            // DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2
-            Pubkey::from_str("BTEa9vssaG61XAhzPTtNtvVFpB1EARNwaTffTqA43YzT").unwrap(),
+            Pubkey::from_str("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2").unwrap(),
         );
         let client = DriftClient::new(
-            crate::Context::MainNet,
-            RpcAccountProvider::new(
-                "https://mainnet.helius-rpc.com/?api-key=53ee88d4-b06c-428c-b3d8-9023261653af",
-            ),
-            // crate::Context::DevNet,
-            // RpcAccountProvider::new("https://api.devnet.solana.com"),
+            crate::Context::DevNet,
+            RpcAccountProvider::new("https://api.devnet.solana.com"),
             wallet.clone(),
         )
         .await
         .unwrap();
         let user = client
-            .get_user_account(&wallet.sub_account(2))
-            .await
-            .unwrap();
-
-        dbg!(
-            calculate_liquidation_price_and_unrealized_pnl(&client, &user, 24)
-                .await
-                .unwrap()
-        );
-
-        let user = client
             .get_user_account(&wallet.sub_account(0))
             .await
             .unwrap();
+
         dbg!(
             calculate_liquidation_price_and_unrealized_pnl(&client, &user, 24)
                 .await
