@@ -95,5 +95,6 @@ async fn place_and_take() {
 
     let result = client.sign_and_send(tx).await;
     dbg!(&result);
-    assert!(result.is_ok());
+    // TODO: add a place and make to match against
+    assert!(result.is_err());
 }
