@@ -462,7 +462,7 @@ impl<T: AccountProvider> DriftClient<T> {
         self.backend.get_account(&user_pubkey).await
     }
 
-    /// Get a stats account 
+    /// Get a stats account
     ///
     /// Returns the deserialized account data (`UserStats`)
     pub async fn get_user_stats(&self, authority: &Pubkey) -> SdkResult<UserStats> {
