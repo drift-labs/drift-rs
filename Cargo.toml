@@ -2,6 +2,16 @@
 name = "drift-sdk"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.76.0"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/drift-labs/drift-rs"
+homepage = "https://drift.trade"
+description = """
+Rust SDK for interacting with the Drift V2 Protocol on the Solana blockchain.
+"""
+categories = ["solana", "trading", "defi", "dex"]
+keywords = ["solana", "trading", "defi", "dex", "drift", "protocol", "sdk"]
 
 [features]
 rpc_tests = []
