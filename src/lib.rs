@@ -67,9 +67,11 @@ pub mod websocket_program_account_subscriber;
 
 // subscribers
 pub mod auction_subscriber;
-pub mod dlob;
+pub mod dlob_client;
 pub mod event_subscriber;
 pub mod slot_subscriber;
+
+pub mod dlob;
 
 use types::*;
 
