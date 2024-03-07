@@ -1,4 +1,4 @@
-use crate::dlob::dlob_node::{DLOBNode, SortDirection, get_order_signature};
+use crate::dlob::dlob_node::{DLOBNode, SortDirection, NodeType, get_order_signature, Node};
 
 use dashmap::DashMap;
 use drift::state::user::Order;
@@ -6,29 +6,34 @@ use std::sync::Arc;
 
 struct NodeList {
     length: usize,
-    head: Option<*mut dyn DLOBNode>,
-    node_map: Arc<DashMap<String, *mut dyn DLOBNode>>,
+    head: Option<*mut Node>,
+    node_type: NodeType,
+    node_map: Arc<DashMap<String, *mut Node>>,
     sort_direction: SortDirection,
 }
 
 impl NodeList {
-    fn new(sort_direction: SortDirection) -> Self {
+    fn new(node_type: NodeType, sort_direction: SortDirection) -> Self {
         Self {
             length: 0,
             head: None,
+            node_type,
             node_map: Arc::new(DashMap::new()),
             sort_direction,
         }
     }
 
-    fn insert(&mut self, node: Box<dyn DLOBNode>) {
+    fn insert(&mut self, node: Node) {
+        if node.get_node_type() != self.node_type {
+            panic!("{}", format!("Node type mismatch. Expected: {:?}, Got: {:?}", self.node_type, node.get_node_type()));
+        }
         let sort_value = node.get_sort_value(node.get_order()).unwrap();
         let order_signature = get_order_signature(node.get_order().order_id, node.get_user_account());
 
-        let node_ptr = Box::into_raw(node);
+        let node_ptr = Box::into_raw(Box::new(node));
 
         if let Some(mut current_ptr) = self.head {
-            let mut prev_ptr: Option<*mut dyn DLOBNode> = None;
+            let mut prev_ptr: Option<*mut Node> = None;
 
             loop {
                 let current_sort_value = unsafe { (&*current_ptr).get_sort_value((&*current_ptr).get_order()).unwrap() };
@@ -72,7 +77,7 @@ impl NodeList {
                 match unsafe { (&*current_ptr).get_next_ptr() } {
                     Some(next_ptr) => {
                         prev_ptr = Some(current_ptr);
-                        current_ptr = next_ptr as *mut dyn DLOBNode;
+                        current_ptr = next_ptr as *mut Node;
                     }
                     None => {
                         unsafe {
@@ -132,7 +137,7 @@ impl NodeList {
         self.node_map.contains_key(order_signature)
     }
 
-    fn get_node(&self, order_signature: &str) -> Option<&dyn DLOBNode> {
+    fn get_node(&self, order_signature: &str) -> Option<&Node> {
         self.node_map.get(order_signature).map(|node_ptr| unsafe { &**node_ptr })
     }
 
@@ -155,11 +160,11 @@ impl NodeList {
 }
 
 struct NodeListIter {
-    current: Option<*mut dyn DLOBNode>,
+    current: Option<*mut Node>,
 }
 
 impl Iterator for NodeListIter {
-    type Item = &'static dyn DLOBNode;
+    type Item = &'static Node;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.current {
@@ -181,29 +186,32 @@ impl Iterator for NodeListIter {
 mod tests {
     use super::*;
     use crate::dlob::dlob_node::{NodeType, create_node};
+    use typed_arena::Arena;
 
     #[test]
     fn test_insert_and_iter() {
-        let mut node_list = NodeList::new(SortDirection::Ascending);
+        let arena = Arena::new();
+
+        let mut node_list = NodeList::new(NodeType::TakingLimit, SortDirection::Ascending);
 
         let mut order1 = Order::default();
         order1.order_id = 1;
         order1.slot = 100;
-        let node1 = create_node(NodeType::TakingLimit, order1, Default::default());
+        let node1 = create_node(&arena, NodeType::TakingLimit, order1, Default::default());
 
         let mut order2 = Order::default();
         order2.order_id = 2;
         order2.slot = 200;
-        let node2 = create_node(NodeType::TakingLimit, order2, Default::default());
+        let node2 = create_node(&arena, NodeType::TakingLimit, order2, Default::default());
 
         let mut order3 = Order::default();
         order3.order_id = 3;
         order3.slot = 150;
-        let node3 = create_node(NodeType::TakingLimit, order3, Default::default());
+        let node3 = create_node(&arena, NodeType::TakingLimit, order3, Default::default());
 
-        node_list.insert(node1);
-        node_list.insert(node2);
-        node_list.insert(node3);
+        node_list.insert(*node1);
+        node_list.insert(*node2);
+        node_list.insert(*node3);
 
         assert_eq!(node_list.len(), 3);
 
@@ -216,26 +224,28 @@ mod tests {
 
     #[test]
     fn test_remove_head() {
-        let mut node_list = NodeList::new(SortDirection::Ascending);
+        let arena = Arena::new();
+
+        let mut node_list = NodeList::new(NodeType::TakingLimit, SortDirection::Ascending);
 
         let mut order1 = Order::default();
         order1.order_id = 1;
         order1.slot = 100;
-        let node1 = create_node(NodeType::TakingLimit, order1.clone(), Default::default());
+        let node1 = create_node(&arena, NodeType::TakingLimit, order1.clone(), Default::default());
 
         let mut order2 = Order::default();
         order2.order_id = 2;
         order2.slot = 200;
-        let node2 = create_node(NodeType::TakingLimit, order2.clone(), Default::default());
+        let node2 = create_node(&arena, NodeType::TakingLimit, order2.clone(), Default::default());
 
         let mut order3 = Order::default();
         order3.order_id = 3;
         order3.slot = 150;
-        let node3 = create_node(NodeType::TakingLimit, order3.clone(), Default::default());
+        let node3 = create_node(&arena, NodeType::TakingLimit, order3.clone(), Default::default());
 
-        node_list.insert(node1);
-        node_list.insert(node2);
-        node_list.insert(node3);
+        node_list.insert(*node1);
+        node_list.insert(*node2);
+        node_list.insert(*node3);
 
         assert_eq!(node_list.len(), 3);
 
@@ -252,26 +262,28 @@ mod tests {
 
     #[test]
     fn test_remove_middle() {
-        let mut node_list = NodeList::new(SortDirection::Ascending);
+        let arena = Arena::new();
+
+        let mut node_list = NodeList::new(NodeType::TakingLimit, SortDirection::Ascending);
 
         let mut order1 = Order::default();
         order1.order_id = 1;
         order1.slot = 100;
-        let node1 = create_node(NodeType::TakingLimit, order1.clone(), Default::default());
+        let node1 = create_node(&arena, NodeType::TakingLimit, order1.clone(), Default::default());
 
         let mut order2 = Order::default();
         order2.order_id = 2;
         order2.slot = 200;
-        let node2 = create_node(NodeType::TakingLimit, order2.clone(), Default::default());
+        let node2 = create_node(&arena, NodeType::TakingLimit, order2.clone(), Default::default());
 
         let mut order3 = Order::default();
         order3.order_id = 3;
         order3.slot = 150;
-        let node3 = create_node(NodeType::TakingLimit, order3.clone(), Default::default());
+        let node3 = create_node(&arena, NodeType::TakingLimit, order3.clone(), Default::default());
 
-        node_list.insert(node1);
-        node_list.insert(node2);
-        node_list.insert(node3);
+        node_list.insert(*node1);
+        node_list.insert(*node2);
+        node_list.insert(*node3);
 
         assert_eq!(node_list.len(), 3);
 
@@ -288,26 +300,28 @@ mod tests {
 
     #[test]
     fn test_remove_end() {
-        let mut node_list = NodeList::new(SortDirection::Ascending);
+        let arena = Arena::new();
+
+        let mut node_list = NodeList::new(NodeType::TakingLimit, SortDirection::Ascending);
 
         let mut order1 = Order::default();
         order1.order_id = 1;
         order1.slot = 100;
-        let node1 = create_node(NodeType::TakingLimit, order1.clone(), Default::default());
+        let node1 = create_node(&arena, NodeType::TakingLimit, order1.clone(), Default::default());
 
         let mut order2 = Order::default();
         order2.order_id = 2;
         order2.slot = 200;
-        let node2 = create_node(NodeType::TakingLimit, order2.clone(), Default::default());
+        let node2 = create_node(&arena, NodeType::TakingLimit, order2.clone(), Default::default());
 
         let mut order3 = Order::default();
         order3.order_id = 3;
         order3.slot = 150;
-        let node3 = create_node(NodeType::TakingLimit, order3.clone(), Default::default());
+        let node3 = create_node(&arena, NodeType::TakingLimit, order3.clone(), Default::default());
 
-        node_list.insert(node1);
-        node_list.insert(node2);
-        node_list.insert(node3);
+        node_list.insert(*node1);
+        node_list.insert(*node2);
+        node_list.insert(*node3);
 
         assert_eq!(node_list.len(), 3);
 
@@ -324,14 +338,16 @@ mod tests {
 
     #[test]
     fn test_update_order() {
-        let mut node_list = NodeList::new(SortDirection::Ascending);
+        let arena = Arena::new();
+
+        let mut node_list = NodeList::new(NodeType::TakingLimit, SortDirection::Ascending);
 
         let mut order1 = Order::default();
         order1.order_id = 1;
         order1.slot = 100;
-        let node1 = create_node(NodeType::TakingLimit, order1.clone(), Default::default());
+        let node1 = create_node(&arena, NodeType::TakingLimit, order1.clone(), Default::default());
 
-        node_list.insert(node1);
+        node_list.insert(*node1);
 
         let mut updated_order = Order::default();
         updated_order.order_id = 1;
@@ -345,73 +361,63 @@ mod tests {
 
     #[test]
     fn test_contains() {
-        let mut node_list = NodeList::new(SortDirection::Ascending);
+        let arena = Arena::new();
+        let mut node_list = NodeList::new(NodeType::TakingLimit, SortDirection::Ascending);
 
         let mut order1 = Order::default();
         order1.order_id = 1;
         order1.slot = 100;
-        let node1 = create_node(NodeType::TakingLimit, order1.clone(), Default::default());
+        let node1 = create_node(&arena, NodeType::TakingLimit, order1.clone(), Default::default());
 
-        node_list.insert(node1);
+        node_list.insert(*node1);
 
         assert!(node_list.contains(&get_order_signature(order1.order_id, Default::default())));
         assert!(!node_list.contains(&get_order_signature(2, Default::default())));
     }
 
     #[test]
+    #[should_panic]
     fn test_different_node_types() {
-        let mut node_list = NodeList::new(SortDirection::Ascending);
+        let arena = Arena::new();
+        let mut node_list = NodeList::new(NodeType::TakingLimit, SortDirection::Ascending);
 
         let mut order1 = Order::default();
         order1.order_id = 1;
         order1.slot = 100;
-        let node1 = create_node(NodeType::TakingLimit, order1.clone(), Default::default());
+        let node1 = create_node(&arena, NodeType::TakingLimit, order1.clone(), Default::default());
 
         let mut order2 = Order::default();
         order2.order_id = 2;
         order2.price = 200;
-        let node2 = create_node(NodeType::RestingLimit, order2.clone(), Default::default());
+        let node2 = create_node(&arena, NodeType::RestingLimit, order2.clone(), Default::default());
 
-        let mut order3 = Order::default();
-        order3.order_id = 3;
-        order3.oracle_price_offset = 150;
-        let node3 = create_node(NodeType::FloatingLimit, order3.clone(), Default::default());
-
-        node_list.insert(node1);
-        node_list.insert(node2);
-        node_list.insert(node3);
-
-        assert_eq!(node_list.len(), 3);
-
-        let mut iter = node_list.iter();
-        assert_eq!(iter.next().unwrap().get_order().order_id, 1);
-        assert_eq!(iter.next().unwrap().get_order().order_id, 2);
-        assert_eq!(iter.next().unwrap().get_order().order_id, 3);
-        assert!(iter.next().is_none());
+        node_list.insert(*node1);
+        node_list.insert(*node2);
     }
 
     #[test]
     fn test_sort_direction() {
-        let mut node_list_asc = NodeList::new(SortDirection::Ascending);
-        let mut node_list_desc = NodeList::new(SortDirection::Descending);
+        let arena = Arena::new();
+        let mut node_list_asc = NodeList::new(NodeType::TakingLimit, SortDirection::Ascending);
+        let mut node_list_desc = NodeList::new(NodeType::TakingLimit, SortDirection::Descending);
 
         let mut order1 = Order::default();
         order1.order_id = 1;
         order1.slot = 100;
-        let node1 = create_node(NodeType::TakingLimit, order1.clone(), Default::default());
-        let node1_clone = create_node(NodeType::TakingLimit, order1.clone(), Default::default());
+        let node1 = create_node(&arena, NodeType::TakingLimit, order1.clone(), Default::default());
+        let node1_clone = create_node(&arena, NodeType::TakingLimit, order1.clone(), Default::default());
 
         let mut order2 = Order::default();
         order2.order_id = 2;
         order2.slot = 200;
-        let node2 = create_node(NodeType::TakingLimit, order2.clone(), Default::default());
-        let node2_clone = create_node(NodeType::TakingLimit, order2.clone(), Default::default());
+        let node2 = create_node(&arena, NodeType::TakingLimit, order2.clone(), Default::default());
+        let node2_clone = create_node(&arena, NodeType::TakingLimit, order2.clone(), Default::default());
 
-        node_list_asc.insert(node1_clone);
-        node_list_asc.insert(node2_clone);
+        node_list_asc.insert(*node1_clone);
+        node_list_asc.insert(*node2_clone);
 
-        node_list_desc.insert(node1);
-        node_list_desc.insert(node2);
+        node_list_desc.insert(*node1);
+        node_list_desc.insert(*node2);
 
         let mut iter_asc = node_list_asc.iter();
         assert_eq!(iter_asc.next().unwrap().get_order().order_id, 1);
