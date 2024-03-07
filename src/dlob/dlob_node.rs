@@ -16,94 +16,89 @@ pub enum SortDirection {
     Descending
 }
 
-macro_rules! impl_order_node {
-    ($($node_type:ident),+) => {
-        $(
-            #[derive(Clone)]
-            pub struct $node_type {
-                pub order: Order,
-                pub user_account: Pubkey,
-                pub next: Option<*mut $node_type>,
-                pub previous: Option<*mut $node_type>,
-            }
+#[derive(Clone, Copy)]
+pub struct OrderNode {
+    pub order: Order,
+    pub user_account: Pubkey,
+    pub node_type: NodeType,
+    pub next: Option<*mut OrderNode>,
+    pub previous: Option<*mut OrderNode>,
+}
 
-            impl $node_type {
-                fn new(order: Order, user_account: Pubkey) -> Self {
-                    Self {
-                        order,
-                        user_account,
-                        next: None,
-                        previous: None,
-                    }
-                }
-            }
+impl OrderNode {
+    pub fn new(node_type: NodeType, order: Order, user_account: Pubkey) -> Self {
+        Self {
+            order,
+            user_account,
+            node_type,
+            next: None,
+            previous: None,
+        }
+    }
+}
 
-            impl DLOBNode for $node_type {
-                fn get_sort_value(&self, order: &Order) -> Option<i128> {
-                    match stringify!($node_type) {
-                        "TakingLimitOrderNode" => Some(order.slot.into()),
-                        "RestingLimitOrderNode" => Some(order.price.into()),
-                        "FloatingLimitOrderNode" => Some(order.oracle_price_offset.into()),
-                        "MarketOrderNode" => Some(order.slot.into()),
-                        "TriggerOrderNode" => Some(order.trigger_price.into()),
-                        _ => panic!("Unknown node type"),
-                    }
-                }
+impl DLOBNode for OrderNode {
+    fn get_price(&self, oracle_price_data: OraclePriceData, slot: u64, tick_size: u64) -> Option<u64> {
+        match self.order.get_limit_price(Some(oracle_price_data.price), None, slot, tick_size) {
+            Ok(price) => price,
+            Err(_) => None,
+        }
+    }
 
-                fn get_price(&self, oracle_price_data: OraclePriceData, slot: u64, tick_size: u64) -> Option<u64> {
-                    match self.order.get_limit_price(Some(oracle_price_data.price), None, slot, tick_size) {
-                        Ok(price) => price,
-                        Err(_) => None,
-                    }
-                }
+    fn is_vamm_node(&self) -> bool {
+        false
+    }
 
-                fn is_base_filled(&self) -> bool {
-                    self.order.base_asset_amount_filled == self.order.base_asset_amount
-                }
+    fn is_base_filled(&self) -> bool {
+        self.order.base_asset_amount_filled == self.order.base_asset_amount
+    }
 
-                fn is_vamm_node(&self) -> bool {
-                    false
-                }
+    fn get_sort_value(&self, order: &Order) -> Option<i128> {
+        match self.node_type {
+            NodeType::TakingLimit => Some(order.slot.into()),
+            NodeType::RestingLimit => Some(order.price.into()),
+            NodeType::FloatingLimit => Some(order.oracle_price_offset.into()),
+            NodeType::Market => Some(order.slot.into()),
+            NodeType::Trigger => Some(order.trigger_price.into()),
+        }
+    }
 
-                fn get_order(&self) -> &Order {
-                    &self.order
-                }
+    fn get_order(&self) -> &Order {
+        &self.order
+    }
 
-                fn get_next_ptr(&self) -> Option<*mut dyn DLOBNode> {
-                    self.next.map(|ptr| ptr as *mut dyn DLOBNode)
-                }
+    fn get_next_ptr(&self) -> Option<*mut dyn DLOBNode> {
+        self.next.map(|ptr| ptr as *mut dyn DLOBNode)
+    }
 
-                fn get_prev_ptr(&self) -> Option<*mut dyn DLOBNode> {
-                    self.previous.map(|ptr| ptr as *mut dyn DLOBNode)
-                }
+    fn get_prev_ptr(&self) -> Option<*mut dyn DLOBNode> {
+        self.previous.map(|ptr| ptr as *mut dyn DLOBNode)
+    }
 
-                fn get_user_account(&self) -> Pubkey {
-                    self.user_account
-                }
+    fn get_user_account(&self) -> Pubkey {
+        self.user_account
+    }
 
-                fn set_next(&mut self, next: Option<*mut dyn DLOBNode>) {
-                    self.next = next.map(|ptr| ptr as *mut $node_type);
-                }
+    fn set_next(&mut self, next: Option<*mut dyn DLOBNode>) {
+        self.next = next.map(|ptr| ptr as *mut OrderNode);
+    }
 
-                fn set_prev(&mut self, prev: Option<*mut dyn DLOBNode>) {
-                    self.previous = prev.map(|ptr| ptr as *mut $node_type);
-                }
+    fn set_prev(&mut self, prev: Option<*mut dyn DLOBNode>) {
+        self.previous = prev.map(|ptr| ptr as *mut OrderNode);
+    }
 
-                fn set_order(&mut self, order: Order) {
-                    self.order = order;
-                }
-            }
-        )+
-    };
+    fn set_order(&mut self, order: Order) {
+        self.order = order;
+    }
 }
 
 pub fn create_node(node_type: NodeType, order: Order, user_account: Pubkey) -> Box<dyn DLOBNode> {
     match node_type {
-        NodeType::TakingLimit => Box::new(TakingLimitOrderNode::new(order, user_account)),
-        NodeType::RestingLimit => Box::new(RestingLimitOrderNode::new(order, user_account)),
-        NodeType::FloatingLimit => Box::new(FloatingLimitOrderNode::new(order, user_account)),
-        NodeType::Market => Box::new(MarketOrderNode::new(order, user_account)),
-        NodeType::Trigger => Box::new(TriggerOrderNode::new(order, user_account)),
+        NodeType::TakingLimit => Box::new(OrderNode::new(NodeType::TakingLimit, order, user_account)),
+        NodeType::RestingLimit => Box::new(OrderNode::new(NodeType::RestingLimit, order, user_account)),
+        NodeType::FloatingLimit => Box::new(OrderNode::new(NodeType::FloatingLimit, order, user_account)),
+        NodeType::Market => Box::new(OrderNode::new(NodeType::Market, order, user_account)),
+        NodeType::Trigger => Box::new(OrderNode::new(NodeType::Trigger, order, user_account)),
     }
 }
 
@@ -203,8 +198,6 @@ impl VAMMNode {
         }
     }
 }
-
-impl_order_node!(TakingLimitOrderNode, RestingLimitOrderNode, FloatingLimitOrderNode, MarketOrderNode, TriggerOrderNode);
 
 #[cfg(test)]
 mod test {
