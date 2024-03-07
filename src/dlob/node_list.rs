@@ -3,6 +3,7 @@ use crate::dlob::dlob_node::{DLOBNode, SortDirection, NodeType, get_order_signat
 use dashmap::DashMap;
 use drift::state::user::Order;
 use std::sync::Arc;
+use std::panic::Location;
 
 #[derive(Clone)]
 pub(crate) struct NodeList {
@@ -24,9 +25,11 @@ impl NodeList {
         }
     }
 
+    #[track_caller]
     pub(crate) fn insert(&mut self, node: Node) {
         if node.get_node_type() != self.node_type {
-            panic!("{}", format!("Node type mismatch. Expected: {:?}, Got: {:?}", self.node_type, node.get_node_type()));
+            let caller = Location::caller();
+            panic!("{}", format!("Node type mismatch. Expected: {:?}, Got: {:?} at {:?}", self.node_type, node.get_node_type(), caller));
         }
         let sort_value = node.get_sort_value(node.get_order()).unwrap();
         let order_signature = get_order_signature(node.get_order().order_id, node.get_user_account());
@@ -98,13 +101,13 @@ impl NodeList {
         }
     }
 
-    pub(crate) fn remove(&mut self, order_signature: &str) -> Option<Box<dyn DLOBNode>> {
+    pub(crate) fn remove(&mut self, order_signature: &str) -> Option< Node> {
         if let Some(node_ptr) = self.node_map.remove(order_signature) {
             let node_ptr = node_ptr.1;
             unsafe {
                 let prev_ptr = (&*node_ptr).get_prev_ptr();
                 let next_ptr = (&*node_ptr).get_next_ptr();
-
+    
                 if let Some(prev_ptr) = prev_ptr {
                     (&mut *prev_ptr).set_next(next_ptr);
                 } else {
@@ -114,9 +117,11 @@ impl NodeList {
                 if let Some(next_ptr) = next_ptr {
                     (&mut *next_ptr).set_prev(prev_ptr);
                 }
+    
+                let node = *Box::from_raw(node_ptr as *mut Node);
+                self.length -= 1;
+                Some(node)
             }
-            self.length -= 1;
-            Some(unsafe { Box::from_raw(node_ptr) })
         } else {
             None
         }

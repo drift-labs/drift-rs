@@ -121,6 +121,14 @@ impl DLOBNode for Node {
             Node::VAMMNode(_) => NodeType::VAMM,
         }
     }
+
+    fn set_node_type(&mut self, node_type: NodeType) {
+        match self {
+            Node::OrderNode(order_node) => order_node.set_node_type(node_type),
+            Node::VAMMNode(_) => unimplemented!(),
+        }
+    
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -202,6 +210,10 @@ impl DLOBNode for OrderNode {
     fn get_node_type(&self) -> NodeType {
         self.node_type
     }
+
+    fn set_node_type(&mut self, node_type: NodeType) {
+        self.node_type = node_type;
+    }
 }
 
 pub(crate) fn create_node<'a>(arena: &'a Arena<Node>, node_type: NodeType, order: Order, user_account: Pubkey) -> &'a mut Node {
@@ -236,6 +248,8 @@ pub(crate) trait DLOBNode {
     fn set_order(&mut self, order: Order);
 
     fn get_node_type(&self) -> NodeType;
+
+    fn set_node_type(&mut self, node_type: NodeType);
 }
 
 pub(crate) trait DLOBNodePointerExt {
@@ -301,6 +315,10 @@ impl DLOBNode for VAMMNode {
 
     fn get_node_type(&self) -> NodeType {
         NodeType::VAMM
+    }
+
+    fn set_node_type(&mut self, node_type: NodeType) {
+        unimplemented!()
     }
 }
 
