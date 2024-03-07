@@ -28,6 +28,10 @@ use crate::Wallet;
 
 pub type SdkResult<T> = Result<T, SdkError>;
 
+pub fn is_one_of_variant<T: PartialEq>(value: &T, variants: &[T]) -> bool {
+    variants.iter().any(|variant| value == variant)
+}
+
 /// Drift program context
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]

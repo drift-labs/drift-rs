@@ -4,16 +4,17 @@ use dashmap::DashMap;
 use drift::state::user::Order;
 use std::sync::Arc;
 
-struct NodeList {
+#[derive(Clone)]
+pub(crate) struct NodeList {
     length: usize,
     head: Option<*mut Node>,
-    node_type: NodeType,
+    pub(crate) node_type: NodeType,
     node_map: Arc<DashMap<String, *mut Node>>,
     sort_direction: SortDirection,
 }
 
 impl NodeList {
-    fn new(node_type: NodeType, sort_direction: SortDirection) -> Self {
+    pub(crate) fn new(node_type: NodeType, sort_direction: SortDirection) -> Self {
         Self {
             length: 0,
             head: None,
@@ -23,7 +24,7 @@ impl NodeList {
         }
     }
 
-    fn insert(&mut self, node: Node) {
+    pub(crate) fn insert(&mut self, node: Node) {
         if node.get_node_type() != self.node_type {
             panic!("{}", format!("Node type mismatch. Expected: {:?}, Got: {:?}", self.node_type, node.get_node_type()));
         }
@@ -97,7 +98,7 @@ impl NodeList {
         }
     }
 
-    fn remove(&mut self, order_signature: &str) -> Option<Box<dyn DLOBNode>> {
+    pub(crate) fn remove(&mut self, order_signature: &str) -> Option<Box<dyn DLOBNode>> {
         if let Some(node_ptr) = self.node_map.remove(order_signature) {
             let node_ptr = node_ptr.1;
             unsafe {
@@ -121,7 +122,7 @@ impl NodeList {
         }
     }
 
-    fn update_order(&mut self, order_signature: &str, new_order: Order) -> bool {
+    pub(crate) fn update_order(&mut self, order_signature: &str, new_order: Order) -> bool {
         if let Some(node_ptr) = self.node_map.get(order_signature) {
             let node_ptr = *node_ptr;
             unsafe {
@@ -133,25 +134,25 @@ impl NodeList {
         }
     }
 
-    pub fn contains(&self, order_signature: &str) -> bool {
+    pub(crate) fn contains(&self, order_signature: &str) -> bool {
         self.node_map.contains_key(order_signature)
     }
 
-    fn get_node(&self, order_signature: &str) -> Option<&Node> {
+    pub(crate) fn get_node(&self, order_signature: &str) -> Option<&Node> {
         self.node_map.get(order_signature).map(|node_ptr| unsafe { &**node_ptr })
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.length
     }
 
-    pub fn iter(&self) -> NodeListIter {
+    pub(crate) fn iter(&self) -> NodeListIter {
         NodeListIter {
             current: self.head,
         }
     }
 
-    pub fn print(&self) {
+    pub(crate) fn print(&self) {
         let mut iter = self.iter();
         while let Some(node) = iter.next() {
             println!("{:?}", node.get_order());
@@ -159,7 +160,7 @@ impl NodeList {
     }
 }
 
-struct NodeListIter {
+pub(crate) struct NodeListIter {
     current: Option<*mut Node>,
 }
 

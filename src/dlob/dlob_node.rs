@@ -3,7 +3,7 @@ use solana_sdk::pubkey::Pubkey;
 use typed_arena::Arena;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum NodeType {
+pub(crate) enum NodeType {
     TakingLimit,
     RestingLimit,
     FloatingLimit,
@@ -12,14 +12,14 @@ pub enum NodeType {
     VAMM,
 }
 
-#[derive(PartialEq, Eq)]
-pub enum SortDirection {
+#[derive(PartialEq, Eq, Clone)]
+pub(crate) enum SortDirection {
     Ascending,
     Descending
 }
 
 #[derive(Copy, Clone)]
-pub enum Node {
+pub(crate) enum Node {
     OrderNode(OrderNode),
     VAMMNode(VAMMNode),
 }
@@ -124,7 +124,7 @@ impl DLOBNode for Node {
 }
 
 #[derive(Clone, Copy)]
-pub struct OrderNode {
+pub(crate) struct OrderNode {
     pub order: Order,
     pub user_account: Pubkey,
     pub node_type: NodeType,
@@ -204,15 +204,15 @@ impl DLOBNode for OrderNode {
     }
 }
 
-pub fn create_node<'a>(arena: &'a Arena<Node>, node_type: NodeType, order: Order, user_account: Pubkey) -> &'a mut Node {
+pub(crate) fn create_node<'a>(arena: &'a Arena<Node>, node_type: NodeType, order: Order, user_account: Pubkey) -> &'a mut Node {
     arena.alloc(Node::new(node_type, order, user_account))
 }
 
-pub fn get_order_signature(order_id: u32, user_account: Pubkey) -> String {
+pub(crate) fn get_order_signature(order_id: u32, user_account: Pubkey) -> String {
     format!("{}-{}", order_id, user_account.to_string())
 }
 
-pub trait DLOBNode {
+pub(crate) trait DLOBNode {
     fn get_price(&self, oracle_price_data: OraclePriceData, slot: u64, tick_size: u64) -> Option<u64>;
 
     fn is_vamm_node(&self) -> bool;
@@ -238,7 +238,7 @@ pub trait DLOBNode {
     fn get_node_type(&self) -> NodeType;
 }
 
-pub trait DLOBNodePointerExt {
+pub(crate) trait DLOBNodePointerExt {
     unsafe fn to_node(&self) -> Option<&Node>;
 }
 
@@ -249,7 +249,7 @@ impl DLOBNodePointerExt for Option<*mut Node> {
 }
 
 #[derive(Copy, Clone)]
-pub struct VAMMNode {
+pub(crate) struct VAMMNode {
     pub order: Order,
     pub price: u64,
 }
