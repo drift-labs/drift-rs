@@ -5,7 +5,7 @@ use drift::state::user::{Order, OrderTriggerCondition, OrderType};
 use crate::dlob::node_list::NodeList;
 use crate::dlob::dlob_node::{SortDirection, NodeType};
 use crate::is_one_of_variant;
-
+use crate::math::order::is_resting_limit_order;
 
 pub(crate) const SUPPORTED_ORDER_TYPES: [OrderType; 5] = [OrderType::Market, OrderType::TriggerMarket, OrderType::Limit, OrderType::TriggerLimit, OrderType::Oracle];
 
@@ -81,6 +81,19 @@ impl Market {
         }
     }
 
+    pub(crate) fn clear(&mut self) {
+        self.resting_limit_orders.resting_limit_bids.clear();
+        self.resting_limit_orders.resting_limit_asks.clear();
+        self.floating_limit_orders.floating_limit_bids.clear();
+        self.floating_limit_orders.floating_limit_asks.clear();
+        self.taking_limit_orders.taking_limit_bids.clear();
+        self.taking_limit_orders.taking_limit_asks.clear();
+        self.market_orders.market_bids.clear();
+        self.market_orders.market_asks.clear();
+        self.trigger_orders.trigger_above.clear();
+        self.trigger_orders.trigger_below.clear();
+    }
+
     pub(crate) fn get_list_for_order(&mut self, order: &Order, slot: u64) -> Option<&mut NodeList> {
         let is_inactive_trigger_order = order.must_be_triggered() && !order.triggered();
 
@@ -91,7 +104,7 @@ impl Market {
         } else if order.oracle_price_offset != 0 {
             NodeType::FloatingLimit
         } else {
-            if order.is_resting_limit_order(slot).unwrap() {
+            if is_resting_limit_order(order, slot) {
                 NodeType::RestingLimit
             } else {
                 NodeType::TakingLimit
@@ -142,6 +155,40 @@ impl Market {
         }
     }
 
+    pub fn iter(&self) -> MarketIter {
+        MarketIter {
+            market: self,
+            index: 0,
+        }
+    }
+}
+
+pub(crate) struct MarketIter<'a> {
+    market: &'a Market,
+    index: usize,
+}
+
+impl<'a> Iterator for MarketIter<'a> {
+    type Item = &'a NodeList;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let node_list = match self.index {
+            0 => Some(&self.market.resting_limit_orders.resting_limit_bids),
+            1 => Some(&self.market.resting_limit_orders.resting_limit_asks),
+            2 => Some(&self.market.floating_limit_orders.floating_limit_bids),
+            3 => Some(&self.market.floating_limit_orders.floating_limit_asks),
+            4 => Some(&self.market.taking_limit_orders.taking_limit_bids),
+            5 => Some(&self.market.taking_limit_orders.taking_limit_asks),
+            6 => Some(&self.market.market_orders.market_bids),
+            7 => Some(&self.market.market_orders.market_asks),
+            8 => Some(&self.market.trigger_orders.trigger_above),
+            9 => Some(&self.market.trigger_orders.trigger_below),
+            _ => None,
+        };
+
+        self.index += 1;
+        node_list
+    }
 }
 
 pub(crate) type Exchange = DashMap<String, DashMap<u16, Market>>;

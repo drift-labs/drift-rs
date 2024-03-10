@@ -72,6 +72,7 @@ pub mod event_subscriber;
 pub mod slot_subscriber;
 
 pub mod dlob;
+pub mod math;
 
 use types::*;
 

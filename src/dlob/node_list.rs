@@ -2,6 +2,7 @@ use crate::dlob::dlob_node::{DLOBNode, SortDirection, NodeType, get_order_signat
 
 use dashmap::DashMap;
 use drift::state::user::Order;
+use typed_arena::Arena;
 use std::sync::Arc;
 use std::panic::Location;
 
@@ -9,7 +10,9 @@ use std::panic::Location;
 pub(crate) struct NodeList {
     length: usize,
     head: Option<*mut Node>,
+    tail: Option<*mut Node>,
     pub(crate) node_type: NodeType,
+    pub arena: Arc<Arena<Node>>,
     node_map: Arc<DashMap<String, *mut Node>>,
     sort_direction: SortDirection,
 }
@@ -19,7 +22,9 @@ impl NodeList {
         Self {
             length: 0,
             head: None,
+            tail: None,
             node_type,
+            arena: Arc::new(Arena::new()),
             node_map: Arc::new(DashMap::new()),
             sort_direction,
         }
@@ -87,6 +92,7 @@ impl NodeList {
                         unsafe {
                             (&mut *current_ptr).set_next(Some(node_ptr));
                             (&mut *node_ptr).set_prev(Some(current_ptr));
+                            self.tail = Some(node_ptr);
                         }
                         self.node_map.insert(order_signature, node_ptr);
                         self.length += 1;
@@ -96,6 +102,7 @@ impl NodeList {
             }
         } else {
             self.head = Some(node_ptr);
+            self.tail = Some(node_ptr);
             self.node_map.insert(order_signature, node_ptr);
             self.length += 1;
         }
@@ -151,10 +158,10 @@ impl NodeList {
         self.length
     }
 
-    pub(crate) fn iter(&self) -> NodeListIter {
-        NodeListIter {
+    pub(crate) fn iter(&self) -> Box<dyn Iterator<Item = Node>> {
+        Box::new(NodeListIter {
             current: self.head,
-        }
+        })
     }
 
     pub(crate) fn print(&self) {
@@ -163,26 +170,78 @@ impl NodeList {
             println!("{:?}", node.get_order());
         }
     }
+
+    pub(crate) fn clear(&mut self) {
+        let mut iter = self.iter();
+        while let Some(node) = iter.next() {
+            let order_signature = get_order_signature(node.get_order().order_id, node.get_user_account());
+            self.node_map.remove(&order_signature);
+            self.length -= 1;
+        }
+    }
+
+    pub(crate) fn head(&self) -> Option<Node> {
+        match self.head {
+            Some(head_ptr) => {
+                unsafe {
+                    let head = (*head_ptr).clone();
+                    Some(head)
+                }
+            }
+            None => None,
+        }
+    }
+
+    pub(crate) fn tail(&self) -> Option<Node> {
+        match self.tail {
+            Some(tail_ptr) => {
+                unsafe {
+                    let tail = (*tail_ptr).clone();
+                    Some(tail)
+                }
+            }
+            None => None,
+        }
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.length == 0
+    }
 }
 
-pub(crate) struct NodeListIter {
-    current: Option<*mut Node>,
+pub struct NodeListIter {
+    pub(crate) current: Option<*mut Node>,
 }
 
 impl Iterator for NodeListIter {
-    type Item = &'static Node;
+    type Item = Node;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.current {
             Some(node_ptr) => {
                 unsafe {
-                    let node_ref = &*node_ptr;
-                    self.current = node_ref.get_next_ptr();
-                    Some(node_ref)
+                    let node = (*node_ptr).clone();
+                    self.current = (*node_ptr).get_next_ptr();
+                    Some(node)
                 }
             }
             None => None,
         }
+    }
+
+    fn collect<B: std::iter::FromIterator<Self::Item>>(mut self) -> B {
+        let mut collected = vec![];
+        let mut exhausted = false;
+
+        while !exhausted {
+            if let Some(node) = self.next() {
+                collected.push(node);
+            } else {
+                exhausted = true;
+            }
+        }
+
+        collected.into_iter().collect()
     }
 }
 
@@ -220,7 +279,9 @@ mod tests {
         node_list.insert(*node3);
 
         assert_eq!(node_list.len(), 3);
-
+        assert_eq!(node_list.head().unwrap().get_order().order_id, 1);
+        assert_eq!(node_list.tail().unwrap().get_order().order_id, 2);
+        
         let mut iter = node_list.iter();
         assert_eq!(iter.next().unwrap().get_order().order_id, 1);
         assert_eq!(iter.next().unwrap().get_order().order_id, 3);
@@ -228,6 +289,37 @@ mod tests {
         assert!(iter.next().is_none());
     }
 
+    #[test]
+    fn test_clear() {
+        let arena = Arena::new();
+
+        let mut node_list = NodeList::new(NodeType::TakingLimit, SortDirection::Ascending);
+
+        let mut order1 = Order::default();
+        order1.order_id = 1;
+        order1.slot = 100;
+        let node1 = create_node(&arena, NodeType::TakingLimit, order1, Default::default());
+
+        let mut order2 = Order::default();
+        order2.order_id = 2;
+        order2.slot = 200;
+        let node2 = create_node(&arena, NodeType::TakingLimit, order2, Default::default());
+
+        let mut order3 = Order::default();
+        order3.order_id = 3;
+        order3.slot = 150;
+        let node3 = create_node(&arena, NodeType::TakingLimit, order3, Default::default());
+
+        node_list.insert(*node1);
+        node_list.insert(*node2);
+        node_list.insert(*node3);
+
+        assert_eq!(node_list.len(), 3);
+
+        node_list.clear();
+        assert_eq!(node_list.len(), 0);
+    }
+    
     #[test]
     fn test_remove_head() {
         let arena = Arena::new();

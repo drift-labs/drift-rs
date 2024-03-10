@@ -1197,6 +1197,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "log",
+ "num-bigint 0.4.4",
  "pyth",
  "regex",
  "reqwest",

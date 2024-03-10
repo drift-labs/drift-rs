@@ -1,9 +1,11 @@
 use drift::state::{oracle::OraclePriceData, user::Order};
+use num_bigint::BigInt;
 use solana_sdk::pubkey::Pubkey;
 use typed_arena::Arena;
+use crate::{math::order::get_limit_price, SdkResult};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub(crate) enum NodeType {
+pub enum NodeType {
     TakingLimit,
     RestingLimit,
     FloatingLimit,
@@ -18,8 +20,8 @@ pub(crate) enum SortDirection {
     Descending
 }
 
-#[derive(Copy, Clone)]
-pub(crate) enum Node {
+#[derive(Copy, Clone, Debug)]
+pub enum Node {
     OrderNode(OrderNode),
     VAMMNode(VAMMNode),
 }
@@ -38,10 +40,10 @@ impl Node {
 }
 
 impl DLOBNode for Node {
-    fn get_price(&self, oracle_price_data: OraclePriceData, slot: u64, tick_size: u64) -> Option<u64> {
+    fn get_price(&self, oracle_price_data: OraclePriceData, slot: u64) -> BigInt {
         match self {
-            Node::OrderNode(order_node) => order_node.get_price(oracle_price_data, slot, tick_size),
-            Node::VAMMNode(vamm_node) => vamm_node.get_price(oracle_price_data, slot, tick_size),
+            Node::OrderNode(order_node) => order_node.get_price(oracle_price_data, slot),
+            Node::VAMMNode(vamm_node) => vamm_node.get_price(oracle_price_data, slot),
         }
     }
 
@@ -131,8 +133,8 @@ impl DLOBNode for Node {
     }
 }
 
-#[derive(Clone, Copy)]
-pub(crate) struct OrderNode {
+#[derive(Clone, Copy, Debug)]
+pub struct OrderNode {
     pub order: Order,
     pub user_account: Pubkey,
     pub node_type: NodeType,
@@ -153,11 +155,8 @@ impl OrderNode {
 }
 
 impl DLOBNode for OrderNode {
-    fn get_price(&self, oracle_price_data: OraclePriceData, slot: u64, tick_size: u64) -> Option<u64> {
-        match self.order.get_limit_price(Some(oracle_price_data.price), None, slot, tick_size) {
-            Ok(price) => price,
-            Err(_) => None,
-        }
+    fn get_price(&self, oracle_price_data: OraclePriceData, slot: u64) -> BigInt  {
+        get_limit_price(&self.order, &oracle_price_data, slot, None)
     }
 
     fn is_vamm_node(&self) -> bool {
@@ -225,7 +224,7 @@ pub(crate) fn get_order_signature(order_id: u32, user_account: Pubkey) -> String
 }
 
 pub(crate) trait DLOBNode {
-    fn get_price(&self, oracle_price_data: OraclePriceData, slot: u64, tick_size: u64) -> Option<u64>;
+    fn get_price(&self, oracle_price_data: OraclePriceData, slot: u64) -> BigInt;
 
     fn is_vamm_node(&self) -> bool;
 
@@ -262,15 +261,15 @@ impl DLOBNodePointerExt for Option<*mut Node> {
     }
 }
 
-#[derive(Copy, Clone)]
-pub(crate) struct VAMMNode {
+#[derive(Copy, Clone, Debug)]
+pub struct VAMMNode {
     pub order: Order,
     pub price: u64,
 }
 
 impl DLOBNode for VAMMNode {
-    fn get_price(&self, _oracle_price_data: OraclePriceData, _slot: u64, _tick_size: u64) -> Option<u64> {
-        Some(self.price)
+    fn get_price(&self, _oracle_price_data: OraclePriceData, _slot: u64) -> BigInt {
+        BigInt::from(self.price)
     }
 
     fn is_vamm_node(&self) -> bool {
@@ -317,7 +316,7 @@ impl DLOBNode for VAMMNode {
         NodeType::VAMM
     }
 
-    fn set_node_type(&mut self, node_type: NodeType) {
+    fn set_node_type(&mut self, _node_type: NodeType) {
         unimplemented!()
     }
 }
