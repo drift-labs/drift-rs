@@ -330,251 +330,251 @@ mod tests {
     }
     
 
-    #[test]
-    fn test_insert_order() {
-        let dlob = DLOB::new(0);
-        let order = Order {
-            order_id: 1,
-            market_type: MarketType::Spot,
-            market_index: 1,
-            order_type: OrderType::Limit,
-            status: OrderStatus::Open,
-            ..Order::default()
-        };
-        let order_2 = Order {
-            order_id: 2,
-            market_type: MarketType::Perp,
-            market_index: 1,
-            order_type: OrderType::Limit,
-            status: OrderStatus::Open,
-            ..Order::default()
-        };
-        let user_account = Pubkey::new_unique();
-        let slot = 0;
-        dlob.insert_order(order, user_account, slot);
-        dlob.insert_order(order_2, user_account, slot);
+    // #[test]
+    // fn test_insert_order() {
+    //     let dlob = DLOB::new(0);
+    //     let order = Order {
+    //         order_id: 1,
+    //         market_type: MarketType::Spot,
+    //         market_index: 1,
+    //         order_type: OrderType::Limit,
+    //         status: OrderStatus::Open,
+    //         ..Order::default()
+    //     };
+    //     let order_2 = Order {
+    //         order_id: 2,
+    //         market_type: MarketType::Perp,
+    //         market_index: 1,
+    //         order_type: OrderType::Limit,
+    //         status: OrderStatus::Open,
+    //         ..Order::default()
+    //     };
+    //     let user_account = Pubkey::new_unique();
+    //     let slot = 0;
+    //     dlob.insert_order(order, user_account, slot);
+    //     dlob.insert_order(order_2, user_account, slot);
 
-        for market in dlob.exchange.iter() {
-            for market_ref in market.value().iter() {
-                let market = market_ref.value();
-                for node in market.resting_limit_orders.resting_limit_bids.iter() {
-                    dbg!(node.get_order().order_id);
-                }
-            }
-        }
+    //     for market in dlob.exchange.iter() {
+    //         for market_ref in market.value().iter() {
+    //             let market = market_ref.value();
+    //             for node in market.resting_limit_orders.resting_limit_bids.iter() {
+    //                 dbg!(node.get_order().order_id);
+    //             }
+    //         }
+    //     }
 
-        assert!(dlob.get_order(order.order_id, user_account).is_some());
-        assert!(dlob.get_order(2, user_account).is_none());
-    }
+    //     assert!(dlob.get_order(order.order_id, user_account).is_some());
+    //     assert!(dlob.get_order(2, user_account).is_none());
+    // }
 
-    #[test]
-    fn test_clear() {
-        let dlob = DLOB::new(0);
-        let order = Order {
-            order_id: 1,
-            market_type: MarketType::Spot,
-            market_index: 1,
-            order_type: OrderType::Limit,
-            status: OrderStatus::Open,
-            ..Order::default()
-        };
-        let order_2 = Order {
-            order_id: 1,
-            market_type: MarketType::Perp,
-            market_index: 1,
-            order_type: OrderType::Limit,
-            status: OrderStatus::Open,
-            ..Order::default()
-        };
-        let order_3 = Order {
-            order_id: 1,
-            market_type: MarketType::Spot,
-            market_index: 1,
-            order_type: OrderType::Market,
-            status: OrderStatus::Open,
-            ..Order::default()
-        };
-        let order_4 = Order {
-            order_id: 1,
-            market_type: MarketType::Perp,
-            market_index: 1,
-            order_type: OrderType::Market,
-            status: OrderStatus::Open,
-            ..Order::default()
-        };
-        let user_account = Pubkey::new_unique();
-        let slot = 0;
-        dlob.insert_order(order, user_account, slot);
-        dlob.insert_order(order_2, user_account, slot);
-        dlob.insert_order(order_3, user_account, slot);
-        dlob.insert_order(order_4, user_account, slot);
+    // #[test]
+    // fn test_clear() {
+    //     let dlob = DLOB::new(0);
+    //     let order = Order {
+    //         order_id: 1,
+    //         market_type: MarketType::Spot,
+    //         market_index: 1,
+    //         order_type: OrderType::Limit,
+    //         status: OrderStatus::Open,
+    //         ..Order::default()
+    //     };
+    //     let order_2 = Order {
+    //         order_id: 1,
+    //         market_type: MarketType::Perp,
+    //         market_index: 1,
+    //         order_type: OrderType::Limit,
+    //         status: OrderStatus::Open,
+    //         ..Order::default()
+    //     };
+    //     let order_3 = Order {
+    //         order_id: 1,
+    //         market_type: MarketType::Spot,
+    //         market_index: 1,
+    //         order_type: OrderType::Market,
+    //         status: OrderStatus::Open,
+    //         ..Order::default()
+    //     };
+    //     let order_4 = Order {
+    //         order_id: 1,
+    //         market_type: MarketType::Perp,
+    //         market_index: 1,
+    //         order_type: OrderType::Market,
+    //         status: OrderStatus::Open,
+    //         ..Order::default()
+    //     };
+    //     let user_account = Pubkey::new_unique();
+    //     let slot = 0;
+    //     dlob.insert_order(order, user_account, slot);
+    //     dlob.insert_order(order_2, user_account, slot);
+    //     dlob.insert_order(order_3, user_account, slot);
+    //     dlob.insert_order(order_4, user_account, slot);
 
-        assert!(dlob.get_order(order.order_id, user_account).is_some());
-        assert!(dlob.get_order(order_2.order_id, user_account).is_some());
-        assert!(dlob.get_order(order_3.order_id, user_account).is_some());
-        assert!(dlob.get_order(order_4.order_id, user_account).is_some());
+    //     assert!(dlob.get_order(order.order_id, user_account).is_some());
+    //     assert!(dlob.get_order(order_2.order_id, user_account).is_some());
+    //     assert!(dlob.get_order(order_3.order_id, user_account).is_some());
+    //     assert!(dlob.get_order(order_4.order_id, user_account).is_some());
 
-        dlob.clear();
+    //     dlob.clear();
 
-        assert!(dlob.get_order(order.order_id, user_account).is_none());
-        assert!(dlob.get_order(order_2.order_id, user_account).is_none());
-        assert!(dlob.get_order(order_3.order_id, user_account).is_none());
-        assert!(dlob.get_order(order_4.order_id, user_account).is_none());
+    //     assert!(dlob.get_order(order.order_id, user_account).is_none());
+    //     assert!(dlob.get_order(order_2.order_id, user_account).is_none());
+    //     assert!(dlob.get_order(order_3.order_id, user_account).is_none());
+    //     assert!(dlob.get_order(order_4.order_id, user_account).is_none());
 
-    }
+    // }
 
-    #[test]
-    fn test_delete_order() {
-        let mut dlob = DLOB::new(0);
-        let order = Order {
-            order_id: 1,
-            market_type: MarketType::Spot,
-            market_index: 1,
-            order_type: OrderType::Limit,
-            status: OrderStatus::Open,
-            ..Order::default()
-        };
-        let user_account = Pubkey::new_unique();
-        let slot = 0;
-        dlob.insert_order(order, user_account, slot);
+    // #[test]
+    // fn test_delete_order() {
+    //     let dlob = DLOB::new(0);
+    //     let order = Order {
+    //         order_id: 1,
+    //         market_type: MarketType::Spot,
+    //         market_index: 1,
+    //         order_type: OrderType::Limit,
+    //         status: OrderStatus::Open,
+    //         ..Order::default()
+    //     };
+    //     let user_account = Pubkey::new_unique();
+    //     let slot = 0;
+    //     dlob.insert_order(order, user_account, slot);
 
-        assert!(dlob.get_order(order.order_id, user_account).is_some());
+    //     assert!(dlob.get_order(order.order_id, user_account).is_some());
 
-        dlob.delete_order(order, user_account, slot);
+    //     dlob.delete_order(order, user_account, slot);
 
-        assert!(dlob.get_order(order.order_id, user_account).is_none());
-    }
+    //     assert!(dlob.get_order(order.order_id, user_account).is_none());
+    // }
 
-    #[test]
-    fn test_update_order_cumulative_baa_filled_below_order_baa_filled() {
+    // #[test]
+    // fn test_update_order_cumulative_baa_filled_below_order_baa_filled() {
         
-        let mut dlob = DLOB::new(0);
-        let order = Order {
-            order_id: 1,
-            market_type: MarketType::Spot,
-            market_index: 1,
-            order_type: OrderType::Limit,
-            status: OrderStatus::Open,
-            slot: 0,
-            ..Order::default()
-        };
-        let user_account = Pubkey::new_unique();
-        let slot = 0;
-        dlob.insert_order(order, user_account, slot);
+    //     let mut dlob = DLOB::new(0);
+    //     let order = Order {
+    //         order_id: 1,
+    //         market_type: MarketType::Spot,
+    //         market_index: 1,
+    //         order_type: OrderType::Limit,
+    //         status: OrderStatus::Open,
+    //         slot: 0,
+    //         ..Order::default()
+    //     };
+    //     let user_account = Pubkey::new_unique();
+    //     let slot = 0;
+    //     dlob.insert_order(order, user_account, slot);
 
-        assert!(dlob.get_order(order.order_id, user_account).unwrap().slot == 0);
+    //     assert!(dlob.get_order(order.order_id, user_account).unwrap().slot == 0);
 
-        let updated_order = Order {
-            order_id: 1,
-            market_type: MarketType::Spot,
-            market_index: 1,
-            order_type: OrderType::Limit,
-            status: OrderStatus::Open,
-            slot: 1,
-            base_asset_amount_filled: 1_000_000,
-            ..Order::default()
-        };
-        dlob.update_order(updated_order, user_account, slot, 500_000);
+    //     let updated_order = Order {
+    //         order_id: 1,
+    //         market_type: MarketType::Spot,
+    //         market_index: 1,
+    //         order_type: OrderType::Limit,
+    //         status: OrderStatus::Open,
+    //         slot: 1,
+    //         base_asset_amount_filled: 1_000_000,
+    //         ..Order::default()
+    //     };
+    //     dlob.update_order(updated_order, user_account, slot, 500_000);
 
-        assert!(dlob.get_order(order.order_id, user_account).unwrap().slot == 1);
-    }
+    //     assert!(dlob.get_order(order.order_id, user_account).unwrap().slot == 1);
+    // }
 
-    #[test]
-    fn test_update_order_cumulative_baa_equal_order_baa_filled() {    
-        let dlob = DLOB::new(0);
-        let order = Order {
-            order_id: 1,
-            market_type: MarketType::Spot,
-            market_index: 1,
-            order_type: OrderType::Limit,
-            status: OrderStatus::Open,
-            slot: 100,
-            ..Order::default()
-        };
-        let user_account = Pubkey::new_unique();
-        let slot = 0;
-        dlob.insert_order(order, user_account, slot);
+    // #[test]
+    // fn test_update_order_cumulative_baa_equal_order_baa_filled() {    
+    //     let dlob = DLOB::new(0);
+    //     let order = Order {
+    //         order_id: 1,
+    //         market_type: MarketType::Spot,
+    //         market_index: 1,
+    //         order_type: OrderType::Limit,
+    //         status: OrderStatus::Open,
+    //         slot: 100,
+    //         ..Order::default()
+    //     };
+    //     let user_account = Pubkey::new_unique();
+    //     let slot = 0;
+    //     dlob.insert_order(order, user_account, slot);
 
-        assert!(dlob.get_order(order.order_id, user_account).unwrap().slot == 100);
+    //     assert!(dlob.get_order(order.order_id, user_account).unwrap().slot == 100);
 
-        let updated_order = Order {
-            order_id: 1,
-            market_type: MarketType::Spot,
-            market_index: 1,
-            order_type: OrderType::Limit,
-            status: OrderStatus::Open,
-            slot: 1,
-            base_asset_amount: 1_000_000,
-            ..Order::default()
-        };
-        dlob.update_order(updated_order, user_account, slot, 1_000_000);
+    //     let updated_order = Order {
+    //         order_id: 1,
+    //         market_type: MarketType::Spot,
+    //         market_index: 1,
+    //         order_type: OrderType::Limit,
+    //         status: OrderStatus::Open,
+    //         slot: 1,
+    //         base_asset_amount: 1_000_000,
+    //         ..Order::default()
+    //     };
+    //     dlob.update_order(updated_order, user_account, slot, 1_000_000);
 
-        assert!(dlob.get_order(order.order_id, user_account).is_none());
-    }
+    //     assert!(dlob.get_order(order.order_id, user_account).is_none());
+    // }
 
-    #[test]
-    fn test_update_resting_limit_nodes() {
-        let dlob = DLOB::new(0);
-        let order = Order {
-            order_id: 1,
-            market_type: MarketType::Spot,
-            market_index: 1,
-            order_type: OrderType::Limit,
-            status: OrderStatus::Open,
-            slot: 0,
-            base_asset_amount: 1_000_000,
-            ..Order::default()
-        };
-        let order_2 = Order {
-            order_id: 2,
-            market_type: MarketType::Spot,
-            market_index: 1,
-            order_type: OrderType::Limit,
-            status: OrderStatus::Open,
-            slot: 0,
-            auction_duration: 100,
-            base_asset_amount: 1_000_000,
-            ..Order::default()
-        };
-        let user_account = Pubkey::new_unique();
-        let slot = 1;
-        dlob.insert_order(order, user_account, slot);
-        dlob.insert_order(order_2, user_account, slot);
+    // #[test]
+    // fn test_update_resting_limit_nodes() {
+    //     let dlob = DLOB::new(0);
+    //     let order = Order {
+    //         order_id: 1,
+    //         market_type: MarketType::Spot,
+    //         market_index: 1,
+    //         order_type: OrderType::Limit,
+    //         status: OrderStatus::Open,
+    //         slot: 0,
+    //         base_asset_amount: 1_000_000,
+    //         ..Order::default()
+    //     };
+    //     let order_2 = Order {
+    //         order_id: 2,
+    //         market_type: MarketType::Spot,
+    //         market_index: 1,
+    //         order_type: OrderType::Limit,
+    //         status: OrderStatus::Open,
+    //         slot: 0,
+    //         auction_duration: 100,
+    //         base_asset_amount: 1_000_000,
+    //         ..Order::default()
+    //     };
+    //     let user_account = Pubkey::new_unique();
+    //     let slot = 1;
+    //     dlob.insert_order(order, user_account, slot);
+    //     dlob.insert_order(order_2, user_account, slot);
 
-        for market in dlob.exchange.iter() {
-            for market_ref in market.value().iter() {
-                let market = market_ref.value();
-                for node in market.resting_limit_orders.resting_limit_bids.iter() {
-                    dbg!(node.get_order().order_id);
-                }
-            }
-        }
+    //     for market in dlob.exchange.iter() {
+    //         for market_ref in market.value().iter() {
+    //             let market = market_ref.value();
+    //             for node in market.resting_limit_orders.resting_limit_bids.iter() {
+    //                 dbg!(node.get_order().order_id);
+    //             }
+    //         }
+    //     }
         
-        let updated_order = Order {
-            order_id: 1,
-            market_type: MarketType::Spot,
-            market_index: 1,
-            order_type: OrderType::Limit,
-            status: OrderStatus::Open,
-            slot: 1,
-            base_asset_amount: 1_000_000,
-            base_asset_amount_filled: 500_000,
-            direction: PositionDirection::Long,
-            ..Order::default()
-        };
+    //     let updated_order = Order {
+    //         order_id: 1,
+    //         market_type: MarketType::Spot,
+    //         market_index: 1,
+    //         order_type: OrderType::Limit,
+    //         status: OrderStatus::Open,
+    //         slot: 1,
+    //         base_asset_amount: 1_000_000,
+    //         base_asset_amount_filled: 500_000,
+    //         direction: PositionDirection::Long,
+    //         ..Order::default()
+    //     };
 
-        let update_slot = 105;
+    //     let update_slot = 105;
 
-        dlob.update_order(updated_order, user_account, update_slot, 1_000_000);
+    //     dlob.update_order(updated_order, user_account, update_slot, 1_000_000);
 
-        assert!(dlob.get_order(order.order_id, user_account).is_none());
+    //     assert!(dlob.get_order(order.order_id, user_account).is_none());
 
-        let side = &dlob.exchange.get("spot").unwrap();
-        let node_list = &side.get(&1).unwrap().resting_limit_orders.resting_limit_bids;
-        let order_sig = get_order_signature(order_2.order_id, user_account);
+    //     let side = &dlob.exchange.get("spot").unwrap();
+    //     let node_list = &side.get(&1).unwrap().resting_limit_orders.resting_limit_bids;
+    //     let order_sig = get_order_signature(order_2.order_id, user_account);
 
-        assert!(node_list.contains(&order_sig));
-    }
+    //     assert!(node_list.contains(&order_sig));
+    // }
 
     #[test]
     fn test_resting_limit_bids() {

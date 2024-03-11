@@ -123,6 +123,8 @@ impl NodeList {
     
                 if let Some(next_ptr) = next_ptr {
                     (&mut *next_ptr).set_prev(prev_ptr);
+                } else {
+                    self.tail = prev_ptr;
                 }
     
                 let node = *Box::from_raw(node_ptr as *mut Node);
