@@ -282,8 +282,11 @@ pub fn calculate_liquidation_price_inner(
         .get_ref(&market_index)
         .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
 
-    let max_confidence_interval_multiplier = perp_market.get_max_confidence_interval_multiplier().map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
-    
+    let max_confidence_interval_multiplier =
+        perp_market
+            .get_max_confidence_interval_multiplier()
+            .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
+
     let (oracle_price_data, _oracle_validity) = oracle_map
         .get_price_data_and_validity(
             MarketType::Perp,
