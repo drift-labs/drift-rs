@@ -21,7 +21,7 @@ test_utils = []
 anchor-lang = "0.27.0"
 bytemuck = "1.13.0"
 base64 = "0.13"
-drift = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.67.0", features = [
+drift = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.71.0", features = [
     "mainnet-beta",
 ] }
 env_logger = "0.10.1"
