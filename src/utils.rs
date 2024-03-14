@@ -118,12 +118,8 @@ where
 
 pub(crate) fn market_type_to_string(market_type: &MarketType) -> String {
     match market_type {
-        MarketType::Perp => {
-            "perp".to_string()
-        }
-        MarketType::Spot => {
-            "spot".to_string()
-        }
+        MarketType::Perp => "perp".to_string(),
+        MarketType::Spot => "spot".to_string(),
     }
 }
 

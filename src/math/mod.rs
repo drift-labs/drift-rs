@@ -1,2 +1,2 @@
-pub mod order;
 pub mod auction;
+pub mod order;

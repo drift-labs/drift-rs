@@ -2,7 +2,7 @@ use std::collections::BinaryHeap;
 
 use dashmap::DashMap;
 
-use crate::dlob::dlob_node::{Node, DirectionalNode, SortDirection, get_order_signature, DLOBNode};
+use crate::dlob::dlob_node::{get_order_signature, DLOBNode, DirectionalNode, Node, SortDirection};
 
 #[derive(Clone, Debug)]
 pub struct Orderlist {
@@ -12,7 +12,6 @@ pub struct Orderlist {
     bid_sort_direction: SortDirection,
     ask_sort_direction: SortDirection,
 }
-
 
 impl Orderlist {
     pub fn new(bid_sort_direction: SortDirection, ask_sort_direction: SortDirection) -> Self {
@@ -44,7 +43,7 @@ impl Orderlist {
             let order_sig = get_order_signature(node.get_order().order_id, node.get_user_account());
             if self.order_sigs.contains_key(&order_sig) {
                 self.order_sigs.remove(&order_sig);
-                return Some(node)
+                return Some(node);
             }
         }
         None
@@ -55,7 +54,7 @@ impl Orderlist {
             let order_sig = get_order_signature(node.get_order().order_id, node.get_user_account());
             if self.order_sigs.contains_key(&order_sig) {
                 self.order_sigs.remove(&order_sig);
-                return Some(node)
+                return Some(node);
             }
         }
         None
@@ -79,8 +78,8 @@ mod tests {
     use crate::dlob::dlob_node::{create_node, NodeType};
 
     use super::*;
-    use solana_sdk::pubkey::Pubkey;
     use drift::state::user::Order;
+    use solana_sdk::pubkey::Pubkey;
 
     #[test]
     fn test_insertion_and_ordering() {

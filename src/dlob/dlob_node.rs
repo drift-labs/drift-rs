@@ -1,7 +1,7 @@
+use crate::math::order::get_limit_price;
 use drift::state::{oracle::OraclePriceData, user::Order};
 use num_bigint::BigInt;
 use solana_sdk::pubkey::Pubkey;
-use crate::math::order::get_limit_price;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum NodeType {
@@ -16,7 +16,7 @@ pub enum NodeType {
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub(crate) enum SortDirection {
     Ascending,
-    Descending
+    Descending,
 }
 
 pub(crate) trait DLOBNode {
@@ -40,14 +40,14 @@ pub enum Node {
 #[derive(Clone, Copy, Debug)]
 pub struct DirectionalNode {
     pub node: Node,
-    sort_direction: SortDirection
+    sort_direction: SortDirection,
 }
 
 impl DirectionalNode {
     pub fn new(node: Node, sort_direction: SortDirection) -> Self {
         Self {
             node,
-            sort_direction
+            sort_direction,
         }
     }
 }
@@ -62,7 +62,9 @@ impl Eq for DirectionalNode {}
 
 impl PartialOrd for DirectionalNode {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        let mut cmp = self.node.get_sort_value(self.node.get_order())
+        let mut cmp = self
+            .node
+            .get_sort_value(self.node.get_order())
             .partial_cmp(&other.node.get_sort_value(other.node.get_order()))
             .unwrap_or(std::cmp::Ordering::Equal);
 
@@ -88,18 +90,28 @@ impl PartialEq for Node {
     fn eq(&self, other: &Self) -> bool {
         self.get_sort_value(self.get_order()) == other.get_sort_value(other.get_order())
     }
-}   
+}
 
 impl Eq for Node {}
 
 impl Node {
     pub fn new(node_type: NodeType, order: Order, user_account: Pubkey) -> Self {
         match node_type {
-            NodeType::TakingLimit => Node::OrderNode(OrderNode::new(NodeType::TakingLimit, order, user_account)),
-            NodeType::RestingLimit => Node::OrderNode(OrderNode::new(NodeType::RestingLimit, order, user_account)),
-            NodeType::FloatingLimit => Node::OrderNode(OrderNode::new(NodeType::FloatingLimit, order, user_account)),
-            NodeType::Market => Node::OrderNode(OrderNode::new(NodeType::Market, order, user_account)),
-            NodeType::Trigger => Node::OrderNode(OrderNode::new(NodeType::Trigger, order, user_account)),
+            NodeType::TakingLimit => {
+                Node::OrderNode(OrderNode::new(NodeType::TakingLimit, order, user_account))
+            }
+            NodeType::RestingLimit => {
+                Node::OrderNode(OrderNode::new(NodeType::RestingLimit, order, user_account))
+            }
+            NodeType::FloatingLimit => {
+                Node::OrderNode(OrderNode::new(NodeType::FloatingLimit, order, user_account))
+            }
+            NodeType::Market => {
+                Node::OrderNode(OrderNode::new(NodeType::Market, order, user_account))
+            }
+            NodeType::Trigger => {
+                Node::OrderNode(OrderNode::new(NodeType::Trigger, order, user_account))
+            }
             NodeType::VAMM => Node::VAMMNode(VAMMNode::new(order, 0)),
         }
     }
@@ -240,10 +252,7 @@ pub struct VAMMNode {
 
 impl VAMMNode {
     pub fn new(order: Order, price: u64) -> Self {
-        Self {
-            order,
-            price,
-        }
+        Self { order, price }
     }
 }
 
@@ -313,12 +322,15 @@ mod test {
         let floating_limit_order_node = create_node(NodeType::FloatingLimit, order, user_account);
         let market_order_node = create_node(NodeType::Market, order, user_account);
         let trigger_order_node = create_node(NodeType::Trigger, order, user_account);
-        
+
         assert_eq!(taking_limit_order_node.get_sort_value(&order), Some(100));
         assert_eq!(resting_limit_order_node.get_sort_value(&order), Some(1_000));
         assert_eq!(market_order_node.get_sort_value(&order), Some(100));
         assert_eq!(trigger_order_node.get_sort_value(&order), Some(500));
-        assert_eq!(floating_limit_order_node.get_sort_value(&order), Some(5_000));
+        assert_eq!(
+            floating_limit_order_node.get_sort_value(&order),
+            Some(5_000)
+        );
 
         let mut order_2 = Order::default();
 
@@ -329,16 +341,25 @@ mod test {
 
         let taking_limit_order_node_2 = create_node(NodeType::TakingLimit, order_2, user_account);
         let resting_limit_order_node_2 = create_node(NodeType::RestingLimit, order_2, user_account);
-        let floating_limit_order_node_2 = create_node(NodeType::FloatingLimit, order_2, user_account);
+        let floating_limit_order_node_2 =
+            create_node(NodeType::FloatingLimit, order_2, user_account);
         let market_order_node_2 = create_node(NodeType::Market, order_2, user_account);
         let trigger_order_node_2 = create_node(NodeType::Trigger, order_2, user_account);
 
-
-        assert_eq!(taking_limit_order_node_2.get_sort_value(&order_2), Some(200));
-        assert_eq!(resting_limit_order_node_2.get_sort_value(&order_2), Some(2_000));
+        assert_eq!(
+            taking_limit_order_node_2.get_sort_value(&order_2),
+            Some(200)
+        );
+        assert_eq!(
+            resting_limit_order_node_2.get_sort_value(&order_2),
+            Some(2_000)
+        );
         assert_eq!(market_order_node_2.get_sort_value(&order_2), Some(200));
         assert_eq!(trigger_order_node_2.get_sort_value(&order_2), Some(600));
-        assert_eq!(floating_limit_order_node_2.get_sort_value(&order_2), Some(6_000));
+        assert_eq!(
+            floating_limit_order_node_2.get_sort_value(&order_2),
+            Some(6_000)
+        );
 
         let mut order_3 = Order::default();
 
@@ -349,15 +370,25 @@ mod test {
 
         let taking_limit_order_node_3 = create_node(NodeType::TakingLimit, order_3, user_account);
         let resting_limit_order_node_3 = create_node(NodeType::RestingLimit, order_3, user_account);
-        let floating_limit_order_node_3 = create_node(NodeType::FloatingLimit, order_3, user_account);
+        let floating_limit_order_node_3 =
+            create_node(NodeType::FloatingLimit, order_3, user_account);
         let market_order_node_3 = create_node(NodeType::Market, order_3, user_account);
         let trigger_order_node_3 = create_node(NodeType::Trigger, order_3, user_account);
 
-        assert_eq!(taking_limit_order_node_3.get_sort_value(&order_3), Some(300));
-        assert_eq!(resting_limit_order_node_3.get_sort_value(&order_3), Some(3_000));
+        assert_eq!(
+            taking_limit_order_node_3.get_sort_value(&order_3),
+            Some(300)
+        );
+        assert_eq!(
+            resting_limit_order_node_3.get_sort_value(&order_3),
+            Some(3_000)
+        );
         assert_eq!(market_order_node_3.get_sort_value(&order_3), Some(300));
         assert_eq!(trigger_order_node_3.get_sort_value(&order_3), Some(700));
-        assert_eq!(floating_limit_order_node_3.get_sort_value(&order_3), Some(7_000));
+        assert_eq!(
+            floating_limit_order_node_3.get_sort_value(&order_3),
+            Some(7_000)
+        );
     }
 
     #[test]
@@ -373,7 +404,8 @@ mod test {
 
         let mut taking_limit_order_node = create_node(NodeType::TakingLimit, order, user_account);
         let mut resting_limit_order_node = create_node(NodeType::RestingLimit, order, user_account);
-        let mut floating_limit_order_node = create_node(NodeType::FloatingLimit, order, user_account);
+        let mut floating_limit_order_node =
+            create_node(NodeType::FloatingLimit, order, user_account);
         let mut market_order_node = create_node(NodeType::Market, order, user_account);
         let mut trigger_order_node = create_node(NodeType::Trigger, order, user_account);
 
@@ -392,7 +424,10 @@ mod test {
 
         assert_eq!(taking_limit_order_node.get_order().slot, 200);
         assert_eq!(resting_limit_order_node.get_order().price, 2_000);
-        assert_eq!(floating_limit_order_node.get_order().oracle_price_offset, 6_000);
+        assert_eq!(
+            floating_limit_order_node.get_order().oracle_price_offset,
+            6_000
+        );
         assert_eq!(market_order_node.get_order().slot, 200);
         assert_eq!(trigger_order_node.get_order().trigger_price, 600);
     }
@@ -423,7 +458,8 @@ mod test {
 
         let taking_limit_order_node_2 = create_node(NodeType::TakingLimit, order_2, user_account);
         let resting_limit_order_node_2 = create_node(NodeType::RestingLimit, order_2, user_account);
-        let floating_limit_order_node_2 = create_node(NodeType::FloatingLimit, order_2, user_account);
+        let floating_limit_order_node_2 =
+            create_node(NodeType::FloatingLimit, order_2, user_account);
         let market_order_node_2 = create_node(NodeType::Market, order_2, user_account);
         let trigger_order_node_2 = create_node(NodeType::Trigger, order_2, user_account);
 
