@@ -3,7 +3,7 @@ use drift::state::oracle::OraclePriceData;
 use drift::state::user::{MarketType, Order};
 use solana_sdk::pubkey::Pubkey;
 use std::cell::Cell;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::BinaryHeap;
 
 use crate::dlob::dlob_node::{get_order_signature, DLOBNode, Node, NodeType};
 use crate::dlob::market::{get_order_lists, Exchange, Market, OpenOrders, SubType};

@@ -1,14 +1,12 @@
 use num_bigint::BigInt;
 use std::cmp::min;
-use std::panic::Location;
 
 use drift::{
     controller::position::PositionDirection,
-    math::auction,
     state::user::{Order, OrderType},
 };
 
-use crate::{is_one_of_variant, SdkResult};
+use crate::is_one_of_variant;
 
 pub fn is_auction_complete(order: &Order, slot: u64) -> bool {
     if order.auction_duration == 0 {
