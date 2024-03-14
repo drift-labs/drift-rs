@@ -1,7 +1,7 @@
 use drift::{controller::position::PositionDirection, state::{oracle::OraclePriceData, user::{Order, OrderType}}};
 use num_bigint::BigInt;
 
-use crate::{math::auction::{get_auction_price, is_auction_complete}, SdkError, SdkResult};
+use crate::math::auction::{get_auction_price, is_auction_complete};
 
 pub fn get_limit_price(order: &Order, oracle_price_data: &OraclePriceData, slot: u64, fallback_price: Option<u64>) -> BigInt {
     if has_auction_price(order, slot) {

@@ -1,8 +1,7 @@
 use drift::state::{oracle::OraclePriceData, user::Order};
 use num_bigint::BigInt;
 use solana_sdk::pubkey::Pubkey;
-use typed_arena::Arena;
-use crate::{math::order::get_limit_price, SdkResult};
+use crate::math::order::get_limit_price;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum NodeType {
@@ -14,10 +13,22 @@ pub enum NodeType {
     VAMM,
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 pub(crate) enum SortDirection {
     Ascending,
     Descending
+}
+
+pub(crate) trait DLOBNode {
+    fn get_price(&self, oracle_price_data: OraclePriceData, slot: u64) -> BigInt;
+    fn is_vamm_node(&self) -> bool;
+    fn is_base_filled(&self) -> bool;
+    fn get_sort_value(&self, order: &Order) -> Option<i128>;
+    fn get_order(&self) -> &Order;
+    fn get_user_account(&self) -> Pubkey;
+    fn set_order(&mut self, order: Order);
+    fn get_node_type(&self) -> NodeType;
+    fn set_node_type(&mut self, node_type: NodeType);
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -25,6 +36,61 @@ pub enum Node {
     OrderNode(OrderNode),
     VAMMNode(VAMMNode),
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct DirectionalNode {
+    pub node: Node,
+    sort_direction: SortDirection
+}
+
+impl DirectionalNode {
+    pub fn new(node: Node, sort_direction: SortDirection) -> Self {
+        Self {
+            node,
+            sort_direction
+        }
+    }
+}
+
+impl PartialEq for DirectionalNode {
+    fn eq(&self, other: &Self) -> bool {
+        self.node.eq(&other.node)
+    }
+}
+
+impl Eq for DirectionalNode {}
+
+impl PartialOrd for DirectionalNode {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        let mut cmp = self.node.get_sort_value(self.node.get_order())
+            .partial_cmp(&other.node.get_sort_value(other.node.get_order()))
+            .unwrap_or(std::cmp::Ordering::Equal);
+
+        if cmp == std::cmp::Ordering::Equal {
+            cmp = self.node.get_order().slot.cmp(&other.node.get_order().slot);
+        }
+
+        if self.sort_direction == SortDirection::Ascending {
+            cmp = cmp.reverse();
+        }
+
+        Some(cmp)
+    }
+}
+
+impl Ord for DirectionalNode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+impl PartialEq for Node {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_sort_value(self.get_order()) == other.get_sort_value(other.get_order())
+    }
+}   
+
+impl Eq for Node {}
 
 impl Node {
     pub fn new(node_type: NodeType, order: Order, user_account: Pubkey) -> Self {
@@ -75,38 +141,10 @@ impl DLOBNode for Node {
         }
     }
 
-    fn get_next_ptr(&self) -> Option<*mut Node> {
-        match self {
-            Node::OrderNode(order_node) => order_node.get_next_ptr(),
-            Node::VAMMNode(vamm_node) => vamm_node.get_next_ptr(),
-        }
-    }
-
-    fn get_prev_ptr(&self) -> Option<*mut Node> {
-        match self {
-            Node::OrderNode(order_node) => order_node.get_prev_ptr(),
-            Node::VAMMNode(vamm_node) => vamm_node.get_prev_ptr(),
-        }
-    }
-
     fn get_user_account(&self) -> Pubkey {
         match self {
             Node::OrderNode(order_node) => order_node.get_user_account(),
             Node::VAMMNode(vamm_node) => vamm_node.get_user_account(),
-        }
-    }
-
-    fn set_next(&mut self, next: Option<*mut Node>) {
-        match self {
-            Node::OrderNode(order_node) => order_node.set_next(next),
-            Node::VAMMNode(vamm_node) => vamm_node.set_next(next),
-        }
-    }
-
-    fn set_prev(&mut self, prev: Option<*mut Node>) {
-        match self {
-            Node::OrderNode(order_node) => order_node.set_prev(prev),
-            Node::VAMMNode(vamm_node) => vamm_node.set_prev(prev),
         }
     }
 
@@ -129,7 +167,6 @@ impl DLOBNode for Node {
             Node::OrderNode(order_node) => order_node.set_node_type(node_type),
             Node::VAMMNode(_) => unimplemented!(),
         }
-    
     }
 }
 
@@ -138,8 +175,6 @@ pub struct OrderNode {
     pub order: Order,
     pub user_account: Pubkey,
     pub node_type: NodeType,
-    pub next: Option<*mut OrderNode>,
-    pub previous: Option<*mut OrderNode>,
 }
 
 impl OrderNode {
@@ -148,14 +183,12 @@ impl OrderNode {
             order,
             user_account,
             node_type,
-            next: None,
-            previous: None,
         }
     }
 }
 
 impl DLOBNode for OrderNode {
-    fn get_price(&self, oracle_price_data: OraclePriceData, slot: u64) -> BigInt  {
+    fn get_price(&self, oracle_price_data: OraclePriceData, slot: u64) -> BigInt {
         get_limit_price(&self.order, &oracle_price_data, slot, None)
     }
 
@@ -182,24 +215,8 @@ impl DLOBNode for OrderNode {
         &self.order
     }
 
-    fn get_next_ptr(&self) -> Option<*mut Node> {
-        self.next.map(|ptr| ptr as *mut Node)
-    }
-
-    fn get_prev_ptr(&self) -> Option<*mut Node> {
-        self.previous.map(|ptr| ptr as *mut Node)
-    }
-
     fn get_user_account(&self) -> Pubkey {
         self.user_account
-    }
-
-    fn set_next(&mut self, next: Option<*mut Node>) {
-        self.next = next.map(|ptr| ptr as *mut OrderNode);
-    }
-
-    fn set_prev(&mut self, prev: Option<*mut Node>) {
-        self.previous = prev.map(|ptr| ptr as *mut OrderNode);
     }
 
     fn set_order(&mut self, order: Order) {
@@ -215,56 +232,19 @@ impl DLOBNode for OrderNode {
     }
 }
 
-pub(crate) fn create_node<'a>(arena: &'a Arena<Node>, node_type: NodeType, order: Order, user_account: Pubkey) -> &'a mut Node {
-    arena.alloc(Node::new(node_type, order, user_account))
-}
-
-pub(crate) fn get_order_signature(order_id: u32, user_account: Pubkey) -> String {
-    format!("{}-{}", order_id, user_account.to_string())
-}
-
-pub(crate) trait DLOBNode {
-    fn get_price(&self, oracle_price_data: OraclePriceData, slot: u64) -> BigInt;
-
-    fn is_vamm_node(&self) -> bool;
-
-    fn is_base_filled(&self) -> bool;
-
-    fn get_sort_value(&self, order: &Order) -> Option<i128>;
-
-    fn get_order(&self) -> &Order;
-
-    fn get_next_ptr(&self) -> Option<*mut Node>;
-    
-    fn get_prev_ptr(&self) -> Option<*mut Node>;
-
-    fn get_user_account(&self) -> Pubkey;
-
-    fn set_next(&mut self, next: Option<*mut Node>);
-
-    fn set_prev(&mut self, next: Option<*mut Node>);
-
-    fn set_order(&mut self, order: Order);
-
-    fn get_node_type(&self) -> NodeType;
-
-    fn set_node_type(&mut self, node_type: NodeType);
-}
-
-pub(crate) trait DLOBNodePointerExt {
-    unsafe fn to_node(&self) -> Option<&Node>;
-}
-
-impl DLOBNodePointerExt for Option<*mut Node> {
-    unsafe fn to_node(&self) -> Option<&Node> {
-        self.map(|ptr| &*ptr)
-    }
-}
-
 #[derive(Copy, Clone, Debug)]
 pub struct VAMMNode {
     pub order: Order,
     pub price: u64,
+}
+
+impl VAMMNode {
+    pub fn new(order: Order, price: u64) -> Self {
+        Self {
+            order,
+            price,
+        }
+    }
 }
 
 impl DLOBNode for VAMMNode {
@@ -288,22 +268,6 @@ impl DLOBNode for VAMMNode {
         &self.order
     }
 
-    fn get_next_ptr(&self) -> Option<*mut Node> {
-        None
-    }
-
-    fn get_prev_ptr(&self) -> Option<*mut Node> {
-        None
-    }
-
-    fn set_next(&mut self, _next: Option<*mut Node>) {
-        unimplemented!()
-    }
-
-    fn set_prev(&mut self, _prev: Option<*mut Node>) {
-        unimplemented!()
-    }
-
     fn get_user_account(&self) -> Pubkey {
         unimplemented!()
     }
@@ -321,13 +285,12 @@ impl DLOBNode for VAMMNode {
     }
 }
 
-impl VAMMNode {
-    pub fn new(order: Order, price: u64) -> Self {
-        Self {
-            order,
-            price,
-        }
-    }
+pub(crate) fn create_node(node_type: NodeType, order: Order, user_account: Pubkey) -> Node {
+    Node::new(node_type, order, user_account)
+}
+
+pub(crate) fn get_order_signature(order_id: u32, user_account: Pubkey) -> String {
+    format!("{}-{}", order_id, user_account.to_string())
 }
 
 #[cfg(test)]
@@ -336,9 +299,6 @@ mod test {
 
     #[test]
     fn test_set_next_prev() {
-
-        let arena = Arena::new();
-
         let mut order = Order::default();
 
         order.slot = 100;
@@ -348,11 +308,11 @@ mod test {
 
         let user_account = Pubkey::new_unique();
 
-        let taking_limit_order_node = create_node(&arena, NodeType::TakingLimit, order, user_account);
-        let resting_limit_order_node = create_node(&arena, NodeType::RestingLimit, order, user_account);
-        let floating_limit_order_node = create_node(&arena, NodeType::FloatingLimit, order, user_account);
-        let market_order_node = create_node(&arena, NodeType::Market, order, user_account);
-        let trigger_order_node = create_node(&arena, NodeType::Trigger, order, user_account);
+        let taking_limit_order_node = create_node(NodeType::TakingLimit, order, user_account);
+        let resting_limit_order_node = create_node(NodeType::RestingLimit, order, user_account);
+        let floating_limit_order_node = create_node(NodeType::FloatingLimit, order, user_account);
+        let market_order_node = create_node(NodeType::Market, order, user_account);
+        let trigger_order_node = create_node(NodeType::Trigger, order, user_account);
         
         assert_eq!(taking_limit_order_node.get_sort_value(&order), Some(100));
         assert_eq!(resting_limit_order_node.get_sort_value(&order), Some(1_000));
@@ -367,11 +327,11 @@ mod test {
         order_2.trigger_price = 600;
         order_2.oracle_price_offset = 6_000;
 
-        let taking_limit_order_node_2 = create_node(&arena, NodeType::TakingLimit, order_2, user_account);
-        let resting_limit_order_node_2 = create_node(&arena, NodeType::RestingLimit, order_2, user_account);
-        let floating_limit_order_node_2 = create_node(&arena, NodeType::FloatingLimit, order_2, user_account);
-        let market_order_node_2 = create_node(&arena, NodeType::Market, order_2, user_account);
-        let trigger_order_node_2 = create_node(&arena, NodeType::Trigger, order_2, user_account);
+        let taking_limit_order_node_2 = create_node(NodeType::TakingLimit, order_2, user_account);
+        let resting_limit_order_node_2 = create_node(NodeType::RestingLimit, order_2, user_account);
+        let floating_limit_order_node_2 = create_node(NodeType::FloatingLimit, order_2, user_account);
+        let market_order_node_2 = create_node(NodeType::Market, order_2, user_account);
+        let trigger_order_node_2 = create_node(NodeType::Trigger, order_2, user_account);
 
 
         assert_eq!(taking_limit_order_node_2.get_sort_value(&order_2), Some(200));
@@ -380,18 +340,6 @@ mod test {
         assert_eq!(trigger_order_node_2.get_sort_value(&order_2), Some(600));
         assert_eq!(floating_limit_order_node_2.get_sort_value(&order_2), Some(6_000));
 
-        taking_limit_order_node.set_next(Some(&mut *taking_limit_order_node_2));
-        resting_limit_order_node.set_next(Some(&mut *resting_limit_order_node_2));
-        floating_limit_order_node.set_next(Some(&mut *floating_limit_order_node_2));
-        market_order_node.set_next(Some(&mut *market_order_node_2));
-        trigger_order_node.set_next(Some(&mut *trigger_order_node_2));
-
-        assert_eq!(unsafe { taking_limit_order_node.get_next_ptr().to_node().unwrap().get_sort_value(&order_2) }, Some(200));
-        assert_eq!(unsafe { resting_limit_order_node.get_next_ptr().to_node().unwrap().get_sort_value(&order_2) }, Some(2_000));
-        assert_eq!(unsafe { market_order_node.get_next_ptr().to_node().unwrap().get_sort_value(&order_2) }, Some(200));
-        assert_eq!(unsafe { trigger_order_node.get_next_ptr().to_node().unwrap().get_sort_value(&order_2) }, Some(600));
-        assert_eq!(unsafe { floating_limit_order_node.get_next_ptr().to_node().unwrap().get_sort_value(&order_2) }, Some(6_000));
-
         let mut order_3 = Order::default();
 
         order_3.slot = 300;
@@ -399,35 +347,21 @@ mod test {
         order_3.trigger_price = 700;
         order_3.oracle_price_offset = 7_000;
 
-        let taking_limit_order_node_3 = create_node(&arena, NodeType::TakingLimit, order_3, user_account);
-        let resting_limit_order_node_3 = create_node(&arena, NodeType::RestingLimit, order_3, user_account);
-        let floating_limit_order_node_3 = create_node(&arena, NodeType::FloatingLimit, order_3, user_account);
-        let market_order_node_3 = create_node(&arena, NodeType::Market, order_3, user_account);
-        let trigger_order_node_3 = create_node(&arena, NodeType::Trigger, order_3, user_account);
+        let taking_limit_order_node_3 = create_node(NodeType::TakingLimit, order_3, user_account);
+        let resting_limit_order_node_3 = create_node(NodeType::RestingLimit, order_3, user_account);
+        let floating_limit_order_node_3 = create_node(NodeType::FloatingLimit, order_3, user_account);
+        let market_order_node_3 = create_node(NodeType::Market, order_3, user_account);
+        let trigger_order_node_3 = create_node(NodeType::Trigger, order_3, user_account);
 
         assert_eq!(taking_limit_order_node_3.get_sort_value(&order_3), Some(300));
         assert_eq!(resting_limit_order_node_3.get_sort_value(&order_3), Some(3_000));
         assert_eq!(market_order_node_3.get_sort_value(&order_3), Some(300));
         assert_eq!(trigger_order_node_3.get_sort_value(&order_3), Some(700));
         assert_eq!(floating_limit_order_node_3.get_sort_value(&order_3), Some(7_000));
-
-        taking_limit_order_node.set_prev(Some(&mut *taking_limit_order_node_3));
-        resting_limit_order_node.set_prev(Some(&mut *resting_limit_order_node_3));
-        floating_limit_order_node.set_prev(Some(&mut *floating_limit_order_node_3));
-        market_order_node.set_prev(Some(&mut *market_order_node_3));
-        trigger_order_node.set_prev(Some(&mut *trigger_order_node_3));
-
-        assert_eq!(unsafe { taking_limit_order_node.get_next_ptr().to_node().unwrap().get_sort_value(&order_3) }, Some(300));
-        assert_eq!(unsafe { resting_limit_order_node.get_next_ptr().to_node().unwrap().get_sort_value(&order_3) }, Some(3_000));
-        assert_eq!(unsafe { market_order_node.get_next_ptr().to_node().unwrap().get_sort_value(&order_3) }, Some(300));
-        assert_eq!(unsafe { trigger_order_node.get_next_ptr().to_node().unwrap().get_sort_value(&order_3) }, Some(700));
-        assert_eq!(unsafe { floating_limit_order_node.get_next_ptr().to_node().unwrap().get_sort_value(&order_3) }, Some(7_000));
     }
 
     #[test]
     fn test_set_order() {
-        let arena = Arena::new();
-
         let user_account = Pubkey::new_unique();
 
         let mut order = Order::default();
@@ -437,11 +371,11 @@ mod test {
         order.trigger_price = 500;
         order.oracle_price_offset = 5_000;
 
-        let taking_limit_order_node = create_node(&arena, NodeType::TakingLimit, order, user_account);
-        let resting_limit_order_node = create_node(&arena, NodeType::RestingLimit, order, user_account);
-        let floating_limit_order_node = create_node(&arena, NodeType::FloatingLimit, order, user_account);
-        let market_order_node = create_node(&arena, NodeType::Market, order, user_account);
-        let trigger_order_node = create_node(&arena, NodeType::Trigger, order, user_account);
+        let mut taking_limit_order_node = create_node(NodeType::TakingLimit, order, user_account);
+        let mut resting_limit_order_node = create_node(NodeType::RestingLimit, order, user_account);
+        let mut floating_limit_order_node = create_node(NodeType::FloatingLimit, order, user_account);
+        let mut market_order_node = create_node(NodeType::Market, order, user_account);
+        let mut trigger_order_node = create_node(NodeType::Trigger, order, user_account);
 
         let mut order_2 = Order::default();
 
@@ -464,19 +398,46 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "not implemented")]
-    fn test_vamm_node_set_next_panics() {
-        let order = Order::default();
-        let mut vamm_node = VAMMNode::new(order, 100);
-        vamm_node.set_next(None);
-    }
+    fn test_eq() {
+        let user_account = Pubkey::new_unique();
 
-    #[test]
-    #[should_panic(expected = "not implemented")]
-    fn test_vamm_node_set_prev_panics() {
-        let order = Order::default();
-        let mut vamm_node = VAMMNode::new(order, 100);
-        vamm_node.set_prev(None);
+        let mut order = Order::default();
+
+        order.slot = 100;
+        order.price = 1_000;
+        order.trigger_price = 500;
+        order.oracle_price_offset = 5_000;
+
+        let taking_limit_order_node = create_node(NodeType::TakingLimit, order, user_account);
+        let resting_limit_order_node = create_node(NodeType::RestingLimit, order, user_account);
+        let floating_limit_order_node = create_node(NodeType::FloatingLimit, order, user_account);
+        let market_order_node = create_node(NodeType::Market, order, user_account);
+        let trigger_order_node = create_node(NodeType::Trigger, order, user_account);
+
+        let mut order_2 = Order::default();
+
+        order_2.slot = 200;
+        order_2.price = 2_000;
+        order_2.trigger_price = 600;
+        order_2.oracle_price_offset = 6_000;
+
+        let taking_limit_order_node_2 = create_node(NodeType::TakingLimit, order_2, user_account);
+        let resting_limit_order_node_2 = create_node(NodeType::RestingLimit, order_2, user_account);
+        let floating_limit_order_node_2 = create_node(NodeType::FloatingLimit, order_2, user_account);
+        let market_order_node_2 = create_node(NodeType::Market, order_2, user_account);
+        let trigger_order_node_2 = create_node(NodeType::Trigger, order_2, user_account);
+
+        assert_eq!(taking_limit_order_node, taking_limit_order_node);
+        assert_eq!(resting_limit_order_node, resting_limit_order_node);
+        assert_eq!(floating_limit_order_node, floating_limit_order_node);
+        assert_eq!(market_order_node, market_order_node);
+        assert_eq!(trigger_order_node, trigger_order_node);
+
+        assert_ne!(taking_limit_order_node, taking_limit_order_node_2);
+        assert_ne!(resting_limit_order_node, resting_limit_order_node_2);
+        assert_ne!(floating_limit_order_node, floating_limit_order_node_2);
+        assert_ne!(market_order_node, market_order_node_2);
+        assert_ne!(trigger_order_node, trigger_order_node_2);
     }
 
     #[test]
