@@ -85,6 +85,19 @@ pub fn http_to_ws(url: &str) -> Result<String, &'static str> {
     Ok(format!("{}/ws", base_url.trim_end_matches('/')))
 }
 
+
+pub fn get_ws_url(url: &str)  -> Result<String, &'static str> {
+    let base_url = if url.starts_with("http://") {
+        url.replacen("http://", "ws://", 1)
+    } else if url.starts_with("https://") {
+        url.replacen("https://", "wss://", 1)
+    } else {
+        return Err("Invalid URL scheme");
+    };
+
+    Ok(base_url)
+}
+
 pub fn dlob_subscribe_ws_json(market: &str) -> String {
     json!({
         "type": "subscribe",
