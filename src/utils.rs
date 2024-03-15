@@ -85,8 +85,7 @@ pub fn http_to_ws(url: &str) -> Result<String, &'static str> {
     Ok(format!("{}/ws", base_url.trim_end_matches('/')))
 }
 
-
-pub fn get_ws_url(url: &str)  -> Result<String, &'static str> {
+pub fn get_ws_url(url: &str) -> Result<String, &'static str> {
     let base_url = if url.starts_with("http://") {
         url.replacen("http://", "ws://", 1)
     } else if url.starts_with("https://") {
