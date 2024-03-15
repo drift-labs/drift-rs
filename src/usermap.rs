@@ -179,7 +179,7 @@ impl Usermap {
 mod tests {
 
     #[tokio::test]
-    // #[cfg(rpc_tests)]
+    #[cfg(rpc_tests)]
     async fn test_usermap() {
         use crate::usermap::Usermap;
         use solana_sdk::commitment_config::CommitmentConfig;
