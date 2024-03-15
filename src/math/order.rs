@@ -5,7 +5,6 @@ use drift::{
         user::{Order, OrderType},
     },
 };
-use num_bigint::BigInt;
 
 use crate::math::auction::{get_auction_price, is_auction_complete};
 
@@ -14,18 +13,22 @@ pub fn get_limit_price(
     oracle_price_data: &OraclePriceData,
     slot: u64,
     fallback_price: Option<u64>,
-) -> BigInt {
+) -> u64 {
     if has_auction_price(order, slot) {
         get_auction_price(order, slot, oracle_price_data.price)
+            .try_into()
+            .unwrap()
     } else if order.oracle_price_offset != 0 {
-        BigInt::from(oracle_price_data.price + order.oracle_price_offset as i64)
+        (oracle_price_data.price as i128 + order.oracle_price_offset as i128)
+            .try_into()
+            .unwrap()
     } else if order.price == 0 {
         match fallback_price {
-            Some(price) => BigInt::from(price),
+            Some(price) => price,
             None => panic!("Order price is 0 and no fallback price was provided"),
         }
     } else {
-        BigInt::from(order.price)
+        order.price
     }
 }
 

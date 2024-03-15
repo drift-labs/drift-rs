@@ -281,7 +281,10 @@ impl DLOB {
 mod tests {
     use super::*;
     use crate::dlob::dlob_node::create_node;
-    use drift::state::user::{Order, OrderType};
+    use drift::{
+        math::constants::PRICE_PRECISION_U64,
+        state::user::{Order, OrderType},
+    };
     use solana_sdk::pubkey::Pubkey;
 
     #[test]
@@ -486,7 +489,7 @@ mod tests {
             market_type: MarketType::Perp,
             order_type: OrderType::Limit,
             auction_duration: 10,
-            price: 11,
+            price: 11 * PRICE_PRECISION_U64,
             ..Order::default()
         };
 
@@ -498,7 +501,7 @@ mod tests {
             market_type: MarketType::Perp,
             order_type: OrderType::Limit,
             auction_duration: 10,
-            price: 12,
+            price: 12 * PRICE_PRECISION_U64,
             ..Order::default()
         };
 
@@ -510,7 +513,7 @@ mod tests {
             market_type: MarketType::Perp,
             order_type: OrderType::Limit,
             auction_duration: 10,
-            price: 13,
+            price: 13 * PRICE_PRECISION_U64,
             ..Order::default()
         };
 
