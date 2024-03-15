@@ -101,6 +101,7 @@ impl Usermap {
             self.subscription.unsubscribe().await?;
             self.subscribed = false;
             self.usermap.clear();
+            self.latest_slot.store(0, Ordering::Relaxed);
         }
         Ok(())
     }
@@ -136,11 +137,6 @@ impl Usermap {
             Err(_) => return Ok(()),
         };
 
-        let filters = vec![
-            get_user_filter(),
-            get_non_idle_user_filter(),
-        ];
-
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.commitment),
             encoding: Some(UiAccountEncoding::Base64),
@@ -148,7 +144,7 @@ impl Usermap {
         };
 
         let gpa_config = RpcProgramAccountsConfig {
-            filters: Some(filters.clone()),
+            filters: Some(self.subscription.options.filters.clone()),
             account_config,
             with_context: Some(true),
         };
