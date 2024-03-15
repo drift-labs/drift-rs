@@ -42,13 +42,13 @@ impl<T: Clone + Send + AccountDeserialize + 'static> Event for ProgramAccountUpd
     }
 }
 
-=pub struct WebsocketProgramAccountOptions {
+pub struct WebsocketProgramAccountOptions {
     pub filters: Vec<RpcFilterType>,
     pub commitment: CommitmentConfig,
     pub encoding: UiAccountEncoding,
 }
 
-=pub struct WebsocketProgramAccountSubscriber {
+pub struct WebsocketProgramAccountSubscriber {
     subscription_name: &'static str,
     url: String,
     options: WebsocketProgramAccountOptions,
