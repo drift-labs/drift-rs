@@ -22,7 +22,7 @@ use solana_sdk::pubkey::Pubkey;
 pub struct Usermap {
     subscribed: bool,
     subscription: WebsocketProgramAccountSubscriber,
-    usermap: Arc<DashMap<String, DataAndSlot<User>>>,
+    usermap: Arc<DashMap<String, User>>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
     commitment: CommitmentConfig,
@@ -89,7 +89,7 @@ impl Usermap {
                 if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
                     latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
                 }
-                usermap.insert(user_pubkey, user_data_and_slot);
+                usermap.insert(user_pubkey, user_data_and_slot.data);
             }
         });
 
@@ -114,17 +114,17 @@ impl Usermap {
         self.usermap.contains_key(pubkey)
     }
 
-    pub fn get(&self, pubkey: &str) -> Option<DataAndSlot<User>> {
-        self.usermap.get(pubkey).map(|data_and_slot| data_and_slot.value().clone())
+    pub fn get(&self, pubkey: &str) -> Option<User> {
+        self.usermap.get(pubkey).map(|user| user.value().clone())
     }
 
-    pub async fn must_get(&self, pubkey: &str) -> SdkResult<DataAndSlot<User>> {
-       if let Some(data_and_slot) = self.get(pubkey) {
-            Ok(data_and_slot)
+    pub async fn must_get(&self, pubkey: &str) -> SdkResult<User> {
+       if let Some(user) = self.get(pubkey) {
+            Ok(user)
        } else {
             let user_data = self.rpc.get_account_data(&Pubkey::from_str(pubkey).unwrap()).await?;
             let user = User::try_deserialize(&mut user_data.as_slice()).unwrap();
-            self.usermap.insert(pubkey.to_string(), DataAndSlot { slot: 0, data: user.clone() });
+            self.usermap.insert(pubkey.to_string(), user.clone());
             Ok(self.get(pubkey).unwrap())
        }
     }
@@ -161,8 +161,7 @@ impl Usermap {
                 let pubkey = account.pubkey;
                 let user_data = account.account.data;
                 let data = decode::<User>(user_data)?;
-                let slot = accounts.context.slot;
-                self.usermap.insert(pubkey.to_string(), DataAndSlot { slot, data });
+                self.usermap.insert(pubkey.to_string(), data);
             }
 
             self.latest_slot.store(accounts.context.slot, Ordering::Relaxed);
