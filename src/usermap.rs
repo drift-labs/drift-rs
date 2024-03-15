@@ -23,14 +23,14 @@ pub struct Usermap {
     subscribed: bool,
     subscription: WebsocketProgramAccountSubscriber,
     usermap: Arc<DashMap<String, DataAndSlot<User>>>,
-    sync_lock: Mutex<()>,
+    sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
     commitment: CommitmentConfig,
     rpc: RpcClient,
 }
 
 impl Usermap {
-    pub fn new(commitment: CommitmentConfig, endpoint: String) -> Self {
+    pub fn new(commitment: CommitmentConfig, endpoint: String, sync: bool) -> Self {
         let filters = vec![get_user_filter(), get_non_idle_user_filter()];
         let options = WebsocketProgramAccountOptions {
             filters,
@@ -52,11 +52,17 @@ impl Usermap {
 
         let rpc = RpcClient::new_with_commitment(endpoint.clone(), commitment);
 
+        let sync_lock = if sync {
+            Some(Mutex::new(()))
+        } else {
+            None
+        };
+
         Self {
             subscribed: false,
             subscription,
             usermap,
-            sync_lock: Mutex::new(()),
+            sync_lock,
             latest_slot: Arc::new(AtomicU64::new(0)),
             commitment,
             rpc
@@ -64,7 +70,7 @@ impl Usermap {
     }
 
     pub async fn subscribe(&mut self) -> SdkResult<()> {
-        if self.size() == 0 {
+        if let Some(_) = self.sync_lock {
             self.sync().await?;
         }
 
@@ -123,7 +129,9 @@ impl Usermap {
     }
 
     async fn sync(&mut self) -> SdkResult<()> {
-        let lock = match self.sync_lock.try_lock() {
+        let sync_lock = self.sync_lock.as_ref().expect("expected sync lock");
+
+        let lock = match sync_lock.try_lock() {
             Ok(lock) => lock,
             Err(_) => return Ok(()),
         };
@@ -190,7 +198,7 @@ mod tests {
             commitment: CommitmentLevel::Processed,
         };
 
-        let mut usermap = Usermap::new(commitment, endpoint);
+        let mut usermap = Usermap::new(commitment, endpoint, true);
         usermap.subscribe().await.unwrap();
 
         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
@@ -201,6 +209,12 @@ mod tests {
         dbg!(usermap.get_latest_slot());
 
         usermap.unsubscribe().await.unwrap();
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+
+        assert_eq!(usermap.size(), 0);
+        assert_eq!(usermap.subscribed, false);
+
     }
 
 }
