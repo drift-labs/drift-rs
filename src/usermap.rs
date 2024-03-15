@@ -139,7 +139,7 @@ impl Usermap {
 
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.commitment),
-            encoding: Some(UiAccountEncoding::Base64),
+            encoding: Some(self.subscription.options.encoding),
             ..RpcAccountInfoConfig::default()
         };
 
