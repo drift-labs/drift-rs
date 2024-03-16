@@ -161,7 +161,7 @@ impl Usermap {
                 let pubkey = account.pubkey;
                 let user_data = account.account.data;
                 let data = decode::<User>(user_data)?;
-                self.usermap.insert(pubkey.to_string(), data);
+                self.usermap.insert(pubkey, data);
             }
 
             self.latest_slot
