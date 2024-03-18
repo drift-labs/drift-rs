@@ -52,7 +52,6 @@ impl DLOB {
             for order in user.orders.iter() {
                 self.insert_order(order, user_pubkey, slot);
             }
-            // self.insert_orders_for_user(user_pubkey, user.orders.to_vec(), slot)
         });
         self._initialized = true;
     }
