@@ -182,7 +182,7 @@ impl DLOB {
                     }
                 }
             }
-            _ => {}
+            _ => unimplemented!()
         }
 
         best_orders

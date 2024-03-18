@@ -101,20 +101,12 @@ impl Market {
     ) -> Option<Node> {
         match sub_type {
             SubType::Bid => {
-                if let Some(node) = order_list.get_best_bid() {
-                    return Some(node);
-                } else {
-                    return None;
-                }
+                order_list.get_best_bid()
             }
             SubType::Ask => {
-                if let Some(node) = order_list.get_best_ask() {
-                    return Some(node);
-                } else {
-                    return None;
-                }
+                order_list.get_best_ask()
             }
-            _ => {}
+            _ => unimplemented!(),
         };
 
         None
@@ -134,6 +126,7 @@ impl Market {
 }
 
 pub(crate) type Exchange = DashMap<String, DashMap<u16, Market>>;
+
 
 pub fn get_order_lists(exchange: &Exchange) -> Vec<Orderlist> {
     let mut order_lists = vec![];
