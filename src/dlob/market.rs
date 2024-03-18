@@ -2,7 +2,7 @@ use dashmap::{DashMap, DashSet};
 use drift::controller::position::PositionDirection;
 use drift::state::user::{Order, OrderTriggerCondition, OrderType};
 
-use crate::dlob::dlob_node::{Node, NodeType, SortDirection};
+use crate::dlob::dlob_node::{NodeType, SortDirection};
 use crate::dlob::order_list::Orderlist;
 use crate::is_one_of_variant;
 use crate::math::order::is_resting_limit_order;
@@ -41,11 +41,11 @@ impl Market {
         }
     }
 
-    pub(crate) fn get_list_for_order(
+    pub(crate) fn get_info_for_order_insert(
         &mut self,
         order: &Order,
         slot: u64,
-    ) -> (Option<&mut Orderlist>, SubType) {
+    ) -> (Option<&mut Orderlist>, SubType, NodeType) {
         let is_inactive_trigger_order = order.must_be_triggered() && !order.triggered();
 
         let node_type = if is_inactive_trigger_order {
@@ -75,7 +75,7 @@ impl Market {
             NodeType::TakingLimit => &mut self.taking_limit_orders,
             NodeType::Market => &mut self.market_orders,
             NodeType::Trigger => &mut self.trigger_orders,
-            NodeType::VAMM => return (None, SubType::Bid),
+            NodeType::VAMM => return (None, SubType::Bid, NodeType::VAMM),
         };
 
         let sub_type = if is_inactive_trigger_order {
@@ -91,21 +91,7 @@ impl Market {
             }
         };
 
-        (Some(order_list), sub_type)
-    }
-
-    pub(crate) fn get_best_order(
-        &self,
-        order_list: &mut Orderlist,
-        sub_type: SubType,
-    ) -> Option<Node> {
-        match sub_type {
-            SubType::Bid => order_list.get_best_bid(),
-            SubType::Ask => order_list.get_best_ask(),
-            _ => unimplemented!(),
-        };
-
-        None
+        (Some(order_list), sub_type, node_type)
     }
 
     pub(crate) fn get_order_list_for_node_type(&self, node_type: NodeType) -> Orderlist {

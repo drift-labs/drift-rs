@@ -40,7 +40,7 @@ use crate::{constants, AccountProvider, DriftClient, MarketId, SdkError, SdkResu
 
 /// Builds an AccountMap of relevant spot, perp, and oracle accounts from rpc
 #[derive(Default)]
-struct AccountMapBuilder {
+pub(crate) struct AccountMapBuilder {
     accounts: Vec<Account>,
     account_keys: Vec<Pubkey>,
 }
