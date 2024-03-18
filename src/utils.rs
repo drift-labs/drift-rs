@@ -1,6 +1,7 @@
 //! SDK utility functions
 
 use anchor_lang::AccountDeserialize;
+use drift::state::user::MarketType;
 use serde_json::json;
 use solana_account_decoder::UiAccountData;
 use solana_sdk::{
@@ -125,6 +126,13 @@ where
     let mut decoded_data_slice = decoded_data.as_slice();
 
     T::try_deserialize(&mut decoded_data_slice).map_err(|err| SdkError::Anchor(Box::new(err)))
+}
+
+pub(crate) fn market_type_to_string(market_type: &MarketType) -> String {
+    match market_type {
+        MarketType::Perp => "perp".to_string(),
+        MarketType::Spot => "spot".to_string(),
+    }
 }
 
 #[cfg(any(test, test_utils))]

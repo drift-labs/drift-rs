@@ -28,6 +28,10 @@ use crate::Wallet;
 
 pub type SdkResult<T> = Result<T, SdkError>;
 
+pub fn is_one_of_variant<T: PartialEq>(value: &T, variants: &[T]) -> bool {
+    variants.iter().any(|variant| value == variant)
+}
+
 /// Drift program context
 #[derive(Debug, Copy, Clone)]
 #[repr(u8)]
@@ -234,6 +238,8 @@ pub enum SdkError {
     CouldntJoin(#[from] tokio::task::JoinError),
     #[error("Couldn't send unsubscribe message: {0}")]
     CouldntUnsubscribe(#[from] tokio::sync::mpsc::error::SendError<()>),
+    #[error("MathError")]
+    MathError(String),
 }
 
 impl SdkError {
