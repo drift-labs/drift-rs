@@ -51,7 +51,7 @@ pub struct WebsocketProgramAccountOptions {
 pub struct WebsocketProgramAccountSubscriber {
     subscription_name: &'static str,
     url: String,
-    options: WebsocketProgramAccountOptions,
+    pub(crate) options: WebsocketProgramAccountOptions,
     pub subscribed: bool,
     pub event_emitter: EventEmitter,
     unsubscriber: Option<tokio::sync::mpsc::Sender<()>>,
