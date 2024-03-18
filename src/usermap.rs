@@ -166,8 +166,6 @@ impl Usermap {
 
             self.latest_slot
                 .store(accounts.context.slot, Ordering::Relaxed);
-        } else {
-            return Ok(());
         }
 
         drop(lock);
