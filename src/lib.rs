@@ -73,6 +73,7 @@ pub mod slot_subscriber;
 
 pub mod dlob;
 pub mod math;
+pub mod usermap;
 
 use types::*;
 
