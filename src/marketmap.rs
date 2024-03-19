@@ -21,12 +21,12 @@ use solana_client::rpc_request::RpcRequest;
 use solana_client::rpc_response::{OptionalContext, RpcKeyedAccount};
 use solana_sdk::commitment_config::CommitmentConfig;
 
-pub trait MarketIndex {
+pub trait Market {
     fn market_index(&self) -> u16;
     fn market_type() -> MarketType;
 }
 
-impl MarketIndex for PerpMarket {
+impl Market for PerpMarket {
     fn market_index(&self) -> u16 {
         self.market_index
     }
@@ -36,7 +36,7 @@ impl MarketIndex for PerpMarket {
     }
 }
 
-impl MarketIndex for SpotMarket {
+impl Market for SpotMarket {
     fn market_index(&self) -> u16 {
         self.market_index
     }
@@ -56,7 +56,7 @@ pub struct MarketMap<T> {
     rpc: RpcClient,
 }
 
-impl<T: AccountDeserialize + Clone + Send + Sync + MarketIndex + 'static> MarketMap<T> {
+impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T> {
     pub fn new(commitment: CommitmentConfig, endpoint: String, sync: bool) -> Self {
         let filters = vec![get_market_filter(T::market_type())];
         let options = WebsocketProgramAccountOptions {
