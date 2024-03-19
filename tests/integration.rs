@@ -1,5 +1,6 @@
 use drift::math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64};
 use drift_sdk::{
+    get_market_accounts,
     types::{Context, MarketId, NewOrder},
     DriftClient, RpcAccountProvider, Wallet,
 };
@@ -26,6 +27,21 @@ async fn get_oracle_prices() {
     let price = client.oracle_price(MarketId::spot(1)).await.expect("ok");
     assert!(price > 0);
     dbg!(price);
+}
+
+#[tokio::test]
+async fn get_market_accounts_works() {
+    let client = DriftClient::new(
+        Context::DevNet,
+        RpcAccountProvider::new("https://api.devnet.solana.com"),
+        Keypair::new().into(),
+    )
+    .await
+    .expect("connects");
+
+    let (spot, perp) = get_market_accounts(client.inner()).await.unwrap();
+    assert!(spot.len() > 1);
+    assert!(perp.len() > 1);
 }
 
 #[tokio::test]

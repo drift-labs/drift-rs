@@ -13,6 +13,7 @@ use drift::{
         order_params::{ModifyOrderParams, OrderParams},
         perp_market::PerpMarket,
         spot_market::SpotMarket,
+        state::State,
         user::{MarketType, Order, OrderStatus, PerpPosition, SpotPosition, User, UserStats},
     },
 };
@@ -608,18 +609,17 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         };
 
         let lookup_table_address = market_lookup_table(context);
-        let (spot, perp, lookup_table_account): (
-            SdkResult<Vec<SpotMarket>>,
-            SdkResult<Vec<PerpMarket>>,
+        let (markets, lookup_table_account): (
+            SdkResult<(Vec<SpotMarket>, Vec<PerpMarket>)>,
             SdkResult<Account>,
         ) = tokio::join!(
-            this.get_program_accounts(),
-            this.get_program_accounts(),
+            get_market_accounts(&this.rpc_client),
             this.get_account_raw(&lookup_table_address),
         );
+        let (spot, perp) = markets?;
         let lookup_table = utils::deserialize_alt(lookup_table_address, &lookup_table_account?)?;
 
-        this.program_data = ProgramData::new(spot?, perp?, lookup_table);
+        this.program_data = ProgramData::new(spot, perp, lookup_table);
 
         Ok(this)
     }
@@ -1422,6 +1422,46 @@ pub fn build_accounts(
     let mut account_metas = base_accounts.to_account_metas(None);
     account_metas.extend(accounts.into_iter().map(Into::into));
     account_metas
+}
+
+/// Fetch all market accounts from drift program (does not require `getProgramAccounts` RPC which is often unavailable)
+pub async fn get_market_accounts(
+    client: &RpcClient,
+) -> SdkResult<(Vec<SpotMarket>, Vec<PerpMarket>)> {
+    let state_data = client
+        .get_account_data(&state_account())
+        .await
+        .expect("state account fetch");
+    let state = State::try_deserialize(&mut state_data.as_slice()).expect("state deserializes");
+    let spot_market_pdas: Vec<Pubkey> = (0..state.number_of_spot_markets)
+        .map(|x| derive_spot_market_account(x))
+        .collect();
+    let perp_market_pdas: Vec<Pubkey> = (0..state.number_of_markets)
+        .map(|x| derive_perp_market_account(x))
+        .collect();
+
+    let (spot_markets, perp_markets) = tokio::join!(
+        client.get_multiple_accounts(spot_market_pdas.as_slice()),
+        client.get_multiple_accounts(perp_market_pdas.as_slice())
+    );
+
+    let spot_markets = spot_markets?
+        .into_iter()
+        .map(|x| {
+            let account = x.unwrap();
+            SpotMarket::try_deserialize(&mut account.data.as_slice()).unwrap()
+        })
+        .collect();
+
+    let perp_markets = perp_markets?
+        .into_iter()
+        .map(|x| {
+            let account = x.unwrap();
+            PerpMarket::try_deserialize(&mut account.data.as_slice()).unwrap()
+        })
+        .collect();
+
+    Ok((spot_markets, perp_markets))
 }
 
 /// Drift wallet
