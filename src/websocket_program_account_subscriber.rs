@@ -42,6 +42,7 @@ impl<T: Clone + Send + AccountDeserialize + 'static> Event for ProgramAccountUpd
     }
 }
 
+#[derive(Clone)]
 pub struct WebsocketProgramAccountOptions {
     pub filters: Vec<RpcFilterType>,
     pub commitment: CommitmentConfig,

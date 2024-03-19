@@ -20,6 +20,7 @@ use drift::{
 use fnv::FnvHashMap;
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use log::{debug, warn};
+use marketmap::MarketMap;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
     nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient},
@@ -321,6 +322,11 @@ impl<T: AccountProvider> DriftClient<T> {
         })
     }
 
+    /// Subscribe to the Drift Client Backend
+    pub async fn subscribe(&self) -> SdkResult<()> {
+        self.backend.subscribe().await
+    }
+
     /// Return a handle to the inner RPC client
     pub fn inner(&self) -> &RpcClient {
         self.backend.client()
@@ -585,6 +591,22 @@ impl<T: AccountProvider> DriftClient<T> {
             .get_recent_priority_fees(writable_markets, window)
             .await
     }
+
+    pub fn get_perp_market_account_and_slot(&self, market_index: u16) -> Option<DataAndSlot<PerpMarket>> {
+        self.backend.get_perp_market_account_and_slot(market_index)
+    }
+
+    pub fn get_spot_market_account_and_slot(&self, market_index: u16) -> Option<DataAndSlot<SpotMarket>> {
+        self.backend.get_spot_market_account_and_slot(market_index)
+    }
+
+    pub fn get_perp_market_account(&self, market_index: u16) -> Option<PerpMarket> {
+        self.backend.get_perp_market_account_and_slot(market_index).map(|x| x.data)
+    }
+
+    pub fn get_spot_market_account(&self, market_index: u16) -> Option<SpotMarket> {
+        self.backend.get_spot_market_account_and_slot(market_index).map(|x| x.data)
+    }
 }
 
 /// Provides the heavy-lifting and network facing features of the SDK
@@ -593,6 +615,8 @@ pub struct DriftClientBackend<T: AccountProvider> {
     rpc_client: RpcClient,
     account_provider: T,
     program_data: ProgramData,
+    perp_market_map: MarketMap<PerpMarket>,
+    spot_market_map: MarketMap<SpotMarket>,
 }
 
 impl<T: AccountProvider> DriftClientBackend<T> {
@@ -603,10 +627,16 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             account_provider.commitment_config(),
         );
 
+        let perp_market_map = MarketMap::<PerpMarket>::new(account_provider.commitment_config(), account_provider.endpoint(), true);
+        let spot_market_map = MarketMap::<SpotMarket>::new(account_provider.commitment_config(), account_provider.endpoint(), true);
+
+
         let mut this = Self {
             rpc_client,
             account_provider,
             program_data: ProgramData::uninitialized(),
+            perp_market_map,
+            spot_market_map,
         };
 
         let lookup_table_address = market_lookup_table(context);
@@ -623,6 +653,22 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         this.program_data = ProgramData::new(spot, perp, lookup_table);
 
         Ok(this)
+    }
+
+
+    /// Subscribes to the MarketMaps and start streaming data through them
+    async fn subscribe(&self) -> SdkResult<()> {
+        self.perp_market_map.subscribe().await?;
+        self.spot_market_map.subscribe().await?;
+        Ok(())
+    }
+
+    fn get_perp_market_account_and_slot(&self, market_index: u16) -> Option<DataAndSlot<PerpMarket>> {
+        self.perp_market_map.get(&market_index)
+    }
+
+    fn get_spot_market_account_and_slot(&self, market_index: u16) -> Option<DataAndSlot<SpotMarket>> {
+        self.spot_market_map.get(&market_index)
     }
 
     /// Return a handle to the inner RPC client
@@ -1611,6 +1657,9 @@ mod tests {
         account_provider_mocks: Mocks,
         keypair: Keypair,
     ) -> DriftClient<RpcAccountProvider> {
+        let perp_market_map = MarketMap::<PerpMarket>::new(CommitmentConfig::processed(), DEVNET_ENDPOINT.to_string(), false);
+        let spot_market_map = MarketMap::<SpotMarket>::new(CommitmentConfig::processed(), DEVNET_ENDPOINT.to_string(), false);
+
         let backend = DriftClientBackend {
             rpc_client: RpcClient::new_mock_with_mocks(DEVNET_ENDPOINT.to_string(), rpc_mocks),
             account_provider: RpcAccountProvider {
@@ -1620,6 +1669,8 @@ mod tests {
                 )),
             },
             program_data: ProgramData::uninitialized(),
+            perp_market_map,
+            spot_market_map,
         };
 
         DriftClient {
@@ -1627,6 +1678,34 @@ mod tests {
             wallet: Wallet::new(keypair),
             active_sub_account_id: 0,
             sub_account_ids: vec![0],
+        }
+    }
+
+    #[tokio::test]
+    #[cfg(rpc_tests)]
+    async fn test_marketmap_subscribe() {
+        let endpoint = "rpc";
+
+        let client = DriftClient::new(Context::MainNet, RpcAccountProvider::new(endpoint), Keypair::new().into())
+            .await
+            .unwrap();
+
+        let _ = client.subscribe().await;
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+
+        for _ in 0..20 {
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            let perp_market = client.get_perp_market_account_and_slot(0);
+            let slot = perp_market.unwrap().slot;
+            dbg!(slot);
+        }
+
+        for _ in 0..20 {
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            let spot_market = client.get_spot_market_account_and_slot(0);
+            let slot = spot_market.unwrap().slot;
+            dbg!(slot);
         }
     }
 
