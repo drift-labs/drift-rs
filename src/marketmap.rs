@@ -49,7 +49,7 @@ impl Market for SpotMarket {
 pub struct MarketMap<T> {
     subscribed: bool,
     subscription: WebsocketProgramAccountSubscriber,
-    pub(crate) marketmap: Arc<DashMap<u16, T>>,
+    marketmap: Arc<DashMap<u16, T>>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
     commitment: CommitmentConfig,
