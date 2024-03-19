@@ -1125,6 +1125,7 @@ dependencies = [
  "hex-literal",
  "log",
  "pyth",
+ "rayon",
  "regex",
  "reqwest",
  "serde",

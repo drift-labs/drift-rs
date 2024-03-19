@@ -1,22 +1,29 @@
 use dashmap::{DashMap, DashSet};
 use drift::state::oracle::OraclePriceData;
 use drift::state::user::{MarketType, Order};
+use rayon::prelude::*;
 use solana_sdk::pubkey::Pubkey;
+use std::any::Any;
 use std::cell::Cell;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap};
+use std::str::FromStr;
+use std::sync::Arc;
 
-use crate::dlob::dlob_node::{get_order_signature, DLOBNode, Node, NodeType};
+use crate::dlob::dlob_node::{
+    create_node, get_order_signature, DLOBNode, DirectionalNode, Node, NodeType,
+};
 use crate::dlob::market::{get_order_lists, Exchange, Market, OpenOrders, SubType};
+use crate::event_emitter::Event;
 use crate::math::order::is_resting_limit_order;
+use crate::usermap::Usermap;
 use crate::utils::market_type_to_string;
 
-use super::dlob_node::DirectionalNode;
-
+#[derive(Clone)]
 pub struct DLOB {
     exchange: Exchange,
     _open_orders: OpenOrders,
     _initialized: bool,
-    _max_slot_for_resting_limit_orders: Cell<u64>,
+    _max_slot_for_resting_limit_orders: Arc<u64>,
 }
 
 impl DLOB {
@@ -33,8 +40,28 @@ impl DLOB {
             exchange,
             _open_orders: open_orders,
             _initialized: true,
-            _max_slot_for_resting_limit_orders: Cell::new(0),
+            _max_slot_for_resting_limit_orders: Arc::new(0),
         }
+    }
+
+    pub fn build_from_usermap(&mut self, usermap: &Usermap, slot: u64) {
+        usermap.usermap.iter().par_bridge().for_each(|user_ref| {
+            let user = user_ref.value();
+            let user_key = user_ref.key();
+            let user_pubkey = Pubkey::from_str(user_key).expect("Valid pubkey");
+            for order in user.orders.iter() {
+                self.insert_order(order, user_pubkey, slot);
+            }
+        });
+        self._initialized = true;
+    }
+
+    pub fn clear(&mut self) {
+        self.exchange.get("perp").expect("perp markets").clear();
+        self.exchange.get("spot").expect("spot markets").clear();
+        self._open_orders.clear();
+        self._initialized = false;
+        self._max_slot_for_resting_limit_orders = Arc::new(0);
     }
 
     pub fn add_market(&self, market_type: &str, market_index: u16) {
@@ -51,9 +78,9 @@ impl DLOB {
         }
     }
 
-    pub fn insert_node(&self, node: &Node) {
-        let market_type = market_type_to_string(&node.get_order().market_type);
-        let market_index = node.get_order().market_index;
+    pub fn insert_order(&self, order: &Order, user_account: Pubkey, slot: u64) {
+        let market_type = market_type_to_string(&order.market_type);
+        let market_index = order.market_index;
 
         if !self
             .exchange
@@ -72,8 +99,9 @@ impl DLOB {
             .get_mut(&market_index)
             .expect(format!("Market index {} not found", market_index).as_str());
 
-        let (order_list, subtype) =
-            market.get_list_for_order(&node.get_order(), node.get_order().slot);
+        let (order_list, subtype, node_type) = market.get_info_for_order_insert(&order, slot);
+
+        let node = create_node(node_type, order.clone(), user_account);
 
         if let Some(order_list) = order_list {
             match subtype {
@@ -131,11 +159,11 @@ impl DLOB {
     }
 
     pub fn update_resting_limit_orders(&mut self, slot: u64) {
-        if slot <= self._max_slot_for_resting_limit_orders.get() {
+        if slot <= *self._max_slot_for_resting_limit_orders {
             return;
         }
 
-        self._max_slot_for_resting_limit_orders.set(slot);
+        self._max_slot_for_resting_limit_orders = Arc::new(slot);
 
         self.update_resting_limit_orders_for_market_type(
             slot,
@@ -277,10 +305,19 @@ impl DLOB {
     }
 }
 
+impl Event for DLOB {
+    fn box_clone(&self) -> Box<dyn Event> {
+        Box::new((*self).clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dlob::dlob_node::create_node;
     use drift::{
         math::constants::PRICE_PRECISION_U64,
         state::user::{Order, OrderType},
@@ -327,20 +364,11 @@ mod tests {
             ..Order::default()
         };
 
-        let taking_limit_node =
-            create_node(NodeType::TakingLimit, taking_limit_order, user_account);
-        let floating_limit_node =
-            create_node(NodeType::FloatingLimit, floating_limit_order, user_account);
-        let resting_limit_node =
-            create_node(NodeType::RestingLimit, resting_limit_order, user_account);
-        let market_node = create_node(NodeType::Market, market_order, user_account);
-        let trigger_node = create_node(NodeType::Trigger, trigger_order, user_account);
-
-        dlob.insert_node(&taking_limit_node);
-        dlob.insert_node(&floating_limit_node);
-        dlob.insert_node(&resting_limit_node);
-        dlob.insert_node(&market_node);
-        dlob.insert_node(&trigger_node);
+        dlob.insert_order(&taking_limit_order, user_account, 1);
+        dlob.insert_order(&floating_limit_order, user_account, 0);
+        dlob.insert_order(&resting_limit_order, user_account, 3);
+        dlob.insert_order(&market_order, user_account, 4);
+        dlob.insert_order(&trigger_order, user_account, 5);
 
         assert!(dlob.get_order(1, user_account).is_some());
         assert!(dlob.get_order(2, user_account).is_some());
@@ -400,17 +428,11 @@ mod tests {
             ..Order::default()
         };
 
-        let node_1 = create_node(NodeType::TakingLimit, order_1, user_account);
-        let node_2 = create_node(NodeType::TakingLimit, order_2, user_account);
-        let node_3 = create_node(NodeType::TakingLimit, order_3, user_account);
-        let node_4 = create_node(NodeType::TakingLimit, order_4, user_account);
-        let node_5 = create_node(NodeType::TakingLimit, order_5, user_account);
-
-        dlob.insert_node(&node_1);
-        dlob.insert_node(&node_2);
-        dlob.insert_node(&node_3);
-        dlob.insert_node(&node_4);
-        dlob.insert_node(&node_5);
+        dlob.insert_order(&order_1, user_account, 1);
+        dlob.insert_order(&order_2, user_account, 2);
+        dlob.insert_order(&order_3, user_account, 3);
+        dlob.insert_order(&order_4, user_account, 4);
+        dlob.insert_order(&order_5, user_account, 5);
 
         assert!(dlob.get_order(1, user_account).is_some());
         assert!(dlob.get_order(2, user_account).is_some());
@@ -443,9 +465,7 @@ mod tests {
             ..Order::default()
         };
 
-        let node_1 = create_node(NodeType::TakingLimit, order_1, user_account);
-
-        dlob.insert_node(&node_1);
+        dlob.insert_order(&order_1, user_account, 1);
 
         let markets_for_market_type = dlob.exchange.get("perp").unwrap();
         let market = markets_for_market_type.get(&0).unwrap();
@@ -517,13 +537,9 @@ mod tests {
             ..Order::default()
         };
 
-        let node_1 = create_node(NodeType::TakingLimit, order_1, user_account);
-        let node_2 = create_node(NodeType::TakingLimit, order_2, user_account);
-        let node_3 = create_node(NodeType::TakingLimit, order_3, user_account);
-
-        dlob.insert_node(&node_1);
-        dlob.insert_node(&node_2);
-        dlob.insert_node(&node_3);
+        dlob.insert_order(&order_1, user_account, 1);
+        dlob.insert_order(&order_2, user_account, 11);
+        dlob.insert_order(&order_3, user_account, 21);
 
         let mut slot = 1;
 
@@ -615,13 +631,9 @@ mod tests {
             ..Order::default()
         };
 
-        let node_1 = create_node(NodeType::TakingLimit, order_1, user_account);
-        let node_2 = create_node(NodeType::TakingLimit, order_2, user_account);
-        let node_3 = create_node(NodeType::TakingLimit, order_3, user_account);
-
-        dlob.insert_node(&node_1);
-        dlob.insert_node(&node_2);
-        dlob.insert_node(&node_3);
+        dlob.insert_order(&order_1, user_account, 1);
+        dlob.insert_order(&order_2, user_account, 11);
+        dlob.insert_order(&order_3, user_account, 21);
 
         let mut slot = 1;
 

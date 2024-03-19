@@ -24,7 +24,7 @@ use solana_sdk::pubkey::Pubkey;
 pub struct Usermap {
     subscribed: bool,
     subscription: WebsocketProgramAccountSubscriber,
-    usermap: Arc<DashMap<String, User>>,
+    pub(crate) usermap: Arc<DashMap<String, User>>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
     commitment: CommitmentConfig,
