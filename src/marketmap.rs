@@ -1,9 +1,8 @@
-use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::event_emitter::EventEmitter;
-use crate::memcmp::{get_market_filter, get_non_idle_user_filter, get_user_filter};
+use crate::memcmp::get_market_filter;
 use crate::utils::{decode, get_ws_url};
 use crate::websocket_program_account_subscriber::{
     ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
@@ -21,7 +20,6 @@ use solana_client::rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
 use solana_client::rpc_request::RpcRequest;
 use solana_client::rpc_response::{OptionalContext, RpcKeyedAccount};
 use solana_sdk::commitment_config::CommitmentConfig;
-use solana_sdk::pubkey::Pubkey;
 
 pub trait MarketIndex {
     fn market_index(&self) -> u16;
