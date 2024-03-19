@@ -8,10 +8,9 @@ use drift::{
     ids::pyth_program,
     instructions::optional_accounts::AccountMaps,
     math::{
-        casting::Cast,
         constants::{
-            AMM_RESERVE_PRECISION_I128, BASE_PRECISION_I128, MARGIN_PRECISION, QUOTE_PRECISION_I64,
-            SPOT_WEIGHT_PRECISION,
+            AMM_RESERVE_PRECISION_I128, BASE_PRECISION_I128, MARGIN_PRECISION,
+            QUOTE_PRECISION_I128, QUOTE_PRECISION_I64, SPOT_WEIGHT_PRECISION,
         },
         margin::{
             calculate_margin_requirement_and_total_collateral_and_liability_info,
@@ -36,7 +35,10 @@ use solana_sdk::{
     pubkey::Pubkey,
 };
 
-use crate::{constants, AccountProvider, DriftClient, MarketId, SdkError, SdkResult};
+use crate::{
+    constants::{self},
+    AccountProvider, DriftClient, MarketId, SdkError, SdkResult,
+};
 
 /// Builds an AccountMap of relevant spot, perp, and oracle accounts from rpc
 #[derive(Default)]
@@ -313,16 +315,14 @@ pub fn calculate_liquidation_price_inner(
 
     // user holding spot asset case
     let mut spot_free_collateral_delta = 0;
-    if let Some(spot_market_index) = spot_market_map
+    if let Some((spot_market_index, _)) = spot_market_map
         .0
         .iter()
-        .position(|x| x.1.load().is_ok_and(|x| x.oracle == perp_market.amm.oracle))
+        .find(|x| x.1.load().is_ok_and(|x| x.oracle == perp_market.amm.oracle))
     {
-        if let Ok(spot_position) = user.get_spot_position(spot_market_index as u16) {
+        if let Ok(spot_position) = user.get_spot_position(*spot_market_index) {
             if !spot_position.is_available() {
-                let market = spot_market_map
-                    .get_ref(&(spot_market_index as u16))
-                    .unwrap();
+                let market = spot_market_map.get_ref(spot_market_index).unwrap();
                 spot_free_collateral_delta =
                     calculate_spot_free_collateral_delta(spot_position, &market);
             }
@@ -350,6 +350,7 @@ pub fn calculate_liquidation_price_inner(
 
 fn calculate_perp_free_collateral_delta(position: &PerpPosition, market: &PerpMarket) -> i64 {
     let current_base_asset_amount = position.base_asset_amount;
+
     let worst_case_base_amount = position.worst_case_base_asset_amount().unwrap();
     let margin_ratio = market
         .get_margin_ratio(
@@ -381,18 +382,17 @@ fn calculate_perp_free_collateral_delta(position: &PerpPosition, market: &PerpMa
 }
 
 fn calculate_spot_free_collateral_delta(position: &SpotPosition, market: &SpotMarket) -> i64 {
-    let market_precision = 10_i64.pow(market.decimals);
+    let market_precision = 10_i128.pow(market.decimals);
     let signed_token_amount = position.get_signed_token_amount(market).unwrap();
-    if signed_token_amount > 0 {
+    let delta = if signed_token_amount > 0 {
         let weight = market
             .get_asset_weight(
                 signed_token_amount.unsigned_abs(),
                 0, // unused by Maintenance margin type, hence 0
                 &MarginRequirementType::Maintenance,
             )
-            .unwrap() as i64;
-        (((QUOTE_PRECISION_I64 * weight) / SPOT_WEIGHT_PRECISION as i64)
-            * signed_token_amount.cast::<i64>().unwrap())
+            .unwrap() as i128;
+        (((QUOTE_PRECISION_I128 * weight) / SPOT_WEIGHT_PRECISION as i128) * signed_token_amount)
             / market_precision
     } else {
         let weight = market
@@ -400,11 +400,13 @@ fn calculate_spot_free_collateral_delta(position: &SpotPosition, market: &SpotMa
                 signed_token_amount.unsigned_abs(),
                 &MarginRequirementType::Maintenance,
             )
-            .unwrap() as i64;
-        (((QUOTE_PRECISION_I64.neg() * weight) / SPOT_WEIGHT_PRECISION as i64)
-            * signed_token_amount.abs().cast::<i64>().unwrap())
+            .unwrap() as i128;
+        (((QUOTE_PRECISION_I128.neg() * weight) / SPOT_WEIGHT_PRECISION as i128)
+            * signed_token_amount.abs())
             / market_precision
-    }
+    };
+
+    delta.try_into().expect("ftis i64")
 }
 
 #[cfg(test)]
@@ -414,6 +416,7 @@ mod tests {
     use anchor_lang::{Owner, ZeroCopy};
     use bytes::BytesMut;
     use drift::{
+        drift::resolve_spot_bankruptcy,
         math::constants::{
             AMM_RESERVE_PRECISION, BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, PEG_PRECISION,
             SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64, SPOT_CUMULATIVE_INTEREST_PRECISION,
@@ -517,17 +520,17 @@ mod tests {
     #[tokio::test]
     async fn calculate_liq_price() {
         let wallet = Wallet::read_only(
-            Pubkey::from_str("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2").unwrap(),
+            Pubkey::from_str("BTEa9vssaG61XAhzPTtNtvVFpB1EARNwaTffTqA43YzT").unwrap(),
         );
         let client = DriftClient::new(
-            crate::Context::DevNet,
-            RpcAccountProvider::new("https://api.devnet.solana.com"),
+            crate::Context::MainNet,
+            RpcAccountProvider::new("https://api.mainnet-beta.solana.com"),
             wallet.clone(),
         )
         .await
         .unwrap();
         let user = client
-            .get_user_account(&wallet.sub_account(0))
+            .get_user_account(&wallet.sub_account(2))
             .await
             .unwrap();
 
@@ -743,6 +746,55 @@ mod tests {
         dbg!(unrealized_pnl);
         // entry at $80, upnl at $60
         assert_eq!(unrealized_pnl, 20_i128 * QUOTE_PRECISION_I64 as i128);
+    }
+
+    #[test]
+    fn liquidation_price_hedged_short() {
+        let sol_perp_index = 0;
+        let sol_spot_index = 1;
+        let mut user = User::default();
+        user.perp_positions[0] = PerpPosition {
+            market_index: sol_perp_index,
+            base_asset_amount: -10 * BASE_PRECISION_I64,
+            quote_entry_amount: 80 * QUOTE_PRECISION_I64,
+            ..Default::default()
+        };
+        user.spot_positions[0] = SpotPosition {
+            market_index: sol_spot_index,
+            scaled_balance: 10 * SPOT_BALANCE_PRECISION as u64,
+            ..Default::default()
+        };
+        let mut sol_oracle_price = get_pyth_price(60, 6);
+
+        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth::ID, sol_oracle);
+        crate::create_anchor_account_info!(
+            usdc_spot_market(),
+            &constants::PROGRAM_ID,
+            SpotMarket,
+            usdc_spot
+        );
+        crate::create_anchor_account_info!(
+            sol_perp_market(),
+            &constants::PROGRAM_ID,
+            PerpMarket,
+            sol_perp
+        );
+        crate::create_anchor_account_info!(
+            sol_spot_market(),
+            &constants::PROGRAM_ID,
+            SpotMarket,
+            sol_spot
+        );
+        let mut accounts_map = build_account_map(
+            &mut [sol_perp],
+            &mut [usdc_spot, sol_spot],
+            &mut [sol_oracle],
+        );
+        let liq_price =
+            calculate_liquidation_price_inner(&user, sol_perp_index, &mut accounts_map).unwrap();
+        dbg!(liq_price);
+        // price down but fully hedged
+        assert_eq!(liq_price, -1);
     }
 
     #[test]
