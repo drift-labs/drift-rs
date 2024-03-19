@@ -520,7 +520,7 @@ mod tests {
     #[tokio::test]
     async fn calculate_liq_price() {
         let wallet = Wallet::read_only(
-            Pubkey::from_str("BTEa9vssaG61XAhzPTtNtvVFpB1EARNwaTffTqA43YzT").unwrap(),
+            Pubkey::from_str("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2").unwrap(),
         );
         let client = DriftClient::new(
             crate::Context::MainNet,
