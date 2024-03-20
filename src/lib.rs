@@ -9,7 +9,12 @@ use drift::{
     controller::position::PositionDirection,
     instructions::SpotFulfillmentType,
     state::{
-        oracle::get_oracle_price, order_params::{ModifyOrderParams, OrderParams}, perp_market::PerpMarket, spot_market::SpotMarket, state::State, user::{MarketType, Order, OrderStatus, PerpPosition, SpotPosition, User, UserStats}
+        oracle::get_oracle_price,
+        order_params::{ModifyOrderParams, OrderParams},
+        perp_market::PerpMarket,
+        spot_market::SpotMarket,
+        state::State,
+        user::{MarketType, Order, OrderStatus, PerpPosition, SpotPosition, User, UserStats},
     },
 };
 use fnv::FnvHashMap;
@@ -51,9 +56,9 @@ use crate::constants::{
 
 // utils
 pub mod async_utils;
+pub mod math;
 pub mod memcmp;
 pub mod utils;
-pub mod math;
 
 // constants & types
 pub mod constants;
@@ -61,17 +66,17 @@ pub mod types;
 
 // internal infra
 pub mod event_emitter;
-pub mod websocket_program_account_subscriber;
 pub mod websocket_account_subscriber;
+pub mod websocket_program_account_subscriber;
 
 // subscribers
 pub mod auction_subscriber;
 pub mod dlob_client;
 pub mod event_subscriber;
-pub mod slot_subscriber;
 pub mod marketmap;
-pub mod usermap;
 pub mod oraclemap;
+pub mod slot_subscriber;
+pub mod usermap;
 
 pub mod dlob;
 
@@ -664,7 +669,12 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             }
         }
 
-        let oracle_map = OracleMap::new(account_provider.commitment_config(), account_provider.endpoint(), true, oracle_infos);
+        let oracle_map = OracleMap::new(
+            account_provider.commitment_config(),
+            account_provider.endpoint(),
+            true,
+            oracle_infos,
+        );
 
         let mut this = Self {
             rpc_client,
@@ -1721,7 +1731,12 @@ mod tests {
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map: OracleMap::new(CommitmentConfig::processed(), DEVNET_ENDPOINT.to_string(), true, vec![])
+            oracle_map: OracleMap::new(
+                CommitmentConfig::processed(),
+                DEVNET_ENDPOINT.to_string(),
+                true,
+                vec![],
+            ),
         };
 
         DriftClient {

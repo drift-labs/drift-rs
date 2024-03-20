@@ -2,8 +2,6 @@ use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{event_emitter::EventEmitter, SdkResult};
 
-
-
 #[derive(Clone)]
 pub struct WebsocketAccountSubscriber {
     subscription_name: &'static str,
@@ -35,13 +33,10 @@ impl WebsocketAccountSubscriber {
     }
 
     pub async fn subscribe(&mut self) -> SdkResult<()> {
-
-        
         Ok(())
     }
 
     pub async fn unsubscribe(&mut self) -> SdkResult<()> {
-
         Ok(())
     }
 }

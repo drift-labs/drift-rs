@@ -6,12 +6,11 @@ use solana_sdk::account_info::{AccountInfo, IntoAccountInfo};
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use std::cell::{Cell, RefCell};
 use std::str::FromStr;
-use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex};
 
 use crate::websocket_account_subscriber::WebsocketAccountSubscriber;
 use crate::{event_emitter::EventEmitter, SdkResult};
-
 
 #[derive(Copy, Clone, Debug)]
 pub(crate) struct OraclePriceDataAndSlot {
@@ -39,20 +38,25 @@ pub(crate) struct OracleMap {
 }
 
 impl OracleMap {
-    pub fn new(commitment: CommitmentConfig, endpoint: String, sync: bool, oracle_infos: Vec<(Pubkey, OracleSource)>, ) -> Self {
+    pub fn new(
+        commitment: CommitmentConfig,
+        endpoint: String,
+        sync: bool,
+        oracle_infos: Vec<(Pubkey, OracleSource)>,
+    ) -> Self {
         let oraclemap = Arc::new(DashMap::new());
 
         let event_emitter = EventEmitter::new();
-        
+
         let rpc = RpcClient::new_with_commitment(endpoint.clone(), commitment);
-        
-        let sync_lock = if sync { Some(Mutex::new(())) } else { None } ;
+
+        let sync_lock = if sync { Some(Mutex::new(())) } else { None };
 
         let oracle_infos_map = DashMap::new();
         for (pubkey, source) in oracle_infos {
             oracle_infos_map.insert(pubkey, source);
         }
-    
+
         Self {
             subscribed: Cell::new(false),
             oraclemap,
@@ -69,10 +73,9 @@ impl OracleMap {
     pub async fn subscribe(&self) -> SdkResult<()> {
         if let Some(_) = self.sync_lock {
             self.sync().await?;
-        }   
+        }
 
         if !self.subscribed.get() {
-
             let url = self.rpc.url();
             let subscription_name: &'static str = "oraclemap";
 
@@ -87,7 +90,7 @@ impl OracleMap {
                     self.event_emitter.clone(),
                 );
                 oracle_subscribers.push(oracle_subscriber);
-            }            
+            }
 
             for oracle_subscriber in oracle_subscribers.clone().iter_mut() {
                 oracle_subscriber.subscribe().await?;
@@ -103,13 +106,12 @@ impl OracleMap {
 
             self.event_emitter.subscribe("oraclemap", move |event| {
                 if let Some(update) = event.as_any().downcast_ref::<OracleAccountUpdate>() {
-                    let oracle_source_maybe = oracle_source_by_oracle_key.get(&Pubkey::from_str(&update.pubkey).expect("valid pubkey"));
+                    let oracle_source_maybe = oracle_source_by_oracle_key
+                        .get(&Pubkey::from_str(&update.pubkey).expect("valid pubkey"));
                     if let Some(oracle_source) = oracle_source_maybe {
-                        let price_data = get_oracle_price(
-                            &oracle_source.value(),
-                            &update.data,
-                            update.slot,
-                        ).map_err(|err| crate::SdkError::Anchor(Box::new(err.into())));
+                        let price_data =
+                            get_oracle_price(&oracle_source.value(), &update.data, update.slot)
+                                .map_err(|err| crate::SdkError::Anchor(Box::new(err.into())));
                         if price_data.is_ok() {
                             let price_data = price_data.unwrap();
                             let oracle_price_data_and_slot = OraclePriceDataAndSlot {
@@ -122,7 +124,7 @@ impl OracleMap {
                 }
             });
         }
-        
+
         Ok(())
     }
 
@@ -139,7 +141,6 @@ impl OracleMap {
         Ok(())
     }
 
-
     async fn sync(&self) -> SdkResult<()> {
         let sync_lock = self.sync_lock.as_ref().expect("expected sync lock");
 
@@ -154,16 +155,31 @@ impl OracleMap {
             ..RpcAccountInfoConfig::default()
         };
 
-        let mut pubkeys = self.oracle_infos.iter().map(|oracle_info_ref| *oracle_info_ref.key()).collect::<Vec<Pubkey>>();
+        let mut pubkeys = self
+            .oracle_infos
+            .iter()
+            .map(|oracle_info_ref| *oracle_info_ref.key())
+            .collect::<Vec<Pubkey>>();
         pubkeys.sort();
 
-        let mut oracle_infos = self.oracle_infos.iter().map(|oracle_info_ref| (*oracle_info_ref.key(), *oracle_info_ref.value())).collect::<Vec<(Pubkey, OracleSource)>>();
+        let mut oracle_infos = self
+            .oracle_infos
+            .iter()
+            .map(|oracle_info_ref| (*oracle_info_ref.key(), *oracle_info_ref.value()))
+            .collect::<Vec<(Pubkey, OracleSource)>>();
         oracle_infos.sort_by_key(|key| key.0);
 
-        let response = self.rpc.get_multiple_accounts_with_config(&pubkeys, account_config).await?;
+        let response = self
+            .rpc
+            .get_multiple_accounts_with_config(&pubkeys, account_config)
+            .await?;
 
         if response.value.len() != pubkeys.len() {
-            return Err(crate::SdkError::Generic(format!("failed to get all oracle accounts, expected: {}, got: {}", pubkeys.len(), response.value.len())));
+            return Err(crate::SdkError::Generic(format!(
+                "failed to get all oracle accounts, expected: {}, got: {}",
+                pubkeys.len(),
+                response.value.len()
+            )));
         }
 
         let slot = response.context.slot;
@@ -174,23 +190,22 @@ impl OracleMap {
                 let oracle_pubkey = oracle_info.0.clone();
                 let mut oracle_components = (oracle_pubkey, oracle_account.clone());
                 let account_info = oracle_components.into_account_info();
-                let price_data = get_oracle_price(
-                    &oracle_info.1,
-                    &account_info,
-                    slot,
-                ).map_err(|err| crate::SdkError::Anchor(Box::new(err.into())))?;
-                self.oraclemap.insert(oracle_pubkey.to_string(), OraclePriceDataAndSlot {
-                    data: price_data,
-                    slot,
-                });
-            }   
+                let price_data = get_oracle_price(&oracle_info.1, &account_info, slot)
+                    .map_err(|err| crate::SdkError::Anchor(Box::new(err.into())))?;
+                self.oraclemap.insert(
+                    oracle_pubkey.to_string(),
+                    OraclePriceDataAndSlot {
+                        data: price_data,
+                        slot,
+                    },
+                );
+            }
         }
 
         self.latest_slot.store(slot, Ordering::Relaxed);
 
         drop(lock);
         Ok(())
-        
     }
 
     pub fn size(&self) -> usize {
@@ -206,8 +221,10 @@ impl OracleMap {
     }
 
     pub fn values(&self) -> Vec<OraclePriceData> {
-        self.oraclemap.iter().map(|x| x.value().data.clone()).collect()
-    
+        self.oraclemap
+            .iter()
+            .map(|x| x.value().data.clone())
+            .collect()
     }
 }
 
@@ -224,11 +241,13 @@ mod tests {
         let commitment = CommitmentConfig::processed();
         let endpoint = "rpc".to_string();
 
-        let spot_market_map = MarketMap::<SpotMarket>::new(commitment.clone(), endpoint.clone(), true);
-        let perp_market_map = MarketMap::<PerpMarket>::new(commitment.clone(), endpoint.clone(), true);
+        let spot_market_map =
+            MarketMap::<SpotMarket>::new(commitment.clone(), endpoint.clone(), true);
+        let perp_market_map =
+            MarketMap::<PerpMarket>::new(commitment.clone(), endpoint.clone(), true);
 
-        let _  = spot_market_map.sync().await;
-        let _  = perp_market_map.sync().await;
+        let _ = spot_market_map.sync().await;
+        let _ = perp_market_map.sync().await;
 
         let perp_oracles = perp_market_map.oracles();
         let spot_oracles = spot_market_map.oracles();
@@ -291,6 +310,5 @@ mod tests {
         //     dbg!(weth_oracle.data.price);
         //     dbg!(weth_oracle.slot);
         // }
-        
     }
 }

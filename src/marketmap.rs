@@ -27,7 +27,7 @@ use solana_sdk::pubkey::Pubkey;
 pub trait Market {
     fn market_index(&self) -> u16;
     fn market_type() -> MarketType;
-    fn oracle_info(&self) -> (Pubkey, OracleSource); 
+    fn oracle_info(&self) -> (Pubkey, OracleSource);
 }
 
 impl Market for PerpMarket {
@@ -113,7 +113,7 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
 
             let marketmap = self.marketmap.clone();
             let latest_slot = self.latest_slot.clone();
-    
+
             self.subscription
                 .try_borrow()?
                 .event_emitter
@@ -181,7 +181,7 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
         };
 
         let options = self.subscription.try_borrow()?.options.clone();
-        
+
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.commitment),
             encoding: Some(options.encoding),

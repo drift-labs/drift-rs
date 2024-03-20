@@ -1,4 +1,7 @@
-use std::{cell::{BorrowError, BorrowMutError}, cmp::Ordering};
+use std::{
+    cell::{BorrowError, BorrowMutError},
+    cmp::Ordering,
+};
 
 use anchor_lang::AccountDeserialize;
 use drift::{error::ErrorCode, state::user::UserStats};
