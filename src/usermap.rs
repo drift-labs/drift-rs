@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crate::event_emitter::EventEmitter;
-use crate::memcmp::{get_non_idle_user_filter, get_user_filter};
+use crate::memcmp::{get_non_idle_user_filter, get_user_filter, get_user_with_order_filter};
 use crate::utils::{decode, get_ws_url};
 use crate::websocket_program_account_subscriber::{
     ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
@@ -33,7 +33,11 @@ pub struct UserMap {
 
 impl UserMap {
     pub fn new(commitment: CommitmentConfig, endpoint: String, sync: bool) -> Self {
-        let filters = vec![get_user_filter(), get_non_idle_user_filter()];
+        let filters = vec![
+            get_user_filter(),
+            get_non_idle_user_filter(),
+            get_user_with_order_filter(),
+        ];
         let options = WebsocketProgramAccountOptions {
             filters,
             commitment,

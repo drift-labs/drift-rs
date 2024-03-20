@@ -1,7 +1,7 @@
 <div align="center">
   <img height="120x" src="https://uploads-ssl.webflow.com/611580035ad59b20437eb024/616f97a42f5637c4517d0193_Logo%20(1)%20(1).png" />
 
-  <h1 style="margin-top:20px;">Drift Protocol v2 (Rust SDK)</h1>
+  <h1 style="margin-top:20px;">drift-rs</h1>
 
   <p>
     <a href="https://crates.io/crates/drift-sdk"><img alt="Crates.io" src="https://img.shields.io/crates/v/drift-sdk.img" /></a>
@@ -11,9 +11,9 @@
   </p>
 </div>
 
-# Drift Protocol v2 (Rust SDK)
+# drift-rs
 
-Rust SDK for building off chain clients for interacting with the [Drift V2](https://github.com/drift-labs/protocol-v2) protocol.
+Experimental, high performance Rust SDK for building off chain clients for interacting with the [Drift V2](https://github.com/drift-labs/protocol-v2) protocol.
 
 ## Setup
 

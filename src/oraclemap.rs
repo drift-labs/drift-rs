@@ -1,5 +1,6 @@
 use dashmap::DashMap;
 use drift::state::oracle::{get_oracle_price, OraclePriceData, OracleSource};
+use solana_account_decoder::{UiAccountData, UiAccountEncoding};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_config::RpcAccountInfoConfig;
 use solana_sdk::account_info::{AccountInfo, IntoAccountInfo};
@@ -9,19 +10,14 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crate::websocket_account_subscriber::WebsocketAccountSubscriber;
+use crate::event_emitter::Event;
+use crate::utils::get_ws_url;
+use crate::websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber};
 use crate::{event_emitter::EventEmitter, SdkResult};
 
 #[derive(Copy, Clone, Debug)]
 pub(crate) struct OraclePriceDataAndSlot {
     pub data: OraclePriceData,
-    pub slot: u64,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct OracleAccountUpdate<'a> {
-    pub pubkey: String,
-    pub data: AccountInfo<'a>,
     pub slot: u64,
 }
 
@@ -76,7 +72,7 @@ impl OracleMap {
         }
 
         if !self.subscribed.get() {
-            let url = self.rpc.url();
+            let url = get_ws_url(&self.rpc.url()).expect("valid url");
             let subscription_name: &'static str = "oraclemap";
 
             let mut oracle_subscribers = vec![];
@@ -92,28 +88,47 @@ impl OracleMap {
                 oracle_subscribers.push(oracle_subscriber);
             }
 
-            for oracle_subscriber in oracle_subscribers.clone().iter_mut() {
-                oracle_subscriber.subscribe().await?;
-            }
-
-            let mut oracle_subscribers_mut = self.oracle_subscribers.try_borrow_mut()?;
-            *oracle_subscribers_mut = oracle_subscribers;
-
             self.subscribed.set(true);
 
             let oracle_source_by_oracle_key = self.oracle_infos.clone();
             let oracle_map = self.oraclemap.clone();
 
             self.event_emitter.subscribe("oraclemap", move |event| {
-                if let Some(update) = event.as_any().downcast_ref::<OracleAccountUpdate>() {
-                    let oracle_source_maybe = oracle_source_by_oracle_key
-                        .get(&Pubkey::from_str(&update.pubkey).expect("valid pubkey"));
+                if let Some(update) = event.as_any().downcast_ref::<AccountUpdate>() {
+                    let oracle_pubkey = Pubkey::from_str(&update.pubkey).expect("valid pubkey");
+                    let oracle_source_maybe = oracle_source_by_oracle_key.get(&oracle_pubkey);
                     if let Some(oracle_source) = oracle_source_maybe {
-                        let price_data =
-                            get_oracle_price(&oracle_source.value(), &update.data, update.slot)
-                                .map_err(|err| crate::SdkError::Anchor(Box::new(err.into())));
+                        let ui_account_data = &update.data.data;
+                        let data_maybe =
+                            if let UiAccountData::Binary(blob, UiAccountEncoding::Base64) =
+                                ui_account_data
+                            {
+                                base64::decode(blob).ok()
+                            } else {
+                                None
+                            };
+                        let mut data = data_maybe.expect("valid data");
+                        let owner = Pubkey::from_str(&update.data.owner).expect("valid pubkey");
+                        let mut lamports = update.data.lamports;
+                        let oracle_account_info = AccountInfo::new(
+                            &oracle_pubkey,
+                            false,
+                            false,
+                            &mut lamports,
+                            &mut data,
+                            &owner,
+                            false,
+                            update.data.rent_epoch,
+                        );
+                        let price_data = get_oracle_price(
+                            &oracle_source.value(),
+                            &oracle_account_info,
+                            update.slot,
+                        )
+                        .map_err(|err| crate::SdkError::Anchor(Box::new(err.into())));
                         if price_data.is_ok() {
                             let price_data = price_data.unwrap();
+
                             let oracle_price_data_and_slot = OraclePriceDataAndSlot {
                                 data: price_data,
                                 slot: update.slot,
@@ -123,6 +138,13 @@ impl OracleMap {
                     }
                 }
             });
+
+            for oracle_subscriber in oracle_subscribers.clone().iter_mut() {
+                oracle_subscriber.subscribe().await?;
+            }
+
+            let mut oracle_subscribers_mut = self.oracle_subscribers.try_borrow_mut()?;
+            *oracle_subscribers_mut = oracle_subscribers;
         }
 
         Ok(())
@@ -205,6 +227,7 @@ impl OracleMap {
         self.latest_slot.store(slot, Ordering::Relaxed);
 
         drop(lock);
+
         Ok(())
     }
 
@@ -270,45 +293,115 @@ mod tests {
 
         let _ = oracle_map.subscribe().await;
 
-        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
-
         dbg!(oracle_map.size());
         assert_eq!(oracle_map.size(), oracle_infos_len);
 
-        for oracle in oracle_map.values() {
-            dbg!(oracle);
+        dbg!("sleeping");
+        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+        dbg!("done sleeping");
+
+        dbg!("perp market oracles");
+        let mut last_sol_price = 0;
+        let mut last_sol_slot = 0;
+        let mut last_btc_price = 0;
+        let mut last_btc_slot = 0;
+        for _ in 0..10 {
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            dbg!();
+            let sol_perp_market_oracle_pubkey = perp_market_map
+                .get(&0)
+                .expect("sol perp market")
+                .data
+                .amm
+                .oracle;
+            let sol_oracle = oracle_map
+                .get(&sol_perp_market_oracle_pubkey.to_string())
+                .expect("sol oracle");
+            dbg!("sol oracle info:");
+            dbg!(sol_oracle.data.price);
+            dbg!(sol_oracle.slot);
+            dbg!(
+                "sol price change: {}",
+                sol_oracle.data.price - last_sol_price
+            );
+            dbg!("sol slot change: {}", sol_oracle.slot - last_sol_slot);
+            last_sol_price = sol_oracle.data.price;
+            last_sol_slot = sol_oracle.slot;
+
+            dbg!();
+
+            let btc_perp_market_oracle_pubkey = perp_market_map
+                .get(&1)
+                .expect("btc perp market")
+                .data
+                .amm
+                .oracle;
+            let btc_oracle = oracle_map
+                .get(&btc_perp_market_oracle_pubkey.to_string())
+                .expect("btc oracle");
+            dbg!("btc oracle info:");
+            dbg!(btc_oracle.data.price);
+            dbg!(btc_oracle.slot);
+            dbg!(
+                "btc price change: {}",
+                btc_oracle.data.price - last_btc_price
+            );
+            dbg!("btc slot change: {}", btc_oracle.slot - last_btc_slot);
+            last_btc_price = btc_oracle.data.price;
+            last_btc_slot = btc_oracle.slot;
         }
 
-        // dbg!("perp market oracles");
-        // for _ in 0..10 {
-        //     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-        //     let sol_perp_market_oracle_pubkey = perp_market_map.get(&0).expect("sol perp market").data.amm.oracle;
-        //     let sol_oracle = oracle_map.get(&sol_perp_market_oracle_pubkey.to_string()).expect("sol oracle");
-        //     dbg!("sol oracle info:");
-        //     dbg!(sol_oracle.data.price);
-        //     dbg!(sol_oracle.slot);
+        dbg!();
 
-        //     let btc_perp_market_oracle_pubkey = perp_market_map.get(&1).expect("btc perp market").data.amm.oracle;
-        //     let btc_oracle = oracle_map.get(&btc_perp_market_oracle_pubkey.to_string()).expect("btc oracle");
-        //     dbg!("btc oracle info:");
-        //     dbg!(btc_oracle.data.price);
-        //     dbg!(btc_oracle.slot);
-        // }
+        dbg!("spot market oracles");
+        let mut last_rndr_price = 0;
+        let mut last_rndr_slot = 0;
+        let mut last_weth_price = 0;
+        let mut last_weth_slot = 0;
+        for _ in 0..10 {
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            dbg!();
+            let rndr_spot_market_oracle_pubkey = spot_market_map
+                .get(&11)
+                .expect("sol perp market")
+                .data
+                .oracle;
+            let rndr_oracle = oracle_map
+                .get(&rndr_spot_market_oracle_pubkey.to_string())
+                .expect("sol oracle");
+            dbg!("rndr oracle info:");
+            dbg!(rndr_oracle.data.price);
+            dbg!(rndr_oracle.slot);
+            dbg!(
+                "rndr price change: {}",
+                rndr_oracle.data.price - last_rndr_price
+            );
+            dbg!("rndr slot change: {}", rndr_oracle.slot - last_rndr_slot);
+            last_rndr_price = rndr_oracle.data.price;
+            last_rndr_slot = rndr_oracle.slot;
 
-        // dbg!("spot market oracles");
-        // for _ in 0..10 {
-        //     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-        //     let rndr_spot_market_oracle_pubkey = spot_market_map.get(&11).expect("sol perp market").data.oracle;
-        //     let rndr_oracle = oracle_map.get(&rndr_spot_market_oracle_pubkey.to_string()).expect("sol oracle");
-        //     dbg!("rndr oracle info:");
-        //     dbg!(rndr_oracle.data.price);
-        //     dbg!(rndr_oracle.slot);
+            dbg!();
 
-        //     let weth_spot_market_oracle_pubkey = spot_market_map.get(&11).expect("sol perp market").data.oracle;
-        //     let weth_oracle = oracle_map.get(&weth_spot_market_oracle_pubkey.to_string()).expect("sol oracle");
-        //     dbg!("weth oracle info:");
-        //     dbg!(weth_oracle.data.price);
-        //     dbg!(weth_oracle.slot);
-        // }
+            let weth_spot_market_oracle_pubkey = spot_market_map
+                .get(&4)
+                .expect("sol perp market")
+                .data
+                .oracle;
+            let weth_oracle = oracle_map
+                .get(&weth_spot_market_oracle_pubkey.to_string())
+                .expect("sol oracle");
+            dbg!("weth oracle info:");
+            dbg!(weth_oracle.data.price);
+            dbg!(weth_oracle.slot);
+            dbg!(
+                "weth price change: {}",
+                weth_oracle.data.price - last_weth_price
+            );
+            dbg!("weth slot change: {}", weth_oracle.slot - last_weth_slot);
+            last_weth_price = weth_oracle.data.price;
+            last_weth_slot = weth_oracle.slot;
+        }
+
+        let _ = oracle_map.unsubscribe().await;
     }
 }
