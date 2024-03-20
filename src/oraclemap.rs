@@ -96,42 +96,46 @@ impl OracleMap {
                     let oracle_pubkey = Pubkey::from_str(&update.pubkey).expect("valid pubkey");
                     let oracle_source_maybe = oracle_source_by_oracle_key.get(&oracle_pubkey);
                     if let Some(oracle_source) = oracle_source_maybe {
-                        let ui_account_data = &update.data.data;
-                        let data_maybe =
-                            if let UiAccountData::Binary(blob, UiAccountEncoding::Base64) =
-                                ui_account_data
-                            {
-                                base64::decode(blob).ok()
-                            } else {
-                                None
-                            };
-                        let mut data = data_maybe.expect("valid data");
-                        let owner = Pubkey::from_str(&update.data.owner).expect("valid pubkey");
-                        let mut lamports = update.data.lamports;
-                        let oracle_account_info = AccountInfo::new(
-                            &oracle_pubkey,
-                            false,
-                            false,
-                            &mut lamports,
-                            &mut data,
-                            &owner,
-                            false,
-                            update.data.rent_epoch,
-                        );
-                        let price_data = get_oracle_price(
-                            &oracle_source.value(),
-                            &oracle_account_info,
-                            update.slot,
-                        )
-                        .map_err(|err| crate::SdkError::Anchor(Box::new(err.into())));
-                        if price_data.is_ok() {
-                            let price_data = price_data.unwrap();
-
-                            let oracle_price_data_and_slot = OraclePriceDataAndSlot {
-                                data: price_data,
-                                slot: update.slot,
-                            };
-                            oracle_map.insert(update.pubkey.clone(), oracle_price_data_and_slot);
+                        if let UiAccountData::Binary(blob, UiAccountEncoding::Base64) =
+                            &update.data.data
+                        {
+                            match base64::decode(blob) {
+                                Ok(mut data) => match Pubkey::from_str(&update.data.owner) {
+                                    Ok(owner) => {
+                                        let mut lamports = update.data.lamports;
+                                        let oracle_account_info = AccountInfo::new(
+                                            &oracle_pubkey,
+                                            false,
+                                            false,
+                                            &mut lamports,
+                                            &mut data,
+                                            &owner,
+                                            false,
+                                            update.data.rent_epoch,
+                                        );
+                                        match get_oracle_price(
+                                            &oracle_source.value(),
+                                            &oracle_account_info,
+                                            update.slot,
+                                        ) {
+                                            Ok(price_data) => {
+                                                oracle_map.insert(
+                                                    update.pubkey.clone(),
+                                                    OraclePriceDataAndSlot {
+                                                        data: price_data,
+                                                        slot: update.slot,
+                                                    },
+                                                );
+                                            }
+                                            Err(err) => {
+                                                eprintln!("Failed to get oracle price: {:?}", err)
+                                            }
+                                        }
+                                    }
+                                    Err(_) => eprintln!("Invalid pubkey in update data"),
+                                },
+                                Err(_) => eprintln!("Failed to decode base64 data"),
+                            }
                         }
                     }
                 }
