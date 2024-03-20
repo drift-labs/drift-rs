@@ -9,7 +9,7 @@ pub fn get_user_filter() -> RpcFilterType {
 }
 
 pub fn get_non_idle_user_filter() -> RpcFilterType {
-    RpcFilterType::Memcmp(Memcmp::new_raw_bytes(4_350, vec![1]))
+    RpcFilterType::Memcmp(Memcmp::new_raw_bytes(4_350, vec![0]))
 }
 
 pub fn get_user_with_auction_filter() -> RpcFilterType {

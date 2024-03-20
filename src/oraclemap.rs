@@ -1,3 +1,6 @@
+use crate::utils::get_ws_url;
+use crate::websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber};
+use crate::{event_emitter::EventEmitter, SdkResult};
 use dashmap::DashMap;
 use drift::state::oracle::{get_oracle_price, OraclePriceData, OracleSource};
 use solana_account_decoder::{UiAccountData, UiAccountEncoding};
@@ -10,13 +13,8 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crate::event_emitter::Event;
-use crate::utils::get_ws_url;
-use crate::websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber};
-use crate::{event_emitter::EventEmitter, SdkResult};
-
 #[derive(Copy, Clone, Debug)]
-pub(crate) struct OraclePriceDataAndSlot {
+pub struct OraclePriceDataAndSlot {
     pub data: OraclePriceData,
     pub slot: u64,
 }

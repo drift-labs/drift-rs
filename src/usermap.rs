@@ -16,6 +16,7 @@ use serde_json::json;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
+use solana_client::rpc_filter::RpcFilterType;
 use solana_client::rpc_request::RpcRequest;
 use solana_client::rpc_response::{OptionalContext, RpcKeyedAccount};
 use solana_sdk::commitment_config::CommitmentConfig;
@@ -32,12 +33,14 @@ pub struct UserMap {
 }
 
 impl UserMap {
-    pub fn new(commitment: CommitmentConfig, endpoint: String, sync: bool) -> Self {
-        let filters = vec![
-            get_user_filter(),
-            get_non_idle_user_filter(),
-            get_user_with_order_filter(),
-        ];
+    pub fn new(
+        commitment: CommitmentConfig,
+        endpoint: String,
+        sync: bool,
+        additional_filters: Option<Vec<RpcFilterType>>,
+    ) -> Self {
+        let mut filters = vec![get_user_filter(), get_non_idle_user_filter()];
+        filters.extend(additional_filters.unwrap_or_default());
         let options = WebsocketProgramAccountOptions {
             filters,
             commitment,

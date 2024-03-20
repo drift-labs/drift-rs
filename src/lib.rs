@@ -21,7 +21,7 @@ use fnv::FnvHashMap;
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use log::{debug, warn};
 use marketmap::MarketMap;
-use oraclemap::OracleMap;
+use oraclemap::{OracleMap, OraclePriceDataAndSlot};
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
     nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient},
@@ -326,8 +326,15 @@ impl<T: AccountProvider> DriftClient<T> {
     }
 
     /// Subscribe to the Drift Client Backend
+    /// This is a no-op if already subscribed
     pub async fn subscribe(&self) -> SdkResult<()> {
         self.backend.subscribe().await
+    }
+
+    /// Unsubscribe from the Drift Client Backend
+    /// This is a no-op if not subscribed
+    pub async fn unsubscribe(&self) -> SdkResult<()> {
+        self.backend.unsubscribe().await
     }
 
     /// Return a handle to the inner RPC client
@@ -620,6 +627,29 @@ impl<T: AccountProvider> DriftClient<T> {
             .get_spot_market_account_and_slot(market_index)
             .map(|x| x.data)
     }
+
+    pub fn get_oracle_price_data_and_slot(
+        &self,
+        oracle_pubkey: Pubkey,
+    ) -> Option<OraclePriceDataAndSlot> {
+        self.backend.get_oracle_price_data_and_slot(oracle_pubkey)
+    }
+
+    pub fn get_oracle_price_data_and_slot_for_perp_market(
+        &self,
+        market_index: u16,
+    ) -> Option<OraclePriceDataAndSlot> {
+        self.backend
+            .get_oracle_price_data_and_slot_for_perp_market(market_index)
+    }
+
+    pub fn get_oracle_price_data_and_slot_for_spot_market(
+        &self,
+        market_index: u16,
+    ) -> Option<OraclePriceDataAndSlot> {
+        self.backend
+            .get_oracle_price_data_and_slot_for_spot_market(market_index)
+    }
 }
 
 /// Provides the heavy-lifting and network facing features of the SDK
@@ -701,11 +731,21 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         Ok(this)
     }
 
-    /// Subscribes to the MarketMaps / OracleMap and start streaming data through them
     async fn subscribe(&self) -> SdkResult<()> {
-        self.perp_market_map.subscribe().await?;
-        self.spot_market_map.subscribe().await?;
-        self.oracle_map.subscribe().await?;
+        tokio::try_join!(
+            self.perp_market_map.subscribe(),
+            self.spot_market_map.subscribe(),
+            self.oracle_map.subscribe()
+        )?;
+        Ok(())
+    }
+
+    async fn unsubscribe(&self) -> SdkResult<()> {
+        tokio::try_join!(
+            self.perp_market_map.unsubscribe(),
+            self.spot_market_map.unsubscribe(),
+            self.oracle_map.unsubscribe()
+        )?;
         Ok(())
     }
 
@@ -721,6 +761,29 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         market_index: u16,
     ) -> Option<DataAndSlot<SpotMarket>> {
         self.spot_market_map.get(&market_index)
+    }
+
+    fn get_oracle_price_data_and_slot(
+        &self,
+        oracle_pubkey: Pubkey,
+    ) -> Option<OraclePriceDataAndSlot> {
+        self.oracle_map.get(&oracle_pubkey.to_string())
+    }
+
+    fn get_oracle_price_data_and_slot_for_perp_market(
+        &self,
+        market_index: u16,
+    ) -> Option<OraclePriceDataAndSlot> {
+        let market = self.get_perp_market_account_and_slot(market_index)?;
+        self.get_oracle_price_data_and_slot(market.data.amm.oracle)
+    }
+
+    fn get_oracle_price_data_and_slot_for_spot_market(
+        &self,
+        market_index: u16,
+    ) -> Option<OraclePriceDataAndSlot> {
+        let market = self.get_spot_market_account_and_slot(market_index)?;
+        self.get_oracle_price_data_and_slot(market.data.oracle)
     }
 
     /// Return a handle to the inner RPC client

@@ -56,6 +56,7 @@ impl DLOBBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memcmp::get_user_with_order_filter;
     use crate::utils::get_ws_url;
     use solana_sdk::commitment_config::CommitmentConfig;
     use solana_sdk::commitment_config::CommitmentLevel;
@@ -70,7 +71,12 @@ mod tests {
         };
 
         let slot_subscriber = SlotSubscriber::new(get_ws_url(&endpoint.clone()).unwrap());
-        let usermap = UserMap::new(commitment, endpoint, true);
+        let mut usermap = UserMap::new(
+            commitment,
+            endpoint,
+            true,
+            Some(vec![get_user_with_order_filter()]),
+        );
         let mut dlob_builder = DLOBBuilder::new(slot_subscriber, usermap, 30);
 
         dlob_builder
@@ -90,13 +96,18 @@ mod tests {
     #[tokio::test]
     #[cfg(rpc_tests)]
     async fn test_build_time() {
-        let endpoint = "url".to_string();
+        let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {
             commitment: CommitmentLevel::Processed,
         };
 
         let mut slot_subscriber = SlotSubscriber::new(get_ws_url(&endpoint.clone()).unwrap());
-        let mut usermap = UserMap::new(commitment, endpoint, true);
+        let mut usermap = UserMap::new(
+            commitment,
+            endpoint,
+            true,
+            Some(vec![get_user_with_order_filter()]),
+        );
         let _ = slot_subscriber.subscribe().await;
         let _ = usermap.subscribe().await;
 
