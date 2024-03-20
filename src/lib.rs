@@ -628,6 +628,14 @@ impl<T: AccountProvider> DriftClient<T> {
             .map(|x| x.data)
     }
 
+    pub fn num_perp_markets(&self) -> usize {
+        self.backend.num_perp_markets()
+    }
+
+    pub fn num_spot_markets(&self) -> usize {
+        self.backend.num_spot_markets()
+    }
+
     pub fn get_oracle_price_data_and_slot(
         &self,
         oracle_pubkey: Pubkey,
@@ -682,8 +690,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             true,
         );
 
-        perp_market_map.sync().await?;
-        spot_market_map.sync().await?;
+        tokio::try_join!(perp_market_map.sync(), spot_market_map.sync())?;
 
         let perp_oracles = perp_market_map.oracles();
         let spot_oracles = spot_market_map.oracles();
@@ -761,6 +768,14 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         market_index: u16,
     ) -> Option<DataAndSlot<SpotMarket>> {
         self.spot_market_map.get(&market_index)
+    }
+
+    fn num_perp_markets(&self) -> usize {
+        self.perp_market_map.size()
+    }
+
+    fn num_spot_markets(&self) -> usize {
+        self.spot_market_map.size()
     }
 
     fn get_oracle_price_data_and_slot(
