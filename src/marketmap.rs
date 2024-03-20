@@ -11,9 +11,10 @@ use crate::websocket_program_account_subscriber::{
 use crate::{DataAndSlot, SdkResult};
 use anchor_lang::AccountDeserialize;
 use dashmap::DashMap;
-use drift::state::user::MarketType;
+use drift::state::oracle::OracleSource;
 use drift::state::perp_market::PerpMarket;
 use drift::state::spot_market::SpotMarket;
+use drift::state::user::MarketType;
 use serde_json::json;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -21,10 +22,12 @@ use solana_client::rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
 use solana_client::rpc_request::RpcRequest;
 use solana_client::rpc_response::{OptionalContext, RpcKeyedAccount};
 use solana_sdk::commitment_config::CommitmentConfig;
+use solana_sdk::pubkey::Pubkey;
 
 pub trait Market {
     fn market_index(&self) -> u16;
     fn market_type() -> MarketType;
+    fn oracle_info(&self) -> (Pubkey, OracleSource); 
 }
 
 impl Market for PerpMarket {
@@ -34,6 +37,10 @@ impl Market for PerpMarket {
 
     fn market_type() -> MarketType {
         MarketType::Perp
+    }
+
+    fn oracle_info(&self) -> (Pubkey, OracleSource) {
+        (self.amm.oracle, self.amm.oracle_source)
     }
 }
 
@@ -45,6 +52,10 @@ impl Market for SpotMarket {
     fn market_type() -> MarketType {
         MarketType::Spot
     }
+
+    fn oracle_info(&self) -> (Pubkey, OracleSource) {
+        (self.oracle, self.oracle_source)
+    }
 }
 
 pub struct MarketMap<T: AccountDeserialize> {
@@ -55,6 +66,7 @@ pub struct MarketMap<T: AccountDeserialize> {
     latest_slot: Arc<AtomicU64>,
     commitment: CommitmentConfig,
     rpc: RpcClient,
+    synced: bool,
 }
 
 impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T> {
@@ -86,6 +98,7 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
             latest_slot: Arc::new(AtomicU64::new(0)),
             commitment,
             rpc,
+            synced: false,
         }
     }
 
@@ -95,37 +108,50 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
         }
 
         if !self.subscribed.get() {
-            self.subscription.borrow_mut().subscribe::<T>().await?;
+            self.subscription.try_borrow_mut()?.subscribe::<T>().await?;
             self.subscribed.set(true);
-        }
 
-        let marketmap = self.marketmap.clone();
-        let latest_slot = self.latest_slot.clone();
-
-        self.subscription
-            .borrow()
-            .event_emitter
-            .subscribe("marketmap", move |event| {
-                if let Some(update) = event.as_any().downcast_ref::<ProgramAccountUpdate<T>>() {
-                    let market_data_and_slot = update.data_and_slot.clone();
-                    if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
-                        latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
+            let marketmap = self.marketmap.clone();
+            let latest_slot = self.latest_slot.clone();
+    
+            self.subscription
+                .try_borrow()?
+                .event_emitter
+                .subscribe("marketmap", move |event| {
+                    if let Some(update) = event.as_any().downcast_ref::<ProgramAccountUpdate<T>>() {
+                        let market_data_and_slot = update.data_and_slot.clone();
+                        if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
+                            latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
+                        }
+                        marketmap.insert(
+                            update.data_and_slot.clone().data.market_index(),
+                            DataAndSlot {
+                                data: market_data_and_slot.data,
+                                slot: update.data_and_slot.slot,
+                            },
+                        );
                     }
-                    marketmap.insert(update.data_and_slot.clone().data.market_index(), DataAndSlot { data: market_data_and_slot.data, slot: update.data_and_slot.slot } );
-                }
-            });
-
+                });
+        }
         Ok(())
     }
 
     pub async fn unsubscribe(&self) -> SdkResult<()> {
         if self.subscribed.get() {
-            self.subscription.borrow_mut().unsubscribe().await?;
+            self.subscription.try_borrow_mut()?.unsubscribe().await?;
             self.subscribed.set(false);
             self.marketmap.clear();
             self.latest_slot.store(0, Ordering::Relaxed);
         }
         Ok(())
+    }
+
+    pub fn values(&self) -> Vec<T> {
+        self.marketmap.iter().map(|x| x.data.clone()).collect()
+    }
+
+    pub fn oracles(&self) -> Vec<(Pubkey, OracleSource)> {
+        self.values().iter().map(|x| x.oracle_info()).collect()
     }
 
     pub fn size(&self) -> usize {
@@ -137,10 +163,16 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
     }
 
     pub fn get(&self, market_index: &u16) -> Option<DataAndSlot<T>> {
-        self.marketmap.get(market_index).map(|market| market.clone())
+        self.marketmap
+            .get(market_index)
+            .map(|market| market.clone())
     }
 
-    async fn sync(&self) -> SdkResult<()> {
+    pub(crate) async fn sync(&self) -> SdkResult<()> {
+        if self.synced {
+            return Ok(());
+        }
+
         let sync_lock = self.sync_lock.as_ref().expect("expected sync lock");
 
         let lock = match sync_lock.try_lock() {
@@ -148,8 +180,8 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
             Err(_) => return Ok(()),
         };
 
-        let options = self.subscription.borrow().options.clone();
-
+        let options = self.subscription.try_borrow()?.options.clone();
+        
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.commitment),
             encoding: Some(options.encoding),
@@ -175,7 +207,8 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
                 let slot = accounts.context.slot;
                 let market_data = account.account.data;
                 let data = decode::<T>(market_data)?;
-                self.marketmap.insert(data.market_index(), DataAndSlot {data, slot});
+                self.marketmap
+                    .insert(data.market_index(), DataAndSlot { data, slot });
             }
 
             self.latest_slot

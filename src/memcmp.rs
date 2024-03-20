@@ -1,7 +1,7 @@
 use anchor_lang::Discriminator;
-use drift::state::user::{MarketType, User};
 use drift::state::perp_market::PerpMarket;
 use drift::state::spot_market::SpotMarket;
+use drift::state::user::{MarketType, User};
 use solana_client::rpc_filter::{Memcmp, RpcFilterType};
 
 pub fn get_user_filter() -> RpcFilterType {
@@ -22,7 +22,11 @@ pub fn get_user_with_order_filter() -> RpcFilterType {
 
 pub fn get_market_filter(market_type: MarketType) -> RpcFilterType {
     match market_type {
-        MarketType::Spot => RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, SpotMarket::discriminator().into())),
-        MarketType::Perp => RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, PerpMarket::discriminator().into())),
+        MarketType::Spot => {
+            RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, SpotMarket::discriminator().into()))
+        }
+        MarketType::Perp => {
+            RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, PerpMarket::discriminator().into()))
+        }
     }
 }

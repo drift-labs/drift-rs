@@ -2,13 +2,13 @@ use crate::{
     dlob::dlob::DLOB,
     event_emitter::{Event, EventEmitter},
     slot_subscriber::SlotSubscriber,
-    usermap::Usermap,
+    usermap::UserMap,
     SdkResult,
 };
 
 pub struct DLOBBuilder {
     slot_subscriber: SlotSubscriber,
-    usermap: Usermap,
+    usermap: UserMap,
     rebuild_frequency: u64,
     dlob: DLOB,
     event_emitter: EventEmitter,
@@ -17,7 +17,7 @@ pub struct DLOBBuilder {
 impl DLOBBuilder {
     pub fn new(
         slot_subscriber: SlotSubscriber,
-        usermap: Usermap,
+        usermap: UserMap,
         rebuild_frequency: u64,
     ) -> DLOBBuilder {
         DLOBBuilder {
@@ -70,7 +70,7 @@ mod tests {
         };
 
         let slot_subscriber = SlotSubscriber::new(get_ws_url(&endpoint.clone()).unwrap());
-        let usermap = Usermap::new(commitment, endpoint, true);
+        let usermap = UserMap::new(commitment, endpoint, true);
         let mut dlob_builder = DLOBBuilder::new(slot_subscriber, usermap, 30);
 
         dlob_builder
@@ -96,7 +96,7 @@ mod tests {
         };
 
         let mut slot_subscriber = SlotSubscriber::new(get_ws_url(&endpoint.clone()).unwrap());
-        let mut usermap = Usermap::new(commitment, endpoint, true);
+        let mut usermap = UserMap::new(commitment, endpoint, true);
         let _ = slot_subscriber.subscribe().await;
         let _ = usermap.subscribe().await;
 

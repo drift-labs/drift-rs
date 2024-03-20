@@ -21,7 +21,7 @@ use solana_client::rpc_response::{OptionalContext, RpcKeyedAccount};
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 
-pub struct Usermap {
+pub struct UserMap {
     subscribed: bool,
     subscription: WebsocketProgramAccountSubscriber,
     pub(crate) usermap: Arc<DashMap<String, User>>,
@@ -31,7 +31,7 @@ pub struct Usermap {
     rpc: RpcClient,
 }
 
-impl Usermap {
+impl UserMap {
     pub fn new(commitment: CommitmentConfig, endpoint: String, sync: bool) -> Self {
         let filters = vec![get_user_filter(), get_non_idle_user_filter()];
         let options = WebsocketProgramAccountOptions {
@@ -183,7 +183,7 @@ mod tests {
     #[tokio::test]
     #[cfg(rpc_tests)]
     async fn test_usermap() {
-        use crate::usermap::Usermap;
+        use crate::usermap::UserMap;
         use solana_sdk::commitment_config::CommitmentConfig;
         use solana_sdk::commitment_config::CommitmentLevel;
 
@@ -192,7 +192,7 @@ mod tests {
             commitment: CommitmentLevel::Processed,
         };
 
-        let mut usermap = Usermap::new(commitment, endpoint, true);
+        let mut usermap = UserMap::new(commitment, endpoint, true);
         usermap.subscribe().await.unwrap();
 
         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;

@@ -15,7 +15,7 @@ use crate::dlob::dlob_node::{
 use crate::dlob::market::{get_order_lists, Exchange, Market, OpenOrders, SubType};
 use crate::event_emitter::Event;
 use crate::math::order::is_resting_limit_order;
-use crate::usermap::Usermap;
+use crate::usermap::UserMap;
 use crate::utils::market_type_to_string;
 
 #[derive(Clone)]
@@ -44,7 +44,7 @@ impl DLOB {
         }
     }
 
-    pub fn build_from_usermap(&mut self, usermap: &Usermap, slot: u64) {
+    pub fn build_from_usermap(&mut self, usermap: &UserMap, slot: u64) {
         usermap.usermap.iter().par_bridge().for_each(|user_ref| {
             let user = user_ref.value();
             let user_key = user_ref.key();

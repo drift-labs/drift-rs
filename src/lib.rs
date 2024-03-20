@@ -9,18 +9,14 @@ use drift::{
     controller::position::PositionDirection,
     instructions::SpotFulfillmentType,
     state::{
-        oracle::get_oracle_price,
-        order_params::{ModifyOrderParams, OrderParams},
-        perp_market::PerpMarket,
-        spot_market::SpotMarket,
-        state::State,
-        user::{MarketType, Order, OrderStatus, PerpPosition, SpotPosition, User, UserStats},
+        oracle::get_oracle_price, order_params::{ModifyOrderParams, OrderParams}, perp_market::PerpMarket, spot_market::SpotMarket, state::State, user::{MarketType, Order, OrderStatus, PerpPosition, SpotPosition, User, UserStats}
     },
 };
 use fnv::FnvHashMap;
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use log::{debug, warn};
 use marketmap::MarketMap;
+use oraclemap::OracleMap;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
     nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient},
@@ -57,6 +53,7 @@ use crate::constants::{
 pub mod async_utils;
 pub mod memcmp;
 pub mod utils;
+pub mod math;
 
 // constants & types
 pub mod constants;
@@ -65,17 +62,18 @@ pub mod types;
 // internal infra
 pub mod event_emitter;
 pub mod websocket_program_account_subscriber;
+pub mod websocket_account_subscriber;
 
 // subscribers
 pub mod auction_subscriber;
 pub mod dlob_client;
 pub mod event_subscriber;
 pub mod slot_subscriber;
+pub mod marketmap;
+pub mod usermap;
+pub mod oraclemap;
 
 pub mod dlob;
-pub mod math;
-pub mod usermap;
-pub mod marketmap;
 
 use types::*;
 
@@ -592,20 +590,30 @@ impl<T: AccountProvider> DriftClient<T> {
             .await
     }
 
-    pub fn get_perp_market_account_and_slot(&self, market_index: u16) -> Option<DataAndSlot<PerpMarket>> {
+    pub fn get_perp_market_account_and_slot(
+        &self,
+        market_index: u16,
+    ) -> Option<DataAndSlot<PerpMarket>> {
         self.backend.get_perp_market_account_and_slot(market_index)
     }
 
-    pub fn get_spot_market_account_and_slot(&self, market_index: u16) -> Option<DataAndSlot<SpotMarket>> {
+    pub fn get_spot_market_account_and_slot(
+        &self,
+        market_index: u16,
+    ) -> Option<DataAndSlot<SpotMarket>> {
         self.backend.get_spot_market_account_and_slot(market_index)
     }
 
     pub fn get_perp_market_account(&self, market_index: u16) -> Option<PerpMarket> {
-        self.backend.get_perp_market_account_and_slot(market_index).map(|x| x.data)
+        self.backend
+            .get_perp_market_account_and_slot(market_index)
+            .map(|x| x.data)
     }
 
     pub fn get_spot_market_account(&self, market_index: u16) -> Option<SpotMarket> {
-        self.backend.get_spot_market_account_and_slot(market_index).map(|x| x.data)
+        self.backend
+            .get_spot_market_account_and_slot(market_index)
+            .map(|x| x.data)
     }
 }
 
@@ -617,6 +625,7 @@ pub struct DriftClientBackend<T: AccountProvider> {
     program_data: ProgramData,
     perp_market_map: MarketMap<PerpMarket>,
     spot_market_map: MarketMap<SpotMarket>,
+    oracle_map: OracleMap,
 }
 
 impl<T: AccountProvider> DriftClientBackend<T> {
@@ -627,9 +636,35 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             account_provider.commitment_config(),
         );
 
-        let perp_market_map = MarketMap::<PerpMarket>::new(account_provider.commitment_config(), account_provider.endpoint(), true);
-        let spot_market_map = MarketMap::<SpotMarket>::new(account_provider.commitment_config(), account_provider.endpoint(), true);
+        let perp_market_map = MarketMap::<PerpMarket>::new(
+            account_provider.commitment_config(),
+            account_provider.endpoint(),
+            true,
+        );
+        let spot_market_map = MarketMap::<SpotMarket>::new(
+            account_provider.commitment_config(),
+            account_provider.endpoint(),
+            true,
+        );
 
+        perp_market_map.sync().await?;
+        spot_market_map.sync().await?;
+
+        let perp_oracles = perp_market_map.oracles();
+        let spot_oracles = spot_market_map.oracles();
+
+        let mut oracles = vec![];
+        oracles.extend(perp_oracles);
+        oracles.extend(spot_oracles);
+
+        let mut oracle_infos = vec![];
+        for oracle_info in oracles {
+            if !oracle_infos.contains(&oracle_info) {
+                oracle_infos.push(oracle_info)
+            }
+        }
+
+        let oracle_map = OracleMap::new(account_provider.commitment_config(), account_provider.endpoint(), true, oracle_infos);
 
         let mut this = Self {
             rpc_client,
@@ -637,6 +672,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
+            oracle_map,
         };
 
         let lookup_table_address = market_lookup_table(context);
@@ -655,19 +691,25 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         Ok(this)
     }
 
-
-    /// Subscribes to the MarketMaps and start streaming data through them
+    /// Subscribes to the MarketMaps / OracleMap and start streaming data through them
     async fn subscribe(&self) -> SdkResult<()> {
         self.perp_market_map.subscribe().await?;
         self.spot_market_map.subscribe().await?;
+        self.oracle_map.subscribe().await?;
         Ok(())
     }
 
-    fn get_perp_market_account_and_slot(&self, market_index: u16) -> Option<DataAndSlot<PerpMarket>> {
+    fn get_perp_market_account_and_slot(
+        &self,
+        market_index: u16,
+    ) -> Option<DataAndSlot<PerpMarket>> {
         self.perp_market_map.get(&market_index)
     }
 
-    fn get_spot_market_account_and_slot(&self, market_index: u16) -> Option<DataAndSlot<SpotMarket>> {
+    fn get_spot_market_account_and_slot(
+        &self,
+        market_index: u16,
+    ) -> Option<DataAndSlot<SpotMarket>> {
         self.spot_market_map.get(&market_index)
     }
 
@@ -1657,8 +1699,16 @@ mod tests {
         account_provider_mocks: Mocks,
         keypair: Keypair,
     ) -> DriftClient<RpcAccountProvider> {
-        let perp_market_map = MarketMap::<PerpMarket>::new(CommitmentConfig::processed(), DEVNET_ENDPOINT.to_string(), false);
-        let spot_market_map = MarketMap::<SpotMarket>::new(CommitmentConfig::processed(), DEVNET_ENDPOINT.to_string(), false);
+        let perp_market_map = MarketMap::<PerpMarket>::new(
+            CommitmentConfig::processed(),
+            DEVNET_ENDPOINT.to_string(),
+            false,
+        );
+        let spot_market_map = MarketMap::<SpotMarket>::new(
+            CommitmentConfig::processed(),
+            DEVNET_ENDPOINT.to_string(),
+            false,
+        );
 
         let backend = DriftClientBackend {
             rpc_client: RpcClient::new_mock_with_mocks(DEVNET_ENDPOINT.to_string(), rpc_mocks),
@@ -1671,6 +1721,7 @@ mod tests {
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
+            oracle_map: OracleMap::new(CommitmentConfig::processed(), DEVNET_ENDPOINT.to_string(), true, vec![])
         };
 
         DriftClient {
@@ -1686,9 +1737,13 @@ mod tests {
     async fn test_marketmap_subscribe() {
         let endpoint = "rpc";
 
-        let client = DriftClient::new(Context::MainNet, RpcAccountProvider::new(endpoint), Keypair::new().into())
-            .await
-            .unwrap();
+        let client = DriftClient::new(
+            Context::MainNet,
+            RpcAccountProvider::new(endpoint),
+            Keypair::new().into(),
+        )
+        .await
+        .unwrap();
 
         let _ = client.subscribe().await;
 
