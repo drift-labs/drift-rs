@@ -72,8 +72,6 @@ impl OracleMap {
             .map(|(market_index, pubkey, _)| (*market_index, *pubkey))
             .collect();
 
-        dbg!(oracle_infos_map.len());
-
         Self {
             subscribed: Cell::new(false),
             oraclemap,
