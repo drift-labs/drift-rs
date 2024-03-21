@@ -1,6 +1,6 @@
 //! Drift SDK
 
-use std::{borrow::Cow, sync::Arc, time::Duration};
+use std::{borrow::Cow, rc::Rc, sync::Arc, time::Duration};
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData, ToAccountMetas};
 use async_utils::{retry_policy, spawn_retry_task};
@@ -668,7 +668,7 @@ pub struct DriftClientBackend<T: AccountProvider> {
     program_data: ProgramData,
     perp_market_map: MarketMap<PerpMarket>,
     spot_market_map: MarketMap<SpotMarket>,
-    oracle_map: Arc<OracleMap>,
+    oracle_map: Rc<OracleMap>,
 }
 
 impl<T: AccountProvider> DriftClientBackend<T> {
@@ -709,7 +709,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map: Arc::new(oracle_map),
+            oracle_map: Rc::new(oracle_map),
         };
 
         let lookup_table_address = market_lookup_table(context);
@@ -1831,7 +1831,7 @@ mod tests {
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map: Arc::new(OracleMap::new(
+            oracle_map: Rc::new(OracleMap::new(
                 CommitmentConfig::processed(),
                 DEVNET_ENDPOINT.to_string(),
                 true,

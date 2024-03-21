@@ -90,7 +90,7 @@ impl OracleMap {
     }
 
     pub async fn subscribe(&self) -> SdkResult<()> {
-        if let Some(_) = self.sync_lock {
+        if self.sync_lock.is_some() {
             self.sync().await?;
         }
 
@@ -139,7 +139,7 @@ impl OracleMap {
                                             update.data.rent_epoch,
                                         );
                                         match get_oracle_price(
-                                            &oracle_source.value(),
+                                            oracle_source.value(),
                                             &oracle_account_info,
                                             update.slot,
                                         ) {
@@ -235,8 +235,8 @@ impl OracleMap {
 
         for (i, account) in response.value.iter().enumerate() {
             if let Some(oracle_account) = account {
-                let oracle_info = oracle_infos[i].clone();
-                let oracle_pubkey = oracle_info.0.clone();
+                let oracle_info = oracle_infos[i];
+                let oracle_pubkey = oracle_info.0;
                 let mut oracle_components = (oracle_pubkey, oracle_account.clone());
                 let account_info = oracle_components.into_account_info();
                 let price_data = get_oracle_price(&oracle_info.1, &account_info, slot)
@@ -267,22 +267,19 @@ impl OracleMap {
     }
 
     pub fn current_perp_oracle(&self, market_index: u16) -> Option<Pubkey> {
-        self.perp_oracles.get(&market_index).map(|x| x.clone())
+        self.perp_oracles.get(&market_index).map(|x| *x)
     }
 
     pub fn current_spot_oracle(&self, market_index: u16) -> Option<Pubkey> {
-        self.spot_oracles.get(&market_index).map(|x| x.clone())
+        self.spot_oracles.get(&market_index).map(|x| *x)
     }
 
     pub fn get(&self, key: &str) -> Option<OraclePriceDataAndSlot> {
-        self.oraclemap.get(key).map(|v| v.clone())
+        self.oraclemap.get(key).map(|v| *v)
     }
 
     pub fn values(&self) -> Vec<OraclePriceData> {
-        self.oraclemap
-            .iter()
-            .map(|x| x.value().data.clone())
-            .collect()
+        self.oraclemap.iter().map(|x| x.value().data).collect()
     }
 
     pub async fn add_oracle(&self, oracle: Pubkey, source: OracleSource) -> SdkResult<()> {

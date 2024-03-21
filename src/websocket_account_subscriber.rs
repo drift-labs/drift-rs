@@ -111,13 +111,11 @@ impl WebsocketAccountSubscriber {
                             }
                         }
                         unsub = unsub_rx.recv() => {
-                            match unsub {
-                                Some(_) => {
-                                    log::debug!("unsubscribing");
-                                    account_unsubscribe().await;
-                                    break;
-                                }
-                                None => {}
+                            if let Some(_) = unsub {
+                                log::debug!("{}: Unsubscribing from account stream", susbscription_name);
+                                account_unsubscribe().await;
+                                break;
+
                             }
                         }
                     }

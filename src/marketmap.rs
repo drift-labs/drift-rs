@@ -99,7 +99,7 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
     }
 
     pub async fn subscribe(&self) -> SdkResult<()> {
-        if let Some(_) = self.sync_lock {
+        if self.sync_lock.is_some() {
             self.sync().await?;
         }
 

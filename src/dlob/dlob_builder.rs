@@ -1,9 +1,6 @@
 use crate::{
-    dlob::dlob::DLOB,
-    event_emitter::{Event, EventEmitter},
-    slot_subscriber::SlotSubscriber,
-    usermap::UserMap,
-    SdkResult,
+    dlob::dlob::DLOB, event_emitter::EventEmitter, slot_subscriber::SlotSubscriber,
+    usermap::UserMap, SdkResult,
 };
 
 pub struct DLOBBuilder {

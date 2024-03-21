@@ -4,8 +4,7 @@ use drift::state::user::{MarketType, Order};
 use rayon::prelude::*;
 use solana_sdk::pubkey::Pubkey;
 use std::any::Any;
-use std::cell::Cell;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::BinaryHeap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -99,14 +98,14 @@ impl DLOB {
             .get_mut(&market_index)
             .expect(format!("Market index {} not found", market_index).as_str());
 
-        let (order_list, subtype, node_type) = market.get_info_for_order_insert(&order, slot);
+        let (order_list, subtype, node_type) = market.get_info_for_order_insert(order, slot);
 
-        let node = create_node(node_type, order.clone(), user_account);
+        let node = create_node(node_type, *order, user_account);
 
         if let Some(order_list) = order_list {
             match subtype {
-                SubType::Bid => order_list.insert_bid(node.clone()),
-                SubType::Ask => order_list.insert_ask(node.clone()),
+                SubType::Bid => order_list.insert_bid(node),
+                SubType::Ask => order_list.insert_ask(node),
                 _ => {}
             }
         } else {
@@ -118,7 +117,7 @@ impl DLOB {
         let order_signature = get_order_signature(order_id, user_account);
         for order_list in get_order_lists(&self.exchange) {
             if let Some(node) = order_list.get_node(&order_signature) {
-                return Some(node.get_order().clone());
+                return Some(*node.get_order());
             }
         }
 
