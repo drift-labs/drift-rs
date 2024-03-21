@@ -1123,6 +1123,7 @@ dependencies = [
  "futures-util",
  "hex",
  "hex-literal",
+ "jit-proxy",
  "log",
  "pyth",
  "rayon",
@@ -1876,6 +1877,18 @@ name = "itoa"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1a46d1a171d865aa5f83f92695765caa047a9b4cbae2cbf37dbd613a793fd4c"
+
+[[package]]
+name = "jit-proxy"
+version = "0.10.2"
+source = "git+https://github.com/drift-labs/jit-proxy#068bdfea5709b78cddc81ffb6dad8cd8db58fa51"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "bytemuck",
+ "drift",
+ "static_assertions",
+]
 
 [[package]]
 name = "jobserver"

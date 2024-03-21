@@ -14,6 +14,8 @@ categories = ["solana", "trading", "defi", "dex"]
 keywords = ["solana", "trading", "defi", "dex", "drift", "protocol", "sdk"]
 
 [features]
+# enable JIT client
+jit = ["jit-proxy"]
 rpc_tests = []
 test_utils = []
 
@@ -27,6 +29,7 @@ drift = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.71.0"
 env_logger = "0.10.1"
 fnv = "1.0.7"
 futures-util = "0.3.29"
+jit-proxy = { git = "https://github.com/drift-labs/jit-proxy", optional = true }
 log = "0.4.20"
 reqwest = "*"
 serde = { version = "*", features = ["derive"] }

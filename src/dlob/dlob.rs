@@ -4,8 +4,7 @@ use drift::state::user::{MarketType, Order};
 use rayon::prelude::*;
 use solana_sdk::pubkey::Pubkey;
 use std::any::Any;
-use std::cell::Cell;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::BinaryHeap;
 use std::str::FromStr;
 use std::sync::Arc;
 
