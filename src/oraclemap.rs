@@ -124,51 +124,50 @@ impl OracleMap {
                         if let UiAccountData::Binary(blob, UiAccountEncoding::Base64) =
                             &update.data.data
                         {
-                            match base64::decode(blob) {
-                                Ok(mut data) => match Pubkey::from_str(&update.data.owner) {
-                                    Ok(owner) => {
-                                        let mut lamports = update.data.lamports;
-                                        let oracle_account_info = AccountInfo::new(
-                                            &oracle_pubkey,
-                                            false,
-                                            false,
-                                            &mut lamports,
-                                            &mut data,
-                                            &owner,
-                                            false,
-                                            update.data.rent_epoch,
-                                        );
-                                        match get_oracle_price(
-                                            oracle_source.value(),
-                                            &oracle_account_info,
-                                            update.slot,
-                                        ) {
-                                            Ok(price_data) => {
-                                                oracle_map.insert(
-                                                    update.pubkey.clone(),
-                                                    OraclePriceDataAndSlot {
-                                                        data: price_data,
-                                                        slot: update.slot,
-                                                    },
-                                                );
-                                            }
-                                            Err(err) => {
-                                                eprintln!("Failed to get oracle price: {:?}", err)
-                                            }
-                                        }
-                                    }
-                                    Err(_) => eprintln!("Invalid pubkey in update data"),
-                                },
-                                Err(_) => eprintln!("Failed to decode base64 data"),
+                            let mut data = base64::decode(blob).expect("valid data");
+                            let owner = Pubkey::from_str(&update.data.owner).expect("valid pubkey");
+                            let mut lamports = update.data.lamports;
+                            let oracle_account_info = AccountInfo::new(
+                                &oracle_pubkey,
+                                false,
+                                false,
+                                &mut lamports,
+                                &mut data,
+                                &owner,
+                                false,
+                                update.data.rent_epoch,
+                            );
+                            match get_oracle_price(
+                                oracle_source.value(),
+                                &oracle_account_info,
+                                update.slot,
+                            ) {
+                                Ok(price_data) => {
+                                    oracle_map.insert(
+                                        update.pubkey.clone(),
+                                        OraclePriceDataAndSlot {
+                                            data: price_data,
+                                            slot: update.slot,
+                                        },
+                                    );
+                                }
+                                Err(err) => {
+                                    log::error!("Failed to get oracle price: {:?}", err)
+                                }
                             }
                         }
                     }
                 }
             });
 
-            for oracle_subscriber in oracle_subscribers.clone().iter_mut() {
-                oracle_subscriber.subscribe().await?;
-            }
+            let mut subscribers_clone = oracle_subscribers.clone();
+
+            let subscribe_futures = subscribers_clone
+                .iter_mut()
+                .map(|subscriber| subscriber.subscribe())
+                .collect::<Vec<_>>();
+            let results = futures_util::future::join_all(subscribe_futures).await;
+            results.into_iter().collect::<Result<Vec<_>, _>>()?;
 
             let mut oracle_subscribers_mut = self.oracle_subscribers.try_borrow_mut()?;
             *oracle_subscribers_mut = oracle_subscribers;
@@ -180,9 +179,13 @@ impl OracleMap {
     pub async fn unsubscribe(&self) -> SdkResult<()> {
         if self.subscribed.get() {
             let mut oracle_subscribers = self.oracle_subscribers.try_borrow_mut()?;
-            for oracle_subscriber in oracle_subscribers.iter_mut() {
-                oracle_subscriber.unsubscribe().await?;
-            }
+            let unsubscribe_futures = oracle_subscribers
+                .iter_mut()
+                .map(|subscriber| subscriber.unsubscribe())
+                .collect::<Vec<_>>();
+
+            let results = futures_util::future::join_all(unsubscribe_futures).await;
+            results.into_iter().collect::<Result<Vec<_>, _>>()?;
             self.subscribed.set(false);
             self.oraclemap.clear();
             self.latest_slot.store(0, Ordering::Relaxed);
@@ -233,9 +236,8 @@ impl OracleMap {
 
         let slot = response.context.slot;
 
-        for (i, account) in response.value.iter().enumerate() {
+        for (account, oracle_info) in response.value.iter().zip(oracle_infos.iter()) {
             if let Some(oracle_account) = account {
-                let oracle_info = oracle_infos[i];
                 let oracle_pubkey = oracle_info.0;
                 let mut oracle_components = (oracle_pubkey, oracle_account.clone());
                 let account_info = oracle_components.into_account_info();
