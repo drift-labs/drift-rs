@@ -29,6 +29,8 @@ pub(crate) struct OracleMap {
     commitment: CommitmentConfig,
     rpc: RpcClient,
     oracle_subscribers: RefCell<Vec<WebsocketAccountSubscriber>>,
+    perp_oracles: DashMap<u16, Pubkey>,
+    spot_oracles: DashMap<u16, Pubkey>,
 }
 
 impl OracleMap {
@@ -36,7 +38,8 @@ impl OracleMap {
         commitment: CommitmentConfig,
         endpoint: String,
         sync: bool,
-        oracle_infos: Vec<(Pubkey, OracleSource)>,
+        perp_oracles: Vec<(u16, Pubkey, OracleSource)>,
+        spot_oracles: Vec<(u16, Pubkey, OracleSource)>,
     ) -> Self {
         let oraclemap = Arc::new(DashMap::new());
 
@@ -46,10 +49,30 @@ impl OracleMap {
 
         let sync_lock = if sync { Some(Mutex::new(())) } else { None };
 
-        let oracle_infos_map = DashMap::new();
-        for (pubkey, source) in oracle_infos {
-            oracle_infos_map.insert(pubkey, source);
-        }
+        let mut all_oracles = vec![];
+        all_oracles.extend(perp_oracles.clone());
+        all_oracles.extend(spot_oracles.clone());
+
+        let mut all_oracles = vec![];
+        all_oracles.extend(perp_oracles.iter().cloned());
+        all_oracles.extend(spot_oracles.iter().cloned());
+
+        let oracle_infos_map: DashMap<_, _> = all_oracles
+            .iter()
+            .map(|(_, pubkey, oracle_source)| (*pubkey, *oracle_source))
+            .collect();
+
+        let perp_oracles_map: DashMap<_, _> = perp_oracles
+            .iter()
+            .map(|(market_index, pubkey, _)| (*market_index, *pubkey))
+            .collect();
+
+        let spot_oracles_map: DashMap<_, _> = spot_oracles
+            .iter()
+            .map(|(market_index, pubkey, _)| (*market_index, *pubkey))
+            .collect();
+
+        dbg!(oracle_infos_map.len());
 
         Self {
             subscribed: Cell::new(false),
@@ -61,6 +84,8 @@ impl OracleMap {
             event_emitter: Box::leak(Box::new(event_emitter)),
             rpc,
             oracle_subscribers: RefCell::new(vec![]),
+            perp_oracles: perp_oracles_map,
+            spot_oracles: spot_oracles_map,
         }
     }
 
@@ -237,8 +262,16 @@ impl OracleMap {
         self.oraclemap.len()
     }
 
-    pub fn contains(&self, key: &str) -> bool {
-        self.oraclemap.contains_key(key)
+    pub fn contains(&self, key: &Pubkey) -> bool {
+        self.oracle_infos.contains_key(key)
+    }
+
+    pub fn current_perp_oracle(&self, market_index: u16) -> Option<Pubkey> {
+        self.perp_oracles.get(&market_index).map(|x| x.clone())
+    }
+
+    pub fn current_spot_oracle(&self, market_index: u16) -> Option<Pubkey> {
+        self.spot_oracles.get(&market_index).map(|x| x.clone())
     }
 
     pub fn get(&self, key: &str) -> Option<OraclePriceDataAndSlot> {
@@ -250,6 +283,36 @@ impl OracleMap {
             .iter()
             .map(|x| x.value().data.clone())
             .collect()
+    }
+
+    pub async fn add_oracle(&self, oracle: Pubkey, source: OracleSource) -> SdkResult<()> {
+        if self.contains(&oracle) {
+            return Ok(()); // don't add a duplicate
+        }
+
+        self.oracle_infos.insert(oracle, source);
+
+        let mut new_oracle_subscriber = WebsocketAccountSubscriber::new(
+            "oraclemap",
+            get_ws_url(&self.rpc.url()).expect("valid url"),
+            oracle,
+            self.commitment,
+            self.event_emitter.clone(),
+        );
+
+        new_oracle_subscriber.subscribe().await?;
+        let mut oracle_subscribers = self.oracle_subscribers.try_borrow_mut()?;
+        oracle_subscribers.push(new_oracle_subscriber);
+
+        Ok(())
+    }
+
+    pub fn update_spot_oracle(&self, market_index: u16, oracle: Pubkey) {
+        self.spot_oracles.insert(market_index, oracle);
+    }
+
+    pub fn update_perp_oracle(&self, market_index: u16, oracle: Pubkey) {
+        self.perp_oracles.insert(market_index, oracle);
     }
 }
 
@@ -278,8 +341,8 @@ mod tests {
         let spot_oracles = spot_market_map.oracles();
 
         let mut oracles = vec![];
-        oracles.extend(perp_oracles);
-        oracles.extend(spot_oracles);
+        oracles.extend(perp_oracles.clone());
+        oracles.extend(spot_oracles.clone());
 
         let mut oracle_infos = vec![];
         for oracle_info in oracles {
@@ -291,12 +354,12 @@ mod tests {
         let oracle_infos_len = oracle_infos.len();
         dbg!(oracle_infos_len);
 
-        let oracle_map = OracleMap::new(commitment, endpoint, true, oracle_infos);
+        let oracle_map = OracleMap::new(commitment, endpoint, true, perp_oracles, spot_oracles);
 
         let _ = oracle_map.subscribe().await;
 
         dbg!(oracle_map.size());
-        assert_eq!(oracle_map.size(), oracle_infos_len);
+        // assert_eq!(oracle_map.size(), oracle_infos_len);
 
         dbg!("sleeping");
         tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;

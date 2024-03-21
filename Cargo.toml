@@ -41,6 +41,7 @@ tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
 regex = "1.10.2"
 dashmap = "5.5.3"
 rayon = "1.9.0"
+clippy = "0.0.302"
 
 [dev-dependencies]
 pyth = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.67.0", features = [

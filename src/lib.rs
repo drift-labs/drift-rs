@@ -668,7 +668,7 @@ pub struct DriftClientBackend<T: AccountProvider> {
     program_data: ProgramData,
     perp_market_map: MarketMap<PerpMarket>,
     spot_market_map: MarketMap<SpotMarket>,
-    oracle_map: OracleMap,
+    oracle_map: Arc<OracleMap>,
 }
 
 impl<T: AccountProvider> DriftClientBackend<T> {
@@ -695,22 +695,12 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         let perp_oracles = perp_market_map.oracles();
         let spot_oracles = spot_market_map.oracles();
 
-        let mut oracles = vec![];
-        oracles.extend(perp_oracles);
-        oracles.extend(spot_oracles);
-
-        let mut oracle_infos = vec![];
-        for oracle_info in oracles {
-            if !oracle_infos.contains(&oracle_info) {
-                oracle_infos.push(oracle_info)
-            }
-        }
-
         let oracle_map = OracleMap::new(
             account_provider.commitment_config(),
             account_provider.endpoint(),
             true,
-            oracle_infos,
+            perp_oracles,
+            spot_oracles,
         );
 
         let mut this = Self {
@@ -719,7 +709,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map,
+            oracle_map: Arc::new(oracle_map),
         };
 
         let lookup_table_address = market_lookup_table(context);
@@ -790,7 +780,23 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         market_index: u16,
     ) -> Option<OraclePriceDataAndSlot> {
         let market = self.get_perp_market_account_and_slot(market_index)?;
-        self.get_oracle_price_data_and_slot(market.data.amm.oracle)
+
+        let oracle = market.data.amm.oracle;
+        let current_oracle = self
+            .oracle_map
+            .current_perp_oracle(market_index)
+            .expect("oracle");
+
+        if oracle != current_oracle {
+            let source = market.data.amm.oracle_source;
+            let clone = self.oracle_map.clone();
+            tokio::task::spawn_local(async move {
+                let _ = clone.add_oracle(oracle, source).await;
+                clone.update_perp_oracle(market_index, oracle)
+            });
+        }
+
+        self.get_oracle_price_data_and_slot(current_oracle)
     }
 
     fn get_oracle_price_data_and_slot_for_spot_market(
@@ -798,6 +804,22 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         market_index: u16,
     ) -> Option<OraclePriceDataAndSlot> {
         let market = self.get_spot_market_account_and_slot(market_index)?;
+
+        let oracle = market.data.oracle;
+        let current_oracle = self
+            .oracle_map
+            .current_spot_oracle(market_index)
+            .expect("oracle");
+
+        if oracle != current_oracle {
+            let source = market.data.oracle_source;
+            let clone = self.oracle_map.clone();
+            tokio::task::spawn_local(async move {
+                let _ = clone.add_oracle(oracle, source).await;
+                clone.update_spot_oracle(market_index, oracle);
+            });
+        }
+
         self.get_oracle_price_data_and_slot(market.data.oracle)
     }
 
@@ -1809,12 +1831,13 @@ mod tests {
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map: OracleMap::new(
+            oracle_map: Arc::new(OracleMap::new(
                 CommitmentConfig::processed(),
                 DEVNET_ENDPOINT.to_string(),
                 true,
                 vec![],
-            ),
+                vec![],
+            )),
         };
 
         DriftClient {

@@ -25,36 +25,32 @@ use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 
 pub trait Market {
+    const MARKET_TYPE: MarketType;
     fn market_index(&self) -> u16;
-    fn market_type() -> MarketType;
-    fn oracle_info(&self) -> (Pubkey, OracleSource);
+    fn oracle_info(&self) -> (u16, Pubkey, OracleSource);
 }
 
 impl Market for PerpMarket {
+    const MARKET_TYPE: MarketType = MarketType::Perp;
+
     fn market_index(&self) -> u16 {
         self.market_index
     }
 
-    fn market_type() -> MarketType {
-        MarketType::Perp
-    }
-
-    fn oracle_info(&self) -> (Pubkey, OracleSource) {
-        (self.amm.oracle, self.amm.oracle_source)
+    fn oracle_info(&self) -> (u16, Pubkey, OracleSource) {
+        (self.market_index(), self.amm.oracle, self.amm.oracle_source)
     }
 }
 
 impl Market for SpotMarket {
+    const MARKET_TYPE: MarketType = MarketType::Spot;
+
     fn market_index(&self) -> u16 {
         self.market_index
     }
 
-    fn market_type() -> MarketType {
-        MarketType::Spot
-    }
-
-    fn oracle_info(&self) -> (Pubkey, OracleSource) {
-        (self.oracle, self.oracle_source)
+    fn oracle_info(&self) -> (u16, Pubkey, OracleSource) {
+        (self.market_index(), self.oracle, self.oracle_source)
     }
 }
 
@@ -71,7 +67,7 @@ pub struct MarketMap<T: AccountDeserialize> {
 
 impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T> {
     pub fn new(commitment: CommitmentConfig, endpoint: String, sync: bool) -> Self {
-        let filters = vec![get_market_filter(T::market_type())];
+        let filters = vec![get_market_filter(T::MARKET_TYPE)];
         let options = WebsocketProgramAccountOptions {
             filters,
             commitment,
@@ -150,7 +146,7 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
         self.marketmap.iter().map(|x| x.data.clone()).collect()
     }
 
-    pub fn oracles(&self) -> Vec<(Pubkey, OracleSource)> {
+    pub fn oracles(&self) -> Vec<(u16, Pubkey, OracleSource)> {
         self.values().iter().map(|x| x.oracle_info()).collect()
     }
 
