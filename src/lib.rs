@@ -1,6 +1,6 @@
 //! Drift SDK
 
-use std::{borrow::Cow, sync::Arc, time::Duration};
+use std::{borrow::Cow, rc::Rc, sync::Arc, time::Duration};
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData, ToAccountMetas};
 use async_utils::{retry_policy, spawn_retry_task};
@@ -20,6 +20,8 @@ use drift::{
 use fnv::FnvHashMap;
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use log::{debug, warn};
+use marketmap::MarketMap;
+use oraclemap::{OracleMap, OraclePriceDataAndSlot};
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
     nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient},
@@ -54,6 +56,7 @@ use crate::constants::{
 
 // utils
 pub mod async_utils;
+pub mod math;
 pub mod memcmp;
 pub mod utils;
 
@@ -63,19 +66,21 @@ pub mod types;
 
 // internal infra
 pub mod event_emitter;
+pub mod websocket_account_subscriber;
 pub mod websocket_program_account_subscriber;
 
 // subscribers
 pub mod auction_subscriber;
 pub mod dlob_client;
 pub mod event_subscriber;
+pub mod marketmap;
+pub mod oraclemap;
 #[cfg(feature = "jit")]
 pub mod jit_client;
 pub mod slot_subscriber;
+pub mod usermap;
 
 pub mod dlob;
-pub mod math;
-pub mod usermap;
 
 use types::*;
 
@@ -320,6 +325,18 @@ impl<T: AccountProvider> DriftClient<T> {
             active_sub_account_id: opts.active_sub_account_id(),
             sub_account_ids: opts.sub_account_ids(),
         })
+    }
+
+    /// Subscribe to the Drift Client Backend
+    /// This is a no-op if already subscribed
+    pub async fn subscribe(&self) -> SdkResult<()> {
+        self.backend.subscribe().await
+    }
+
+    /// Unsubscribe from the Drift Client Backend
+    /// This is a no-op if not subscribed
+    pub async fn unsubscribe(&self) -> SdkResult<()> {
+        self.backend.unsubscribe().await
     }
 
     /// Return a handle to the inner RPC client
@@ -586,6 +603,63 @@ impl<T: AccountProvider> DriftClient<T> {
             .get_recent_priority_fees(writable_markets, window)
             .await
     }
+
+    pub fn get_perp_market_account_and_slot(
+        &self,
+        market_index: u16,
+    ) -> Option<DataAndSlot<PerpMarket>> {
+        self.backend.get_perp_market_account_and_slot(market_index)
+    }
+
+    pub fn get_spot_market_account_and_slot(
+        &self,
+        market_index: u16,
+    ) -> Option<DataAndSlot<SpotMarket>> {
+        self.backend.get_spot_market_account_and_slot(market_index)
+    }
+
+    pub fn get_perp_market_account(&self, market_index: u16) -> Option<PerpMarket> {
+        self.backend
+            .get_perp_market_account_and_slot(market_index)
+            .map(|x| x.data)
+    }
+
+    pub fn get_spot_market_account(&self, market_index: u16) -> Option<SpotMarket> {
+        self.backend
+            .get_spot_market_account_and_slot(market_index)
+            .map(|x| x.data)
+    }
+
+    pub fn num_perp_markets(&self) -> usize {
+        self.backend.num_perp_markets()
+    }
+
+    pub fn num_spot_markets(&self) -> usize {
+        self.backend.num_spot_markets()
+    }
+
+    pub fn get_oracle_price_data_and_slot(
+        &self,
+        oracle_pubkey: Pubkey,
+    ) -> Option<OraclePriceDataAndSlot> {
+        self.backend.get_oracle_price_data_and_slot(oracle_pubkey)
+    }
+
+    pub fn get_oracle_price_data_and_slot_for_perp_market(
+        &self,
+        market_index: u16,
+    ) -> Option<OraclePriceDataAndSlot> {
+        self.backend
+            .get_oracle_price_data_and_slot_for_perp_market(market_index)
+    }
+
+    pub fn get_oracle_price_data_and_slot_for_spot_market(
+        &self,
+        market_index: u16,
+    ) -> Option<OraclePriceDataAndSlot> {
+        self.backend
+            .get_oracle_price_data_and_slot_for_spot_market(market_index)
+    }
 }
 
 /// Provides the heavy-lifting and network facing features of the SDK
@@ -594,6 +668,9 @@ pub struct DriftClientBackend<T: AccountProvider> {
     rpc_client: RpcClient,
     account_provider: T,
     program_data: ProgramData,
+    perp_market_map: MarketMap<PerpMarket>,
+    spot_market_map: MarketMap<SpotMarket>,
+    oracle_map: Rc<OracleMap>,
 }
 
 impl<T: AccountProvider> DriftClientBackend<T> {
@@ -604,10 +681,37 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             account_provider.commitment_config(),
         );
 
+        let perp_market_map = MarketMap::<PerpMarket>::new(
+            account_provider.commitment_config(),
+            account_provider.endpoint(),
+            true,
+        );
+        let spot_market_map = MarketMap::<SpotMarket>::new(
+            account_provider.commitment_config(),
+            account_provider.endpoint(),
+            true,
+        );
+
+        tokio::try_join!(perp_market_map.sync(), spot_market_map.sync())?;
+
+        let perp_oracles = perp_market_map.oracles();
+        let spot_oracles = spot_market_map.oracles();
+
+        let oracle_map = OracleMap::new(
+            account_provider.commitment_config(),
+            account_provider.endpoint(),
+            true,
+            perp_oracles,
+            spot_oracles,
+        );
+
         let mut this = Self {
             rpc_client,
             account_provider,
             program_data: ProgramData::uninitialized(),
+            perp_market_map,
+            spot_market_map,
+            oracle_map: Rc::new(oracle_map),
         };
 
         let lookup_table_address = market_lookup_table(context);
@@ -624,6 +728,101 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         this.program_data = ProgramData::new(spot, perp, lookup_table);
 
         Ok(this)
+    }
+
+    async fn subscribe(&self) -> SdkResult<()> {
+        tokio::try_join!(
+            self.perp_market_map.subscribe(),
+            self.spot_market_map.subscribe(),
+            self.oracle_map.subscribe()
+        )?;
+        Ok(())
+    }
+
+    async fn unsubscribe(&self) -> SdkResult<()> {
+        tokio::try_join!(
+            self.perp_market_map.unsubscribe(),
+            self.spot_market_map.unsubscribe(),
+            self.oracle_map.unsubscribe()
+        )?;
+        Ok(())
+    }
+
+    fn get_perp_market_account_and_slot(
+        &self,
+        market_index: u16,
+    ) -> Option<DataAndSlot<PerpMarket>> {
+        self.perp_market_map.get(&market_index)
+    }
+
+    fn get_spot_market_account_and_slot(
+        &self,
+        market_index: u16,
+    ) -> Option<DataAndSlot<SpotMarket>> {
+        self.spot_market_map.get(&market_index)
+    }
+
+    fn num_perp_markets(&self) -> usize {
+        self.perp_market_map.size()
+    }
+
+    fn num_spot_markets(&self) -> usize {
+        self.spot_market_map.size()
+    }
+
+    fn get_oracle_price_data_and_slot(
+        &self,
+        oracle_pubkey: Pubkey,
+    ) -> Option<OraclePriceDataAndSlot> {
+        self.oracle_map.get(&oracle_pubkey.to_string())
+    }
+
+    fn get_oracle_price_data_and_slot_for_perp_market(
+        &self,
+        market_index: u16,
+    ) -> Option<OraclePriceDataAndSlot> {
+        let market = self.get_perp_market_account_and_slot(market_index)?;
+
+        let oracle = market.data.amm.oracle;
+        let current_oracle = self
+            .oracle_map
+            .current_perp_oracle(market_index)
+            .expect("oracle");
+
+        if oracle != current_oracle {
+            let source = market.data.amm.oracle_source;
+            let clone = self.oracle_map.clone();
+            tokio::task::spawn_local(async move {
+                let _ = clone.add_oracle(oracle, source).await;
+                clone.update_perp_oracle(market_index, oracle)
+            });
+        }
+
+        self.get_oracle_price_data_and_slot(current_oracle)
+    }
+
+    fn get_oracle_price_data_and_slot_for_spot_market(
+        &self,
+        market_index: u16,
+    ) -> Option<OraclePriceDataAndSlot> {
+        let market = self.get_spot_market_account_and_slot(market_index)?;
+
+        let oracle = market.data.oracle;
+        let current_oracle = self
+            .oracle_map
+            .current_spot_oracle(market_index)
+            .expect("oracle");
+
+        if oracle != current_oracle {
+            let source = market.data.oracle_source;
+            let clone = self.oracle_map.clone();
+            tokio::task::spawn_local(async move {
+                let _ = clone.add_oracle(oracle, source).await;
+                clone.update_spot_oracle(market_index, oracle);
+            });
+        }
+
+        self.get_oracle_price_data_and_slot(market.data.oracle)
     }
 
     /// Return a handle to the inner RPC client
@@ -1612,6 +1811,17 @@ mod tests {
         account_provider_mocks: Mocks,
         keypair: Keypair,
     ) -> DriftClient<RpcAccountProvider> {
+        let perp_market_map = MarketMap::<PerpMarket>::new(
+            CommitmentConfig::processed(),
+            DEVNET_ENDPOINT.to_string(),
+            false,
+        );
+        let spot_market_map = MarketMap::<SpotMarket>::new(
+            CommitmentConfig::processed(),
+            DEVNET_ENDPOINT.to_string(),
+            false,
+        );
+
         let backend = DriftClientBackend {
             rpc_client: RpcClient::new_mock_with_mocks(DEVNET_ENDPOINT.to_string(), rpc_mocks),
             account_provider: RpcAccountProvider {
@@ -1621,6 +1831,15 @@ mod tests {
                 )),
             },
             program_data: ProgramData::uninitialized(),
+            perp_market_map,
+            spot_market_map,
+            oracle_map: Rc::new(OracleMap::new(
+                CommitmentConfig::processed(),
+                DEVNET_ENDPOINT.to_string(),
+                true,
+                vec![],
+                vec![],
+            )),
         };
 
         DriftClient {
@@ -1628,6 +1847,38 @@ mod tests {
             wallet: Wallet::new(keypair),
             active_sub_account_id: 0,
             sub_account_ids: vec![0],
+        }
+    }
+
+    #[tokio::test]
+    #[cfg(rpc_tests)]
+    async fn test_marketmap_subscribe() {
+        let endpoint = "rpc";
+
+        let client = DriftClient::new(
+            Context::MainNet,
+            RpcAccountProvider::new(endpoint),
+            Keypair::new().into(),
+        )
+        .await
+        .unwrap();
+
+        let _ = client.subscribe().await;
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+
+        for _ in 0..20 {
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            let perp_market = client.get_perp_market_account_and_slot(0);
+            let slot = perp_market.unwrap().slot;
+            dbg!(slot);
+        }
+
+        for _ in 0..20 {
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+            let spot_market = client.get_spot_market_account_and_slot(0);
+            let slot = spot_market.unwrap().slot;
+            dbg!(slot);
         }
     }
 

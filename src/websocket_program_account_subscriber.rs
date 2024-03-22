@@ -42,6 +42,7 @@ impl<T: Clone + Send + AccountDeserialize + 'static> Event for ProgramAccountUpd
     }
 }
 
+#[derive(Clone)]
 pub struct WebsocketProgramAccountOptions {
     pub filters: Vec<RpcFilterType>,
     pub commitment: CommitmentConfig,
@@ -102,53 +103,82 @@ impl WebsocketProgramAccountSubscriber {
             ..RpcProgramAccountsConfig::default()
         };
 
-        let pubsub = PubsubClient::new(&self.url).await?;
         let (unsub_tx, mut unsub_rx) = tokio::sync::mpsc::channel::<()>(1);
         self.unsubscriber = Some(unsub_tx);
 
+        let mut attempt = 0;
+        let max_reconnection_attempts = 20;
+        let base_delay = tokio::time::Duration::from_secs(5);
+
+        let url = self.url.clone();
         tokio::spawn({
             let event_emitter = self.event_emitter.clone();
             let mut latest_slot = 0;
             let subscription_name = self.subscription_name;
             async move {
-                let (mut accounts, unsubscriber) = pubsub
-                    .program_subscribe(&drift::ID, Some(config))
-                    .await
-                    .unwrap();
                 loop {
-                    tokio::select! {
-                        message = accounts.next() => {
-                            match message {
-                                Some(message) => {
-                                    let slot = message.context.slot;
-                                    if slot >= latest_slot {
-                                        latest_slot = slot;
-                                        let pubkey = message.value.pubkey;
-                                        let account_data = message.value.account.data;
-                                        match decode(account_data) {
-                                            Ok(data) => {
-                                                let data_and_slot = DataAndSlot::<T> { slot, data };
-                                                event_emitter.emit(subscription_name, Box::new(ProgramAccountUpdate::new(pubkey, data_and_slot)));
-                                            },
-                                            Err(e) => {
-                                                error!("Error decoding account data {e}");
+                    let pubsub = PubsubClient::new(&url).await?;
+                    match pubsub
+                        .program_subscribe(&drift::ID, Some(config.clone()))
+                        .await
+                    {
+                        Ok((mut accounts, unsubscriber)) => loop {
+                            tokio::select! {
+                                message = accounts.next() => {
+                                    match message {
+                                        Some(message) => {
+                                            let slot = message.context.slot;
+                                            if slot >= latest_slot {
+                                                latest_slot = slot;
+                                                let pubkey = message.value.pubkey;
+                                                let account_data = message.value.account.data;
+                                                match decode(account_data) {
+                                                    Ok(data) => {
+                                                        let data_and_slot = DataAndSlot::<T> { slot, data };
+                                                        event_emitter.emit(subscription_name, Box::new(ProgramAccountUpdate::new(pubkey, data_and_slot)));
+                                                    },
+                                                    Err(e) => {
+                                                        error!("Error decoding account data {e}");
+                                                    }
+                                                }
                                             }
+                                        }
+                                        None => {
+                                            warn!("{} stream ended", subscription_name);
+                                            unsubscriber().await;
+                                            break;
                                         }
                                     }
                                 }
-                                None => {
-                                    warn!("{} stream ended", subscription_name);
+                                _ = unsub_rx.recv() => {
+                                    debug!("Unsubscribing.");
                                     unsubscriber().await;
-                                    break;
+                                    return Ok(());
                                 }
                             }
-                        }
-                        _ = unsub_rx.recv() => {
-                            debug!("Unsubscribing.");
-                            unsubscriber().await;
-                            break;
+                        },
+                        Err(_) => {
+                            error!("Failed to subscribe to program stream, retrying.");
+                            attempt += 1;
+                            if attempt >= max_reconnection_attempts {
+                                error!("Max reconnection attempts reached.");
+                                return Err(SdkError::MaxReconnectionAttemptsReached);
+                            }
                         }
                     }
+
+                    if attempt >= max_reconnection_attempts {
+                        error!("Max reconnection attempts reached.");
+                        return Err(SdkError::MaxReconnectionAttemptsReached);
+                    }
+
+                    let delay_duration = base_delay * 2_u32.pow(attempt);
+                    debug!(
+                        "{}: Reconnecting in {:?}",
+                        subscription_name, delay_duration
+                    );
+                    tokio::time::sleep(delay_duration).await;
+                    attempt += 1;
                 }
             }
         });

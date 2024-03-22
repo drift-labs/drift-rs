@@ -1120,6 +1120,7 @@ dependencies = [
  "drift",
  "env_logger 0.10.2",
  "fnv",
+ "futures",
  "futures-util",
  "hex",
  "hex-literal",

@@ -61,12 +61,10 @@ impl Market {
             NodeType::Market
         } else if order.oracle_price_offset != 0 {
             NodeType::FloatingLimit
+        } else if is_resting_limit_order(order, slot) {
+            NodeType::RestingLimit
         } else {
-            if is_resting_limit_order(order, slot) {
-                NodeType::RestingLimit
-            } else {
-                NodeType::TakingLimit
-            }
+            NodeType::TakingLimit
         };
 
         let order_list = match node_type {

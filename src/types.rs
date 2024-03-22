@@ -1,4 +1,7 @@
-use std::cmp::Ordering;
+use std::{
+    cell::{BorrowError, BorrowMutError},
+    cmp::Ordering,
+};
 
 use anchor_lang::AccountDeserialize;
 use drift::{error::ErrorCode, state::user::UserStats};
@@ -240,6 +243,14 @@ pub enum SdkError {
     CouldntUnsubscribe(#[from] tokio::sync::mpsc::error::SendError<()>),
     #[error("MathError")]
     MathError(String),
+    #[error("{0}")]
+    BorrowMutError(#[from] BorrowMutError),
+    #[error("{0}")]
+    BorrowError(#[from] BorrowError),
+    #[error("{0}")]
+    Generic(String),
+    #[error("max connection attempts reached")]
+    MaxReconnectionAttemptsReached,
 }
 
 impl SdkError {

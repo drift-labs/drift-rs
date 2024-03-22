@@ -16,12 +16,13 @@ use serde_json::json;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
+use solana_client::rpc_filter::RpcFilterType;
 use solana_client::rpc_request::RpcRequest;
 use solana_client::rpc_response::{OptionalContext, RpcKeyedAccount};
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 
-pub struct Usermap {
+pub struct UserMap {
     subscribed: bool,
     subscription: WebsocketProgramAccountSubscriber,
     pub(crate) usermap: Arc<DashMap<String, User>>,
@@ -31,9 +32,15 @@ pub struct Usermap {
     rpc: RpcClient,
 }
 
-impl Usermap {
-    pub fn new(commitment: CommitmentConfig, endpoint: String, sync: bool) -> Self {
-        let filters = vec![get_user_filter(), get_non_idle_user_filter()];
+impl UserMap {
+    pub fn new(
+        commitment: CommitmentConfig,
+        endpoint: String,
+        sync: bool,
+        additional_filters: Option<Vec<RpcFilterType>>,
+    ) -> Self {
+        let mut filters = vec![get_user_filter(), get_non_idle_user_filter()];
+        filters.extend(additional_filters.unwrap_or_default());
         let options = WebsocketProgramAccountOptions {
             filters,
             commitment,
@@ -64,7 +71,7 @@ impl Usermap {
     }
 
     pub async fn subscribe(&mut self) -> SdkResult<()> {
-        if let Some(_) = self.sync_lock {
+        if self.sync_lock.is_some() {
             self.sync().await?;
         }
 
@@ -123,7 +130,7 @@ impl Usermap {
                 .get_account_data(&Pubkey::from_str(pubkey).unwrap())
                 .await?;
             let user = User::try_deserialize(&mut user_data.as_slice()).unwrap();
-            self.usermap.insert(pubkey.to_string(), user.clone());
+            self.usermap.insert(pubkey.to_string(), user);
             Ok(self.get(pubkey).unwrap())
         }
     }
@@ -183,7 +190,7 @@ mod tests {
     #[tokio::test]
     #[cfg(rpc_tests)]
     async fn test_usermap() {
-        use crate::usermap::Usermap;
+        use crate::usermap::UserMap;
         use solana_sdk::commitment_config::CommitmentConfig;
         use solana_sdk::commitment_config::CommitmentLevel;
 
@@ -192,7 +199,7 @@ mod tests {
             commitment: CommitmentLevel::Processed,
         };
 
-        let mut usermap = Usermap::new(commitment, endpoint, true);
+        let mut usermap = UserMap::new(commitment, endpoint, true);
         usermap.subscribe().await.unwrap();
 
         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;

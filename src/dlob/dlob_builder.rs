@@ -1,14 +1,11 @@
 use crate::{
-    dlob::dlob::DLOB,
-    event_emitter::{Event, EventEmitter},
-    slot_subscriber::SlotSubscriber,
-    usermap::Usermap,
-    SdkResult,
+    dlob::dlob::DLOB, event_emitter::EventEmitter, slot_subscriber::SlotSubscriber,
+    usermap::UserMap, SdkResult,
 };
 
 pub struct DLOBBuilder {
     slot_subscriber: SlotSubscriber,
-    usermap: Usermap,
+    usermap: UserMap,
     rebuild_frequency: u64,
     dlob: DLOB,
     event_emitter: EventEmitter,
@@ -17,7 +14,7 @@ pub struct DLOBBuilder {
 impl DLOBBuilder {
     pub fn new(
         slot_subscriber: SlotSubscriber,
-        usermap: Usermap,
+        usermap: UserMap,
         rebuild_frequency: u64,
     ) -> DLOBBuilder {
         DLOBBuilder {
@@ -56,6 +53,7 @@ impl DLOBBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memcmp::get_user_with_order_filter;
     use crate::utils::get_ws_url;
     use solana_sdk::commitment_config::CommitmentConfig;
     use solana_sdk::commitment_config::CommitmentLevel;
@@ -70,7 +68,12 @@ mod tests {
         };
 
         let slot_subscriber = SlotSubscriber::new(get_ws_url(&endpoint.clone()).unwrap());
-        let usermap = Usermap::new(commitment, endpoint, true);
+        let mut usermap = UserMap::new(
+            commitment,
+            endpoint,
+            true,
+            Some(vec![get_user_with_order_filter()]),
+        );
         let mut dlob_builder = DLOBBuilder::new(slot_subscriber, usermap, 30);
 
         dlob_builder
@@ -90,13 +93,18 @@ mod tests {
     #[tokio::test]
     #[cfg(rpc_tests)]
     async fn test_build_time() {
-        let endpoint = "url".to_string();
+        let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {
             commitment: CommitmentLevel::Processed,
         };
 
         let mut slot_subscriber = SlotSubscriber::new(get_ws_url(&endpoint.clone()).unwrap());
-        let mut usermap = Usermap::new(commitment, endpoint, true);
+        let mut usermap = UserMap::new(
+            commitment,
+            endpoint,
+            true,
+            Some(vec![get_user_with_order_filter()]),
+        );
         let _ = slot_subscriber.subscribe().await;
         let _ = usermap.subscribe().await;
 

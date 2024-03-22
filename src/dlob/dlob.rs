@@ -14,7 +14,7 @@ use crate::dlob::dlob_node::{
 use crate::dlob::market::{get_order_lists, Exchange, Market, OpenOrders, SubType};
 use crate::event_emitter::Event;
 use crate::math::order::is_resting_limit_order;
-use crate::usermap::Usermap;
+use crate::usermap::UserMap;
 use crate::utils::market_type_to_string;
 
 #[derive(Clone)]
@@ -43,7 +43,7 @@ impl DLOB {
         }
     }
 
-    pub fn build_from_usermap(&mut self, usermap: &Usermap, slot: u64) {
+    pub fn build_from_usermap(&mut self, usermap: &UserMap, slot: u64) {
         usermap.usermap.iter().par_bridge().for_each(|user_ref| {
             let user = user_ref.value();
             let user_key = user_ref.key();
@@ -98,14 +98,14 @@ impl DLOB {
             .get_mut(&market_index)
             .expect(format!("Market index {} not found", market_index).as_str());
 
-        let (order_list, subtype, node_type) = market.get_info_for_order_insert(&order, slot);
+        let (order_list, subtype, node_type) = market.get_info_for_order_insert(order, slot);
 
-        let node = create_node(node_type, order.clone(), user_account);
+        let node = create_node(node_type, *order, user_account);
 
         if let Some(order_list) = order_list {
             match subtype {
-                SubType::Bid => order_list.insert_bid(node.clone()),
-                SubType::Ask => order_list.insert_ask(node.clone()),
+                SubType::Bid => order_list.insert_bid(node),
+                SubType::Ask => order_list.insert_ask(node),
                 _ => {}
             }
         } else {
@@ -117,7 +117,7 @@ impl DLOB {
         let order_signature = get_order_signature(order_id, user_account);
         for order_list in get_order_lists(&self.exchange) {
             if let Some(node) = order_list.get_node(&order_signature) {
-                return Some(node.get_order().clone());
+                return Some(*node.get_order());
             }
         }
 
