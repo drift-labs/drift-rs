@@ -48,7 +48,7 @@ impl DriftUser {
             .event_emitter
             .subscribe("user", move |event| {
                 if let Some(update) = event.as_any().downcast_ref::<AccountUpdate>() {
-                    dbg!("update received");
+                    dbg!("update ");
                     let new_data =
                         decode::<User>(update.data.data.clone()).expect("valid user data");
                     let slot = update.slot;
