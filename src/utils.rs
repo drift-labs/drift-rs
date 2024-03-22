@@ -91,6 +91,8 @@ pub fn get_ws_url(url: &str) -> Result<String, &'static str> {
         url.replacen("http://", "ws://", 1)
     } else if url.starts_with("https://") {
         url.replacen("https://", "wss://", 1)
+    } else if url.starts_with("wss://") || url.starts_with("wss://") {
+        url.to_string()
     } else {
         return Err("Invalid URL scheme");
     };

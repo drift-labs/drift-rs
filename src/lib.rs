@@ -73,12 +73,15 @@ pub mod websocket_program_account_subscriber;
 pub mod auction_subscriber;
 pub mod dlob_client;
 pub mod event_subscriber;
-pub mod marketmap;
-pub mod oraclemap;
 #[cfg(feature = "jit")]
 pub mod jit_client;
+pub mod marketmap;
+pub mod oraclemap;
 pub mod slot_subscriber;
 pub mod usermap;
+
+// wrappers
+pub mod user;
 
 pub mod dlob;
 
@@ -715,6 +718,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         };
 
         let lookup_table_address = market_lookup_table(context);
+
         let (markets, lookup_table_account): (
             SdkResult<(Vec<SpotMarket>, Vec<PerpMarket>)>,
             SdkResult<Account>,
@@ -722,9 +726,9 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             get_market_accounts(&this.rpc_client),
             this.get_account_raw(&lookup_table_address),
         );
+
         let (spot, perp) = markets?;
         let lookup_table = utils::deserialize_alt(lookup_table_address, &lookup_table_account?)?;
-
         this.program_data = ProgramData::new(spot, perp, lookup_table);
 
         Ok(this)
