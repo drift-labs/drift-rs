@@ -23,7 +23,9 @@ use log::{debug, warn};
 use regex::Regex;
 pub use solana_client::nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient};
 use solana_client::{
+    nonblocking::pubsub_client::PubsubClientError,
     rpc_client::GetConfirmedSignaturesForAddress2Config, rpc_config::RpcTransactionLogsConfig,
+    rpc_response::RpcLogsResponse,
 };
 pub use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::{pubkey::Pubkey, signature::Signature, transaction::VersionedTransaction};
@@ -116,12 +118,12 @@ impl EventSubscriber {
     /// Subscribe to drift events of `sub_account`, backed by Ws APIs
     ///
     /// The underlying stream will reconnect according to the given `retry_policy`
-    pub fn subscribe(
-        provider: PubsubClient,
+    pub async fn subscribe(
+        endpoint: &str,
         sub_account: Pubkey,
         retry_policy: impl TaskRetryPolicy,
-    ) -> DriftEventStream {
-        log_stream(provider, sub_account, retry_policy)
+    ) -> SdkResult<DriftEventStream> {
+        log_stream(endpoint, sub_account, retry_policy).await
     }
     /// Subscribe to drift events of `sub_account`, backed by RPC polling APIs
     pub fn subscribe_polled(provider: impl EventRpcProvider, account: Pubkey) -> DriftEventStream {
@@ -131,6 +133,7 @@ impl EventSubscriber {
 
 struct LogEventStream {
     cache: Arc<RwLock<TxSignatureCache>>,
+    endpoint: Arc<String>,
     provider: Arc<PubsubClient>,
     sub_account: Pubkey,
     event_tx: Sender<DriftEvent>,
@@ -139,55 +142,79 @@ struct LogEventStream {
 
 impl LogEventStream {
     /// Returns a future for running the configured log event stream
-    async fn stream_fn(self) {
+    async fn stream_fn(mut self) {
         let sub_account = self.sub_account;
         let subscribe_result = self
             .provider
             .logs_subscribe(
-                solana_client::rpc_config::RpcTransactionLogsFilter::Mentions(vec![
-                    sub_account.to_string()
-                ]),
+                solana_client::rpc_config::RpcTransactionLogsFilter::Mentions(vec![self
+                    .sub_account
+                    .to_string()]),
                 RpcTransactionLogsConfig {
                     commitment: Some(self.commitment),
                 },
             )
             .await;
-        if let Err(err) = subscribe_result {
-            warn!(target: LOG_TARGET, "log subscription failed: {sub_account:?} with: {err:?}");
-            return;
+
+        // the provider's internal websocket connection can close, if so need to reconnect
+        if let Err(ref err) = subscribe_result {
+            match err {
+                PubsubClientError::ConnectionClosed(_) => {
+                    drop(subscribe_result);
+                    warn!(target: LOG_TARGET, "log stream disconnected, reconnecting: {sub_account:?}");
+                    let _ = PubsubClient::new(&self.endpoint)
+                        .await
+                        .map(|provider| {
+                            self.provider = Arc::new(provider);
+                        })
+                        .map_err(|err| {
+                            warn!(target: LOG_TARGET, "log stream reconnect failed {err:?}, retrying: {sub_account:?}");
+                        });
+                    return;
+                }
+                subscribe_err => {
+                    warn!(target: LOG_TARGET, "log subscription failed {subscribe_err:?}, retrying: {sub_account:?}");
+                    return;
+                }
+            }
         }
 
         let (mut log_stream, unsub_fn) = subscribe_result.unwrap();
         debug!(target: LOG_TARGET, "start log subscription: {sub_account:?}");
 
-        let mut cache = self.cache.write().await;
         while let Some(response) = log_stream.next().await {
-            // don't emit events for failed txs
-            if response.value.err.is_some() {
-                debug!(target: LOG_TARGET, "skipping event for failed tx: {}", response.value.signature);
-                continue;
-            }
-            let signature = response.value.signature;
-            // seems to block
-            // debug!(target: LOG_TARGET, "log extracting events, tx: {signature:?}");
-            if cache.contains(&signature) {
-                debug!(target: LOG_TARGET, "log skip cached, tx: {signature:?}");
-                continue;
-            }
-            cache.insert(signature.clone());
+            self.process_log(response.value).await;
+        }
 
-            for (tx_idx, log) in response.value.logs.iter().enumerate() {
-                // a drift sub-account should not interact with any other program by definition
-                if let Some(event) = try_parse_log(log.as_str(), &signature, tx_idx) {
-                    // unrelated events from same tx should not be emitted e.g. a filler tx which produces other fill events
-                    if event.pertains_to(sub_account) {
-                        self.event_tx.try_send(event).expect("sent");
-                    }
+        warn!(target: LOG_TARGET, "log stream ended: {sub_account:?}");
+        unsub_fn().await;
+    }
+
+    /// Process a log response from RPC, emitting any relevant events
+    async fn process_log(&self, response: RpcLogsResponse) {
+        let mut cache = self.cache.write().await;
+        if response.err.is_some() {
+            debug!(target: LOG_TARGET, "skipping failed tx: {}", response.signature);
+            return;
+        }
+        let signature = response.signature;
+        // seems to block
+        // debug!(target: LOG_TARGET, "log extracting events, tx: {signature:?}");
+        if cache.contains(&signature) {
+            debug!(target: LOG_TARGET, "skipping cached tx: {signature:?}");
+            return;
+        }
+        cache.insert(signature.clone());
+
+        for (tx_idx, log) in response.logs.iter().enumerate() {
+            // a drift sub-account should not interact with any other program by definition
+            if let Some(event) = try_parse_log(log.as_str(), &signature, tx_idx) {
+                // unrelated events from same tx should not be emitted e.g. a filler tx which produces other fill events
+                if event.pertains_to(self.sub_account) {
+                    self.event_tx.try_send(event).expect("sent");
                 }
             }
         }
-        warn!(target: LOG_TARGET, "log stream ended: {sub_account:?}");
-        unsub_fn().await;
     }
 }
 
@@ -212,20 +239,23 @@ fn polled_stream(provider: impl EventRpcProvider, sub_account: Pubkey) -> DriftE
 }
 
 /// Creates a Ws-backed event stream using `logsSubscribe` interface
-fn log_stream(
-    provider: PubsubClient,
+async fn log_stream(
+    endpoint: &str,
     sub_account: Pubkey,
     retry_policy: impl TaskRetryPolicy,
-) -> DriftEventStream {
+) -> SdkResult<DriftEventStream> {
     debug!(target: LOG_TARGET, "stream events for {sub_account:?}");
     let (event_tx, event_rx) = channel(64);
-    let provider = Arc::new(provider);
-    let cache = Arc::new(RwLock::new(TxSignatureCache::new(128)));
+
+    let provider = Arc::new(PubsubClient::new(endpoint).await?);
+    let cache = Arc::new(RwLock::new(TxSignatureCache::new(256)));
+    let endpoint = Arc::new(endpoint.to_string());
 
     // spawn the event subscription task
     let join_handle = spawn_retry_task(
         move || {
             let log_stream = LogEventStream {
+                endpoint: Arc::clone(&endpoint),
                 cache: Arc::clone(&cache),
                 provider: Arc::clone(&provider),
                 sub_account,
@@ -237,10 +267,10 @@ fn log_stream(
         retry_policy,
     );
 
-    DriftEventStream {
+    Ok(DriftEventStream {
         rx: event_rx,
         task: join_handle,
-    }
+    })
 }
 
 pub struct PolledEventStream<T: EventRpcProvider> {
@@ -659,6 +689,10 @@ impl TxSignatureCache {
             }
         }
     }
+    #[cfg(test)]
+    fn reset(&mut self) {
+        self.entries.clear()
+    }
 }
 
 #[cfg(test)]
@@ -684,17 +718,123 @@ mod test {
     #[tokio::test]
     async fn event_streaming_logs() {
         let mut event_stream = EventSubscriber::subscribe(
-            PubsubClient::new("wss://api.devnet.solana.com")
-                .await
-                .expect("connects"),
+            "wss://api.devnet.solana.com",
             Pubkey::from_str("9JtczxrJjPM4J1xooxr2rFXmRivarb4BwjNiBgXDwe2p").unwrap(),
             retry_policy::never(),
         )
+        .await
+        .unwrap()
         .take(5);
 
         while let Some(event) = event_stream.next().await {
             dbg!(event);
         }
+    }
+
+    #[tokio::test]
+    async fn log_stream_handles_jit_proxy_events() {
+        let provider = PubsubClient::new("wss://api.devnet.solana.com")
+            .await
+            .expect("connects");
+
+        let cache = TxSignatureCache::new(16);
+        let (event_tx, mut event_rx) = channel(16);
+
+        let mut log_stream = LogEventStream {
+            cache: Arc::new(cache.into()),
+            provider: Arc::new(provider),
+            endpoint: Arc::new("wss://api.devnet.solana.com".into()),
+            sub_account: "GgZkrSFgTAXZn1rNtZ533wpZi6nxx8whJC9bxRESB22c"
+                .try_into()
+                .unwrap(),
+            event_tx,
+            commitment: CommitmentConfig::confirmed(),
+        };
+
+        let logs: Vec<String> = [
+            "Program ComputeBudget111111111111111111111111111111 invoke [1]",
+            "Program ComputeBudget111111111111111111111111111111 success",
+            "Program J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP invoke [1]",
+            "Program log: Instruction: ArbPerp",
+            "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH invoke [2]",
+            "Program log: Instruction: PlaceAndTakePerpOrder",
+            "Program log: Invalid Spot 0 Oracle: Stale (oracle_delay=23)",
+            "Program log: 4DRDR8LtbQFOKvplAAAAAAAAGAABAAAAAAAAAAAAAAFGJn8TpIimFlKv8ZWRhmuU81x+ojkf3K4d+++MbslDfAGZcTYAAQEBAM5q/TIAAAABAAAAAAAAAAABAAAAAAAAAAAAAAAAAACTWxEAAAAAAA==",
+            "Program log: aBNAOFkVAlpOKvplAAAAAEYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8qZQ2DwAAAABMTREAAAAAAADOav0yAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJlxNgAYAAEBAQAAAQAAAQAAAAAA",
+            "Program log: 4DRDR8LtbQFOKvplAAAAAAIIGAABAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AQAAAAAAAAAAAceaAwAAAAAAAQDOav0yAAAAAQQgzQ4AAAAAAQIjAQAAAAAAAQA+////////AAAAAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AZlxNgABAQEAzmr9MgAAAAEAzmr9MgAAAAEEIM0OAAAAAAHpAf4sI0TDV0Ec0LWHs9mO40bjfKEm3A+yye5HFCQQQQEzPgAAAQABANraQssAAAABANraQssAAAABLJgAOwAAAACTWxEAAAAAAA==",
+            "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH consumed 373815 of 1334075 compute units",
+            "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH success",
+            "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH invoke [2]",
+            "Program log: Instruction: PlaceAndTakePerpOrder",
+            "Program log: Invalid Spot 0 Oracle: Stale (oracle_delay=23)",
+            "Program log: 4DRDR8LtbQFOKvplAAAAAAAAGAABAAAAAAAAAAAAAAFGJn8TpIimFlKv8ZWRhmuU81x+ojkf3K4d+++MbslDfAGacTYAAQABAM5q/TIAAAABAAAAAAAAAAABAAAAAAAAAAAAAAAAAACTWxEAAAAAAA==",
+            "Program log: aBNAOFkVAlpOKvplAAAAAEYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8qZQ2DwAAAACAPBEAAAAAAADOav0yAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJpxNgAYAAEBAQABAAAAAQAAAAAA",
+            "Program log: 4DRDR8LtbQFOKvplAAAAAAIQGAABAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AQAAAAAAAAAAAciaAwAAAAAAAQDgBS0LAAAAAQBYOwMAAAAAAYs/AAAAAAAAAAAB+Ejx//////8AAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AZpxNgABAAEAzmr9MgAAAAEA4AUtCwAAAAEAWDsDAAAAAAAAAAAAAJNbEQAAAAAA",
+            "Program log: 4DRDR8LtbQFOKvplAAAAAAIIGAABAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AQAAAAAAAAAAAcmaAwAAAAAAAQDuZNAnAAAAAYBpgwsAAAAAAV3iAAAAAAAAARhp////////AAAAAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AZpxNgABAAEAzmr9MgAAAAEAzmr9MgAAAAGAwb4OAAAAAAFmQRGN8PRJqt5D5pVvCspbc3f0ZBdTB1Kcw0YfuzxCOAH2/poHAQEBAIjmn+sAAAABAFrDjp4AAAABgPDZLQAAAACTWxEAAAAAAA==",
+            "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH consumed 269624 of 934786 compute units",
+            "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH success",
+            "Program log: pnl 792986",
+            "Program J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP consumed 738458 of 1399850 compute units",
+            "Program J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP success",
+            ].into_iter().map(Into::into).collect();
+
+        log_stream.process_log(RpcLogsResponse {
+            signature: "2jLk34wWwgecuws9iD9Ug63JdL8kYBePdtcakzG34zEx9KYVYD6HuokxMZYpFw799cJZBcaCMZ47WAxkGJjM7zNC".into(),
+            err: None,
+            logs: logs.clone(),
+        }).await;
+
+        // case 1: jit taker
+        assert_eq!(
+            event_rx.try_recv().expect("one event"),
+            DriftEvent::OrderFill {
+                maker: Some(
+                    "GgZkrSFgTAXZn1rNtZ533wpZi6nxx8whJC9bxRESB22c".try_into().unwrap(),
+                ),
+                maker_fee: -49664,
+                maker_order_id: 15923,
+                maker_side: Some(
+                    PositionDirection::Long,
+                ),
+                taker: Some(
+                    "5iqawn52cdBmsjC4hDegyFnX1iNRTNDV5mRsGzgqbuyD".try_into().unwrap(),
+                ),
+                taker_fee: 74498,
+                taker_order_id: 3568025,
+                taker_side: Some(
+                    PositionDirection::Short,
+                ),
+                base_asset_amount_filled: 219000000000,
+                quote_asset_amount_filled: 248324100,
+                market_index: 24,
+                market_type: MarketType::Perp,
+                oracle_price: 1137555,
+                signature: "2jLk34wWwgecuws9iD9Ug63JdL8kYBePdtcakzG34zEx9KYVYD6HuokxMZYpFw799cJZBcaCMZ47WAxkGJjM7zNC".into(),
+                tx_idx: 9,
+                ts: 1710893646,
+            }
+        );
+        assert!(event_rx.try_recv().is_err()); // no more events
+
+        // case 2: jit maker
+        // reset the cache and account to process the log from maker's side this time
+        log_stream.sub_account = "5iqawn52cdBmsjC4hDegyFnX1iNRTNDV5mRsGzgqbuyD"
+            .try_into()
+            .unwrap();
+        log_stream.cache.write().await.reset();
+
+        log_stream.process_log(RpcLogsResponse {
+            signature: "2jLk34wWwgecuws9iD9Ug63JdL8kYBePdtcakzG34zEx9KYVYD6HuokxMZYpFw799cJZBcaCMZ47WAxkGJjM7zNC".into(),
+            err: None,
+            logs: logs.clone(),
+        }).await;
+
+        assert!(event_rx.try_recv().is_ok()); // place/create
+        assert!(event_rx.try_recv().is_ok()); // fill with match
+        assert!(event_rx.try_recv().is_ok()); // place/create
+        assert!(event_rx.try_recv().is_ok()); // fill with amm
+        assert!(event_rx.try_recv().is_ok()); // fill with match
+        assert!(event_rx.try_recv().is_err()); // no more events
     }
 
     #[test]
@@ -703,9 +843,27 @@ mod test {
         dbg!(result);
     }
 
+    #[test]
+    fn parses_jit_proxy_logs() {
+        let cpi_logs = &[
+            "Program log: 4DRDR8LtbQFOKvplAAAAAAAAGAABAAAAAAAAAAAAAAFGJn8TpIimFlKv8ZWRhmuU81x+ojkf3K4d+++MbslDfAGZcTYAAQEBAM5q/TIAAAABAAAAAAAAAAABAAAAAAAAAAAAAAAAAACTWxEAAAAAAA==",
+            "Program log: aBNAOFkVAlpOKvplAAAAAEYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8qZQ2DwAAAABMTREAAAAAAADOav0yAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJlxNgAYAAEBAQAAAQAAAQAAAAAA",
+            "Program log: 4DRDR8LtbQFOKvplAAAAAAIIGAABAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AQAAAAAAAAAAAceaAwAAAAAAAQDOav0yAAAAAQQgzQ4AAAAAAQIjAQAAAAAAAQA+////////AAAAAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AZlxNgABAQEAzmr9MgAAAAEAzmr9MgAAAAEEIM0OAAAAAAHpAf4sI0TDV0Ec0LWHs9mO40bjfKEm3A+yye5HFCQQQQEzPgAAAQABANraQssAAAABANraQssAAAABLJgAOwAAAACTWxEAAAAAAA==",
+            "Program log: 4DRDR8LtbQFOKvplAAAAAAAAGAABAAAAAAAAAAAAAAFGJn8TpIimFlKv8ZWRhmuU81x+ojkf3K4d+++MbslDfAGacTYAAQABAM5q/TIAAAABAAAAAAAAAAABAAAAAAAAAAAAAAAAAACTWxEAAAAAAA==",
+            "Program log: aBNAOFkVAlpOKvplAAAAAEYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8qZQ2DwAAAACAPBEAAAAAAADOav0yAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJpxNgAYAAEBAQABAAAAAQAAAAAA",
+            "Program log: 4DRDR8LtbQFOKvplAAAAAAIQGAABAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AQAAAAAAAAAAAciaAwAAAAAAAQDgBS0LAAAAAQBYOwMAAAAAAYs/AAAAAAAAAAAB+Ejx//////8AAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AZpxNgABAAEAzmr9MgAAAAEA4AUtCwAAAAEAWDsDAAAAAAAAAAAAAJNbEQAAAAAA",
+            "Program log: 4DRDR8LtbQFOKvplAAAAAAIIGAABAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AQAAAAAAAAAAAcmaAwAAAAAAAQDuZNAnAAAAAYBpgwsAAAAAAV3iAAAAAAAAARhp////////AAAAAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AZpxNgABAAEAzmr9MgAAAAEAzmr9MgAAAAGAwb4OAAAAAAFmQRGN8PRJqt5D5pVvCspbc3f0ZBdTB1Kcw0YfuzxCOAH2/poHAQEBAIjmn+sAAAABAFrDjp4AAAABgPDZLQAAAACTWxEAAAAAAA==",
+        ];
+
+        for log in cpi_logs {
+            let result = try_parse_log(log, "sig", 0);
+            dbg!(log, result);
+        }
+    }
+
     #[tokio::test]
     async fn polled_event_stream_caching() {
-        env_logger::try_init();
+        let _ = env_logger::try_init();
         struct MockRpcProvider {
             tx_responses: FnvHashMap<String, EncodedTransactionWithStatusMeta>,
             signatures: tokio::sync::Mutex<Vec<String>>,

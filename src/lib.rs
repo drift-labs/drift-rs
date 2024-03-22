@@ -75,6 +75,8 @@ pub mod dlob_client;
 pub mod event_subscriber;
 pub mod marketmap;
 pub mod oraclemap;
+#[cfg(feature = "jit")]
+pub mod jit_client;
 pub mod slot_subscriber;
 pub mod usermap;
 
@@ -1628,15 +1630,15 @@ pub async fn get_market_accounts(
     client: &RpcClient,
 ) -> SdkResult<(Vec<SpotMarket>, Vec<PerpMarket>)> {
     let state_data = client
-        .get_account_data(&state_account())
+        .get_account_data(state_account())
         .await
         .expect("state account fetch");
     let state = State::try_deserialize(&mut state_data.as_slice()).expect("state deserializes");
     let spot_market_pdas: Vec<Pubkey> = (0..state.number_of_spot_markets)
-        .map(|x| derive_spot_market_account(x))
+        .map(derive_spot_market_account)
         .collect();
     let perp_market_pdas: Vec<Pubkey> = (0..state.number_of_markets)
-        .map(|x| derive_perp_market_account(x))
+        .map(derive_perp_market_account)
         .collect();
 
     let (spot_markets, perp_markets) = tokio::join!(
