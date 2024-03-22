@@ -23,6 +23,7 @@ use log::{debug, warn};
 use regex::Regex;
 pub use solana_client::nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient};
 use solana_client::{
+    nonblocking::pubsub_client::PubsubClientError,
     rpc_client::GetConfirmedSignaturesForAddress2Config, rpc_config::RpcTransactionLogsConfig,
     rpc_response::RpcLogsResponse,
 };
@@ -117,12 +118,12 @@ impl EventSubscriber {
     /// Subscribe to drift events of `sub_account`, backed by Ws APIs
     ///
     /// The underlying stream will reconnect according to the given `retry_policy`
-    pub fn subscribe(
-        provider: PubsubClient,
+    pub async fn subscribe(
+        endpoint: &str,
         sub_account: Pubkey,
         retry_policy: impl TaskRetryPolicy,
-    ) -> DriftEventStream {
-        log_stream(provider, sub_account, retry_policy)
+    ) -> SdkResult<DriftEventStream> {
+        log_stream(endpoint, sub_account, retry_policy).await
     }
     /// Subscribe to drift events of `sub_account`, backed by RPC polling APIs
     pub fn subscribe_polled(provider: impl EventRpcProvider, account: Pubkey) -> DriftEventStream {
@@ -132,6 +133,7 @@ impl EventSubscriber {
 
 struct LogEventStream {
     cache: Arc<RwLock<TxSignatureCache>>,
+    endpoint: Arc<String>,
     provider: Arc<PubsubClient>,
     sub_account: Pubkey,
     event_tx: Sender<DriftEvent>,
@@ -140,7 +142,7 @@ struct LogEventStream {
 
 impl LogEventStream {
     /// Returns a future for running the configured log event stream
-    async fn stream_fn(self) {
+    async fn stream_fn(mut self) {
         let sub_account = self.sub_account;
         let subscribe_result = self
             .provider
@@ -153,9 +155,28 @@ impl LogEventStream {
                 },
             )
             .await;
-        if let Err(err) = subscribe_result {
-            warn!(target: LOG_TARGET, "log subscription failed: {sub_account:?} with: {err:?}");
-            return;
+
+        // the provider's internal websocket connection can close, if so need to reconnect
+        if let Err(ref err) = subscribe_result {
+            match err {
+                PubsubClientError::ConnectionClosed(_) => {
+                    drop(subscribe_result);
+                    warn!(target: LOG_TARGET, "log stream disconnected, reconnecting: {sub_account:?}");
+                    let _ = PubsubClient::new(&self.endpoint)
+                        .await
+                        .map(|provider| {
+                            self.provider = Arc::new(provider);
+                        })
+                        .map_err(|err| {
+                            warn!(target: LOG_TARGET, "log stream reconnect failed {err:?}, retrying: {sub_account:?}");
+                        });
+                    return;
+                }
+                subscribe_err => {
+                    warn!(target: LOG_TARGET, "log subscription failed {subscribe_err:?}, retrying: {sub_account:?}");
+                    return;
+                }
+            }
         }
 
         let (mut log_stream, unsub_fn) = subscribe_result.unwrap();
@@ -164,6 +185,7 @@ impl LogEventStream {
         while let Some(response) = log_stream.next().await {
             self.process_log(response.value).await;
         }
+
         warn!(target: LOG_TARGET, "log stream ended: {sub_account:?}");
         unsub_fn().await;
     }
@@ -218,20 +240,23 @@ fn polled_stream(provider: impl EventRpcProvider, sub_account: Pubkey) -> DriftE
 }
 
 /// Creates a Ws-backed event stream using `logsSubscribe` interface
-fn log_stream(
-    provider: PubsubClient,
+async fn log_stream(
+    endpoint: &str,
     sub_account: Pubkey,
     retry_policy: impl TaskRetryPolicy,
-) -> DriftEventStream {
+) -> SdkResult<DriftEventStream> {
     debug!(target: LOG_TARGET, "stream events for {sub_account:?}");
     let (event_tx, event_rx) = channel(64);
-    let provider = Arc::new(provider);
+
+    let provider = Arc::new(PubsubClient::new(endpoint).await?);
     let cache = Arc::new(RwLock::new(TxSignatureCache::new(256)));
+    let endpoint = Arc::new(endpoint.to_string());
 
     // spawn the event subscription task
     let join_handle = spawn_retry_task(
         move || {
             let log_stream = LogEventStream {
+                endpoint: Arc::clone(&endpoint),
                 cache: Arc::clone(&cache),
                 provider: Arc::clone(&provider),
                 sub_account,
@@ -243,10 +268,10 @@ fn log_stream(
         retry_policy,
     );
 
-    DriftEventStream {
+    Ok(DriftEventStream {
         rx: event_rx,
         task: join_handle,
-    }
+    })
 }
 
 pub struct PolledEventStream<T: EventRpcProvider> {
@@ -694,12 +719,12 @@ mod test {
     #[tokio::test]
     async fn event_streaming_logs() {
         let mut event_stream = EventSubscriber::subscribe(
-            PubsubClient::new("wss://api.devnet.solana.com")
-                .await
-                .expect("connects"),
+            "wss://api.devnet.solana.com",
             Pubkey::from_str("9JtczxrJjPM4J1xooxr2rFXmRivarb4BwjNiBgXDwe2p").unwrap(),
             retry_policy::never(),
         )
+        .await
+        .unwrap()
         .take(5);
 
         while let Some(event) = event_stream.next().await {
@@ -719,6 +744,7 @@ mod test {
         let mut log_stream = LogEventStream {
             cache: Arc::new(cache.into()),
             provider: Arc::new(provider),
+            endpoint: Arc::new("wss://api.devnet.solana.com".into()),
             sub_account: "GgZkrSFgTAXZn1rNtZ533wpZi6nxx8whJC9bxRESB22c"
                 .try_into()
                 .unwrap(),
