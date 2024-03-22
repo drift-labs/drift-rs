@@ -193,16 +193,15 @@ impl LogEventStream {
     /// Process a log response from RPC, emitting any relevant events
     async fn process_log(&self, response: RpcLogsResponse) {
         let mut cache = self.cache.write().await;
-        // don't emit events for failed txs
         if response.err.is_some() {
-            debug!(target: LOG_TARGET, "skipping event for failed tx: {}", response.signature);
+            debug!(target: LOG_TARGET, "skipping failed tx: {}", response.signature);
             return;
         }
         let signature = response.signature;
         // seems to block
         // debug!(target: LOG_TARGET, "log extracting events, tx: {signature:?}");
         if cache.contains(&signature) {
-            debug!(target: LOG_TARGET, "log skip cached, tx: {signature:?}");
+            debug!(target: LOG_TARGET, "skipping cached tx: {signature:?}");
             return;
         }
         cache.insert(signature.clone());
