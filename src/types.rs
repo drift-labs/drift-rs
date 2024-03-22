@@ -249,6 +249,8 @@ pub enum SdkError {
     BorrowError(#[from] BorrowError),
     #[error("{0}")]
     Generic(String),
+    #[error("max connection attempts reached")]
+    MaxReconnectionAttemptsReached,
 }
 
 impl SdkError {

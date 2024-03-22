@@ -76,49 +76,69 @@ impl WebsocketAccountSubscriber {
         let (unsub_tx, mut unsub_rx) = tokio::sync::mpsc::channel::<()>(1);
         self.unsubscriber = Some(unsub_tx);
 
+        let mut attempt = 0;
+        let max_reconnection_attempts = 20;
+        let base_delay = tokio::time::Duration::from_secs(2);
+
         tokio::spawn({
             let event_emitter = self.event_emitter.clone();
             let mut latest_slot = 0;
-            let susbscription_name = self.subscription_name;
+            let subscription_name = self.subscription_name;
             let pubkey = self.pubkey.clone();
             async move {
-                let (mut account_updates, account_unsubscribe) = pubsub
-                    .account_subscribe(&pubkey, Some(account_config))
-                    .await
-                    .unwrap();
-
                 loop {
-                    tokio::select! {
-                        message = account_updates.next() => {
-                            match message {
-                                Some(message) => {
-                                    let slot = message.context.slot;
-                                    if slot >= latest_slot {
-                                        latest_slot = slot;
-                                        let account_update = AccountUpdate {
-                                            pubkey: pubkey.to_string(),
-                                            data: message.value,
-                                            slot,
-                                        };
-                                        event_emitter.emit(susbscription_name, Box::new(account_update));
+                    let (mut account_updates, account_unsubscribe) = pubsub
+                        .account_subscribe(&pubkey, Some(account_config.clone()))
+                        .await
+                        .unwrap();
+
+                    loop {
+                        tokio::select! {
+                            message = account_updates.next() => {
+                                match message {
+                                    Some(message) => {
+                                        let slot = message.context.slot;
+                                        if slot >= latest_slot {
+                                            latest_slot = slot;
+                                            let account_update = AccountUpdate {
+                                                pubkey: pubkey.to_string(),
+                                                data: message.value,
+                                                slot,
+                                            };
+                                            event_emitter.emit(subscription_name, Box::new(account_update));
+                                        }
+                                    }
+                                    None => {
+                                        log::warn!("{}: Account stream interrupted", subscription_name);
+                                        account_unsubscribe().await;
+                                        break;
                                     }
                                 }
-                                None => {
-                                    log::warn!("{}: Account stream interrupted", susbscription_name);
-                                    account_unsubscribe().await;
-                                    break;
-                                }
                             }
-                        }
-                        unsub = unsub_rx.recv() => {
-                            if let Some(_) = unsub {
-                                log::debug!("{}: Unsubscribing from account stream", susbscription_name);
-                                account_unsubscribe().await;
-                                break;
+                            unsub = unsub_rx.recv() => {
+                                if let Some(_) = unsub {
+                                    log::debug!("{}: Unsubscribing from account stream", subscription_name);
+                                    account_unsubscribe().await;
+                                    return Ok(());
 
+                                }
                             }
                         }
                     }
+
+                    if attempt >= max_reconnection_attempts {
+                        log::error!("{}: Max reconnection attempts reached", subscription_name);
+                        return Err(crate::SdkError::MaxReconnectionAttemptsReached);
+                    }
+
+                    let delay_duration = base_delay * 2_u32.pow(attempt);
+                    log::debug!(
+                        "{}: Reconnecting in {:?}",
+                        subscription_name,
+                        delay_duration
+                    );
+                    tokio::time::sleep(delay_duration).await;
+                    attempt += 1;
                 }
             }
         });
