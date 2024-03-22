@@ -53,10 +53,6 @@ impl OracleMap {
         all_oracles.extend(perp_oracles.clone());
         all_oracles.extend(spot_oracles.clone());
 
-        let mut all_oracles = vec![];
-        all_oracles.extend(perp_oracles.iter().cloned());
-        all_oracles.extend(spot_oracles.iter().cloned());
-
         let oracle_infos_map: DashMap<_, _> = all_oracles
             .iter()
             .map(|(_, pubkey, oracle_source)| (*pubkey, *oracle_source))
