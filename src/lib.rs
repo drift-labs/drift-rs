@@ -1,6 +1,6 @@
 //! Drift SDK
 
-use std::{borrow::Cow, rc::Rc, sync::Arc, time::Duration};
+use std::{borrow::Cow, sync::Arc, time::Duration};
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData, ToAccountMetas};
 use async_utils::{retry_policy, spawn_retry_task};
@@ -143,15 +143,15 @@ impl AccountProvider for RpcAccountProvider {
 
 /// Account provider using websocket subscriptions to receive and cache account updates
 pub struct WsAccountProvider {
+    url: String,
     rpc_client: Arc<RpcClient>,
-    ws_client: Arc<PubsubClient>,
     /// map from account pubkey to (account data, last modified ts)
     account_cache: RwLock<FnvHashMap<Pubkey, Receiver<(Account, Slot)>>>,
 }
 
 struct AccountSubscription {
     account: Pubkey,
-    ws_client: Arc<PubsubClient>,
+    url: String,
     rpc_client: Arc<RpcClient>,
     /// sink for account updates
     tx: Arc<watch::Sender<(Account, Slot)>>,
@@ -167,8 +167,16 @@ impl AccountSubscription {
         min_context_slot: None,
     };
     async fn stream_fn(self) {
-        let result = self
-            .ws_client
+        let ws_client =
+            match PubsubClient::new(self.url.as_str().replace("http", "ws").as_str()).await {
+                Ok(ws_client) => ws_client,
+                Err(err) => {
+                    warn!(target: "account", "connect client {:?} failed: {err:?}", self.account);
+                    return;
+                }
+            };
+
+        let result = ws_client
             .account_subscribe(&self.account, Some(Self::RPC_CONFIG))
             .await;
 
@@ -239,25 +247,22 @@ impl WsAccountProvider {
     }
     /// Create a new WsAccountProvider with provided commitment level
     pub async fn new_with_commitment(url: &str, commitment: CommitmentConfig) -> SdkResult<Self> {
-        let ws_url = url.replace("http", "ws");
-        let ws_client = PubsubClient::new(&ws_url).await?;
-
         Ok(Self {
+            url: url.to_string(),
             rpc_client: Arc::new(RpcClient::new_with_commitment(url.to_string(), commitment)),
-            ws_client: Arc::new(ws_client),
             account_cache: Default::default(),
         })
     }
     /// Subscribe to account updates via web-socket and polling
     fn subscribe_account(&self, account: Pubkey, tx: watch::Sender<(Account, Slot)>) {
-        let ws_client = Arc::clone(&self.ws_client);
         let rpc_client = Arc::clone(&self.rpc_client);
         let tx = Arc::new(tx);
+        let url = self.url.clone();
         spawn_retry_task(
             move || {
                 let account_sub = AccountSubscription {
                     account,
-                    ws_client: Arc::clone(&ws_client),
+                    url: url.clone(),
                     rpc_client: Arc::clone(&rpc_client),
                     tx: Arc::clone(&tx),
                 };
@@ -676,7 +681,7 @@ pub struct DriftClientBackend<T: AccountProvider> {
     program_data: ProgramData,
     perp_market_map: MarketMap<PerpMarket>,
     spot_market_map: MarketMap<SpotMarket>,
-    oracle_map: Rc<OracleMap>,
+    oracle_map: Arc<OracleMap>,
     state_account: Arc<std::sync::RwLock<State>>,
 }
 
@@ -723,7 +728,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map: Rc::new(oracle_map),
+            oracle_map: Arc::new(oracle_map),
             state_account: Arc::new(std::sync::RwLock::new(
                 State::try_deserialize(&mut state.data.as_ref()).expect("valid state"),
             )),

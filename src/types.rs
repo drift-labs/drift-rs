@@ -4,7 +4,7 @@ use std::{
 };
 
 use anchor_lang::AccountDeserialize;
-use drift::{error::ErrorCode, state::user::UserStats};
+use drift::error::ErrorCode;
 // re-export types in public API
 pub use drift::{
     controller::position::PositionDirection,
@@ -12,7 +12,7 @@ pub use drift::{
         order_params::{ModifyOrderParams, OrderParams, PostOnlyParam},
         perp_market::PerpMarket,
         spot_market::SpotMarket,
-        user::{MarketType, Order, OrderType, PerpPosition, SpotPosition},
+        user::{MarketType, Order, OrderType, PerpPosition, SpotPosition, User, UserStats},
     },
 };
 use futures_util::sink::Sink;
