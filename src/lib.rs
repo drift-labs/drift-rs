@@ -676,7 +676,7 @@ pub struct DriftClientBackend<T: AccountProvider> {
     program_data: ProgramData,
     perp_market_map: MarketMap<PerpMarket>,
     spot_market_map: MarketMap<SpotMarket>,
-    oracle_map: Rc<OracleMap>,
+    oracle_map: Arc<OracleMap>,
     state_account: Arc<std::sync::RwLock<State>>,
 }
 
@@ -723,7 +723,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map: Rc::new(oracle_map),
+            oracle_map: Arc::new(oracle_map),
             state_account: Arc::new(std::sync::RwLock::new(
                 State::try_deserialize(&mut state.data.as_ref()).expect("valid state"),
             )),
@@ -1867,7 +1867,7 @@ mod tests {
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map: Rc::new(OracleMap::new(
+            oracle_map: Arc::new(OracleMap::new(
                 CommitmentConfig::processed(),
                 DEVNET_ENDPOINT.to_string(),
                 true,
@@ -1883,6 +1883,16 @@ mod tests {
             active_sub_account_id: 0,
             sub_account_ids: vec![0],
         }
+    }
+
+    #[tokio::test]
+    async fn test_backend_send_sync() {
+        let account_mocks = Mocks::default();
+        let client = setup(Default::default(), account_mocks, Keypair::new()).await;
+
+        tokio::task::spawn(async move {
+            let _ = client.clone();
+        });
     }
 
     #[tokio::test]
