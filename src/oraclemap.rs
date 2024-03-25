@@ -13,15 +13,18 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-#[derive(Copy, Clone, Debug)]
-pub struct OraclePriceDataAndSlot {
+#[derive(Clone, Debug)]
+pub struct Oracle {
+    pub pubkey: Pubkey,
     pub data: OraclePriceData,
+    pub source: OracleSource,
     pub slot: u64,
+    pub raw: Vec<u8>,
 }
 
 pub(crate) struct OracleMap {
     subscribed: Cell<bool>,
-    pub(crate) oraclemap: Arc<DashMap<String, OraclePriceDataAndSlot>>,
+    pub(crate) oraclemap: Arc<DashMap<String, Oracle>>,
     event_emitter: &'static EventEmitter,
     oracle_infos: DashMap<Pubkey, OracleSource>,
     sync_lock: Option<Mutex<()>>,
@@ -139,9 +142,12 @@ impl OracleMap {
                                 Ok(price_data) => {
                                     oracle_map.insert(
                                         update.pubkey.clone(),
-                                        OraclePriceDataAndSlot {
+                                        Oracle {
+                                            pubkey: oracle_pubkey,
                                             data: price_data,
+                                            source: *oracle_source.value(),
                                             slot: update.slot,
+                                            raw: data,
                                         },
                                     );
                                 }
@@ -239,9 +245,12 @@ impl OracleMap {
                     .map_err(|err| crate::SdkError::Anchor(Box::new(err.into())))?;
                 self.oraclemap.insert(
                     oracle_pubkey.to_string(),
-                    OraclePriceDataAndSlot {
+                    Oracle {
+                        pubkey: oracle_pubkey,
                         data: price_data,
+                        source: oracle_info.1,
                         slot,
+                        raw: account.as_ref().expect("account").data.clone(),
                     },
                 );
             }
@@ -270,12 +279,12 @@ impl OracleMap {
         self.spot_oracles.get(&market_index).map(|x| *x)
     }
 
-    pub fn get(&self, key: &str) -> Option<OraclePriceDataAndSlot> {
+    pub fn get(&self, key: &str) -> Option<Oracle> {
         self.oraclemap.get(key).map(|v| *v)
     }
 
-    pub fn values(&self) -> Vec<OraclePriceData> {
-        self.oraclemap.iter().map(|x| x.value().data).collect()
+    pub fn values(&self) -> Vec<Oracle> {
+        self.oraclemap.iter().map(|x| *x.value()).collect()
     }
 
     pub async fn add_oracle(&self, oracle: Pubkey, source: OracleSource) -> SdkResult<()> {
@@ -306,6 +315,10 @@ impl OracleMap {
 
     pub fn update_perp_oracle(&self, market_index: u16, oracle: Pubkey) {
         self.perp_oracles.insert(market_index, oracle);
+    }
+
+    pub fn get_latest_slot(&self) -> u64 {
+        self.latest_slot.load(Ordering::Relaxed)
     }
 }
 

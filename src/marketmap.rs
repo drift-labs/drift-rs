@@ -24,6 +24,8 @@ use solana_client::rpc_response::{OptionalContext, RpcKeyedAccount};
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 
+const LAMPORTS: u64 = 1_000_000_000;
+
 pub trait Market {
     const MARKET_TYPE: MarketType;
     fn market_index(&self) -> u16;
@@ -65,7 +67,7 @@ pub struct MarketMap<T: AccountDeserialize> {
     synced: bool,
 }
 
-impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T> {
+impl<T: AccountDeserialize + Clone + Send + Sync + Market + bytemuck::Pod + 'static> MarketMap<T> {
     pub fn new(commitment: CommitmentConfig, endpoint: String, sync: bool) -> Self {
         let filters = vec![get_market_filter(T::MARKET_TYPE)];
         let options = WebsocketProgramAccountOptions {

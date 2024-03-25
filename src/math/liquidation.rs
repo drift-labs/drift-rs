@@ -3,9 +3,9 @@
 
 use std::ops::Neg;
 
-use anchor_lang::{prelude::AccountInfo, AnchorDeserialize};
+use anchor_lang::prelude::AccountInfo;
 use drift::{
-    ids::pyth_program,
+    ids::{pyth_program, switchboard_program},
     instructions::optional_accounts::AccountMaps,
     math::{
         constants::{
@@ -19,26 +19,24 @@ use drift::{
     },
     state::{
         margin_calculation::MarginContext,
+        oracle::OracleSource,
         oracle_map::OracleMap,
         perp_market::PerpMarket,
         perp_market_map::{MarketSet, PerpMarketMap},
         spot_market::SpotMarket,
         spot_market_map::SpotMarketMap,
-        state::State,
         user::{MarketType, PerpPosition, SpotPosition, User},
     },
 };
 use fnv::FnvHashSet;
-use solana_client::rpc_response::Response;
-use solana_sdk::{
-    account::{Account, ReadableAccount},
-    pubkey::Pubkey,
-};
+use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::{
-    constants::{self},
-    AccountProvider, DriftClient, MarketId, SdkError, SdkResult,
+    constants, utils::zero_account_to_bytes, AccountProvider, DriftClient, SdkError, SdkResult,
 };
+
+const DEFAULT_PUBKEY: Pubkey = solana_sdk::pubkey!("11111111111111111111111111111111");
+const LAMPORTS: u64 = 1_000_000_000;
 
 /// Builds an AccountMap of relevant spot, perp, and oracle accounts from rpc
 #[derive(Default)]
@@ -58,96 +56,102 @@ impl AccountMapBuilder {
         let mut spot_markets_count = 0_usize;
         let mut perp_markets_count = 0_usize;
 
+        let mut spot_markets = Vec::<SpotMarket>::with_capacity(user.spot_positions.len());
+        let mut perp_markets = Vec::<PerpMarket>::with_capacity(user.perp_positions.len());
+
         for p in user.spot_positions.iter().filter(|p| !p.is_available()) {
-            let market = *client
-                .program_data()
-                .spot_market_config_by_index(p.market_index)
-                .unwrap();
-            self.account_keys.push(market.pubkey);
+            let market = client
+                .get_spot_market_account(p.market_index)
+                .expect("spot market");
             oracles.insert(market.oracle);
+            spot_markets.push(market);
             spot_markets_count += 1;
         }
 
-        // always need quote market
-        let quote_market = *client
-            .program_data()
-            .spot_market_config_by_index(MarketId::QUOTE_SPOT.index)
-            .unwrap();
-        if !oracles.contains(&quote_market.oracle) {
-            self.account_keys.push(quote_market.pubkey);
-            oracles.insert(quote_market.oracle);
-            spot_markets_count += 1
-        }
+        let quote_market = client.get_spot_market_account(0).expect("spot market");
+        oracles.insert(quote_market.oracle);
+        spot_markets_count += 1;
 
         for p in user.perp_positions.iter().filter(|p| !p.is_available()) {
-            let market = *client
-                .program_data()
-                .perp_market_config_by_index(p.market_index)
-                .unwrap();
-            self.account_keys.push(market.pubkey);
+            let market = client
+                .get_perp_market_account(p.market_index)
+                .expect("perp market");
             oracles.insert(market.amm.oracle);
+            perp_markets.push(market);
             perp_markets_count += 1;
         }
 
         self.account_keys.extend(oracles.iter());
         self.account_keys.push(*constants::state_account());
 
-        let Response { context, value } = client
-            .inner()
-            .get_multiple_accounts_with_config(self.account_keys.as_slice(), Default::default())
-            .await?;
-
-        self.accounts = value.into_iter().flatten().collect();
-
-        if self.accounts.len() != self.account_keys.len() {
-            return Err(SdkError::InvalidAccount);
-        }
-        let mut accounts_iter = self.account_keys.iter().zip(self.accounts.iter_mut());
+        let spot_iter = spot_markets.iter();
 
         let mut spot_accounts = Vec::<AccountInfo>::with_capacity(spot_markets_count);
-        for _ in 0..spot_markets_count {
-            let (pubkey, acc) = accounts_iter.next().unwrap();
+        for market in spot_iter {
+            let mut data = zero_account_to_bytes(*market);
             spot_accounts.push(AccountInfo::new(
-                pubkey,
+                &DEFAULT_PUBKEY,
                 false,
                 false,
-                &mut acc.lamports,
-                &mut acc.data[..],
+                &mut LAMPORTS,
+                &mut data[..],
                 &constants::PROGRAM_ID,
                 false,
                 0,
             ));
         }
+
+        let perp_iter = perp_markets.iter();
 
         let mut perp_accounts = Vec::<AccountInfo>::with_capacity(perp_markets_count);
-        for _ in 0..perp_markets_count {
-            let (pubkey, acc) = accounts_iter.next().unwrap();
+        for market in perp_iter {
+            let mut data = zero_account_to_bytes(*market);
             perp_accounts.push(AccountInfo::new(
-                pubkey,
+                &DEFAULT_PUBKEY,
                 false,
                 false,
-                &mut acc.lamports,
-                &mut acc.data[..],
+                &mut LAMPORTS,
+                &mut data[..],
                 &constants::PROGRAM_ID,
                 false,
                 0,
             ));
         }
 
+        let oracle_values = client.backend.oracle_map.values();
+        let oracles_iter = oracle_values
+            .iter()
+            .filter(|opdas| oracles.contains(&opdas.pubkey));
         let mut oracle_accounts = Vec::<AccountInfo>::with_capacity(oracles.len());
-        for _ in 0..oracles.len() {
-            let (pubkey, acc) = accounts_iter.next().unwrap();
+        for oracle in oracles_iter {
+            let owner = match oracle.source {
+                OracleSource::Pyth
+                | OracleSource::Pyth1K
+                | OracleSource::Pyth1M
+                | OracleSource::PythStableCoin => &pyth_program::ID,
+                OracleSource::Switchboard => &switchboard_program::ID,
+                OracleSource::QuoteAsset => &DEFAULT_PUBKEY,
+                OracleSource::Prelaunch => &drift::ID,
+            };
+
+            let pubkey = oracle.pubkey;
+            let mut data = oracle.raw.clone();
             oracle_accounts.push(AccountInfo::new(
-                pubkey,
+                &pubkey,
                 false,
                 false,
-                &mut acc.lamports,
-                &mut acc.data[..],
-                &pyth_program::ID, // this could be wrong but it doesn't really matter for the liquidity calculation
+                &mut LAMPORTS,
+                &mut data[..],
+                &owner,
                 false,
                 0,
             ));
         }
+
+        let perp_slot = client.backend.perp_market_map.get_latest_slot();
+        let spot_slot = client.backend.spot_market_map.get_latest_slot();
+        let oracle_slot = client.backend.oracle_map.get_latest_slot();
+        let slot = std::cmp::max(oracle_slot, std::cmp::max(perp_slot, spot_slot));
 
         let perp_market_map =
             PerpMarketMap::load(&MarketSet::default(), &mut perp_accounts.iter().peekable())
@@ -156,12 +160,12 @@ impl AccountMapBuilder {
             SpotMarketMap::load(&MarketSet::default(), &mut spot_accounts.iter().peekable())
                 .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
 
-        let (_, state_account) = accounts_iter.next().unwrap();
-        let state = State::deserialize(&mut state_account.data()).expect("valid state");
+        let state_account = client.backend.state_account.read().unwrap();
+        let oracle_guard_rails = state_account.oracle_guard_rails.clone();
         let oracle_map = OracleMap::load(
             &mut oracle_accounts.iter().peekable(),
-            context.slot,
-            Some(state.oracle_guard_rails),
+            slot,
+            Some(oracle_guard_rails),
         )
         .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
 
@@ -427,7 +431,7 @@ mod tests {
             user::SpotPosition,
         },
     };
-    use pyth::pc::Price;
+    use pyth::pc;
 
     use super::*;
     use crate::{MarketId, RpcAccountProvider, Wallet};
@@ -557,7 +561,7 @@ mod tests {
         };
 
         let mut sol_oracle_price = get_pyth_price(100, 6);
-        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth::ID, sol_oracle);
+        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth_program::ID, sol_oracle);
         crate::create_anchor_account_info!(
             usdc_spot_market(),
             &constants::PROGRAM_ID,
@@ -595,7 +599,7 @@ mod tests {
             ..Default::default()
         };
         let mut sol_oracle_price = get_pyth_price(100, 6);
-        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth::ID, sol_oracle);
+        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth_program::ID, sol_oracle);
         crate::create_anchor_account_info!(
             usdc_spot_market(),
             &constants::PROGRAM_ID,
@@ -631,9 +635,9 @@ mod tests {
             ..Default::default()
         };
         let mut sol_oracle_price = get_pyth_price(100, 6);
-        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth::ID, sol_oracle);
+        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth_program::ID, sol_oracle);
         let mut btc_oracle_price = get_pyth_price(40_000, 6);
-        crate::create_account_info!(btc_oracle_price, &BTC_ORACLE, &pyth::ID, btc_oracle);
+        crate::create_account_info!(btc_oracle_price, &BTC_ORACLE, &pyth_program::ID, btc_oracle);
         crate::create_anchor_account_info!(
             usdc_spot_market(),
             &constants::PROGRAM_ID,
@@ -678,7 +682,7 @@ mod tests {
             ..Default::default()
         };
         let mut sol_oracle_price = get_pyth_price(100, 6);
-        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth::ID, sol_oracle);
+        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth_program::ID, sol_oracle);
         crate::create_anchor_account_info!(
             usdc_spot_market(),
             &constants::PROGRAM_ID,
@@ -726,7 +730,7 @@ mod tests {
         };
         let mut sol_oracle_price = get_pyth_price(60, 6);
 
-        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth::ID, sol_oracle);
+        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth_program::ID, sol_oracle);
         crate::create_anchor_account_info!(
             usdc_spot_market(),
             &constants::PROGRAM_ID,
@@ -766,7 +770,7 @@ mod tests {
         };
         let mut sol_oracle_price = get_pyth_price(60, 6);
 
-        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth::ID, sol_oracle);
+        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth_program::ID, sol_oracle);
         crate::create_anchor_account_info!(
             usdc_spot_market(),
             &constants::PROGRAM_ID,
@@ -808,7 +812,7 @@ mod tests {
         };
         let mut sol_oracle_price = get_pyth_price(100, 6);
 
-        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth::ID, sol_oracle);
+        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth_program::ID, sol_oracle);
         crate::create_anchor_account_info!(
             usdc_spot_market(),
             &constants::PROGRAM_ID,
@@ -853,8 +857,8 @@ mod tests {
 
     // helpers from drift-program test_utils.
     // TODO: re-export from there
-    fn get_pyth_price(price: i64, expo: i32) -> Price {
-        let mut pyth_price = Price::default();
+    fn get_pyth_price(price: i64, expo: i32) -> pc::Price {
+        let mut pyth_price = pc::Price::default();
         let price = price * 10_i64.pow(expo as u32);
         pyth_price.agg.price = price;
         pyth_price.twap = price;

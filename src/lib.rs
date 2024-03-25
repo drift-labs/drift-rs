@@ -17,11 +17,12 @@ use drift::{
         user::{MarketType, Order, OrderStatus, PerpPosition, SpotPosition, User, UserStats},
     },
 };
+use event_emitter::EventEmitter;
 use fnv::FnvHashMap;
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use log::{debug, warn};
 use marketmap::MarketMap;
-use oraclemap::{OracleMap, OraclePriceDataAndSlot};
+use oraclemap::{Oracle, OracleMap};
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
     nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient},
@@ -49,9 +50,14 @@ use tokio::{
         RwLock,
     },
 };
+use utils::get_ws_url;
+use websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber};
 
-use crate::constants::{
-    derive_spot_market_account, market_lookup_table, state_account, MarketExt, ProgramData,
+use crate::{
+    constants::{
+        derive_spot_market_account, market_lookup_table, state_account, MarketExt, ProgramData,
+    },
+    utils::decode,
 };
 
 // utils
@@ -641,17 +647,14 @@ impl<T: AccountProvider> DriftClient<T> {
         self.backend.num_spot_markets()
     }
 
-    pub fn get_oracle_price_data_and_slot(
-        &self,
-        oracle_pubkey: Pubkey,
-    ) -> Option<OraclePriceDataAndSlot> {
+    pub fn get_oracle_price_data_and_slot(&self, oracle_pubkey: Pubkey) -> Option<Oracle> {
         self.backend.get_oracle_price_data_and_slot(oracle_pubkey)
     }
 
     pub fn get_oracle_price_data_and_slot_for_perp_market(
         &self,
         market_index: u16,
-    ) -> Option<OraclePriceDataAndSlot> {
+    ) -> Option<Oracle> {
         self.backend
             .get_oracle_price_data_and_slot_for_perp_market(market_index)
     }
@@ -659,7 +662,7 @@ impl<T: AccountProvider> DriftClient<T> {
     pub fn get_oracle_price_data_and_slot_for_spot_market(
         &self,
         market_index: u16,
-    ) -> Option<OraclePriceDataAndSlot> {
+    ) -> Option<Oracle> {
         self.backend
             .get_oracle_price_data_and_slot_for_spot_market(market_index)
     }
@@ -674,6 +677,7 @@ pub struct DriftClientBackend<T: AccountProvider> {
     perp_market_map: MarketMap<PerpMarket>,
     spot_market_map: MarketMap<SpotMarket>,
     oracle_map: Rc<OracleMap>,
+    state_account: Arc<std::sync::RwLock<State>>,
 }
 
 impl<T: AccountProvider> DriftClientBackend<T> {
@@ -708,6 +712,11 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             spot_oracles,
         );
 
+        let state = account_provider
+            .get_account(*state_account())
+            .await
+            .expect("state account");
+
         let mut this = Self {
             rpc_client,
             account_provider,
@@ -715,6 +724,9 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             perp_market_map,
             spot_market_map,
             oracle_map: Rc::new(oracle_map),
+            state_account: Arc::new(std::sync::RwLock::new(
+                State::try_deserialize(&mut state.data.as_ref()).expect("valid state"),
+            )),
         };
 
         let lookup_table_address = market_lookup_table(context);
@@ -752,6 +764,33 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         Ok(())
     }
 
+    async fn state_subscribe(&self) -> SdkResult<()> {
+        let pubkey = *state_account();
+
+        let mut subscription = WebsocketAccountSubscriber::new(
+            "user",
+            get_ws_url(&self.rpc_client.url()).expect("valid url"),
+            pubkey,
+            self.rpc_client.commitment(),
+            EventEmitter::new(),
+        );
+
+        let state = self.state_account.clone();
+
+        subscription.event_emitter.subscribe("user", move |event| {
+            if let Some(update) = event.as_any().downcast_ref::<AccountUpdate>() {
+                dbg!("update ");
+                let new_data = decode::<State>(update.data.data.clone()).expect("valid state data");
+                let mut state_writer = state.write().unwrap();
+                *state_writer = new_data;
+            }
+        });
+
+        subscription.subscribe().await?;
+
+        Ok(())
+    }
+
     fn get_perp_market_account_and_slot(
         &self,
         market_index: u16,
@@ -774,17 +813,11 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         self.spot_market_map.size()
     }
 
-    fn get_oracle_price_data_and_slot(
-        &self,
-        oracle_pubkey: Pubkey,
-    ) -> Option<OraclePriceDataAndSlot> {
+    fn get_oracle_price_data_and_slot(&self, oracle_pubkey: Pubkey) -> Option<Oracle> {
         self.oracle_map.get(&oracle_pubkey.to_string())
     }
 
-    fn get_oracle_price_data_and_slot_for_perp_market(
-        &self,
-        market_index: u16,
-    ) -> Option<OraclePriceDataAndSlot> {
+    fn get_oracle_price_data_and_slot_for_perp_market(&self, market_index: u16) -> Option<Oracle> {
         let market = self.get_perp_market_account_and_slot(market_index)?;
 
         let oracle = market.data.amm.oracle;
@@ -805,10 +838,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         self.get_oracle_price_data_and_slot(current_oracle)
     }
 
-    fn get_oracle_price_data_and_slot_for_spot_market(
-        &self,
-        market_index: u16,
-    ) -> Option<OraclePriceDataAndSlot> {
+    fn get_oracle_price_data_and_slot_for_spot_market(&self, market_index: u16) -> Option<Oracle> {
         let market = self.get_spot_market_account_and_slot(market_index)?;
 
         let oracle = market.data.oracle;
@@ -1844,6 +1874,7 @@ mod tests {
                 vec![],
                 vec![],
             )),
+            state_account: Arc::new(std::sync::RwLock::new(State::default())),
         };
 
         DriftClient {

@@ -137,6 +137,12 @@ pub(crate) fn market_type_to_string(market_type: &MarketType) -> String {
     }
 }
 
+pub(crate) fn zero_account_to_bytes<T: bytemuck::Pod>(account: T) -> Vec<u8> {
+    let mut account_data = vec![0; 8 + std::mem::size_of::<T>()];
+    account_data[8..].copy_from_slice(bytemuck::bytes_of(&account));
+    account_data
+}
+
 #[cfg(any(test, test_utils))]
 pub mod envs {
     //! test env vars

@@ -81,11 +81,13 @@ mod tests {
     use super::*;
     use crate::Context;
     use crate::RpcAccountProvider;
+    use anchor_lang::accounts::account_loader::AccountLoader;
+    use solana_sdk::account_info::AccountInfo;
     use solana_sdk::signature::Keypair;
 
     #[tokio::test]
     #[cfg(feature = "rpc_tests")]
-    async fn test_user() {
+    async fn test_user_subscribe() {
         let url = "rpc";
         let client = DriftClient::new(
             Context::MainNet,
@@ -102,10 +104,8 @@ mod tests {
         loop {
             let data_and_slot = user.get_user_account_and_slot();
             dbg!(data_and_slot.slot);
+
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
         }
     }
-
-    #[tokio::test]
-    async fn subscribe() {}
 }
