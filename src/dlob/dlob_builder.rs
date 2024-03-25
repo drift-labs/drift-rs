@@ -35,13 +35,17 @@ impl DLOBBuilder {
         locked_builder.usermap.subscribe().await?;
         drop(locked_builder);
 
-        loop {
-            {
-                let mut builder = builder.lock().await;
-                builder.build();
+        tokio::task::spawn(async move {
+            loop {
+                {
+                    let mut builder = builder.lock().await;
+                    builder.build();
+                }
+                tokio::time::sleep(tokio::time::Duration::from_secs(rebuild_frequency)).await;
             }
-            tokio::time::sleep(tokio::time::Duration::from_secs(rebuild_frequency)).await;
-        }
+        });
+
+        Ok(())
     }
 
     pub fn build(&mut self) {
@@ -68,19 +72,19 @@ mod tests {
     #[tokio::test]
     #[cfg(rpc_tests)]
     async fn test_dlob_builder() {
-        let endpoint = "rpc_url".to_string();
+        let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {
             commitment: CommitmentLevel::Processed,
         };
 
         let slot_subscriber = SlotSubscriber::new(get_ws_url(&endpoint.clone()).unwrap());
-        let mut usermap = UserMap::new(
+        let usermap = UserMap::new(
             commitment,
             endpoint,
             true,
             Some(vec![get_user_with_order_filter()]),
         );
-        let mut dlob_builder = DLOBBuilder::new(slot_subscriber, usermap, 30);
+        let dlob_builder = DLOBBuilder::new(slot_subscriber, usermap, 5);
 
         dlob_builder
             .event_emitter
@@ -91,7 +95,9 @@ mod tests {
                 }
             });
 
-        dlob_builder.start_building().await.unwrap();
+        DLOBBuilder::start_building(Arc::new(Mutex::new(dlob_builder)))
+            .await
+            .unwrap();
 
         tokio::time::sleep(tokio::time::Duration::from_secs(120)).await;
     }
