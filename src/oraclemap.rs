@@ -3,13 +3,11 @@ use crate::websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscri
 use crate::{event_emitter::EventEmitter, SdkResult};
 use dashmap::DashMap;
 use drift::state::oracle::{get_oracle_price, OraclePriceData, OracleSource};
-use drift::state::user::Order;
 use solana_account_decoder::{UiAccountData, UiAccountEncoding};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_config::RpcAccountInfoConfig;
 use solana_sdk::account_info::{AccountInfo, IntoAccountInfo};
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
-use std::cell::{Cell, RefCell};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
