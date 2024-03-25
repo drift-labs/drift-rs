@@ -10,6 +10,7 @@ use crate::{
     AccountProvider, DataAndSlot, DriftClient, SdkResult,
 };
 
+#[derive(Clone)]
 pub struct DriftUser {
     pubkey: Pubkey,
     subscription: WebsocketAccountSubscriber,
