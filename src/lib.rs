@@ -647,7 +647,7 @@ impl<T: AccountProvider> DriftClient<T> {
         self.backend.num_spot_markets()
     }
 
-    pub fn get_oracle_price_data_and_slot(&self, oracle_pubkey: Pubkey) -> Option<Oracle> {
+    pub fn get_oracle_price_data_and_slot(&self, oracle_pubkey: &Pubkey) -> Option<Oracle> {
         self.backend.get_oracle_price_data_and_slot(oracle_pubkey)
     }
 
@@ -813,8 +813,8 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         self.spot_market_map.size()
     }
 
-    fn get_oracle_price_data_and_slot(&self, oracle_pubkey: Pubkey) -> Option<Oracle> {
-        self.oracle_map.get(&oracle_pubkey.to_string())
+    fn get_oracle_price_data_and_slot(&self, oracle_pubkey: &Pubkey) -> Option<Oracle> {
+        self.oracle_map.get(oracle_pubkey)
     }
 
     fn get_oracle_price_data_and_slot_for_perp_market(&self, market_index: u16) -> Option<Oracle> {
@@ -835,7 +835,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             });
         }
 
-        self.get_oracle_price_data_and_slot(current_oracle)
+        self.get_oracle_price_data_and_slot(&current_oracle)
     }
 
     fn get_oracle_price_data_and_slot_for_spot_market(&self, market_index: u16) -> Option<Oracle> {
@@ -856,7 +856,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             });
         }
 
-        self.get_oracle_price_data_and_slot(market.data.oracle)
+        self.get_oracle_price_data_and_slot(&market.data.oracle)
     }
 
     /// Return a handle to the inner RPC client

@@ -24,7 +24,7 @@ pub struct Oracle {
 
 pub(crate) struct OracleMap {
     subscribed: Cell<bool>,
-    pub(crate) oraclemap: Arc<DashMap<String, Oracle>>,
+    pub(crate) oraclemap: Arc<DashMap<Pubkey, Oracle>>,
     event_emitter: &'static EventEmitter,
     oracle_infos: DashMap<Pubkey, OracleSource>,
     sync_lock: Option<Mutex<()>>,
@@ -141,7 +141,7 @@ impl OracleMap {
                             ) {
                                 Ok(price_data) => {
                                     oracle_map.insert(
-                                        update.pubkey.clone(),
+                                        oracle_pubkey,
                                         Oracle {
                                             pubkey: oracle_pubkey,
                                             data: price_data,
@@ -244,7 +244,7 @@ impl OracleMap {
                 let price_data = get_oracle_price(&oracle_info.1, &account_info, slot)
                     .map_err(|err| crate::SdkError::Anchor(Box::new(err.into())))?;
                 self.oraclemap.insert(
-                    oracle_pubkey.to_string(),
+                    oracle_pubkey,
                     Oracle {
                         pubkey: oracle_pubkey,
                         data: price_data,
@@ -279,12 +279,12 @@ impl OracleMap {
         self.spot_oracles.get(&market_index).map(|x| *x)
     }
 
-    pub fn get(&self, key: &str) -> Option<Oracle> {
-        self.oraclemap.get(key).map(|v| *v)
+    pub fn get(&self, key: &Pubkey) -> Option<Oracle> {
+        self.oraclemap.get(key).map(|x| x.clone())
     }
 
     pub fn values(&self) -> Vec<Oracle> {
-        self.oraclemap.iter().map(|x| *x.value()).collect()
+        self.oraclemap.iter().map(|x| x.clone()).collect()
     }
 
     pub async fn add_oracle(&self, oracle: Pubkey, source: OracleSource) -> SdkResult<()> {

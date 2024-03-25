@@ -35,14 +35,11 @@ use crate::{
     constants, utils::zero_account_to_bytes, AccountProvider, DriftClient, SdkError, SdkResult,
 };
 
-const DEFAULT_PUBKEY: Pubkey = solana_sdk::pubkey!("11111111111111111111111111111111");
-const LAMPORTS: u64 = 1_000_000_000;
-
 /// Builds an AccountMap of relevant spot, perp, and oracle accounts from rpc
 #[derive(Default)]
 pub(crate) struct AccountMapBuilder {
-    accounts: Vec<Account>,
-    account_keys: Vec<Pubkey>,
+    /// placeholder account values populated with real market & oracle account data
+    accounts: Vec<(Pubkey, Account)>,
 }
 
 impl AccountMapBuilder {
@@ -53,9 +50,6 @@ impl AccountMapBuilder {
         user: &User,
     ) -> SdkResult<AccountMaps> {
         let mut oracles = FnvHashSet::<Pubkey>::default();
-        let mut spot_markets_count = 0_usize;
-        let mut perp_markets_count = 0_usize;
-
         let mut spot_markets = Vec::<SpotMarket>::with_capacity(user.spot_positions.len());
         let mut perp_markets = Vec::<PerpMarket>::with_capacity(user.perp_positions.len());
 
@@ -64,85 +58,83 @@ impl AccountMapBuilder {
                 .get_spot_market_account(p.market_index)
                 .expect("spot market");
             oracles.insert(market.oracle);
+            self.accounts.push((market.pubkey, Account::default()));
             spot_markets.push(market);
-            spot_markets_count += 1;
         }
 
         let quote_market = client.get_spot_market_account(0).expect("spot market");
         oracles.insert(quote_market.oracle);
-        spot_markets_count += 1;
 
         for p in user.perp_positions.iter().filter(|p| !p.is_available()) {
             let market = client
                 .get_perp_market_account(p.market_index)
                 .expect("perp market");
             oracles.insert(market.amm.oracle);
+            self.accounts.push((market.pubkey, Account::default()));
             perp_markets.push(market);
-            perp_markets_count += 1;
         }
 
-        self.account_keys.extend(oracles.iter());
-        self.account_keys.push(*constants::state_account());
+        self.accounts
+            .extend(oracles.iter().map(|x| (*x, Default::default())));
+        let mut accounts_iter = self.accounts.iter_mut();
 
-        let spot_iter = spot_markets.iter();
-
-        let mut spot_accounts = Vec::<AccountInfo>::with_capacity(spot_markets_count);
-        for market in spot_iter {
-            let mut data = zero_account_to_bytes(*market);
+        let mut spot_accounts = Vec::<AccountInfo>::with_capacity(spot_markets.len());
+        for market in spot_markets.iter() {
+            let (pubkey, account) = accounts_iter.next().unwrap();
+            account.data = zero_account_to_bytes(*market);
             spot_accounts.push(AccountInfo::new(
-                &DEFAULT_PUBKEY,
+                pubkey,
                 false,
                 false,
-                &mut LAMPORTS,
-                &mut data[..],
+                &mut account.lamports,
+                &mut account.data[..],
                 &constants::PROGRAM_ID,
                 false,
                 0,
             ));
         }
 
-        let perp_iter = perp_markets.iter();
-
-        let mut perp_accounts = Vec::<AccountInfo>::with_capacity(perp_markets_count);
-        for market in perp_iter {
-            let mut data = zero_account_to_bytes(*market);
+        let mut perp_accounts = Vec::<AccountInfo>::with_capacity(perp_markets.len());
+        for market in perp_markets.iter() {
+            let (pubkey, account) = accounts_iter.next().unwrap();
+            account.data = zero_account_to_bytes(*market);
             perp_accounts.push(AccountInfo::new(
-                &DEFAULT_PUBKEY,
+                pubkey,
                 false,
                 false,
-                &mut LAMPORTS,
-                &mut data[..],
+                &mut account.lamports,
+                &mut account.data[..],
                 &constants::PROGRAM_ID,
                 false,
                 0,
             ));
         }
 
-        let oracle_values = client.backend.oracle_map.values();
-        let oracles_iter = oracle_values
-            .iter()
-            .filter(|opdas| oracles.contains(&opdas.pubkey));
         let mut oracle_accounts = Vec::<AccountInfo>::with_capacity(oracles.len());
-        for oracle in oracles_iter {
+        for oracle_key in oracles.iter() {
+            let oracle = client
+                .backend
+                .oracle_map
+                .get(oracle_key)
+                .expect("oracle exists");
             let owner = match oracle.source {
                 OracleSource::Pyth
                 | OracleSource::Pyth1K
                 | OracleSource::Pyth1M
                 | OracleSource::PythStableCoin => &pyth_program::ID,
                 OracleSource::Switchboard => &switchboard_program::ID,
-                OracleSource::QuoteAsset => &DEFAULT_PUBKEY,
+                OracleSource::QuoteAsset => &constants::DEFAULT_PUBKEY,
                 OracleSource::Prelaunch => &drift::ID,
             };
-
-            let pubkey = oracle.pubkey;
-            let mut data = oracle.raw.clone();
+            let (pubkey, account) = accounts_iter.next().unwrap();
+            account.data.clone_from(&oracle.raw);
             oracle_accounts.push(AccountInfo::new(
-                &pubkey,
+                pubkey,
                 false,
                 false,
-                &mut LAMPORTS,
-                &mut data[..],
-                &owner,
+                &mut account.lamports,
+                &mut account.data[..],
+                owner,
                 false,
                 0,
             ));
@@ -161,11 +153,10 @@ impl AccountMapBuilder {
                 .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
 
         let state_account = client.backend.state_account.read().unwrap();
-        let oracle_guard_rails = state_account.oracle_guard_rails.clone();
         let oracle_map = OracleMap::load(
             &mut oracle_accounts.iter().peekable(),
             slot,
-            Some(oracle_guard_rails),
+            Some(state_account.oracle_guard_rails),
         )
         .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
 
@@ -420,7 +411,6 @@ mod tests {
     use anchor_lang::{Owner, ZeroCopy};
     use bytes::BytesMut;
     use drift::{
-        drift::resolve_spot_bankruptcy,
         math::constants::{
             AMM_RESERVE_PRECISION, BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, PEG_PRECISION,
             SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64, SPOT_CUMULATIVE_INTEREST_PRECISION,
