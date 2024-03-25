@@ -123,6 +123,7 @@ impl WebsocketProgramAccountSubscriber {
                         .await
                     {
                         Ok((mut accounts, unsubscriber)) => loop {
+                            attempt = 0;
                             tokio::select! {
                                 message = accounts.next() => {
                                     match message {

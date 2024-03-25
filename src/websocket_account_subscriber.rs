@@ -94,6 +94,7 @@ impl WebsocketAccountSubscriber {
                         .await
                     {
                         Ok((mut account_updates, account_unsubscribe)) => loop {
+                            attempt = 0;
                             tokio::select! {
                                 message = account_updates.next() => {
                                     match message {

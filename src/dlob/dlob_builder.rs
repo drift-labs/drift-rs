@@ -2,6 +2,8 @@ use crate::{
     dlob::dlob::DLOB, event_emitter::EventEmitter, slot_subscriber::SlotSubscriber,
     usermap::UserMap, SdkResult,
 };
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub struct DLOBBuilder {
     slot_subscriber: SlotSubscriber,
@@ -26,15 +28,19 @@ impl DLOBBuilder {
         }
     }
 
-    pub async fn start_building(&mut self) -> SdkResult<()> {
-        self.slot_subscriber.subscribe().await?;
-        self.usermap.subscribe().await?;
-
-        self.build();
+    pub async fn start_building(builder: Arc<Mutex<Self>>) -> SdkResult<()> {
+        let mut locked_builder = builder.lock().await;
+        let rebuild_frequency = locked_builder.rebuild_frequency;
+        locked_builder.slot_subscriber.subscribe().await?;
+        locked_builder.usermap.subscribe().await?;
+        drop(locked_builder);
 
         loop {
-            self.build();
-            tokio::time::sleep(tokio::time::Duration::from_secs(self.rebuild_frequency)).await;
+            {
+                let mut builder = builder.lock().await;
+                builder.build();
+            }
+            tokio::time::sleep(tokio::time::Duration::from_secs(rebuild_frequency)).await;
         }
     }
 

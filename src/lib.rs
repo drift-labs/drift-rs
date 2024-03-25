@@ -750,7 +750,8 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         tokio::try_join!(
             self.perp_market_map.subscribe(),
             self.spot_market_map.subscribe(),
-            self.oracle_map.subscribe()
+            self.oracle_map.subscribe(),
+            self.state_subscribe(),
         )?;
         Ok(())
     }
@@ -759,7 +760,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         tokio::try_join!(
             self.perp_market_map.unsubscribe(),
             self.spot_market_map.unsubscribe(),
-            self.oracle_map.unsubscribe()
+            self.oracle_map.unsubscribe(),
         )?;
         Ok(())
     }
@@ -768,7 +769,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         let pubkey = *state_account();
 
         let mut subscription = WebsocketAccountSubscriber::new(
-            "user",
+            "state",
             get_ws_url(&self.rpc_client.url()).expect("valid url"),
             pubkey,
             self.rpc_client.commitment(),
@@ -777,9 +778,8 @@ impl<T: AccountProvider> DriftClientBackend<T> {
 
         let state = self.state_account.clone();
 
-        subscription.event_emitter.subscribe("user", move |event| {
+        subscription.event_emitter.subscribe("state", move |event| {
             if let Some(update) = event.as_any().downcast_ref::<AccountUpdate>() {
-                dbg!("update ");
                 let new_data = decode::<State>(update.data.data.clone()).expect("valid state data");
                 let mut state_writer = state.write().unwrap();
                 *state_writer = new_data;
