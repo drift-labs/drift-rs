@@ -142,11 +142,13 @@ impl AccountProvider for RpcAccountProvider {
 }
 
 /// Account provider using websocket subscriptions to receive and cache account updates
+#[derive(Clone)]
 pub struct WsAccountProvider {
     url: String,
     rpc_client: Arc<RpcClient>,
     /// map from account pubkey to (account data, last modified ts)
-    account_cache: RwLock<FnvHashMap<Pubkey, Receiver<(Account, Slot)>>>,
+    account_cache: Arc<RwLock<FnvHashMap<Pubkey, Receiver<(Account, Slot)>>>>,
+    account_counter: Arc<RwLock<FnvHashMap<Pubkey, u32>>>,
 }
 
 struct AccountSubscription {
@@ -251,6 +253,7 @@ impl WsAccountProvider {
             url: url.to_string(),
             rpc_client: Arc::new(RpcClient::new_with_commitment(url.to_string(), commitment)),
             account_cache: Default::default(),
+            account_counter: Default::default(),
         })
     }
     /// Subscribe to account updates via web-socket and polling
@@ -283,12 +286,18 @@ impl WsAccountProvider {
 
         // fetch initial account data, stream only updates on changes
         let account_data: Account = self.rpc_client.get_account(&account).await?;
-        let (tx, rx) = watch::channel((account_data.clone(), 0));
-        {
-            let mut cache = self.account_cache.write().await;
-            cache.insert(account, rx);
+        let mut counts = self.account_counter.write().await;
+        // after encountering the account 10 times the subscription kicks in
+        if counts.get(&account).is_some_and(|c| *c > 10) {
+            let (tx, rx) = watch::channel((account_data.clone(), 0));
+            {
+                let mut cache = self.account_cache.write().await;
+                cache.insert(account, rx);
+            }
+            self.subscribe_account(account, tx);
+        } else {
+            counts.entry(account).and_modify(|x| *x += 1).or_insert(1);
         }
-        self.subscribe_account(account, tx);
 
         Ok(account_data)
     }

@@ -3,6 +3,7 @@
 //! Routes JIT maker orders via onchain jit-proxy program
 
 use anchor_lang::InstructionData;
+pub use drift::math::auction::calculate_auction_price;
 use drift::{
     math::constants::QUOTE_SPOT_MARKET_INDEX,
     state::user::{MarketType, User},
