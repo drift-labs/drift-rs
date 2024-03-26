@@ -43,7 +43,7 @@ pub async fn get_leverage<T: AccountProvider>(
     let total_liability_value = margin_calculation.total_perp_liability_value
         + margin_calculation.total_spot_liability_value;
 
-    let leverage = calculate_leverage(total_liability_value * 10_000, net_asset_value);
+    let leverage = calculate_leverage(total_liability_value, net_asset_value);
 
     Ok(leverage)
 }

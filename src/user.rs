@@ -12,7 +12,7 @@ use crate::{
 
 #[derive(Clone)]
 pub struct DriftUser {
-    pubkey: Pubkey,
+    pub pubkey: Pubkey,
     subscription: WebsocketAccountSubscriber,
     data_and_slot: Arc<RwLock<DataAndSlot<User>>>,
 }
