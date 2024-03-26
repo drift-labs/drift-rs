@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use drift::state::user::User;
+use drift::{program::Drift, state::user::User};
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
@@ -18,12 +18,14 @@ pub struct DriftUser {
 }
 
 impl DriftUser {
+    pub const SUBSCRIPTION_ID: &'static str = "user";
+
     pub async fn new<T: AccountProvider>(
         pubkey: Pubkey,
         drift_client: DriftClient<T>,
     ) -> SdkResult<Self> {
         let subscription = WebsocketAccountSubscriber::new(
-            "user",
+            DriftUser::SUBSCRIPTION_ID,
             get_ws_url(&drift_client.inner().url()).expect("valid url"),
             pubkey,
             drift_client.inner().commitment(),
@@ -47,7 +49,7 @@ impl DriftUser {
         let current_data_and_slot = self.data_and_slot.clone();
         self.subscription
             .event_emitter
-            .subscribe("user", move |event| {
+            .subscribe(DriftUser::SUBSCRIPTION_ID, move |event| {
                 if let Some(update) = event.as_any().downcast_ref::<AccountUpdate>() {
                     let new_data =
                         decode::<User>(update.data.data.clone()).expect("valid user data");

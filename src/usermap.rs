@@ -33,6 +33,8 @@ pub struct UserMap {
 }
 
 impl UserMap {
+    pub const SUBSCRIPTION_ID: &'static str = "usermap";
+
     pub fn new(
         commitment: CommitmentConfig,
         endpoint: String,
@@ -50,8 +52,12 @@ impl UserMap {
 
         let url = get_ws_url(&endpoint.clone()).unwrap();
 
-        let subscription =
-            WebsocketProgramAccountSubscriber::new("usermap", url, options, event_emitter);
+        let subscription = WebsocketProgramAccountSubscriber::new(
+            UserMap::SUBSCRIPTION_ID,
+            url,
+            options,
+            event_emitter,
+        );
 
         let usermap = Arc::new(DashMap::new());
 
@@ -84,7 +90,7 @@ impl UserMap {
 
             self.subscription
                 .event_emitter
-                .subscribe("usermap", move |event| {
+                .subscribe(UserMap::SUBSCRIPTION_ID, move |event| {
                     if let Some(update) =
                         event.as_any().downcast_ref::<ProgramAccountUpdate<User>>()
                     {

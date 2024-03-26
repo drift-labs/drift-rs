@@ -40,6 +40,8 @@ impl Event for SlotUpdate {
 }
 
 impl SlotSubscriber {
+    pub const SUBSCRIPTION_ID: &'static str = "slot";
+
     pub fn new(url: String) -> Self {
         let event_emitter = EventEmitter::new();
         Self {
@@ -87,7 +89,7 @@ impl SlotSubscriber {
                                 let mut current_slot_guard = current_slot.lock().unwrap();
                                 if slot >= *current_slot_guard {
                                     *current_slot_guard = slot;
-                                    event_emitter.emit("slot", Box::new(SlotUpdate::new(slot)));
+                                    event_emitter.emit(SlotSubscriber::SUBSCRIPTION_ID, Box::new(SlotUpdate::new(slot)));
                                 }
                             }
                             None => {
@@ -139,14 +141,14 @@ mod tests {
         let mut slot_subscriber = SlotSubscriber::new(url);
         let _ = slot_subscriber.subscribe().await;
 
-        slot_subscriber
-            .event_emitter
-            .clone()
-            .subscribe("slot", move |event| {
+        slot_subscriber.event_emitter.clone().subscribe(
+            SlotSubscriber::SUBSCRIPTION_ID,
+            move |event| {
                 if let Some(event) = event.as_any().downcast_ref::<SlotUpdate>() {
                     dbg!(event);
                 }
-            });
+            },
+        );
         dbg!("sub'd");
 
         tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;

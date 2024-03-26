@@ -36,6 +36,8 @@ pub(crate) struct OracleMap {
 }
 
 impl OracleMap {
+    pub const SUBSCRIPTION_ID: &'static str = "oraclemap";
+
     pub fn new(
         commitment: CommitmentConfig,
         endpoint: String,
@@ -92,13 +94,12 @@ impl OracleMap {
 
         if !self.subscribed.load(Ordering::Relaxed) {
             let url = get_ws_url(&self.rpc.url()).expect("valid url");
-            let subscription_name: &'static str = "oraclemap";
 
             let mut oracle_subscribers = vec![];
             for oracle_info in self.oracle_infos.iter() {
                 let oracle_pubkey = oracle_info.key();
                 let oracle_subscriber = WebsocketAccountSubscriber::new(
-                    subscription_name,
+                    OracleMap::SUBSCRIPTION_ID,
                     url.clone(),
                     *oracle_pubkey,
                     self.commitment,
@@ -112,52 +113,54 @@ impl OracleMap {
             let oracle_source_by_oracle_key = self.oracle_infos.clone();
             let oracle_map = self.oraclemap.clone();
 
-            self.event_emitter.subscribe("oraclemap", move |event| {
-                if let Some(update) = event.as_any().downcast_ref::<AccountUpdate>() {
-                    let oracle_pubkey = Pubkey::from_str(&update.pubkey).expect("valid pubkey");
-                    let oracle_source_maybe = oracle_source_by_oracle_key.get(&oracle_pubkey);
-                    if let Some(oracle_source) = oracle_source_maybe {
-                        if let UiAccountData::Binary(blob, UiAccountEncoding::Base64) =
-                            &update.data.data
-                        {
-                            let mut data = base64::decode(blob).expect("valid data");
-                            let owner = Pubkey::from_str(&update.data.owner).expect("valid pubkey");
-                            let mut lamports = update.data.lamports;
-                            let oracle_account_info = AccountInfo::new(
-                                &oracle_pubkey,
-                                false,
-                                false,
-                                &mut lamports,
-                                &mut data,
-                                &owner,
-                                false,
-                                update.data.rent_epoch,
-                            );
-                            match get_oracle_price(
-                                oracle_source.value(),
-                                &oracle_account_info,
-                                update.slot,
-                            ) {
-                                Ok(price_data) => {
-                                    oracle_map.insert(
-                                        oracle_pubkey,
-                                        Oracle {
-                                            pubkey: oracle_pubkey,
-                                            data: price_data,
-                                            source: *oracle_source.value(),
-                                            slot: update.slot,
-                                            raw: data,
-                                        },
-                                    );
-                                }
-                                Err(err) => {
-                                    log::error!("Failed to get oracle price: {:?}", err)
+            self.event_emitter
+                .subscribe(OracleMap::SUBSCRIPTION_ID, move |event| {
+                    if let Some(update) = event.as_any().downcast_ref::<AccountUpdate>() {
+                        let oracle_pubkey = Pubkey::from_str(&update.pubkey).expect("valid pubkey");
+                        let oracle_source_maybe = oracle_source_by_oracle_key.get(&oracle_pubkey);
+                        if let Some(oracle_source) = oracle_source_maybe {
+                            if let UiAccountData::Binary(blob, UiAccountEncoding::Base64) =
+                                &update.data.data
+                            {
+                                let mut data = base64::decode(blob).expect("valid data");
+                                let owner =
+                                    Pubkey::from_str(&update.data.owner).expect("valid pubkey");
+                                let mut lamports = update.data.lamports;
+                                let oracle_account_info = AccountInfo::new(
+                                    &oracle_pubkey,
+                                    false,
+                                    false,
+                                    &mut lamports,
+                                    &mut data,
+                                    &owner,
+                                    false,
+                                    update.data.rent_epoch,
+                                );
+                                match get_oracle_price(
+                                    oracle_source.value(),
+                                    &oracle_account_info,
+                                    update.slot,
+                                ) {
+                                    Ok(price_data) => {
+                                        oracle_map.insert(
+                                            oracle_pubkey,
+                                            Oracle {
+                                                pubkey: oracle_pubkey,
+                                                data: price_data,
+                                                source: *oracle_source.value(),
+                                                slot: update.slot,
+                                                raw: data,
+                                            },
+                                        );
+                                    }
+                                    Err(err) => {
+                                        log::error!("Failed to get oracle price: {:?}", err)
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            });
+                });
 
             let mut subscribers_clone = oracle_subscribers.clone();
 
@@ -294,7 +297,7 @@ impl OracleMap {
         self.oracle_infos.insert(oracle, source);
 
         let mut new_oracle_subscriber = WebsocketAccountSubscriber::new(
-            "oraclemap",
+            OracleMap::SUBSCRIPTION_ID,
             get_ws_url(&self.rpc.url()).expect("valid url"),
             oracle,
             self.commitment,

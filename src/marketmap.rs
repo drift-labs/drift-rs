@@ -64,7 +64,12 @@ pub struct MarketMap<T: AccountDeserialize> {
     synced: bool,
 }
 
-impl<T: AccountDeserialize + Clone + Send + Sync + Market + bytemuck::Pod + 'static> MarketMap<T> {
+impl<T> MarketMap<T>
+where
+    T: AccountDeserialize + Clone + Send + Sync + Market + bytemuck::Pod + 'static,
+{
+    pub const SUBSCRIPTION_ID: &'static str = "marketmap";
+
     pub fn new(commitment: CommitmentConfig, endpoint: String, sync: bool) -> Self {
         let filters = vec![get_market_filter(T::MARKET_TYPE)];
         let options = WebsocketProgramAccountOptions {
@@ -76,8 +81,12 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + bytemuck::Pod + 'sta
 
         let url = get_ws_url(&endpoint.clone()).unwrap();
 
-        let subscription =
-            WebsocketProgramAccountSubscriber::new("marketmap", url, options, event_emitter);
+        let subscription = WebsocketProgramAccountSubscriber::new(
+            MarketMap::<T>::SUBSCRIPTION_ID,
+            url,
+            options,
+            event_emitter,
+        );
 
         let marketmap = Arc::new(DashMap::new());
 
@@ -111,9 +120,9 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + bytemuck::Pod + 'sta
             let marketmap = self.marketmap.clone();
             let latest_slot = self.latest_slot.clone();
 
-            subscription_writer
-                .event_emitter
-                .subscribe("marketmap", move |event| {
+            subscription_writer.event_emitter.subscribe(
+                MarketMap::<T>::SUBSCRIPTION_ID,
+                move |event| {
                     if let Some(update) = event.as_any().downcast_ref::<ProgramAccountUpdate<T>>() {
                         let market_data_and_slot = update.data_and_slot.clone();
                         if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
@@ -127,7 +136,8 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + bytemuck::Pod + 'sta
                             },
                         );
                     }
-                });
+                },
+            );
 
             drop(subscription_writer)
         }

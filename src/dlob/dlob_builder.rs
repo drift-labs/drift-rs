@@ -14,6 +14,8 @@ pub struct DLOBBuilder {
 }
 
 impl DLOBBuilder {
+    pub const SUBSCRIPTION_ID: &'static str = "dlob_update";
+
     pub fn new(
         slot_subscriber: SlotSubscriber,
         usermap: UserMap,
@@ -36,12 +38,14 @@ impl DLOBBuilder {
         drop(locked_builder);
 
         tokio::task::spawn(async move {
+            let mut timer =
+                tokio::time::interval(tokio::time::Duration::from_secs(rebuild_frequency));
             loop {
                 {
                     let mut builder = builder.lock().await;
                     builder.build();
                 }
-                tokio::time::sleep(tokio::time::Duration::from_secs(rebuild_frequency)).await;
+                let _ = timer.tick().await;
             }
         });
 
@@ -52,7 +56,7 @@ impl DLOBBuilder {
         self.dlob
             .build_from_usermap(&self.usermap, self.slot_subscriber.current_slot());
         self.event_emitter
-            .emit("dlob_update", Box::new(self.dlob.clone()));
+            .emit(DLOBBuilder::SUBSCRIPTION_ID, Box::new(self.dlob.clone()));
     }
 
     pub fn get_dlob(&self) -> DLOB {
@@ -89,7 +93,7 @@ mod tests {
         dlob_builder
             .event_emitter
             .clone()
-            .subscribe("dlob_update", move |event| {
+            .subscribe(DLOBBuilder::SUBSCRIPTION_ID, move |event| {
                 if let Some(_) = event.as_any().downcast_ref::<DLOB>() {
                     dbg!("update received");
                 }
