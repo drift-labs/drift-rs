@@ -28,7 +28,7 @@ pub fn get_limit_price(
             None => {
                 dbg!(order);
                 panic!("Order price is 0 and no fallback price provided");
-            },
+            }
         }
     } else {
         order.price

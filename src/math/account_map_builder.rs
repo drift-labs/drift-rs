@@ -16,9 +16,7 @@ use fnv::FnvHashSet;
 use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::{
-    constants,
-    utils::zero_account_to_bytes,
-    AccountProvider, DriftClient, SdkError, SdkResult,
+    constants, utils::zero_account_to_bytes, AccountProvider, DriftClient, SdkError, SdkResult,
 };
 
 /// Builds an AccountMap of relevant spot, perp, and oracle accounts from rpc
@@ -30,7 +28,7 @@ pub(crate) struct AccountMapBuilder {
 
 impl AccountMapBuilder {
     /// Constructs the account map + drift state account
-    pub async fn build<T: AccountProvider>(
+    pub fn build<T: AccountProvider>(
         &mut self,
         client: &DriftClient<T>,
         user: &User,

@@ -37,14 +37,14 @@ pub struct LiquidationAndPnlInfo {
 }
 
 /// Calculate the liquidation price and unrealized PnL of a user's perp position (given by `market_index`)
-pub async fn calculate_liquidation_price_and_unrealized_pnl<'a, T: AccountProvider>(
+pub fn calculate_liquidation_price_and_unrealized_pnl<'a, T: AccountProvider>(
     client: &DriftClient<T>,
     user: &User,
     market_index: u16,
 ) -> SdkResult<LiquidationAndPnlInfo> {
     // TODO: this does a decent amount of rpc queries, it could make sense to cache it e.g. for calculating multiple perp positions
     let mut accounts_builder = AccountMapBuilder::default();
-    let mut account_maps = accounts_builder.build(client, user).await?;
+    let mut account_maps = accounts_builder.build(client, user)?;
     let position = user
         .get_perp_position(market_index)
         .map_err(|_| SdkError::NoPosiiton(market_index))?;
@@ -59,14 +59,14 @@ pub async fn calculate_liquidation_price_and_unrealized_pnl<'a, T: AccountProvid
 }
 
 /// Calculate the unrealized pnl for user perp position, given by `market_index`
-pub async fn calculate_unrealized_pnl<T: AccountProvider>(
+pub fn calculate_unrealized_pnl<T: AccountProvider>(
     client: &DriftClient<T>,
     user: &User,
     market_index: u16,
 ) -> SdkResult<i128> {
     if let Ok(position) = user.get_perp_position(market_index) {
         let mut accounts_builder = AccountMapBuilder::default();
-        let mut account_maps = accounts_builder.build(client, user).await?;
+        let mut account_maps = accounts_builder.build(client, user)?;
         calculate_unrealized_pnl_inner(position, market_index, &mut account_maps)
     } else {
         Err(SdkError::NoPosiiton(market_index))
@@ -109,7 +109,7 @@ pub async fn calculate_liquidation_price<'a, T: AccountProvider>(
 ) -> SdkResult<i64> {
     // TODO: this does a decent amount of rpc queries, it could make sense to cache it e.g. for calculating multiple perp positions
     let mut accounts_builder = AccountMapBuilder::default();
-    let mut account_maps = accounts_builder.build(client, user).await?;
+    let mut account_maps = accounts_builder.build(client, user)?;
     calculate_liquidation_price_inner(user, market_index, &mut account_maps)
 }
 
@@ -393,11 +393,7 @@ mod tests {
             .await
             .unwrap();
 
-        dbg!(
-            calculate_liquidation_price_and_unrealized_pnl(&client, &user, 24)
-                .await
-                .unwrap()
-        );
+        dbg!(calculate_liquidation_price_and_unrealized_pnl(&client, &user, 24).unwrap());
     }
 
     #[test]

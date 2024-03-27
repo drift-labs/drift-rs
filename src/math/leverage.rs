@@ -7,12 +7,9 @@ use drift::math::margin::{
 use drift::state::margin_calculation::MarginContext;
 use drift::state::user::User;
 
-pub async fn get_leverage<T: AccountProvider>(
-    client: &DriftClient<T>,
-    user: &User,
-) -> SdkResult<u128> {
+pub fn get_leverage<T: AccountProvider>(client: &DriftClient<T>, user: &User) -> SdkResult<u128> {
     let mut accounts_builder = AccountMapBuilder::default();
-    let mut account_maps = accounts_builder.build(client, user).await?;
+    let mut account_maps = accounts_builder.build(client, user)?;
 
     let AccountMaps {
         perp_market_map,
@@ -48,12 +45,12 @@ pub async fn get_leverage<T: AccountProvider>(
     Ok(leverage)
 }
 
-pub async fn get_spot_asset_value<T: AccountProvider>(
+pub fn get_spot_asset_value<T: AccountProvider>(
     client: &DriftClient<T>,
     user: &User,
 ) -> SdkResult<i128> {
     let mut accounts_builder = AccountMapBuilder::default();
-    let mut account_maps = accounts_builder.build(client, user).await?;
+    let mut account_maps = accounts_builder.build(client, user)?;
 
     let AccountMaps {
         perp_market_map,
