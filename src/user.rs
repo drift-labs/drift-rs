@@ -1,6 +1,6 @@
 use std::sync::{Arc, RwLock};
 
-use drift::{program::Drift, state::user::User};
+use drift::state::user::User;
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{

@@ -50,6 +50,7 @@ use tokio::{
         RwLock,
     },
 };
+use user::DriftUser;
 use utils::get_ws_url;
 use websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber};
 
