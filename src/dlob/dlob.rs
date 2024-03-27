@@ -49,6 +49,10 @@ impl DLOB {
             let user_key = user_ref.key();
             let user_pubkey = Pubkey::from_str(user_key).expect("Valid pubkey");
             for order in user.orders.iter() {
+                if *order == Order::default() {
+                    // this indicates that there are no more orders in the [Order; 8] slice
+                    break
+                }
                 self.insert_order(order, user_pubkey, slot);
             }
         });
