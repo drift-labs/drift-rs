@@ -17,7 +17,7 @@ use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::{
     constants,
-    utils::{decode, zero_account_to_bytes},
+    utils::zero_account_to_bytes,
     AccountProvider, DriftClient, SdkError, SdkResult,
 };
 

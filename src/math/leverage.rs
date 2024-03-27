@@ -70,7 +70,7 @@ pub async fn get_spot_asset_value<T: AccountProvider>(
     )
     .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
 
-    dbg!(margin_calculation);
+    // dbg!(margin_calculation);
 
     Ok(margin_calculation.total_spot_asset_value
         - margin_calculation.total_spot_liability_value as i128)
