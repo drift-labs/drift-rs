@@ -53,12 +53,8 @@ impl DLOBBuilder {
     }
 
     pub fn build(&mut self) {
-        // let start = std::time::Instant::now();
         self.dlob
             .build_from_usermap(&self.usermap, self.slot_subscriber.current_slot());
-        // println!("{:?}", start.elapsed());
-        // println!("perp, spot size: {:?}", self.dlob.size());
-        // self.dlob.print_all_spot_orders();
         self.event_emitter
             .emit(DLOBBuilder::SUBSCRIPTION_ID, Box::new(self.dlob.clone()));
     }
