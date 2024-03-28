@@ -33,6 +33,8 @@ pub struct UserMap {
 }
 
 impl UserMap {
+    pub const SUBSCRIPTION_ID: &'static str = "usermap";
+
     pub fn new(
         commitment: CommitmentConfig,
         endpoint: String,
@@ -50,8 +52,12 @@ impl UserMap {
 
         let url = get_ws_url(&endpoint.clone()).unwrap();
 
-        let subscription =
-            WebsocketProgramAccountSubscriber::new("usermap", url, options, event_emitter);
+        let subscription = WebsocketProgramAccountSubscriber::new(
+            UserMap::SUBSCRIPTION_ID,
+            url,
+            options,
+            event_emitter,
+        );
 
         let usermap = Arc::new(DashMap::new());
 
@@ -78,23 +84,25 @@ impl UserMap {
         if !self.subscribed {
             self.subscription.subscribe::<User>().await?;
             self.subscribed = true;
-        }
 
-        let usermap = self.usermap.clone();
-        let latest_slot = self.latest_slot.clone();
+            let usermap = self.usermap.clone();
+            let latest_slot = self.latest_slot.clone();
 
-        self.subscription
-            .event_emitter
-            .subscribe("usermap", move |event| {
-                if let Some(update) = event.as_any().downcast_ref::<ProgramAccountUpdate<User>>() {
-                    let user_data_and_slot = update.data_and_slot.clone();
-                    let user_pubkey = update.pubkey.to_string();
-                    if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
-                        latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
+            self.subscription
+                .event_emitter
+                .subscribe(UserMap::SUBSCRIPTION_ID, move |event| {
+                    if let Some(update) =
+                        event.as_any().downcast_ref::<ProgramAccountUpdate<User>>()
+                    {
+                        let user_data_and_slot = update.data_and_slot.clone();
+                        let user_pubkey = update.pubkey.to_string();
+                        if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
+                            latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
+                        }
+                        usermap.insert(user_pubkey, user_data_and_slot.data);
                     }
-                    usermap.insert(user_pubkey, user_data_and_slot.data);
-                }
-            });
+                });
+        }
 
         Ok(())
     }

@@ -1,6 +1,5 @@
-use std::cell::{Cell, RefCell};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, RwLock};
 
 use crate::event_emitter::EventEmitter;
 use crate::memcmp::get_market_filter;
@@ -55,8 +54,8 @@ impl Market for SpotMarket {
 }
 
 pub struct MarketMap<T: AccountDeserialize> {
-    subscribed: Cell<bool>,
-    subscription: RefCell<WebsocketProgramAccountSubscriber>,
+    subscribed: AtomicBool,
+    subscription: RwLock<WebsocketProgramAccountSubscriber>,
     marketmap: Arc<DashMap<u16, DataAndSlot<T>>>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
@@ -65,7 +64,12 @@ pub struct MarketMap<T: AccountDeserialize> {
     synced: bool,
 }
 
-impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T> {
+impl<T> MarketMap<T>
+where
+    T: AccountDeserialize + Clone + Send + Sync + Market + bytemuck::Pod + 'static,
+{
+    pub const SUBSCRIPTION_ID: &'static str = "marketmap";
+
     pub fn new(commitment: CommitmentConfig, endpoint: String, sync: bool) -> Self {
         let filters = vec![get_market_filter(T::MARKET_TYPE)];
         let options = WebsocketProgramAccountOptions {
@@ -77,8 +81,12 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
 
         let url = get_ws_url(&endpoint.clone()).unwrap();
 
-        let subscription =
-            WebsocketProgramAccountSubscriber::new("marketmap", url, options, event_emitter);
+        let subscription = WebsocketProgramAccountSubscriber::new(
+            MarketMap::<T>::SUBSCRIPTION_ID,
+            url,
+            options,
+            event_emitter,
+        );
 
         let marketmap = Arc::new(DashMap::new());
 
@@ -87,8 +95,8 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
         let sync_lock = if sync { Some(Mutex::new(())) } else { None };
 
         Self {
-            subscribed: Cell::new(false),
-            subscription: RefCell::new(subscription),
+            subscribed: AtomicBool::new(false),
+            subscription: RwLock::new(subscription),
             marketmap,
             sync_lock,
             latest_slot: Arc::new(AtomicU64::new(0)),
@@ -103,17 +111,18 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
             self.sync().await?;
         }
 
-        if !self.subscribed.get() {
-            self.subscription.try_borrow_mut()?.subscribe::<T>().await?;
-            self.subscribed.set(true);
+        if !self.subscribed.load(Ordering::Relaxed) {
+            let mut subscription_writer = self.subscription.write().unwrap();
+
+            subscription_writer.subscribe::<T>().await?;
+            self.subscribed.store(true, Ordering::Relaxed);
 
             let marketmap = self.marketmap.clone();
             let latest_slot = self.latest_slot.clone();
 
-            self.subscription
-                .try_borrow()?
-                .event_emitter
-                .subscribe("marketmap", move |event| {
+            subscription_writer.event_emitter.subscribe(
+                MarketMap::<T>::SUBSCRIPTION_ID,
+                move |event| {
                     if let Some(update) = event.as_any().downcast_ref::<ProgramAccountUpdate<T>>() {
                         let market_data_and_slot = update.data_and_slot.clone();
                         if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
@@ -127,15 +136,18 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
                             },
                         );
                     }
-                });
+                },
+            );
+
+            drop(subscription_writer)
         }
         Ok(())
     }
 
     pub async fn unsubscribe(&self) -> SdkResult<()> {
-        if self.subscribed.get() {
-            self.subscription.try_borrow_mut()?.unsubscribe().await?;
-            self.subscribed.set(false);
+        if self.subscribed.load(Ordering::Relaxed) {
+            self.subscription.write().unwrap().unsubscribe().await?;
+            self.subscribed.store(false, Ordering::Relaxed);
             self.marketmap.clear();
             self.latest_slot.store(0, Ordering::Relaxed);
         }
@@ -176,7 +188,9 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
             Err(_) => return Ok(()),
         };
 
-        let options = self.subscription.try_borrow()?.options.clone();
+        let subscription_reader = self.subscription.read().unwrap();
+        let options = subscription_reader.options.clone();
+        drop(subscription_reader);
 
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.commitment),
@@ -222,6 +236,7 @@ impl<T: AccountDeserialize + Clone + Send + Sync + Market + 'static> MarketMap<T
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use crate::marketmap::MarketMap;
     use drift::state::perp_market::PerpMarket;
     use drift::state::spot_market::SpotMarket;
@@ -251,7 +266,7 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
 
         assert_eq!(marketmap.size(), 0);
-        assert_eq!(marketmap.subscribed.get(), false);
+        assert_eq!(marketmap.subscribed.load(Ordering::Relaxed), false);
     }
 
     #[tokio::test]

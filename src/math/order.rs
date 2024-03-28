@@ -25,7 +25,10 @@ pub fn get_limit_price(
     } else if order.price == 0 {
         match fallback_price {
             Some(price) => price,
-            None => panic!("Order price is 0 and no fallback price was provided"),
+            None => {
+                dbg!(order);
+                panic!("Order price is 0 and no fallback price provided");
+            }
         }
     } else {
         order.price

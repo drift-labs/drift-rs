@@ -18,7 +18,7 @@ pub(crate) enum SortDirection {
     Descending,
 }
 
-pub(crate) trait DLOBNode {
+pub trait DLOBNode {
     fn get_price(&self, oracle_price_data: OraclePriceData, slot: u64) -> u64;
     fn is_vamm_node(&self) -> bool;
     fn is_base_filled(&self) -> bool;
