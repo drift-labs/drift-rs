@@ -17,7 +17,10 @@ pub use drift::{
 };
 use futures_util::sink::Sink;
 pub use solana_client::rpc_config::RpcSendTransactionConfig;
-pub use solana_sdk::{commitment_config::CommitmentConfig, message::VersionedMessage};
+pub use solana_sdk::{
+    commitment_config::CommitmentConfig, message::VersionedMessage,
+    transaction::VersionedTransaction,
+};
 use solana_sdk::{
     instruction::{AccountMeta, InstructionError},
     pubkey::Pubkey,
@@ -251,6 +254,8 @@ pub enum SdkError {
     Generic(String),
     #[error("max connection attempts reached")]
     MaxReconnectionAttemptsReached,
+    #[error("jit taker order not found")]
+    JitOrderNotFound,
 }
 
 impl SdkError {
