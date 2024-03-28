@@ -11,7 +11,7 @@ use std::sync::Arc;
 use crate::dlob::dlob_node::{
     create_node, get_order_signature, DLOBNode, DirectionalNode, Node, NodeType,
 };
-use crate::dlob::market::{get_order_lists, Exchange, Market, OpenOrders, SubType};
+use crate::dlob::market::{get_node_subtype_and_type, Exchange, Market, OpenOrders, SubType};
 use crate::event_emitter::Event;
 use crate::math::order::is_resting_limit_order;
 use crate::usermap::UserMap;
@@ -28,8 +28,6 @@ pub struct DLOB {
 impl DLOB {
     pub fn new() -> DLOB {
         let exchange = Exchange::new();
-        exchange.insert("perp".to_string(), DashMap::new());
-        exchange.insert("spot".to_string(), DashMap::new());
 
         let open_orders = OpenOrders::new();
         open_orders.insert("perp".to_string(), DashSet::new());
@@ -44,6 +42,7 @@ impl DLOB {
     }
 
     pub fn build_from_usermap(&mut self, usermap: &UserMap, slot: u64) {
+        self.clear();
         usermap.usermap.iter().par_bridge().for_each(|user_ref| {
             let user = user_ref.value();
             let user_key = user_ref.key();
@@ -53,73 +52,52 @@ impl DLOB {
                     // this indicates that there are no more orders in the [Order; 32] slice
                     break;
                 }
+                // let start = std::time::Instant::now();
                 self.insert_order(order, user_pubkey, slot);
+                // dbg!(start.elapsed());
             }
         });
         self._initialized = true;
     }
 
+    pub fn size(&self) -> usize {
+        self.exchange.size()
+    }
+
     pub fn clear(&mut self) {
-        self.exchange.get("perp").expect("perp markets").clear();
-        self.exchange.get("spot").expect("spot markets").clear();
+        self.exchange.clear();
         self._open_orders.clear();
         self._initialized = false;
         self._max_slot_for_resting_limit_orders = Arc::new(0);
-    }
-
-    pub fn add_market(&self, market_type: &str, market_index: u16) {
-        if !self
-            .exchange
-            .get(market_type)
-            .unwrap()
-            .contains_key(&market_index)
-        {
-            self.exchange
-                .get(market_type)
-                .unwrap()
-                .insert(market_index, Market::new());
-        }
     }
 
     pub fn insert_order(&self, order: &Order, user_account: Pubkey, slot: u64) {
         let market_type = market_type_to_string(&order.market_type);
         let market_index = order.market_index;
 
-        if !self
-            .exchange
-            .get(&market_type)
-            .unwrap()
-            .contains_key(&market_index)
-        {
-            self.add_market(&market_type, market_index);
-        }
-
-        let markets_for_market_type = self
-            .exchange
-            .get(&market_type)
-            .expect(format!("Market type {} not found", market_type).as_str());
-        let mut market = markets_for_market_type
-            .get_mut(&market_index)
-            .expect(format!("Market index {} not found", market_index).as_str());
-
-        let (order_list, subtype, node_type) = market.get_info_for_order_insert(order, slot);
-
+        let (subtype, node_type) = get_node_subtype_and_type(order, slot);
         let node = create_node(node_type, *order, user_account);
 
-        if let Some(order_list) = order_list {
-            match subtype {
-                SubType::Bid => order_list.insert_bid(node),
-                SubType::Ask => order_list.insert_ask(node),
-                _ => {}
-            }
-        } else {
-            panic!("Order list not found for order {:?}", node.get_order());
+        self.exchange
+            .add_market_indempotent(&market_type, market_index);
+
+        let mut market = match order.market_type {
+            MarketType::Perp => self.exchange.perp.get_mut(&market_index).expect("market"),
+            MarketType::Spot => self.exchange.spot.get_mut(&market_index).expect("market"),
+        };
+
+        let order_list = market.get_order_list_for_node_insert(node_type);
+
+        match subtype {
+            SubType::Bid => order_list.insert_bid(node),
+            SubType::Ask => order_list.insert_ask(node),
+            _ => {}
         }
     }
 
     pub fn get_order(&self, order_id: u32, user_account: Pubkey) -> Option<Order> {
         let order_signature = get_order_signature(order_id, user_account);
-        for order_list in get_order_lists(&self.exchange) {
+        for order_list in self.exchange.get_order_lists() {
             if let Some(node) = order_list.get_node(&order_signature) {
                 return Some(*node.get_order());
             }
@@ -128,36 +106,40 @@ impl DLOB {
         None
     }
 
-    fn update_resting_limit_orders_for_market_type(&mut self, slot: u64, market_type: String) {
+    fn update_resting_limit_orders_for_market_type(&mut self, slot: u64, market_type: MarketType) {
         let mut new_taking_asks: BinaryHeap<DirectionalNode> = BinaryHeap::new();
         let mut new_taking_bids: BinaryHeap<DirectionalNode> = BinaryHeap::new();
-        if let Some(market) = self.exchange.get_mut(&market_type) {
-            for mut market_ref in market.iter_mut() {
-                let market = market_ref.value_mut();
 
-                for directional_node in market.taking_limit_orders.bids.iter() {
-                    if is_resting_limit_order(directional_node.node.get_order(), slot) {
-                        market
-                            .resting_limit_orders
-                            .insert_bid(directional_node.node)
-                    } else {
-                        new_taking_bids.push(*directional_node)
-                    }
+        let market = match market_type {
+            MarketType::Perp => &self.exchange.perp,
+            MarketType::Spot => &self.exchange.spot,
+        };
+
+        for mut market_ref in market.iter_mut() {
+            let market = market_ref.value_mut();
+
+            for directional_node in market.taking_limit_orders.bids.iter() {
+                if is_resting_limit_order(directional_node.node.get_order(), slot) {
+                    market
+                        .resting_limit_orders
+                        .insert_bid(directional_node.node)
+                } else {
+                    new_taking_bids.push(*directional_node)
                 }
-
-                for directional_node in market.taking_limit_orders.asks.iter() {
-                    if is_resting_limit_order(directional_node.node.get_order(), slot) {
-                        market
-                            .resting_limit_orders
-                            .insert_ask(directional_node.node);
-                    } else {
-                        new_taking_asks.push(*directional_node);
-                    }
-                }
-
-                market.taking_limit_orders.bids = new_taking_bids.clone();
-                market.taking_limit_orders.asks = new_taking_asks.clone();
             }
+
+            for directional_node in market.taking_limit_orders.asks.iter() {
+                if is_resting_limit_order(directional_node.node.get_order(), slot) {
+                    market
+                        .resting_limit_orders
+                        .insert_ask(directional_node.node);
+                } else {
+                    new_taking_asks.push(*directional_node);
+                }
+            }
+
+            market.taking_limit_orders.bids = new_taking_bids.clone();
+            market.taking_limit_orders.asks = new_taking_asks.clone();
         }
     }
 
@@ -168,14 +150,8 @@ impl DLOB {
 
         self._max_slot_for_resting_limit_orders = Arc::new(slot);
 
-        self.update_resting_limit_orders_for_market_type(
-            slot,
-            market_type_to_string(&MarketType::Perp),
-        );
-        self.update_resting_limit_orders_for_market_type(
-            slot,
-            market_type_to_string(&MarketType::Spot),
-        );
+        self.update_resting_limit_orders_for_market_type(slot, MarketType::Perp);
+        self.update_resting_limit_orders_for_market_type(slot, MarketType::Spot);
     }
 
     pub fn get_best_orders(
@@ -185,15 +161,10 @@ impl DLOB {
         node_type: NodeType,
         market_index: u16,
     ) -> Vec<Node> {
-        let market_type_str = market_type_to_string(&market_type);
-        let markets_for_market_type = self
-            .exchange
-            .get(&market_type_str)
-            .expect(format!("Market type {} not found", market_type_str).as_str());
-        let market = markets_for_market_type
-            .get(&market_index)
-            .expect(format!("Market index {} not found", market_index).as_str());
-
+        let market = match market_type {
+            MarketType::Perp => self.exchange.perp.get_mut(&market_index).expect("market"),
+            MarketType::Spot => self.exchange.spot.get_mut(&market_index).expect("market"),
+        };
         let mut order_list = market.get_order_list_for_node_type(node_type);
 
         let mut best_orders: Vec<Node> = vec![];
@@ -470,7 +441,7 @@ mod tests {
 
         dlob.insert_order(&order_1, user_account, 1);
 
-        let markets_for_market_type = dlob.exchange.get("perp").unwrap();
+        let markets_for_market_type = dlob.exchange.perp.clone();
         let market = markets_for_market_type.get(&0).unwrap();
 
         assert_eq!(market.taking_limit_orders.bids.len(), 1);
@@ -482,7 +453,7 @@ mod tests {
 
         dlob.update_resting_limit_orders(slot);
 
-        let markets_for_market_type = dlob.exchange.get("perp").unwrap();
+        let markets_for_market_type = dlob.exchange.perp.clone();
         let market = markets_for_market_type.get(&0).unwrap();
 
         assert_eq!(market.taking_limit_orders.bids.len(), 0);

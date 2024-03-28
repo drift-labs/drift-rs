@@ -71,6 +71,10 @@ impl Orderlist {
     pub fn asks_empty(&self) -> bool {
         self.asks.is_empty()
     }
+
+    pub fn size(&self) -> usize {
+        self.bids.len() + self.asks.len()
+    }
 }
 
 #[cfg(test)]

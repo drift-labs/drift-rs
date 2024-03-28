@@ -1,6 +1,7 @@
 use crate::math::account_map_builder::AccountMapBuilder;
 use crate::{AccountProvider, DriftClient, SdkError, SdkResult};
 use drift::instructions::optional_accounts::AccountMaps;
+use drift::math::constants::PRICE_PRECISION;
 use drift::math::margin::{
     calculate_margin_requirement_and_total_collateral_and_liability_info, MarginRequirementType,
 };
@@ -67,8 +68,6 @@ pub fn get_spot_asset_value<T: AccountProvider>(
     )
     .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
 
-    // dbg!(margin_calculation);
-
     Ok(margin_calculation.total_spot_asset_value
         - margin_calculation.total_spot_liability_value as i128)
 }
@@ -89,9 +88,9 @@ fn calculate_net_asset_value(total_collateral: i128, total_spot_liability_value:
 fn calculate_leverage(total_liability_value: u128, net_asset_value: i128) -> u128 {
     let sign: i128 = if net_asset_value < 0 { -1 } else { 1 };
 
-    let leverage = total_liability_value / net_asset_value.abs() as u128;
+    let leverage = (total_liability_value as f64) / (net_asset_value.abs() as f64);
 
-    sign as u128 * leverage
+    sign as u128 * (leverage * PRICE_PRECISION as f64) as u128
 }
 
 #[cfg(test)]
@@ -104,7 +103,7 @@ mod tests {
     const PRIVATE_KEY: &'static str = "private key";
 
     #[tokio::test]
-    #[cfg(rpc_tests)]
+    #[cfg(feature = "rpc_tests")]
     async fn test_get_spot_market_value() {
         let wallet: Wallet = Keypair::from_base58_string(PRIVATE_KEY).into();
         let pubkey = wallet.authority().clone();
@@ -124,13 +123,12 @@ mod tests {
         user.subscribe().await.expect("subscribe");
 
         let spot_asset_value = get_spot_asset_value(&drift_client, &user.get_user_account())
-            .await
             .expect("spot asset value");
         println!("spot_asset_value: {}", spot_asset_value);
     }
 
     #[tokio::test]
-    #[cfg(rpc_tests)]
+    #[cfg(feature = "rpc_tests")]
     async fn test_leverage() {
         let wallet: Wallet = Keypair::from_base58_string(PRIVATE_KEY).into();
         let pubkey = wallet.authority().clone();
@@ -149,9 +147,7 @@ mod tests {
         .expect("drift user");
         user.subscribe().await.expect("subscribe");
 
-        let leverage = get_leverage(&drift_client, &user.get_user_account())
-            .await
-            .expect("leverage");
+        let leverage = get_leverage(&drift_client, &user.get_user_account()).expect("leverage");
         println!("leverage: {}", leverage);
     }
 }

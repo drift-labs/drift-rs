@@ -39,7 +39,7 @@ impl DLOBBuilder {
 
         tokio::task::spawn(async move {
             let mut timer =
-                tokio::time::interval(tokio::time::Duration::from_secs(rebuild_frequency));
+                tokio::time::interval(tokio::time::Duration::from_millis(rebuild_frequency));
             loop {
                 {
                     let mut builder = builder.lock().await;
@@ -53,8 +53,11 @@ impl DLOBBuilder {
     }
 
     pub fn build(&mut self) {
+        // let start = std::time::Instant::now();
         self.dlob
             .build_from_usermap(&self.usermap, self.slot_subscriber.current_slot());
+        // dbg!(start.elapsed());
+        // dbg!(self.dlob.size());
         self.event_emitter
             .emit(DLOBBuilder::SUBSCRIPTION_ID, Box::new(self.dlob.clone()));
     }
@@ -71,7 +74,6 @@ mod tests {
     use crate::utils::get_ws_url;
     use solana_sdk::commitment_config::CommitmentConfig;
     use solana_sdk::commitment_config::CommitmentLevel;
-    use std::time::Instant;
 
     #[tokio::test]
     #[cfg(rpc_tests)]
@@ -95,7 +97,7 @@ mod tests {
             .clone()
             .subscribe(DLOBBuilder::SUBSCRIPTION_ID, move |event| {
                 if let Some(_) = event.as_any().downcast_ref::<DLOB>() {
-                    dbg!("update received");
+                    // dbg!("update received");
                 }
             });
 
@@ -126,7 +128,7 @@ mod tests {
 
         let mut dlob_builder = DLOBBuilder::new(slot_subscriber, usermap, 30);
 
-        let start = Instant::now();
+        let start = std::time::Instant::now();
         dlob_builder.build();
         let duration = start.elapsed();
         dbg!(duration);
