@@ -24,6 +24,12 @@ impl Orderlist {
         }
     }
 
+    /// for debugging
+    pub fn print(&self) {
+        println!("Bids: {:?}", self.bids);
+        println!("Asks: {:?}", self.asks);
+    }
+
     pub fn insert_bid(&mut self, node: Node) {
         let order_sig = get_order_signature(node.get_order().order_id, node.get_user_account());
         self.order_sigs.insert(order_sig.clone(), node);

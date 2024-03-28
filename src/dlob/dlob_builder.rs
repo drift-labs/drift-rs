@@ -56,8 +56,9 @@ impl DLOBBuilder {
         // let start = std::time::Instant::now();
         self.dlob
             .build_from_usermap(&self.usermap, self.slot_subscriber.current_slot());
-        // dbg!(start.elapsed());
-        // dbg!(self.dlob.size());
+        // println!("{:?}", start.elapsed());
+        // println!("perp, spot size: {:?}", self.dlob.size());
+        // self.dlob.print_all_spot_orders();
         self.event_emitter
             .emit(DLOBBuilder::SUBSCRIPTION_ID, Box::new(self.dlob.clone()));
     }
@@ -74,10 +75,12 @@ mod tests {
     use crate::utils::get_ws_url;
     use solana_sdk::commitment_config::CommitmentConfig;
     use solana_sdk::commitment_config::CommitmentLevel;
+    use env_logger;
 
     #[tokio::test]
     #[cfg(rpc_tests)]
     async fn test_dlob_builder() {
+        env_logger::init();
         let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {
             commitment: CommitmentLevel::Processed,

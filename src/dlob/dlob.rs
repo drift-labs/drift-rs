@@ -1,6 +1,6 @@
 use dashmap::{DashMap, DashSet};
 use drift::state::oracle::OraclePriceData;
-use drift::state::user::{MarketType, Order};
+use drift::state::user::{MarketType, Order, OrderStatus};
 use rayon::prelude::*;
 use solana_sdk::pubkey::Pubkey;
 use std::any::Any;
@@ -48,9 +48,8 @@ impl DLOB {
             let user_key = user_ref.key();
             let user_pubkey = Pubkey::from_str(user_key).expect("Valid pubkey");
             for order in user.orders.iter() {
-                if *order == Order::default() {
-                    // this indicates that there are no more orders in the [Order; 32] slice
-                    break;
+                if order.status == OrderStatus::Init {
+                    continue;
                 }
                 // let start = std::time::Instant::now();
                 self.insert_order(order, user_pubkey, slot);
@@ -60,8 +59,16 @@ impl DLOB {
         self._initialized = true;
     }
 
-    pub fn size(&self) -> usize {
-        self.exchange.size()
+    pub fn size(&self) -> (usize, usize) {
+        (self.exchange.perp_size(), self.exchange.spot_size())
+    }
+
+    /// for debugging
+    pub fn print_all_spot_orders(&self) {
+        for market in self.exchange.spot.iter() {
+            println!("market index: {}", market.key());
+            market.value().print_all_orders();
+        }
     }
 
     pub fn clear(&mut self) {

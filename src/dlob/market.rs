@@ -63,6 +63,15 @@ impl Market {
         }
         .clone()
     }
+
+    /// for debugging
+    pub fn print_all_orders(&self) {
+        self.resting_limit_orders.print();
+        self.floating_limit_orders.print();
+        self.taking_limit_orders.print();
+        self.market_orders.print();
+        self.trigger_orders.print();
+    }
 }
 
 pub(crate) fn get_node_subtype_and_type(order: &Order, slot: u64) -> (SubType, NodeType) {
@@ -165,6 +174,7 @@ impl Exchange {
         order_lists
     }
 
+    /// for debugging
     pub fn size(&self) -> usize {
         let mut size = 0;
         for market_type_ref in self.iter() {
@@ -175,6 +185,32 @@ impl Exchange {
                 size += market.value().market_orders.size();
                 size += market.value().trigger_orders.size();
             }
+        }
+        return size;
+    }
+
+    /// for debugging
+    pub fn perp_size(&self) -> usize {
+        let mut size = 0;
+        for market in self.perp.iter() {
+            size += market.value().resting_limit_orders.size();
+            size += market.value().floating_limit_orders.size();
+            size += market.value().taking_limit_orders.size();
+            size += market.value().market_orders.size();
+            size += market.value().trigger_orders.size();
+        }
+        return size;
+    }
+
+    /// for debugging
+    pub fn spot_size(&self) -> usize {
+        let mut size = 0;
+        for market in self.spot.iter() {
+            size += market.value().resting_limit_orders.size();
+            size += market.value().floating_limit_orders.size();
+            size += market.value().taking_limit_orders.size();
+            size += market.value().market_orders.size();
+            size += market.value().trigger_orders.size();
         }
         return size;
     }
