@@ -15,6 +15,7 @@ pub struct DriftUser {
     pub pubkey: Pubkey,
     subscription: WebsocketAccountSubscriber,
     data_and_slot: Arc<RwLock<DataAndSlot<User>>>,
+    pub sub_account: u16,
 }
 
 impl DriftUser {
@@ -22,7 +23,8 @@ impl DriftUser {
 
     pub async fn new<T: AccountProvider>(
         pubkey: Pubkey,
-        drift_client: DriftClient<T>,
+        drift_client: &DriftClient<T>,
+        sub_account: u16,
     ) -> SdkResult<Self> {
         let subscription = WebsocketAccountSubscriber::new(
             DriftUser::SUBSCRIPTION_ID,
@@ -42,6 +44,7 @@ impl DriftUser {
             pubkey,
             subscription,
             data_and_slot,
+            sub_account
         })
     }
 

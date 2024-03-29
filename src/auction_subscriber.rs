@@ -81,11 +81,13 @@ mod tests {
     use crate::{
         utils::envs::mainnet_endpoint, websocket_program_account_subscriber::ProgramAccountUpdate,
     };
+    use env_logger;
 
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn test_auction_subscriber() {
-        let cluster = Cluster::from_str(&mainnet_endpoint()).unwrap();
+        env_logger::init();
+        let cluster = Cluster::from_str(&"rpc").unwrap();
         let url = cluster.ws_url().to_string();
 
         let config = AuctionSubscriberConfig {
@@ -100,7 +102,7 @@ mod tests {
 
         emitter.subscribe(AuctionSubscriber::SUBSCRIPTION_ID, move |event| {
             if let Some(event) = event.as_any().downcast_ref::<ProgramAccountUpdate<User>>() {
-                dbg!(event);
+                log::info!("{:?}", event.now.elapsed());
             }
         });
 

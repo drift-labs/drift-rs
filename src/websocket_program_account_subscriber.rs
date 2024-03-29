@@ -21,13 +21,15 @@ use crate::{
 pub struct ProgramAccountUpdate<T: Clone + Send + AccountDeserialize + 'static> {
     pub pubkey: String,
     pub data_and_slot: DataAndSlot<T>,
+    pub now: std::time::Instant,
 }
 
 impl<T: Clone + Send + AccountDeserialize + 'static> ProgramAccountUpdate<T> {
-    pub fn new(pubkey: String, data_and_slot: DataAndSlot<T>) -> Self {
+    pub fn new(pubkey: String, data_and_slot: DataAndSlot<T>, now: std::time::Instant) -> Self {
         Self {
             pubkey,
             data_and_slot,
+            now,
         }
     }
 }
@@ -136,7 +138,7 @@ impl WebsocketProgramAccountSubscriber {
                                                 match decode(account_data) {
                                                     Ok(data) => {
                                                         let data_and_slot = DataAndSlot::<T> { slot, data };
-                                                        event_emitter.emit(subscription_name, Box::new(ProgramAccountUpdate::new(pubkey, data_and_slot)));
+                                                        event_emitter.emit(subscription_name, Box::new(ProgramAccountUpdate::new(pubkey, data_and_slot, std::time::Instant::now())));
                                                     },
                                                     Err(e) => {
                                                         error!("Error decoding account data {e}");

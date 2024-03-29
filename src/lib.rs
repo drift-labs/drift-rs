@@ -314,6 +314,7 @@ pub struct DriftClient<T: AccountProvider> {
     wallet: Wallet,
     pub active_sub_account_id: u16,
     pub sub_account_ids: Vec<u16>,
+    pub users: Vec<DriftUser>,
 }
 
 impl<T: AccountProvider> DriftClient<T> {
@@ -334,7 +335,20 @@ impl<T: AccountProvider> DriftClient<T> {
             wallet,
             active_sub_account_id: opts.active_sub_account_id(),
             sub_account_ids: opts.sub_account_ids(),
+            users: vec![],
         })
+    }
+
+    pub async fn add_user(&mut self, sub_account_id: u16) -> SdkResult<()> {
+        let pubkey = Wallet::derive_user_account(self.wallet.authority(), sub_account_id, &drift::ID);
+        let mut user = DriftUser::new(pubkey, self, sub_account_id).await?;
+        user.subscribe().await?;
+        self.users.push(user);
+        Ok(())
+    }
+
+    pub fn get_user(&self, sub_account_id: u16) -> Option<&DriftUser> {
+        self.users.iter().find(|u| u.sub_account == sub_account_id)
     }
 
     /// Subscribe to the Drift Client Backend
@@ -486,14 +500,14 @@ impl<T: AccountProvider> DriftClient<T> {
     /// Get the _active_ user account data
     ///
     /// Returns the deserialized account data (`User`)
-    pub async fn get_user(&self) -> SdkResult<User> {
-        let user_pubkey = Wallet::derive_user_account(
-            self.wallet().authority(),
-            self.active_sub_account_id,
-            &constants::PROGRAM_ID,
-        );
-        self.backend.get_account(&user_pubkey).await
-    }
+    // pub async fn get_user(&self) -> SdkResult<User> {
+    //     let user_pubkey = Wallet::derive_user_account(
+    //         self.wallet().authority(),
+    //         self.active_sub_account_id,
+    //         &constants::PROGRAM_ID,
+    //     );
+    //     self.backend.get_account(&user_pubkey).await
+    // }
 
     /// Get a stats account
     ///
@@ -595,7 +609,7 @@ impl<T: AccountProvider> DriftClient<T> {
         account: &Pubkey,
         delegated: bool,
     ) -> SdkResult<TransactionBuilder> {
-        let account_data = self.get_user_account(account).await?;
+        let account_data = self.get_user(self.active_sub_account_id).expect("user").get_user_account();
         Ok(TransactionBuilder::new(
             self.program_data(),
             *account,
@@ -1883,6 +1897,7 @@ mod tests {
             wallet: Wallet::new(keypair),
             active_sub_account_id: 0,
             sub_account_ids: vec![0],
+            users: vec![]
         }
     }
 
