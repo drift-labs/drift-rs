@@ -28,7 +28,7 @@ pub struct AuctionSubscriber {
 }
 
 impl AuctionSubscriber {
-    pub const SUBSCRIPTION_D: &'static str = "auction";
+    pub const SUBSCRIPTION_ID: &'static str = "auction";
     pub fn new(config: AuctionSubscriberConfig) -> Self {
         let event_emitter = EventEmitter::new();
 
@@ -41,7 +41,7 @@ impl AuctionSubscriber {
         };
 
         let subscriber = WebsocketProgramAccountSubscriber::new(
-            Self::SUBSCRIPTION_D,
+            Self::SUBSCRIPTION_ID,
             config.url,
             websocket_options,
             event_emitter.clone(),
