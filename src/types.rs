@@ -4,7 +4,7 @@ use std::{
 };
 
 use anchor_lang::AccountDeserialize;
-use drift::{error::ErrorCode, state::user::UserStats};
+use drift::error::ErrorCode;
 // re-export types in public API
 pub use drift::{
     controller::position::PositionDirection,
@@ -12,12 +12,15 @@ pub use drift::{
         order_params::{ModifyOrderParams, OrderParams, PostOnlyParam},
         perp_market::PerpMarket,
         spot_market::SpotMarket,
-        user::{MarketType, Order, OrderType, PerpPosition, SpotPosition},
+        user::{MarketType, Order, OrderType, PerpPosition, SpotPosition, User, UserStats},
     },
 };
 use futures_util::sink::Sink;
 pub use solana_client::rpc_config::RpcSendTransactionConfig;
-pub use solana_sdk::{commitment_config::CommitmentConfig, message::VersionedMessage};
+pub use solana_sdk::{
+    commitment_config::CommitmentConfig, message::VersionedMessage,
+    transaction::VersionedTransaction,
+};
 use solana_sdk::{
     instruction::{AccountMeta, InstructionError},
     pubkey::Pubkey,
@@ -251,6 +254,8 @@ pub enum SdkError {
     Generic(String),
     #[error("max connection attempts reached")]
     MaxReconnectionAttemptsReached,
+    #[error("jit taker order not found")]
+    JitOrderNotFound,
 }
 
 impl SdkError {
