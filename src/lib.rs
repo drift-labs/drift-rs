@@ -275,7 +275,6 @@ impl WsAccountProvider {
 
         // fetch initial account data, stream only updates on changes
         let account_data: Account = self.rpc_client.get_account(&account).await?;
-        // after encountering the account 5 times the subscription kicks in
         let (tx, rx) = watch::channel((account_data.clone(), 0));
         {
             let mut cache = self.account_cache.write().await;
