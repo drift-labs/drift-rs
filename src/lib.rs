@@ -1,6 +1,6 @@
 //! Drift SDK
 
-use std::{borrow::Cow, sync::Arc, time::Duration};
+use std::{borrow::Cow, rc::Rc, sync::Arc, time::Duration};
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData, ToAccountMetas};
 use async_utils::{retry_policy, spawn_retry_task};
@@ -139,7 +139,6 @@ pub struct WsAccountProvider {
     rpc_client: Arc<RpcClient>,
     /// map from account pubkey to (account data, last modified ts)
     account_cache: Arc<RwLock<FnvHashMap<Pubkey, Receiver<(Account, Slot)>>>>,
-    account_counter: Arc<RwLock<FnvHashMap<Pubkey, u32>>>,
 }
 
 struct AccountSubscription {
@@ -244,7 +243,6 @@ impl WsAccountProvider {
             url: url.to_string(),
             rpc_client: Arc::new(RpcClient::new_with_commitment(url.to_string(), commitment)),
             account_cache: Default::default(),
-            account_counter: Default::default(),
         })
     }
     /// Subscribe to account updates via web-socket and polling
@@ -277,18 +275,13 @@ impl WsAccountProvider {
 
         // fetch initial account data, stream only updates on changes
         let account_data: Account = self.rpc_client.get_account(&account).await?;
-        let mut counts = self.account_counter.write().await;
-        // after encountering the account 10 times the subscription kicks in
-        if counts.get(&account).is_some_and(|c| *c > 10) {
-            let (tx, rx) = watch::channel((account_data.clone(), 0));
-            {
-                let mut cache = self.account_cache.write().await;
-                cache.insert(account, rx);
-            }
-            self.subscribe_account(account, tx);
-        } else {
-            counts.entry(account).and_modify(|x| *x += 1).or_insert(1);
+        // after encountering the account 5 times the subscription kicks in
+        let (tx, rx) = watch::channel((account_data.clone(), 0));
+        {
+            let mut cache = self.account_cache.write().await;
+            cache.insert(account, rx);
         }
+        self.subscribe_account(account, tx);
 
         Ok(account_data)
     }
@@ -684,8 +677,7 @@ pub struct DriftClientBackend<T: AccountProvider> {
     program_data: ProgramData,
     perp_market_map: MarketMap<PerpMarket>,
     spot_market_map: MarketMap<SpotMarket>,
-    oracle_map: Arc<OracleMap>,
-    state_account: Arc<std::sync::RwLock<State>>,
+    oracle_map: Rc<OracleMap>,
 }
 
 impl<T: AccountProvider> DriftClientBackend<T> {
@@ -726,10 +718,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map: Arc::new(oracle_map),
-            state_account: Arc::new(std::sync::RwLock::new(
-                State::try_deserialize(&mut state.data.as_ref()).expect("valid state"),
-            )),
+            oracle_map: Rc::new(oracle_map),
         };
 
         let lookup_table_address = market_lookup_table(context);
