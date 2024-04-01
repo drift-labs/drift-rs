@@ -69,9 +69,9 @@ mod tests {
     use super::*;
     use crate::memcmp::get_user_with_order_filter;
     use crate::utils::get_ws_url;
+    use env_logger;
     use solana_sdk::commitment_config::CommitmentConfig;
     use solana_sdk::commitment_config::CommitmentLevel;
-    use env_logger;
 
     #[tokio::test]
     #[cfg(rpc_tests)]

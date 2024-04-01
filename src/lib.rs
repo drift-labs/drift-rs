@@ -4,6 +4,7 @@ use std::{borrow::Cow, rc::Rc, sync::Arc, time::Duration};
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData, ToAccountMetas};
 use async_utils::{retry_policy, spawn_retry_task};
+use blockhash_subscriber::BlockhashSubscriber;
 use constants::derive_perp_market_account;
 use drift::{
     controller::position::PositionDirection,
@@ -78,8 +79,10 @@ pub mod websocket_program_account_subscriber;
 
 // subscribers
 pub mod auction_subscriber;
+pub mod blockhash_subscriber;
 pub mod dlob_client;
 pub mod event_subscriber;
+
 #[cfg(feature = "jit")]
 pub mod jit_client;
 pub mod marketmap;
@@ -340,7 +343,8 @@ impl<T: AccountProvider> DriftClient<T> {
     }
 
     pub async fn add_user(&mut self, sub_account_id: u16) -> SdkResult<()> {
-        let pubkey = Wallet::derive_user_account(self.wallet.authority(), sub_account_id, &drift::ID);
+        let pubkey =
+            Wallet::derive_user_account(self.wallet.authority(), sub_account_id, &drift::ID);
         let mut user = DriftUser::new(pubkey, self, sub_account_id).await?;
         user.subscribe().await?;
         self.users.push(user);
@@ -609,7 +613,10 @@ impl<T: AccountProvider> DriftClient<T> {
         account: &Pubkey,
         delegated: bool,
     ) -> SdkResult<TransactionBuilder> {
-        let account_data = self.get_user(self.active_sub_account_id).expect("user").get_user_account();
+        let account_data = self
+            .get_user(self.active_sub_account_id)
+            .expect("user")
+            .get_user_account();
         Ok(TransactionBuilder::new(
             self.program_data(),
             *account,
@@ -693,6 +700,7 @@ pub struct DriftClientBackend<T: AccountProvider> {
     spot_market_map: MarketMap<SpotMarket>,
     oracle_map: Arc<OracleMap>,
     state_account: Arc<std::sync::RwLock<State>>,
+    blockhash_subscriber: Arc<RwLock<BlockhashSubscriber>>,
 }
 
 impl<T: AccountProvider> DriftClientBackend<T> {
@@ -732,6 +740,11 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             .await
             .expect("state account");
 
+        let blockhash_subscriber = Arc::new(RwLock::new(BlockhashSubscriber::new(
+            2,
+            account_provider.endpoint(),
+        )));
+
         let mut this = Self {
             rpc_client,
             account_provider,
@@ -742,6 +755,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             state_account: Arc::new(std::sync::RwLock::new(
                 State::try_deserialize(&mut state.data.as_ref()).expect("valid state"),
             )),
+            blockhash_subscriber,
         };
 
         let lookup_table_address = market_lookup_table(context);
@@ -767,6 +781,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             self.spot_market_map.subscribe(),
             self.oracle_map.subscribe(),
             self.state_subscribe(),
+            BlockhashSubscriber::subscribe(self.blockhash_subscriber.clone()),
         )?;
         Ok(())
     }
@@ -968,7 +983,9 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         wallet: &Wallet,
         tx: VersionedMessage,
     ) -> SdkResult<Signature> {
-        let recent_block_hash = self.rpc_client.get_latest_blockhash().await?;
+        let blockhash_reader = self.blockhash_subscriber.read().await;
+        let recent_block_hash = blockhash_reader.get_valid_blockhash();
+        drop(blockhash_reader);
         let tx = wallet.sign_tx(tx, recent_block_hash)?;
         self.rpc_client
             .send_transaction(&tx)
@@ -986,7 +1003,9 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         tx: VersionedMessage,
         config: RpcSendTransactionConfig,
     ) -> SdkResult<Signature> {
-        let recent_block_hash = self.rpc_client.get_latest_blockhash().await?;
+        let blockhash_reader = self.blockhash_subscriber.read().await;
+        let recent_block_hash = blockhash_reader.get_valid_blockhash();
+        drop(blockhash_reader);
         let tx = wallet.sign_tx(tx, recent_block_hash)?;
         self.rpc_client
             .send_transaction_with_config(&tx, config)
@@ -1890,6 +1909,10 @@ mod tests {
                 vec![],
             )),
             state_account: Arc::new(std::sync::RwLock::new(State::default())),
+            blockhash_subscriber: Arc::new(RwLock::new(BlockhashSubscriber::new(
+                2,
+                DEVNET_ENDPOINT.to_string(),
+            ))),
         };
 
         DriftClient {
@@ -1897,7 +1920,7 @@ mod tests {
             wallet: Wallet::new(keypair),
             active_sub_account_id: 0,
             sub_account_ids: vec![0],
-            users: vec![]
+            users: vec![],
         }
     }
 

@@ -44,7 +44,7 @@ impl DriftUser {
             pubkey,
             subscription,
             data_and_slot,
-            sub_account
+            sub_account,
         })
     }
 
