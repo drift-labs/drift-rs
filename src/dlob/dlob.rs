@@ -51,9 +51,7 @@ impl DLOB {
                 if order.status == OrderStatus::Init {
                     continue;
                 }
-                // let start = std::time::Instant::now();
                 self.insert_order(order, user_pubkey, slot);
-                // dbg!(start.elapsed());
             }
         });
         self._initialized = true;
