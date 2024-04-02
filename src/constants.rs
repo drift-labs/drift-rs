@@ -12,6 +12,8 @@ use solana_sdk::{address_lookup_table_account::AddressLookupTableAccount, pubkey
 
 use crate::types::Context;
 
+pub const DEFAULT_PUBKEY: Pubkey = solana_sdk::pubkey!("11111111111111111111111111111111");
+
 static STATE_ACCOUNT: OnceLock<Pubkey> = OnceLock::new();
 
 pub const TOKEN_PROGRAM_ID: Pubkey =

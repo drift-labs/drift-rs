@@ -2,6 +2,8 @@ use crate::{
     dlob::dlob::DLOB, event_emitter::EventEmitter, slot_subscriber::SlotSubscriber,
     usermap::UserMap, SdkResult,
 };
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub struct DLOBBuilder {
     slot_subscriber: SlotSubscriber,
@@ -12,6 +14,8 @@ pub struct DLOBBuilder {
 }
 
 impl DLOBBuilder {
+    pub const SUBSCRIPTION_ID: &'static str = "dlob_update";
+
     pub fn new(
         slot_subscriber: SlotSubscriber,
         usermap: UserMap,
@@ -26,23 +30,33 @@ impl DLOBBuilder {
         }
     }
 
-    pub async fn start_building(&mut self) -> SdkResult<()> {
-        self.slot_subscriber.subscribe().await?;
-        self.usermap.subscribe().await?;
+    pub async fn start_building(builder: Arc<Mutex<Self>>) -> SdkResult<()> {
+        let mut locked_builder = builder.lock().await;
+        let rebuild_frequency = locked_builder.rebuild_frequency;
+        locked_builder.slot_subscriber.subscribe().await?;
+        locked_builder.usermap.subscribe().await?;
+        drop(locked_builder);
 
-        self.build();
+        tokio::task::spawn(async move {
+            let mut timer =
+                tokio::time::interval(tokio::time::Duration::from_millis(rebuild_frequency));
+            loop {
+                {
+                    let mut builder = builder.lock().await;
+                    builder.build();
+                }
+                let _ = timer.tick().await;
+            }
+        });
 
-        loop {
-            self.build();
-            tokio::time::sleep(tokio::time::Duration::from_secs(self.rebuild_frequency)).await;
-        }
+        Ok(())
     }
 
     pub fn build(&mut self) {
         self.dlob
             .build_from_usermap(&self.usermap, self.slot_subscriber.current_slot());
         self.event_emitter
-            .emit("dlob_update", Box::new(self.dlob.clone()));
+            .emit(DLOBBuilder::SUBSCRIPTION_ID, Box::new(self.dlob.clone()));
     }
 
     pub fn get_dlob(&self) -> DLOB {
@@ -55,37 +69,40 @@ mod tests {
     use super::*;
     use crate::memcmp::get_user_with_order_filter;
     use crate::utils::get_ws_url;
+    use env_logger;
     use solana_sdk::commitment_config::CommitmentConfig;
     use solana_sdk::commitment_config::CommitmentLevel;
-    use std::time::Instant;
 
     #[tokio::test]
     #[cfg(rpc_tests)]
     async fn test_dlob_builder() {
-        let endpoint = "rpc_url".to_string();
+        env_logger::init();
+        let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {
             commitment: CommitmentLevel::Processed,
         };
 
         let slot_subscriber = SlotSubscriber::new(get_ws_url(&endpoint.clone()).unwrap());
-        let mut usermap = UserMap::new(
+        let usermap = UserMap::new(
             commitment,
             endpoint,
             true,
             Some(vec![get_user_with_order_filter()]),
         );
-        let mut dlob_builder = DLOBBuilder::new(slot_subscriber, usermap, 30);
+        let dlob_builder = DLOBBuilder::new(slot_subscriber, usermap, 5);
 
         dlob_builder
             .event_emitter
             .clone()
-            .subscribe("dlob_update", move |event| {
+            .subscribe(DLOBBuilder::SUBSCRIPTION_ID, move |event| {
                 if let Some(_) = event.as_any().downcast_ref::<DLOB>() {
-                    dbg!("update received");
+                    // dbg!("update received");
                 }
             });
 
-        dlob_builder.start_building().await.unwrap();
+        DLOBBuilder::start_building(Arc::new(Mutex::new(dlob_builder)))
+            .await
+            .unwrap();
 
         tokio::time::sleep(tokio::time::Duration::from_secs(120)).await;
     }
@@ -110,7 +127,7 @@ mod tests {
 
         let mut dlob_builder = DLOBBuilder::new(slot_subscriber, usermap, 30);
 
-        let start = Instant::now();
+        let start = std::time::Instant::now();
         dlob_builder.build();
         let duration = start.elapsed();
         dbg!(duration);

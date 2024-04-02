@@ -4,6 +4,7 @@ use std::{borrow::Cow, rc::Rc, sync::Arc, time::Duration};
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData, ToAccountMetas};
 use async_utils::{retry_policy, spawn_retry_task};
+use blockhash_subscriber::BlockhashSubscriber;
 use constants::derive_perp_market_account;
 use drift::{
     controller::position::PositionDirection,
@@ -17,11 +18,12 @@ use drift::{
         user::{MarketType, Order, OrderStatus, PerpPosition, SpotPosition, User, UserStats},
     },
 };
+use event_emitter::EventEmitter;
 use fnv::FnvHashMap;
 use futures_util::{future::BoxFuture, FutureExt, StreamExt};
 use log::{debug, warn};
 use marketmap::MarketMap;
-use oraclemap::{OracleMap, OraclePriceDataAndSlot};
+use oraclemap::{Oracle, OracleMap};
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
     nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient},
@@ -49,9 +51,15 @@ use tokio::{
         RwLock,
     },
 };
+use user::DriftUser;
+use utils::get_ws_url;
+use websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber};
 
-use crate::constants::{
-    derive_spot_market_account, market_lookup_table, state_account, MarketExt, ProgramData,
+use crate::{
+    constants::{
+        derive_spot_market_account, market_lookup_table, state_account, MarketExt, ProgramData,
+    },
+    utils::decode,
 };
 
 // utils
@@ -71,14 +79,19 @@ pub mod websocket_program_account_subscriber;
 
 // subscribers
 pub mod auction_subscriber;
+pub mod blockhash_subscriber;
 pub mod dlob_client;
 pub mod event_subscriber;
-pub mod marketmap;
-pub mod oraclemap;
+
 #[cfg(feature = "jit")]
 pub mod jit_client;
+pub mod marketmap;
+pub mod oraclemap;
 pub mod slot_subscriber;
 pub mod usermap;
+
+// wrappers
+pub mod user;
 
 pub mod dlob;
 
@@ -304,6 +317,7 @@ pub struct DriftClient<T: AccountProvider> {
     wallet: Wallet,
     pub active_sub_account_id: u16,
     pub sub_account_ids: Vec<u16>,
+    pub users: Vec<DriftUser>,
 }
 
 impl<T: AccountProvider> DriftClient<T> {
@@ -324,7 +338,21 @@ impl<T: AccountProvider> DriftClient<T> {
             wallet,
             active_sub_account_id: opts.active_sub_account_id(),
             sub_account_ids: opts.sub_account_ids(),
+            users: vec![],
         })
+    }
+
+    pub async fn add_user(&mut self, sub_account_id: u16) -> SdkResult<()> {
+        let pubkey =
+            Wallet::derive_user_account(self.wallet.authority(), sub_account_id, &drift::ID);
+        let mut user = DriftUser::new(pubkey, self, sub_account_id).await?;
+        user.subscribe().await?;
+        self.users.push(user);
+        Ok(())
+    }
+
+    pub fn get_user(&self, sub_account_id: u16) -> Option<&DriftUser> {
+        self.users.iter().find(|u| u.sub_account == sub_account_id)
     }
 
     /// Subscribe to the Drift Client Backend
@@ -473,18 +501,6 @@ impl<T: AccountProvider> DriftClient<T> {
         self.backend.get_account(account).await
     }
 
-    /// Get the _active_ user account data
-    ///
-    /// Returns the deserialized account data (`User`)
-    pub async fn get_user(&self) -> SdkResult<User> {
-        let user_pubkey = Wallet::derive_user_account(
-            self.wallet().authority(),
-            self.active_sub_account_id,
-            &constants::PROGRAM_ID,
-        );
-        self.backend.get_account(&user_pubkey).await
-    }
-
     /// Get a stats account
     ///
     /// Returns the deserialized account data (`UserStats`)
@@ -585,7 +601,10 @@ impl<T: AccountProvider> DriftClient<T> {
         account: &Pubkey,
         delegated: bool,
     ) -> SdkResult<TransactionBuilder> {
-        let account_data = self.get_user_account(account).await?;
+        let account_data = self
+            .get_user(self.active_sub_account_id)
+            .expect("user")
+            .get_user_account();
         Ok(TransactionBuilder::new(
             self.program_data(),
             *account,
@@ -638,17 +657,14 @@ impl<T: AccountProvider> DriftClient<T> {
         self.backend.num_spot_markets()
     }
 
-    pub fn get_oracle_price_data_and_slot(
-        &self,
-        oracle_pubkey: Pubkey,
-    ) -> Option<OraclePriceDataAndSlot> {
+    pub fn get_oracle_price_data_and_slot(&self, oracle_pubkey: &Pubkey) -> Option<Oracle> {
         self.backend.get_oracle_price_data_and_slot(oracle_pubkey)
     }
 
     pub fn get_oracle_price_data_and_slot_for_perp_market(
         &self,
         market_index: u16,
-    ) -> Option<OraclePriceDataAndSlot> {
+    ) -> Option<Oracle> {
         self.backend
             .get_oracle_price_data_and_slot_for_perp_market(market_index)
     }
@@ -656,7 +672,7 @@ impl<T: AccountProvider> DriftClient<T> {
     pub fn get_oracle_price_data_and_slot_for_spot_market(
         &self,
         market_index: u16,
-    ) -> Option<OraclePriceDataAndSlot> {
+    ) -> Option<Oracle> {
         self.backend
             .get_oracle_price_data_and_slot_for_spot_market(market_index)
     }
@@ -670,7 +686,9 @@ pub struct DriftClientBackend<T: AccountProvider> {
     program_data: ProgramData,
     perp_market_map: MarketMap<PerpMarket>,
     spot_market_map: MarketMap<SpotMarket>,
-    oracle_map: Rc<OracleMap>,
+    oracle_map: Arc<OracleMap>,
+    state_account: Arc<std::sync::RwLock<State>>,
+    blockhash_subscriber: Arc<RwLock<BlockhashSubscriber>>,
 }
 
 impl<T: AccountProvider> DriftClientBackend<T> {
@@ -705,16 +723,31 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             spot_oracles,
         );
 
+        let state = account_provider
+            .get_account(*state_account())
+            .await
+            .expect("state account");
+
+        let blockhash_subscriber = Arc::new(RwLock::new(BlockhashSubscriber::new(
+            2,
+            account_provider.endpoint(),
+        )));
+
         let mut this = Self {
             rpc_client,
             account_provider,
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map: Rc::new(oracle_map),
+            oracle_map: Arc::new(oracle_map),
+            state_account: Arc::new(std::sync::RwLock::new(
+                State::try_deserialize(&mut state.data.as_ref()).expect("valid state"),
+            )),
+            blockhash_subscriber,
         };
 
         let lookup_table_address = market_lookup_table(context);
+
         let (markets, lookup_table_account): (
             SdkResult<(Vec<SpotMarket>, Vec<PerpMarket>)>,
             SdkResult<Account>,
@@ -722,9 +755,9 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             get_market_accounts(&this.rpc_client),
             this.get_account_raw(&lookup_table_address),
         );
+
         let (spot, perp) = markets?;
         let lookup_table = utils::deserialize_alt(lookup_table_address, &lookup_table_account?)?;
-
         this.program_data = ProgramData::new(spot, perp, lookup_table);
 
         Ok(this)
@@ -734,7 +767,9 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         tokio::try_join!(
             self.perp_market_map.subscribe(),
             self.spot_market_map.subscribe(),
-            self.oracle_map.subscribe()
+            self.oracle_map.subscribe(),
+            self.state_subscribe(),
+            BlockhashSubscriber::subscribe(self.blockhash_subscriber.clone()),
         )?;
         Ok(())
     }
@@ -743,8 +778,34 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         tokio::try_join!(
             self.perp_market_map.unsubscribe(),
             self.spot_market_map.unsubscribe(),
-            self.oracle_map.unsubscribe()
+            self.oracle_map.unsubscribe(),
         )?;
+        Ok(())
+    }
+
+    async fn state_subscribe(&self) -> SdkResult<()> {
+        let pubkey = *state_account();
+
+        let mut subscription = WebsocketAccountSubscriber::new(
+            "state",
+            get_ws_url(&self.rpc_client.url()).expect("valid url"),
+            pubkey,
+            self.rpc_client.commitment(),
+            EventEmitter::new(),
+        );
+
+        let state = self.state_account.clone();
+
+        subscription.event_emitter.subscribe("state", move |event| {
+            if let Some(update) = event.as_any().downcast_ref::<AccountUpdate>() {
+                let new_data = decode::<State>(update.data.data.clone()).expect("valid state data");
+                let mut state_writer = state.write().unwrap();
+                *state_writer = new_data;
+            }
+        });
+
+        subscription.subscribe().await?;
+
         Ok(())
     }
 
@@ -770,17 +831,11 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         self.spot_market_map.size()
     }
 
-    fn get_oracle_price_data_and_slot(
-        &self,
-        oracle_pubkey: Pubkey,
-    ) -> Option<OraclePriceDataAndSlot> {
-        self.oracle_map.get(&oracle_pubkey.to_string())
+    fn get_oracle_price_data_and_slot(&self, oracle_pubkey: &Pubkey) -> Option<Oracle> {
+        self.oracle_map.get(oracle_pubkey)
     }
 
-    fn get_oracle_price_data_and_slot_for_perp_market(
-        &self,
-        market_index: u16,
-    ) -> Option<OraclePriceDataAndSlot> {
+    fn get_oracle_price_data_and_slot_for_perp_market(&self, market_index: u16) -> Option<Oracle> {
         let market = self.get_perp_market_account_and_slot(market_index)?;
 
         let oracle = market.data.amm.oracle;
@@ -798,13 +853,10 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             });
         }
 
-        self.get_oracle_price_data_and_slot(current_oracle)
+        self.get_oracle_price_data_and_slot(&current_oracle)
     }
 
-    fn get_oracle_price_data_and_slot_for_spot_market(
-        &self,
-        market_index: u16,
-    ) -> Option<OraclePriceDataAndSlot> {
+    fn get_oracle_price_data_and_slot_for_spot_market(&self, market_index: u16) -> Option<Oracle> {
         let market = self.get_spot_market_account_and_slot(market_index)?;
 
         let oracle = market.data.oracle;
@@ -822,7 +874,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             });
         }
 
-        self.get_oracle_price_data_and_slot(market.data.oracle)
+        self.get_oracle_price_data_and_slot(&market.data.oracle)
     }
 
     /// Return a handle to the inner RPC client
@@ -919,7 +971,9 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         wallet: &Wallet,
         tx: VersionedMessage,
     ) -> SdkResult<Signature> {
-        let recent_block_hash = self.rpc_client.get_latest_blockhash().await?;
+        let blockhash_reader = self.blockhash_subscriber.read().await;
+        let recent_block_hash = blockhash_reader.get_valid_blockhash();
+        drop(blockhash_reader);
         let tx = wallet.sign_tx(tx, recent_block_hash)?;
         self.rpc_client
             .send_transaction(&tx)
@@ -937,7 +991,9 @@ impl<T: AccountProvider> DriftClientBackend<T> {
         tx: VersionedMessage,
         config: RpcSendTransactionConfig,
     ) -> SdkResult<Signature> {
-        let recent_block_hash = self.rpc_client.get_latest_blockhash().await?;
+        let blockhash_reader = self.blockhash_subscriber.read().await;
+        let recent_block_hash = blockhash_reader.get_valid_blockhash();
+        drop(blockhash_reader);
         let tx = wallet.sign_tx(tx, recent_block_hash)?;
         self.rpc_client
             .send_transaction_with_config(&tx, config)
@@ -1833,13 +1889,18 @@ mod tests {
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map: Rc::new(OracleMap::new(
+            oracle_map: Arc::new(OracleMap::new(
                 CommitmentConfig::processed(),
                 DEVNET_ENDPOINT.to_string(),
                 true,
                 vec![],
                 vec![],
             )),
+            state_account: Arc::new(std::sync::RwLock::new(State::default())),
+            blockhash_subscriber: Arc::new(RwLock::new(BlockhashSubscriber::new(
+                2,
+                DEVNET_ENDPOINT.to_string(),
+            ))),
         };
 
         DriftClient {
@@ -1847,7 +1908,18 @@ mod tests {
             wallet: Wallet::new(keypair),
             active_sub_account_id: 0,
             sub_account_ids: vec![0],
+            users: vec![],
         }
+    }
+
+    #[tokio::test]
+    async fn test_backend_send_sync() {
+        let account_mocks = Mocks::default();
+        let client = setup(Default::default(), account_mocks, Keypair::new()).await;
+
+        tokio::task::spawn(async move {
+            let _ = client.clone();
+        });
     }
 
     #[tokio::test]
