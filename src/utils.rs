@@ -91,6 +91,8 @@ pub fn get_ws_url(url: &str) -> Result<String, &'static str> {
         url.replacen("http://", "ws://", 1)
     } else if url.starts_with("https://") {
         url.replacen("https://", "wss://", 1)
+    } else if url.starts_with("wss://") || url.starts_with("ws://") {
+        url.to_string()
     } else {
         return Err("Invalid URL scheme");
     };
@@ -138,6 +140,15 @@ pub(crate) fn market_type_to_string(market_type: &MarketType) -> String {
 /// Helper to deserialize account data as `T`
 pub fn deserialize_account<T: anchor_lang::AccountDeserialize>(data: &mut &[u8]) -> Option<T> {
     T::try_deserialize(data).ok()
+}
+
+pub(crate) fn zero_account_to_bytes<T: bytemuck::Pod + anchor_lang::Discriminator>(
+    account: T,
+) -> Vec<u8> {
+    let mut account_data = vec![0; 8 + std::mem::size_of::<T>()];
+    account_data[0..8].copy_from_slice(bytemuck::bytes_of(&T::DISCRIMINATOR));
+    account_data[8..].copy_from_slice(bytemuck::bytes_of(&account));
+    account_data
 }
 
 #[cfg(any(test, test_utils))]

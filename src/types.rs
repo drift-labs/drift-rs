@@ -30,7 +30,7 @@ use thiserror::Error;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{tungstenite, MaybeTlsStream, WebSocketStream};
 
-use crate::Wallet;
+use crate::{websocket_program_account_subscriber::WebsocketProgramAccountSubscriber, Wallet};
 
 pub type SdkResult<T> = Result<T, SdkError>;
 
