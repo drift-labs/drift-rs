@@ -126,7 +126,7 @@ impl UserMap {
     }
 
     pub fn get(&self, pubkey: &str) -> Option<User> {
-        self.usermap.get(pubkey).map(|user| user.value().clone())
+        self.usermap.get(pubkey).map(|user| *user.value())
     }
 
     pub async fn must_get(&self, pubkey: &str) -> SdkResult<User> {
@@ -150,6 +150,8 @@ impl UserMap {
             Ok(lock) => lock,
             Err(_) => return Ok(()),
         };
+
+        drop(lock);
 
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.commitment),
@@ -183,7 +185,6 @@ impl UserMap {
                 .store(accounts.context.slot, Ordering::Relaxed);
         }
 
-        drop(lock);
         Ok(())
     }
 

@@ -13,7 +13,7 @@ pub enum NodeType {
 }
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub(crate) enum SortDirection {
+pub enum SortDirection {
     Ascending,
     Descending,
 }
@@ -61,6 +61,12 @@ impl Eq for DirectionalNode {}
 
 impl PartialOrd for DirectionalNode {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for DirectionalNode {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         let mut cmp = self
             .node
             .get_sort_value(self.node.get_order())
@@ -75,13 +81,7 @@ impl PartialOrd for DirectionalNode {
             cmp = cmp.reverse();
         }
 
-        Some(cmp)
-    }
-}
-
-impl Ord for DirectionalNode {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+        cmp
     }
 }
 

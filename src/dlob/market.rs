@@ -175,6 +175,7 @@ impl Exchange {
     }
 
     /// for debugging
+    #[allow(dead_code)]
     pub fn size(&self) -> usize {
         let mut size = 0;
         for market_type_ref in self.iter() {
@@ -186,7 +187,7 @@ impl Exchange {
                 size += market.value().trigger_orders.size();
             }
         }
-        return size;
+        size
     }
 
     /// for debugging
@@ -199,7 +200,7 @@ impl Exchange {
             size += market.value().market_orders.size();
             size += market.value().trigger_orders.size();
         }
-        return size;
+        size
     }
 
     /// for debugging
@@ -212,7 +213,7 @@ impl Exchange {
             size += market.value().market_orders.size();
             size += market.value().trigger_orders.size();
         }
-        return size;
+        size
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::{
-    dlob::dlob::DLOB, event_emitter::EventEmitter, slot_subscriber::SlotSubscriber,
+    dlob::DLOB, event_emitter::EventEmitter, slot_subscriber::SlotSubscriber,
     usermap::UserMap, SdkResult,
 };
 use std::sync::Arc;

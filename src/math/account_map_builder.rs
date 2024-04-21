@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::AccountInfo, AccountDeserialize};
+use anchor_lang::prelude::AccountInfo;
 use drift::{
     ids::{pyth_program, switchboard_program},
     instructions::optional_accounts::AccountMaps,

@@ -2,11 +2,13 @@ use std::{
     any::Any,
     collections::HashMap,
     sync::{
-        mpsc::{channel, Receiver, Sender},
+        mpsc::{channel, Sender},
         Arc, Mutex,
     },
     thread,
 };
+
+type Subscribers = Arc<Mutex<HashMap<&'static str, Vec<Sender<Box<dyn Event>>>>>>;
 
 pub trait Event: Any + Send {
     fn box_clone(&self) -> Box<dyn Event>;
@@ -21,7 +23,7 @@ impl Clone for Box<dyn Event> {
 
 #[derive(Clone)]
 pub struct EventEmitter {
-    subscribers: Arc<Mutex<HashMap<&'static str, Vec<Sender<Box<dyn Event>>>>>>,
+    subscribers: Subscribers,
 }
 
 impl EventEmitter {
@@ -36,7 +38,7 @@ impl EventEmitter {
         event_type: &'static str,
         handler: F,
     ) {
-        let (tx, rx): (Sender<Box<dyn Event>>, Receiver<Box<dyn Event>>) = channel();
+        let (tx, rx) = channel();
 
         if let Ok(mut subs) = self.subscribers.lock() {
             subs.entry(event_type).or_default().push(tx);
@@ -57,6 +59,12 @@ impl EventEmitter {
                 }
             }
         }
+    }
+}
+
+impl Default for EventEmitter {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
