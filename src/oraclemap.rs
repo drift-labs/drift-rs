@@ -196,6 +196,7 @@ impl OracleMap {
         Ok(())
     }
 
+    #[allow(clippy::await_holding_lock)]
     async fn sync(&self) -> SdkResult<()> {
         let sync_lock = self.sync_lock.as_ref().expect("expected sync lock");
 
@@ -203,8 +204,6 @@ impl OracleMap {
             Ok(lock) => lock,
             Err(_) => return Ok(()),
         };
-
-        drop(lock);
 
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.commitment),
@@ -262,6 +261,8 @@ impl OracleMap {
         }
 
         self.latest_slot.store(slot, Ordering::Relaxed);
+
+        drop(lock);
 
         Ok(())
     }

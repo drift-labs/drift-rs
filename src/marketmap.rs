@@ -177,6 +177,7 @@ where
             .map(|market| market.clone())
     }
 
+    #[allow(clippy::await_holding_lock)]
     pub(crate) async fn sync(&self) -> SdkResult<()> {
         if self.synced {
             return Ok(());
@@ -188,7 +189,6 @@ where
             Ok(lock) => lock,
             Err(_) => return Ok(()),
         };
-        drop(lock);
 
         let subscription_reader = self.subscription.read().await;
         let options = subscription_reader.options.clone();
@@ -227,6 +227,7 @@ where
                 .store(accounts.context.slot, Ordering::Relaxed);
         }
 
+        drop(lock);
         Ok(())
     }
 

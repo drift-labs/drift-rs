@@ -143,6 +143,7 @@ impl UserMap {
         }
     }
 
+    #[allow(clippy::await_holding_lock)]
     async fn sync(&mut self) -> SdkResult<()> {
         let sync_lock = self.sync_lock.as_ref().expect("expected sync lock");
 
@@ -150,8 +151,6 @@ impl UserMap {
             Ok(lock) => lock,
             Err(_) => return Ok(()),
         };
-
-        drop(lock);
 
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.commitment),
@@ -185,6 +184,7 @@ impl UserMap {
                 .store(accounts.context.slot, Ordering::Relaxed);
         }
 
+        drop(lock);
         Ok(())
     }
 
