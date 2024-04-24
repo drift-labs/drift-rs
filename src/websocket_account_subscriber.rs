@@ -84,7 +84,7 @@ impl WebsocketAccountSubscriber {
             let event_emitter = self.event_emitter.clone();
             let mut latest_slot = 0;
             let subscription_name = self.subscription_name;
-            let pubkey = self.pubkey.clone();
+            let pubkey = self.pubkey;
             async move {
                 loop {
                     let pubsub = PubsubClient::new(&url).await?;
@@ -118,7 +118,7 @@ impl WebsocketAccountSubscriber {
                                     }
                                 }
                                 unsub = unsub_rx.recv() => {
-                                    if let Some(_) = unsub {
+                                    if unsub.is_some() {
                                         log::debug!("{}: Unsubscribing from account stream", subscription_name);
                                         account_unsubscribe().await;
                                         return Ok(());

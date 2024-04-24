@@ -70,8 +70,7 @@ impl DriftUser {
 
     pub fn get_user_account_and_slot(&self) -> DataAndSlot<User> {
         let reader = self.data_and_slot.read().expect("reader");
-        let clone = reader.clone();
-        clone
+        reader.clone()
     }
 
     pub fn get_user_account(&self) -> User {

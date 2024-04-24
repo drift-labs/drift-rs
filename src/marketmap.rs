@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 use crate::event_emitter::EventEmitter;
 use crate::memcmp::get_market_filter;
@@ -22,6 +22,7 @@ use solana_client::rpc_request::RpcRequest;
 use solana_client::rpc_response::{OptionalContext, RpcKeyedAccount};
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
+use tokio::sync::RwLock;
 
 pub trait Market {
     const MARKET_TYPE: MarketType;
@@ -112,7 +113,7 @@ where
         }
 
         if !self.subscribed.load(Ordering::Relaxed) {
-            let mut subscription_writer = self.subscription.write().unwrap();
+            let mut subscription_writer = self.subscription.write().await;
 
             subscription_writer.subscribe::<T>().await?;
             self.subscribed.store(true, Ordering::Relaxed);
@@ -146,7 +147,7 @@ where
 
     pub async fn unsubscribe(&self) -> SdkResult<()> {
         if self.subscribed.load(Ordering::Relaxed) {
-            self.subscription.write().unwrap().unsubscribe().await?;
+            self.subscription.write().await.unsubscribe().await?;
             self.subscribed.store(false, Ordering::Relaxed);
             self.marketmap.clear();
             self.latest_slot.store(0, Ordering::Relaxed);
@@ -155,7 +156,7 @@ where
     }
 
     pub fn values(&self) -> Vec<T> {
-        self.marketmap.iter().map(|x| x.data.clone()).collect()
+        self.marketmap.iter().map(|x| x.data).collect()
     }
 
     pub fn oracles(&self) -> Vec<(u16, Pubkey, OracleSource)> {
@@ -176,6 +177,7 @@ where
             .map(|market| market.clone())
     }
 
+    #[allow(clippy::await_holding_lock)]
     pub(crate) async fn sync(&self) -> SdkResult<()> {
         if self.synced {
             return Ok(());
@@ -188,7 +190,7 @@ where
             Err(_) => return Ok(()),
         };
 
-        let subscription_reader = self.subscription.read().unwrap();
+        let subscription_reader = self.subscription.read().await;
         let options = subscription_reader.options.clone();
         drop(subscription_reader);
 

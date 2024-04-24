@@ -37,7 +37,7 @@ pub struct LiquidationAndPnlInfo {
 }
 
 /// Calculate the liquidation price and unrealized PnL of a user's perp position (given by `market_index`)
-pub fn calculate_liquidation_price_and_unrealized_pnl<'a, T: AccountProvider>(
+pub fn calculate_liquidation_price_and_unrealized_pnl<T: AccountProvider>(
     client: &DriftClient<T>,
     user: &User,
     market_index: u16,

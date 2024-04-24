@@ -1,4 +1,6 @@
-use dashmap::{DashMap, DashSet};
+#![allow(clippy::module_inception)]
+
+use dashmap::DashSet;
 use drift::state::oracle::OraclePriceData;
 use drift::state::user::{MarketType, Order, OrderStatus};
 use rayon::prelude::*;
@@ -11,7 +13,7 @@ use std::sync::Arc;
 use crate::dlob::dlob_node::{
     create_node, get_order_signature, DLOBNode, DirectionalNode, Node, NodeType,
 };
-use crate::dlob::market::{get_node_subtype_and_type, Exchange, Market, OpenOrders, SubType};
+use crate::dlob::market::{get_node_subtype_and_type, Exchange, OpenOrders, SubType};
 use crate::event_emitter::Event;
 use crate::math::order::is_resting_limit_order;
 use crate::usermap::UserMap;
@@ -281,6 +283,12 @@ impl DLOB {
         });
 
         all_orders
+    }
+}
+
+impl Default for DLOB {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

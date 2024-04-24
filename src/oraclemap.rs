@@ -10,7 +10,8 @@ use solana_sdk::account_info::{AccountInfo, IntoAccountInfo};
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
+use tokio::sync::RwLock;
 
 #[derive(Clone, Debug)]
 pub struct Oracle {
@@ -171,7 +172,7 @@ impl OracleMap {
             let results = futures_util::future::join_all(subscribe_futures).await;
             results.into_iter().collect::<Result<Vec<_>, _>>()?;
 
-            let mut oracle_subscribers_mut = self.oracle_subscribers.write().unwrap();
+            let mut oracle_subscribers_mut = self.oracle_subscribers.write().await;
             *oracle_subscribers_mut = oracle_subscribers;
         }
 
@@ -180,7 +181,7 @@ impl OracleMap {
 
     pub async fn unsubscribe(&self) -> SdkResult<()> {
         if self.subscribed.load(Ordering::Relaxed) {
-            let mut oracle_subscribers = self.oracle_subscribers.write().unwrap();
+            let mut oracle_subscribers = self.oracle_subscribers.write().await;
             let unsubscribe_futures = oracle_subscribers
                 .iter_mut()
                 .map(|subscriber| subscriber.unsubscribe())
@@ -195,6 +196,7 @@ impl OracleMap {
         Ok(())
     }
 
+    #[allow(clippy::await_holding_lock)]
     async fn sync(&self) -> SdkResult<()> {
         let sync_lock = self.sync_lock.as_ref().expect("expected sync lock");
 
@@ -265,6 +267,7 @@ impl OracleMap {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn size(&self) -> usize {
         self.oraclemap.len()
     }
@@ -285,6 +288,7 @@ impl OracleMap {
         self.oraclemap.get(key).map(|x| x.clone())
     }
 
+    #[allow(dead_code)]
     pub fn values(&self) -> Vec<Oracle> {
         self.oraclemap.iter().map(|x| x.clone()).collect()
     }
@@ -305,7 +309,7 @@ impl OracleMap {
         );
 
         new_oracle_subscriber.subscribe().await?;
-        let mut oracle_subscribers = self.oracle_subscribers.write().unwrap();
+        let mut oracle_subscribers = self.oracle_subscribers.write().await;
         oracle_subscribers.push(new_oracle_subscriber);
 
         Ok(())

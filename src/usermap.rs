@@ -126,7 +126,7 @@ impl UserMap {
     }
 
     pub fn get(&self, pubkey: &str) -> Option<User> {
-        self.usermap.get(pubkey).map(|user| user.value().clone())
+        self.usermap.get(pubkey).map(|user| *user.value())
     }
 
     pub async fn must_get(&self, pubkey: &str) -> SdkResult<User> {
@@ -143,6 +143,7 @@ impl UserMap {
         }
     }
 
+    #[allow(clippy::await_holding_lock)]
     async fn sync(&mut self) -> SdkResult<()> {
         let sync_lock = self.sync_lock.as_ref().expect("expected sync lock");
 

@@ -30,7 +30,7 @@ use thiserror::Error;
 use tokio::net::TcpStream;
 use tokio_tungstenite::{tungstenite, MaybeTlsStream, WebSocketStream};
 
-use crate::{websocket_program_account_subscriber::WebsocketProgramAccountSubscriber, Wallet};
+use crate::Wallet;
 
 pub type SdkResult<T> = Result<T, SdkError>;
 
@@ -291,7 +291,7 @@ impl SdkError {
 /// Helper type for Accounts included in drift instructions
 ///
 /// Provides sorting implementation matching drift program
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Ord)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub(crate) enum RemainingAccount {
     Oracle { pubkey: Pubkey },
@@ -326,14 +326,20 @@ impl RemainingAccount {
     }
 }
 
-impl PartialOrd for RemainingAccount {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+impl Ord for RemainingAccount {
+    fn cmp(&self, other: &Self) -> Ordering {
         let type_order = self.discriminant().cmp(&other.discriminant());
         if let Ordering::Equal = type_order {
-            self.pubkey().partial_cmp(other.pubkey())
+            self.pubkey().cmp(other.pubkey())
         } else {
-            Some(type_order)
+            type_order
         }
+    }
+}
+
+impl PartialOrd for RemainingAccount {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 

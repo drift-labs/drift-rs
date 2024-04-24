@@ -1,4 +1,4 @@
-use std::{ops::DerefMut, sync::Arc};
+use std::sync::Arc;
 
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::hash::Hash;
@@ -57,10 +57,10 @@ impl BlockhashSubscriber {
     }
 
     pub fn get_valid_blockhash(&self) -> Hash {
-        self.last_twenty_hashes
+        *self
+            .last_twenty_hashes
             .first()
             .unwrap_or(&self.latest_blockhash)
-            .clone()
     }
 }
 
