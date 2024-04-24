@@ -54,7 +54,10 @@ async fn place_and_cancel_orders() {
     )
     .await
     .expect("connects");
-    client.add_user(client.active_sub_account_id).await.expect("add user");
+    client
+        .add_user(client.active_sub_account_id)
+        .await
+        .expect("add user");
 
     let sol_perp = client.market_lookup("sol-perp").expect("exists");
     let sol_spot = client.market_lookup("sol").expect("exists");
@@ -96,7 +99,10 @@ async fn place_and_take() {
     )
     .await
     .expect("connects");
-    client.add_user(client.active_sub_account_id).await.expect("add user");
+    client
+        .add_user(client.active_sub_account_id)
+        .await
+        .expect("add user");
 
     let sol_perp = client.market_lookup("sol-perp").expect("exists");
 
