@@ -101,7 +101,7 @@ pub fn calculate_unrealized_pnl_inner(
 /// Calculate the liquidation price of a user's perp position (given by `market_index`)
 ///
 /// Returns the liquidaton price (PRICE_PRECISION / 1e6)
-pub fn calculate_liquidation_price<'a, T: AccountProvider>(
+pub fn calculate_liquidation_price<T: AccountProvider>(
     client: &DriftClient<T>,
     user: &User,
     market_index: u16,
@@ -270,7 +270,7 @@ pub struct MarginRequirementInfo {
 }
 
 /// Calculate the margin requirements of `user`
-pub fn calculate_margin_requirements<'a, T: AccountProvider>(
+pub fn calculate_margin_requirements<T: AccountProvider>(
     client: &DriftClient<T>,
     user: &User,
 ) -> SdkResult<MarginRequirementInfo> {
