@@ -1100,7 +1100,7 @@ dependencies = [
 [[package]]
 name = "drift"
 version = "2.74.0"
-source = "git+https://github.com/drift-labs/protocol-v2.git#2bbe28cf37ca0dc59c93617076ce50a928597eb4"
+source = "git+https://github.com/drift-labs/protocol-v2.git?rev=2bbe28c#2bbe28cf37ca0dc59c93617076ce50a928597eb4"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
@@ -1119,7 +1119,7 @@ dependencies = [
  "solana-program",
  "solana-security-txt",
  "static_assertions",
- "switchboard 0.1.0 (git+https://github.com/drift-labs/protocol-v2.git)",
+ "switchboard 0.1.0 (git+https://github.com/drift-labs/protocol-v2.git?rev=2bbe28c)",
  "thiserror",
  "uint",
 ]
@@ -4247,7 +4247,7 @@ dependencies = [
 [[package]]
 name = "switchboard"
 version = "0.1.0"
-source = "git+https://github.com/drift-labs/protocol-v2.git#2bbe28cf37ca0dc59c93617076ce50a928597eb4"
+source = "git+https://github.com/drift-labs/protocol-v2.git?rev=2bbe28c#2bbe28cf37ca0dc59c93617076ce50a928597eb4"
 dependencies = [
  "anchor-lang",
 ]

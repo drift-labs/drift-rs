@@ -42,7 +42,6 @@ pub fn calculate_liquidation_price_and_unrealized_pnl<T: AccountProvider>(
     user: &User,
     market_index: u16,
 ) -> SdkResult<LiquidationAndPnlInfo> {
-    // TODO: this does a decent amount of rpc queries, it could make sense to cache it e.g. for calculating multiple perp positions
     let mut accounts_builder = AccountMapBuilder::default();
     let mut account_maps = accounts_builder.build(client, user)?;
     let position = user
@@ -102,12 +101,11 @@ pub fn calculate_unrealized_pnl_inner(
 /// Calculate the liquidation price of a user's perp position (given by `market_index`)
 ///
 /// Returns the liquidaton price (PRICE_PRECISION / 1e6)
-pub async fn calculate_liquidation_price<'a, T: AccountProvider>(
+pub fn calculate_liquidation_price<T: AccountProvider>(
     client: &DriftClient<T>,
     user: &User,
     market_index: u16,
 ) -> SdkResult<i64> {
-    // TODO: this does a decent amount of rpc queries, it could make sense to cache it e.g. for calculating multiple perp positions
     let mut accounts_builder = AccountMapBuilder::default();
     let mut account_maps = accounts_builder.build(client, user)?;
     calculate_liquidation_price_inner(user, market_index, &mut account_maps)
@@ -263,6 +261,58 @@ fn calculate_spot_free_collateral_delta(position: &SpotPosition, market: &SpotMa
     delta.try_into().expect("ftis i64")
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct MarginRequirementInfo {
+    /// initial margin requirement (PRICE_PRECISION)
+    pub initial: u128,
+    /// maintenance margin requirement (PRICE_PRECISION)
+    pub maintenance: u128,
+}
+
+/// Calculate the margin requirements of `user`
+pub fn calculate_margin_requirements<T: AccountProvider>(
+    client: &DriftClient<T>,
+    user: &User,
+) -> SdkResult<MarginRequirementInfo> {
+    let mut accounts_builder = AccountMapBuilder::default();
+    calculate_margin_requirements_inner(user, &mut accounts_builder.build(client, user)?)
+}
+
+/// Calculate the margin requirements of `user` (internal)
+fn calculate_margin_requirements_inner(
+    user: &User,
+    account_maps: &mut AccountMaps,
+) -> SdkResult<MarginRequirementInfo> {
+    let AccountMaps {
+        ref perp_market_map,
+        ref spot_market_map,
+        ref mut oracle_map,
+    } = account_maps;
+
+    let maintenance_result = calculate_margin_requirement_and_total_collateral_and_liability_info(
+        user,
+        perp_market_map,
+        spot_market_map,
+        oracle_map,
+        MarginContext::standard(MarginRequirementType::Maintenance),
+    )
+    .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
+
+    let initial_result = calculate_margin_requirement_and_total_collateral_and_liability_info(
+        user,
+        perp_market_map,
+        spot_market_map,
+        oracle_map,
+        MarginContext::standard(MarginRequirementType::Initial),
+    )
+    .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
+
+    Ok(MarginRequirementInfo {
+        maintenance: maintenance_result.margin_requirement,
+        initial: initial_result.margin_requirement,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -375,7 +425,7 @@ mod tests {
         }
     }
 
-    #[ignore]
+    #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn calculate_liq_price() {
         let wallet = Wallet::read_only(
@@ -389,11 +439,94 @@ mod tests {
         .await
         .unwrap();
         let user = client
-            .get_user_account(&wallet.sub_account(2))
+            .get_user_account(&wallet.sub_account(0))
             .await
             .unwrap();
 
         dbg!(calculate_liquidation_price_and_unrealized_pnl(&client, &user, 24).unwrap());
+    }
+
+    #[cfg(feature = "rpc_tests")]
+    #[tokio::test]
+    async fn calculate_margin_requirements_works() {
+        let wallet = Wallet::read_only(
+            Pubkey::from_str("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2").unwrap(),
+        );
+        let client = DriftClient::new(
+            crate::Context::MainNet,
+            RpcAccountProvider::new("https://api.rpcpool.com/179768cca720c4957c1ceff0677f"),
+            wallet.clone(),
+        )
+        .await
+        .unwrap();
+        client.subscribe().await.unwrap();
+        let user = client
+            .get_user_account(&wallet.sub_account(0))
+            .await
+            .unwrap();
+
+        dbg!(calculate_margin_requirements(&client, &user).await.unwrap());
+    }
+
+    #[test]
+    fn calculate_margin_requirements_works() {
+        let sol_perp_index = 0;
+        let btc_perp_index = 1;
+        let mut user = User::default();
+        user.perp_positions[0] = PerpPosition {
+            market_index: sol_perp_index,
+            base_asset_amount: -2 * BASE_PRECISION_I64,
+            ..Default::default()
+        };
+        user.perp_positions[1] = PerpPosition {
+            market_index: btc_perp_index,
+            base_asset_amount: (1 * BASE_PRECISION_I64) / 20,
+            ..Default::default()
+        };
+        user.spot_positions[0] = SpotPosition {
+            market_index: MarketId::QUOTE_SPOT.index,
+            scaled_balance: 1_000 * SPOT_BALANCE_PRECISION_U64,
+            ..Default::default()
+        };
+
+        let mut sol_oracle_price = get_pyth_price(100, 6);
+        crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, &pyth_program::ID, sol_oracle);
+        crate::create_anchor_account_info!(
+            sol_perp_market(),
+            &constants::PROGRAM_ID,
+            PerpMarket,
+            sol_perp
+        );
+        let mut btc_oracle_price = get_pyth_price(50_000, 6);
+        crate::create_account_info!(btc_oracle_price, &BTC_ORACLE, &pyth_program::ID, btc_oracle);
+        crate::create_anchor_account_info!(
+            usdc_spot_market(),
+            &constants::PROGRAM_ID,
+            SpotMarket,
+            usdc_spot
+        );
+        crate::create_anchor_account_info!(
+            btc_perp_market(),
+            &constants::PROGRAM_ID,
+            PerpMarket,
+            btc_perp
+        );
+        let mut accounts_map = build_account_map(
+            &mut [sol_perp, btc_perp],
+            &mut [usdc_spot],
+            &mut [sol_oracle, btc_oracle],
+        );
+
+        let margin_info = calculate_margin_requirements_inner(&user, &mut accounts_map).unwrap();
+        dbg!(margin_info);
+
+        assert_eq!(
+            MarginRequirementInfo {
+                initial: 27_000_0000,
+                maintenance: 135_000_000
+            },
+            margin_info
+        );
     }
 
     #[test]
