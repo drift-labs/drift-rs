@@ -605,7 +605,7 @@ impl<T: AccountProvider> DriftClient<T> {
     ///     .build();
     /// ```
     /// Returns a `TransactionBuilder` for composing the tx
-    pub async fn init_tx(
+    pub fn init_tx(
         &self,
         account: &Pubkey,
         delegated: bool,
