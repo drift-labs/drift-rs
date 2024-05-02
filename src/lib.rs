@@ -605,21 +605,21 @@ impl<T: AccountProvider> DriftClient<T> {
     ///     .build();
     /// ```
     /// Returns a `TransactionBuilder` for composing the tx
-    pub fn init_tx(
-        &self,
-        account: &Pubkey,
-        delegated: bool,
-    ) -> SdkResult<TransactionBuilder> {
-        let account_data = self
-            .get_user(self.active_sub_account_id)
-            .expect("user")
-            .get_user_account();
-        Ok(TransactionBuilder::new(
-            self.program_data(),
-            *account,
-            Cow::Owned(account_data),
-            delegated,
-        ))
+    pub fn init_tx(&self, account: &Pubkey, delegated: bool) -> SdkResult<TransactionBuilder> {
+        let user = self.get_user(self.active_sub_account_id);
+
+        match user {
+            Some(user) => {
+                let account_data = user.get_user_account();
+                Ok(TransactionBuilder::new(
+                    self.program_data(),
+                    *account,
+                    Cow::Owned(account_data),
+                    delegated,
+                ))
+            }
+            None => Err(SdkError::Generic("user".to_string())),
+        }
     }
 
     pub async fn get_recent_priority_fees(
