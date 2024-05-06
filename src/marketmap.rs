@@ -238,16 +238,15 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::marketmap::MarketMap;
-    use drift::state::perp_market::PerpMarket;
-    use drift::state::spot_market::SpotMarket;
-    use solana_sdk::commitment_config::CommitmentConfig;
-    use solana_sdk::commitment_config::CommitmentLevel;
-
     #[tokio::test]
     #[cfg(rpc_tests)]
     async fn test_marketmap_perp() {
+        use super::*;
+        use crate::marketmap::MarketMap;
+        use drift::state::perp_market::PerpMarket;
+        use solana_sdk::commitment_config::CommitmentConfig;
+        use solana_sdk::commitment_config::CommitmentLevel;
+
         let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {
             commitment: CommitmentLevel::Processed,
@@ -274,12 +273,17 @@ mod tests {
     #[tokio::test]
     #[cfg(rpc_tests)]
     async fn test_marketmap_spot() {
+        use crate::marketmap::MarketMap;
+        use drift::state::spot_market::SpotMarket;
+        use solana_sdk::commitment_config::CommitmentConfig;
+        use solana_sdk::commitment_config::CommitmentLevel;
+
         let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {
             commitment: CommitmentLevel::Processed,
         };
 
-        let marketmap = MarketMap::<SpotMarket>::new(commitment, endpoint, true);
+        let mut marketmap = MarketMap::<SpotMarket>::new(commitment, endpoint, true);
         marketmap.subscribe().await.unwrap();
 
         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
@@ -294,6 +298,6 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
 
         assert_eq!(marketmap.size(), 0);
-        assert_eq!(marketmap.subscribed.get(), false);
+        assert_eq!(*marketmap.subscribed.get_mut(), false);
     }
 }

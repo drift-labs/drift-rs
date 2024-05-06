@@ -330,14 +330,14 @@ impl OracleMap {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::marketmap::MarketMap;
-    use drift::state::perp_market::PerpMarket;
-    use drift::state::spot_market::SpotMarket;
-
     #[tokio::test]
     #[cfg(rpc_tests)]
     async fn test_oracle_map() {
+        use super::*;
+        use crate::marketmap::MarketMap;
+        use drift::state::perp_market::PerpMarket;
+        use drift::state::spot_market::SpotMarket;
+
         let commitment = CommitmentConfig::processed();
         let endpoint = "rpc".to_string();
 
