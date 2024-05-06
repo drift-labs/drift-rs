@@ -8,7 +8,10 @@ use solana_sdk::signature::Keypair;
 
 /// keypair for integration tests
 fn test_keypair() -> Keypair {
-    let private_key = std::env::var("TEST_PRIVATE_KEY").expect("TEST_PRIVATE_KEY set");
+    let mut private_key = std::env::var("TEST_PRIVATE_KEY").expect("TEST_PRIVATE_KEY set");
+    if private_key.is_empty() {
+        private_key = "4ZT38mSeFhzzDRCMTMbwDp7VYWDqNfkvDR42Wv4Hu9cKzbZPJoVapQSrjLbs9aMPrpAMmN1cQinztnP2PzKVjzwX".to_string();
+    }
     Keypair::from_base58_string(private_key.as_str())
 }
 
@@ -47,13 +50,17 @@ async fn get_market_accounts_works() {
 #[tokio::test]
 async fn place_and_cancel_orders() {
     let wallet: Wallet = test_keypair().into();
-    let client = DriftClient::new(
+    let mut client = DriftClient::new(
         Context::DevNet,
         RpcAccountProvider::new("https://api.devnet.solana.com"),
         wallet.clone(),
     )
     .await
     .expect("connects");
+    client
+        .add_user(client.active_sub_account_id)
+        .await
+        .expect("add user");
 
     let sol_perp = client.market_lookup("sol-perp").expect("exists");
     let sol_spot = client.market_lookup("sol").expect("exists");
@@ -88,13 +95,17 @@ async fn place_and_cancel_orders() {
 #[tokio::test]
 async fn place_and_take() {
     let wallet: Wallet = test_keypair().into();
-    let client = DriftClient::new(
+    let mut client = DriftClient::new(
         Context::DevNet,
         RpcAccountProvider::new("https://api.devnet.solana.com"),
         wallet.clone(),
     )
     .await
     .expect("connects");
+    client
+        .add_user(client.active_sub_account_id)
+        .await
+        .expect("add user");
 
     let sol_perp = client.market_lookup("sol-perp").expect("exists");
 
