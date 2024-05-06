@@ -99,16 +99,16 @@ mod tests {
     use crate::{Context, RpcAccountProvider, Wallet};
     use solana_sdk::signature::Keypair;
 
-    const RPC: &str = "https://api.mainnet-beta.solana.com";
+    const RPC: &str = "https://api.devnet.solana.com";
     const PRIVATE_KEY: &'static str =
         "4ZT38mSeFhzzDRCMTMbwDp7VYWDqNfkvDR42Wv4Hu9cKzbZPJoVapQSrjLbs9aMPrpAMmN1cQinztnP2PzKVjzwX";
 
     #[tokio::test]
-    // #[cfg(feature = "rpc_tests")]
+    #[cfg(feature = "rpc_tests")]
     async fn test_get_spot_market_value() {
         let wallet: Wallet = Keypair::from_base58_string(PRIVATE_KEY).into();
         let pubkey = wallet.authority().clone();
-        let drift_client = DriftClient::new(Context::MainNet, RpcAccountProvider::new(RPC), wallet)
+        let drift_client = DriftClient::new(Context::DevNet, RpcAccountProvider::new(RPC), wallet)
             .await
             .expect("drift client");
         drift_client.subscribe().await.expect("subscribe");
@@ -134,7 +134,7 @@ mod tests {
     async fn test_leverage() {
         let wallet: Wallet = Keypair::from_base58_string(PRIVATE_KEY).into();
         let pubkey = wallet.authority().clone();
-        let drift_client = DriftClient::new(Context::MainNet, RpcAccountProvider::new(RPC), wallet)
+        let drift_client = DriftClient::new(Context::DevNet, RpcAccountProvider::new(RPC), wallet)
             .await
             .expect("drift client");
         drift_client.subscribe().await.expect("subscribe");
