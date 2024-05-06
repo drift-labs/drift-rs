@@ -83,11 +83,11 @@ mod tests {
     };
     use env_logger;
 
-    #[cfg(feature = "rpc_tests")]
+    #[cfg(rpt_test)]
     #[tokio::test]
     async fn test_auction_subscriber() {
         env_logger::init();
-        let cluster = Cluster::from_str(&"rpc").unwrap();
+        let cluster = Cluster::Mainnet;
         let url = cluster.ws_url().to_string();
 
         let config = AuctionSubscriberConfig {

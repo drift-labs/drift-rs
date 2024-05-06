@@ -227,7 +227,7 @@ mod tests {
         };
         let cluster = Cluster::from_str(&mainnet_endpoint()).unwrap();
         let url = cluster.ws_url().to_string();
-        let subscription_name = "Test".to_string();
+        let subscription_name = "Test";
 
         let mut ws_subscriber = WebsocketProgramAccountSubscriber::new(
             subscription_name,

@@ -465,11 +465,11 @@ mod tests {
             .await
             .unwrap();
 
-        dbg!(calculate_margin_requirements(&client, &user).await.unwrap());
+        dbg!(calculate_margin_requirements(&client, &user).unwrap());
     }
 
     #[test]
-    fn calculate_margin_requirements_works() {
+    fn calculate_margin_requirements_inner_works() {
         let sol_perp_index = 0;
         let btc_perp_index = 1;
         let mut user = User::default();

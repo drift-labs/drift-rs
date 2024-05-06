@@ -277,9 +277,9 @@ mod tests {
     async fn pull_l2_book() {
         let url = "https://dlob.drift.trade";
         let client = DLOBClient::new(url);
-        let perp_book = client.get_l2(MarketId::perp(0)).await.unwrap();
+        let perp_book = client.get_l2(MarketId::perp(0), None).await.unwrap();
         dbg!(perp_book);
-        let spot_book = client.get_l2(MarketId::spot(2)).await.unwrap();
+        let spot_book = client.get_l2(MarketId::spot(2), None).await.unwrap();
         dbg!(spot_book);
     }
 

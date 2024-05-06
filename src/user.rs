@@ -85,8 +85,6 @@ mod tests {
     use super::*;
     use crate::Context;
     use crate::RpcAccountProvider;
-    use anchor_lang::accounts::account_loader::AccountLoader;
-    use solana_sdk::account_info::AccountInfo;
     use solana_sdk::signature::Keypair;
 
     #[tokio::test]
@@ -102,7 +100,7 @@ mod tests {
         .unwrap();
 
         let pubkey = Pubkey::from_str("DCdMynEZ8QwNniQvwSxU4a6bqvnKRhK39QDCMEVJQJzU").unwrap();
-        let mut user = DriftUser::new(pubkey, client).await.unwrap();
+        let mut user = DriftUser::new(pubkey, &client, 0).await.unwrap();
         user.subscribe().await.unwrap();
 
         loop {
