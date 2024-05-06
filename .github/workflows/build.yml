@@ -45,5 +45,5 @@ jobs:
       - name: Test
         env:
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
-        run: cargo test --all
+        run: cargo test --all-features
 
