@@ -87,27 +87,36 @@ mod tests {
     use crate::RpcAccountProvider;
     use solana_sdk::signature::Keypair;
 
+    const DEVNET_ENDPOINT: &str = "https://api.devnet.solana.com";
+
     #[tokio::test]
-    #[cfg(feature = "rpc_tests")]
+    // #[cfg(feature = "rpc_tests")]
     async fn test_user_subscribe() {
-        let url = "rpc";
+        let url = DEVNET_ENDPOINT;
         let client = DriftClient::new(
-            Context::MainNet,
+            Context::DevNet,
             RpcAccountProvider::new(&url),
             Keypair::new().into(),
         )
         .await
         .unwrap();
 
-        let pubkey = Pubkey::from_str("DCdMynEZ8QwNniQvwSxU4a6bqvnKRhK39QDCMEVJQJzU").unwrap();
+        let pubkey = Pubkey::from_str("9JtczxrJjPM4J1xooxr2rFXmRivarb4BwjNiBgXDwe2p").unwrap();
         let mut user = DriftUser::new(pubkey, &client, 0).await.unwrap();
         user.subscribe().await.unwrap();
 
+        let mut count = 0;
         loop {
+            if count > 5 {
+                break;
+            }
+
             let data_and_slot = user.get_user_account_and_slot();
             dbg!(data_and_slot.slot);
 
             tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+
+            count += 1;
         }
     }
 }

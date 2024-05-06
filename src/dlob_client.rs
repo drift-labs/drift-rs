@@ -341,6 +341,7 @@ mod tests {
         let stream = dlob_client.subscribe_ws(market_symbol).await.unwrap();
         let mut short_stream = stream.take(5);
         while let Some(book) = short_stream.next().await {
+            let book = book.unwrap();
             dbg!(book);
         }
     }

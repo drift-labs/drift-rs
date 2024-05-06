@@ -73,19 +73,15 @@ impl AuctionSubscriber {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
-    use anchor_client::Cluster;
-
-    use super::*;
-    use crate::{
-        utils::envs::mainnet_endpoint, websocket_program_account_subscriber::ProgramAccountUpdate,
-    };
-    use env_logger;
-
     #[cfg(rpt_test)]
     #[tokio::test]
     async fn test_auction_subscriber() {
+        use anchor_client::Cluster;
+
+        use super::*;
+        use crate::websocket_program_account_subscriber::ProgramAccountUpdate;
+        use env_logger;
+
         env_logger::init();
         let cluster = Cluster::Mainnet;
         let url = cluster.ws_url().to_string();

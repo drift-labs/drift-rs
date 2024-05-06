@@ -339,6 +339,7 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
 
     use super::*;
+    use crate::utils::envs::mainnet_endpoint;
     use crate::{constants, MarketId, RpcAccountProvider, Wallet};
 
     const SOL_ORACLE: Pubkey = solana_sdk::pubkey!("J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix");
@@ -429,19 +430,16 @@ mod tests {
     #[tokio::test]
     async fn calculate_liq_price() {
         let wallet = Wallet::read_only(
-            Pubkey::from_str("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2").unwrap(),
+            Pubkey::from_str("9JtczxrJjPM4J1xooxr2rFXmRivarb4BwjNiBgXDwe2p").unwrap(),
         );
         let client = DriftClient::new(
             crate::Context::MainNet,
-            RpcAccountProvider::new("https://api.mainnet-beta.solana.com"),
+            RpcAccountProvider::new(&mainnet_endpoint()),
             wallet.clone(),
         )
         .await
         .unwrap();
-        let user = client
-            .get_user_account(&wallet.sub_account(0))
-            .await
-            .unwrap();
+        let user = client.get_user_account(&wallet.authority()).await.unwrap();
 
         dbg!(calculate_liquidation_price_and_unrealized_pnl(&client, &user, 24).unwrap());
     }

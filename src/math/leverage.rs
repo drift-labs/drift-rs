@@ -130,7 +130,7 @@ mod tests {
     }
 
     #[tokio::test]
-    // #[cfg(feature = "rpc_tests")]
+    #[cfg(feature = "rpc_tests")]
     async fn test_leverage() {
         let wallet: Wallet = Keypair::from_base58_string(PRIVATE_KEY).into();
         let pubkey = wallet.authority().clone();
