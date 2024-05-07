@@ -264,17 +264,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use futures_util::StreamExt;
-    use solana_sdk::signature::Keypair;
-
-    use super::*;
-    use crate::{
-        types::Context, utils::envs::mainnet_endpoint, DriftClient, MarketExt, RpcAccountProvider,
-    };
-
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn pull_l2_book() {
+        use super::*;
+
         let url = "https://dlob.drift.trade";
         let client = DLOBClient::new(url);
         let perp_book = client.get_l2(MarketId::perp(0), None).await.unwrap();
@@ -286,6 +280,10 @@ mod tests {
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn stream_l2_book() {
+        use futures_util::StreamExt;
+
+        use super::*;
+
         let url = "https://dlob.drift.trade";
         let client = DLOBClient::new(url);
         let stream = client.subscribe_l2_book(MarketId::perp(0), None);
@@ -298,6 +296,8 @@ mod tests {
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn pull_l3_book() {
+        use super::*;
+
         let url = "https://dlob.drift.trade";
         let client = DLOBClient::new(url);
         let perp_book = client.get_l3(MarketId::perp(0)).await.unwrap();
@@ -309,6 +309,10 @@ mod tests {
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn stream_l3_book() {
+        use futures_util::StreamExt;
+
+        use super::*;
+
         let url = "https://dlob.drift.trade";
         let client = DLOBClient::new(url);
         let stream = client.subscribe_l3_book(MarketId::perp(0), None);
@@ -321,14 +325,21 @@ mod tests {
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn subscribe_ws() {
+        use futures_util::StreamExt;
+        use solana_sdk::signature::Keypair;
+
+        use super::*;
+        use crate::{types::Context, DriftClient, MarketExt, RpcAccountProvider};
+
+        let endpoint = "https://api.devnet.solana.com";
         let client = DriftClient::new(
-            Context::MainNet,
-            RpcAccountProvider::new(&mainnet_endpoint()),
+            Context::DevNet,
+            RpcAccountProvider::new(&endpoint),
             Keypair::new().into(),
         )
         .await
         .unwrap();
-        let url = "https://dlob.drift.trade";
+        let url = "https://master.dlob.drift.trade/";
         let dlob_client = DLOBClient::new(url);
 
         let market = MarketId::perp(0); // sol-perp

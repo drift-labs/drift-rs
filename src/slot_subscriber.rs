@@ -125,17 +125,17 @@ impl SlotSubscriber {
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
-    use anchor_client::Cluster;
-
-    use super::*;
-    use crate::utils::envs::mainnet_endpoint;
-
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn test_subscribe() {
-        let cluster = Cluster::from_str(&mainnet_endpoint()).unwrap();
+        use std::str::FromStr;
+
+        use anchor_client::Cluster;
+
+        use super::*;
+
+        let endpoint = "https://api.devnet.solana.com";
+        let cluster = Cluster::from_str(endpoint).unwrap();
         let url = cluster.ws_url().to_string();
 
         let mut slot_subscriber = SlotSubscriber::new(url);

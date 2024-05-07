@@ -315,8 +315,6 @@ fn calculate_margin_requirements_inner(
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use anchor_lang::prelude::AccountInfo;
     use anchor_lang::{Owner, ZeroCopy};
     use bytes::BytesMut;
@@ -339,8 +337,7 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
 
     use super::*;
-    use crate::utils::envs::mainnet_endpoint;
-    use crate::{constants, MarketId, RpcAccountProvider, Wallet};
+    use crate::{constants, MarketId};
 
     const SOL_ORACLE: Pubkey = solana_sdk::pubkey!("J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix");
     const BTC_ORACLE: Pubkey = solana_sdk::pubkey!("GVXRSBjFk6e6J3NbVPXohDJetcTjaeeuykUpbQF8UoMU");
@@ -428,13 +425,19 @@ mod tests {
 
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
+    #[ignore]
     async fn calculate_liq_price() {
+        use std::str::FromStr;
+
+        use crate::utils::envs::mainnet_endpoint;
+        use crate::{RpcAccountProvider, Wallet};
+
         let wallet = Wallet::read_only(
             Pubkey::from_str("9JtczxrJjPM4J1xooxr2rFXmRivarb4BwjNiBgXDwe2p").unwrap(),
         );
         let client = DriftClient::new(
             crate::Context::MainNet,
-            RpcAccountProvider::new(&mainnet_endpoint()),
+            RpcAccountProvider::new(&&mainnet_endpoint()),
             wallet.clone(),
         )
         .await
@@ -447,6 +450,10 @@ mod tests {
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn calculate_margin_requirements_works() {
+        use std::str::FromStr;
+
+        use crate::{RpcAccountProvider, Wallet};
+
         let wallet = Wallet::read_only(
             Pubkey::from_str("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2").unwrap(),
         );

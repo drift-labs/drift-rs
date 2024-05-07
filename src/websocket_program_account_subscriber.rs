@@ -203,21 +203,17 @@ impl WebsocketProgramAccountSubscriber {
 
 #[cfg(test)]
 mod tests {
-
-    use std::str::FromStr;
-
-    use anchor_client::Cluster;
-    use drift::state::user::User;
-
-    use super::*;
-    use crate::{
-        memcmp::{get_non_idle_user_filter, get_user_filter},
-        utils::envs::mainnet_endpoint,
-    };
-
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn test_subscribe() {
+        use std::str::FromStr;
+
+        use anchor_client::Cluster;
+        use drift::state::user::User;
+
+        use super::*;
+        use crate::memcmp::{get_non_idle_user_filter, get_user_filter};
+
         let filters = vec![get_user_filter(), get_non_idle_user_filter()];
         let commitment = CommitmentConfig::confirmed();
         let options = WebsocketProgramAccountOptions {
@@ -225,7 +221,8 @@ mod tests {
             commitment,
             encoding: UiAccountEncoding::Base64,
         };
-        let cluster = Cluster::from_str(&mainnet_endpoint()).unwrap();
+        let endpoint = "https://api.devnet.solana.com";
+        let cluster = Cluster::from_str(endpoint).unwrap();
         let url = cluster.ws_url().to_string();
         let subscription_name = "Test";
 

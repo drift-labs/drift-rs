@@ -95,17 +95,17 @@ fn calculate_leverage(total_liability_value: u128, net_asset_value: i128) -> u12
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{Context, RpcAccountProvider, Wallet};
-    use solana_sdk::signature::Keypair;
-
-    const RPC: &str = "https://api.devnet.solana.com";
-    const PRIVATE_KEY: &'static str =
-        "4ZT38mSeFhzzDRCMTMbwDp7VYWDqNfkvDR42Wv4Hu9cKzbZPJoVapQSrjLbs9aMPrpAMmN1cQinztnP2PzKVjzwX";
-
     #[tokio::test]
     #[cfg(feature = "rpc_tests")]
     async fn test_get_spot_market_value() {
+        use super::*;
+        use crate::{Context, RpcAccountProvider, Wallet};
+        use solana_sdk::signature::Keypair;
+
+        const RPC: &str = "https://api.devnet.solana.com";
+        const PRIVATE_KEY: &'static str =
+        "4ZT38mSeFhzzDRCMTMbwDp7VYWDqNfkvDR42Wv4Hu9cKzbZPJoVapQSrjLbs9aMPrpAMmN1cQinztnP2PzKVjzwX";
+
         let wallet: Wallet = Keypair::from_base58_string(PRIVATE_KEY).into();
         let pubkey = wallet.authority().clone();
         let drift_client = DriftClient::new(Context::DevNet, RpcAccountProvider::new(RPC), wallet)
@@ -132,6 +132,14 @@ mod tests {
     #[tokio::test]
     #[cfg(feature = "rpc_tests")]
     async fn test_leverage() {
+        use super::*;
+        use crate::{Context, RpcAccountProvider, Wallet};
+        use solana_sdk::signature::Keypair;
+
+        const RPC: &str = "https://api.devnet.solana.com";
+        const PRIVATE_KEY: &'static str =
+        "4ZT38mSeFhzzDRCMTMbwDp7VYWDqNfkvDR42Wv4Hu9cKzbZPJoVapQSrjLbs9aMPrpAMmN1cQinztnP2PzKVjzwX";
+
         let wallet: Wallet = Keypair::from_base58_string(PRIVATE_KEY).into();
         let pubkey = wallet.authority().clone();
         let drift_client = DriftClient::new(Context::DevNet, RpcAccountProvider::new(RPC), wallet)
