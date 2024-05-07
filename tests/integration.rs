@@ -60,7 +60,6 @@ async fn place_and_cancel_orders() {
 
     let tx = client
         .init_tx(&wallet.default_sub_account(), false)
-        .await
         .unwrap()
         .cancel_all_orders()
         .place_orders(vec![
@@ -104,7 +103,6 @@ async fn place_and_take() {
         .build();
     let tx = client
         .init_tx(&wallet.default_sub_account(), false)
-        .await
         .unwrap()
         .place_and_take(order, None, None, None)
         .build();
