@@ -321,23 +321,38 @@ pub struct CollateralInfo {
     pub free: i128,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum MarginCategory {
+    Initial,
+    Maintenance,
+}
+
+impl Into<MarginRequirementType> for MarginCategory {
+    fn into(self) -> MarginRequirementType {
+        match self {
+            MarginCategory::Initial => MarginRequirementType::Initial,
+            MarginCategory::Maintenance => MarginRequirementType::Maintenance,
+        }
+    }
+}
+
 pub fn calculate_collateral<T: AccountProvider>(
     client: &DriftClient<T>,
     user: &User,
-    margin_requirement_type: MarginRequirementType,
+    margin_category: MarginCategory,
 ) -> SdkResult<CollateralInfo> {
     let mut accounts_builder = AccountMapBuilder::default();
     calculate_collateral_inner(
         user,
         &mut accounts_builder.build(client, user)?,
-        margin_requirement_type,
+        margin_category,
     )
 }
 
 fn calculate_collateral_inner(
     user: &User,
     account_maps: &mut AccountMaps,
-    margin_requirement_type: MarginRequirementType,
+    margin_category: MarginCategory,
 ) -> SdkResult<CollateralInfo> {
     let AccountMaps {
         ref perp_market_map,
@@ -350,7 +365,7 @@ fn calculate_collateral_inner(
         perp_market_map,
         spot_market_map,
         oracle_map,
-        MarginContext::standard(margin_requirement_type),
+        MarginContext::standard(margin_category.into()),
     )
     .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
 
