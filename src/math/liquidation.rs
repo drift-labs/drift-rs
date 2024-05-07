@@ -313,6 +313,53 @@ fn calculate_margin_requirements_inner(
     })
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct CollateralInfo {
+    /// total collateral (QUOTE_PRECISION)
+    pub total: i128,
+    /// free collateral (QUOTE_PRECISION)
+    pub free: i128,
+}
+
+pub fn calculate_collateral<T: AccountProvider>(
+    client: &DriftClient<T>,
+    user: &User,
+    margin_requirement_type: MarginRequirementType,
+) -> SdkResult<CollateralInfo> {
+    let mut accounts_builder = AccountMapBuilder::default();
+    calculate_collateral_inner(
+        user,
+        &mut accounts_builder.build(client, user)?,
+        margin_requirement_type,
+    )
+}
+
+fn calculate_collateral_inner(
+    user: &User,
+    account_maps: &mut AccountMaps,
+    margin_requirement_type: MarginRequirementType,
+) -> SdkResult<CollateralInfo> {
+    let AccountMaps {
+        ref perp_market_map,
+        ref spot_market_map,
+        ref mut oracle_map,
+    } = account_maps;
+
+    let result = calculate_margin_requirement_and_total_collateral_and_liability_info(
+        user,
+        perp_market_map,
+        spot_market_map,
+        oracle_map,
+        MarginContext::standard(margin_requirement_type),
+    )
+    .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
+
+    Ok(CollateralInfo {
+        total: result.total_collateral,
+        free: result.get_free_collateral().unwrap() as i128,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
