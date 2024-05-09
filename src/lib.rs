@@ -20,7 +20,7 @@ use drift::{
 };
 use event_emitter::EventEmitter;
 use fnv::FnvHashMap;
-use futures_util::{future::BoxFuture, FutureExt, StreamExt};
+use futures_util::{future::BoxFuture, FutureExt, StreamExt, TryFutureExt};
 use log::{debug, warn};
 use marketmap::MarketMap;
 use oraclemap::{Oracle, OracleMap};
@@ -719,7 +719,17 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             true,
         );
 
-        tokio::try_join!(perp_market_map.sync(), spot_market_map.sync())?;
+        let lookup_table_address = market_lookup_table(context);
+
+        let (_, _, lut, state) = tokio::try_join!(
+            perp_market_map.sync(),
+            spot_market_map.sync(),
+            rpc_client
+                .get_account(&lookup_table_address)
+                .map_err(Into::into),
+            rpc_client.get_account(state_account()).map_err(Into::into),
+        )?;
+        let lookup_table = utils::deserialize_alt(lookup_table_address, &lut)?;
 
         let perp_oracles = perp_market_map.oracles();
         let spot_oracles = spot_market_map.oracles();
@@ -732,20 +742,19 @@ impl<T: AccountProvider> DriftClientBackend<T> {
             spot_oracles,
         );
 
-        let state = account_provider
-            .get_account(*state_account())
-            .await
-            .expect("state account");
-
         let blockhash_subscriber = Arc::new(RwLock::new(BlockhashSubscriber::new(
             2,
             account_provider.endpoint(),
         )));
 
-        let mut this = Self {
+        Ok(Self {
             rpc_client,
             account_provider,
-            program_data: ProgramData::uninitialized(),
+            program_data: ProgramData::new(
+                spot_market_map.values(),
+                perp_market_map.values(),
+                lookup_table,
+            ),
             perp_market_map,
             spot_market_map,
             oracle_map: Arc::new(oracle_map),
@@ -753,20 +762,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
                 State::try_deserialize(&mut state.data.as_ref()).expect("valid state"),
             )),
             blockhash_subscriber,
-        };
-
-        let lookup_table_address = market_lookup_table(context);
-
-        let (markets, lookup_table_account) = tokio::join!(
-            get_market_accounts(&this.rpc_client),
-            this.get_account_raw(&lookup_table_address),
-        );
-
-        let (spot, perp) = markets?;
-        let lookup_table = utils::deserialize_alt(lookup_table_address, &lookup_table_account?)?;
-        this.program_data = ProgramData::new(spot, perp, lookup_table);
-
-        Ok(this)
+        })
     }
 
     async fn subscribe(&self) -> SdkResult<()> {
@@ -960,14 +956,6 @@ impl<T: AccountProvider> DriftClientBackend<T> {
     async fn get_account<U: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<U> {
         let account_data = self.account_provider.get_account(*account).await?;
         U::try_deserialize(&mut account_data.data.as_ref()).map_err(|_err| SdkError::InvalidAccount)
-    }
-
-    /// Fetch an `account`
-    async fn get_account_raw(&self, account: &Pubkey) -> SdkResult<Account> {
-        self.account_provider
-            .get_account(*account)
-            .await
-            .map_err(Into::into)
     }
 
     /// Sign and send a tx to the network
