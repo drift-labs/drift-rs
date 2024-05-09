@@ -16,7 +16,8 @@ use fnv::FnvHashSet;
 use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::{
-    constants, utils::zero_account_to_bytes, AccountProvider, DriftClient, SdkError, SdkResult,
+    constants, utils::zero_account_to_bytes, AccountProvider, DriftClient, MarketId, SdkError,
+    SdkResult,
 };
 
 /// Builds an AccountMap of relevant spot, perp, and oracle accounts from rpc
@@ -34,7 +35,7 @@ impl AccountMapBuilder {
         user: &User,
     ) -> SdkResult<AccountMaps> {
         let mut oracles = FnvHashSet::<Pubkey>::default();
-        let mut spot_markets = Vec::<SpotMarket>::with_capacity(user.spot_positions.len());
+        let mut spot_markets = Vec::<SpotMarket>::with_capacity(user.spot_positions.len() + 1); // +1 incase missing USDC position
         let mut perp_markets = Vec::<PerpMarket>::with_capacity(user.perp_positions.len());
 
         for p in user.spot_positions.iter().filter(|p| !p.is_available()) {
@@ -46,8 +47,15 @@ impl AccountMapBuilder {
             spot_markets.push(market);
         }
 
-        let quote_market = client.get_spot_market_account(0).expect("spot market");
-        oracles.insert(quote_market.oracle);
+        let quote_market = client
+            .get_spot_market_account(MarketId::QUOTE_SPOT.index)
+            .expect("spot market");
+        if oracles.insert(quote_market.oracle) {
+            // ensure always include the spot USDC market
+            self.accounts
+                .push((quote_market.pubkey, Account::default()));
+            spot_markets.push(quote_market);
+        }
 
         for p in user.perp_positions.iter().filter(|p| !p.is_available()) {
             let market = client
