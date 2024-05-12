@@ -262,7 +262,7 @@ pub enum SdkError {
     MaxReconnectionAttemptsReached,
     #[error("jit taker order not found")]
     JitOrderNotFound,
-    #[error("Drift Program occured. Error Code: {0}")]
+    #[error("Drift Program Error occured. Error Code: {0}")]
     DriftProgramError(drift::error::ErrorCode),
 }
 
@@ -550,5 +550,14 @@ mod tests {
                 },
             ]
         )
+    }
+
+    #[test]
+    fn test_drift_program_error_display() {
+        let error = SdkError::DriftProgramError(drift::error::ErrorCode::MathError);
+        assert_eq!(
+            "Drift Program Error occured. Error Code: Math Error",
+            format!("{}", error)
+        );
     }
 }
