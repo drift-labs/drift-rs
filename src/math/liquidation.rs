@@ -516,7 +516,7 @@ mod tests {
         );
         let client = DriftClient::new(
             crate::Context::MainNet,
-            RpcAccountProvider::new("https://api.rpcpool.com/179768cca720c4957c1ceff0677f"),
+            RpcAccountProvider::new("https://api.mainnet-beta.solana.com"),
             wallet.clone(),
         )
         .await
