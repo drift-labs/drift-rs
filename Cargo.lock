@@ -1140,6 +1140,7 @@ dependencies = [
  "anchor-client",
  "anchor-lang",
  "base64 0.13.1",
+ "bincode",
  "borsh 1.4.0",
  "bytemuck",
  "bytes",
@@ -1159,7 +1160,9 @@ dependencies = [
  "reqwest 0.12.2",
  "serde",
  "serde_json",
+ "serde_qs",
  "solana-account-decoder",
+ "solana-address-lookup-table-program",
  "solana-client",
  "solana-sdk",
  "solana-transaction-status",
@@ -3300,6 +3303,17 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
+]
+
+[[package]]
+name = "serde_qs"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd34f36fe4c5ba9654417139a9b3a20d2e1de6012ee678ad14d240c22c78d8d6"
+dependencies = [
+ "percent-encoding",
+ "serde",
+ "thiserror",
 ]
 
 [[package]]

@@ -95,6 +95,7 @@ pub mod usermap;
 pub mod user;
 
 pub mod dlob;
+pub mod jupiter;
 
 use types::*;
 
