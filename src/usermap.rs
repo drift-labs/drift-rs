@@ -8,10 +8,10 @@ use crate::utils::{decode, get_ws_url};
 use crate::websocket_program_account_subscriber::{
     ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
 };
-use crate::SdkResult;
+use crate::{types::SdkError, SdkResult};
 use anchor_lang::AccountDeserialize;
 use dashmap::DashMap;
-use drift::state::user::User;
+use drift::state::{events::OrderRecord, user::User};
 use serde_json::json;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -107,6 +107,15 @@ impl UserMap {
         Ok(())
     }
 
+    pub async fn add_pubkey(&mut self, user_account_pubkey: &Pubkey) -> SdkResult<()> {
+        let user_data = self.rpc.get_account_data(user_account_pubkey).await?;
+        let user = User::try_deserialize(&mut user_data.as_slice())
+            .map_err(|_e| SdkError::Deserializing)?;
+        self.usermap.insert(user_account_pubkey.to_string(), user);
+
+        Ok(())
+    }
+
     pub async fn unsubscribe(&mut self) -> SdkResult<()> {
         if self.subscribed {
             self.subscription.unsubscribe().await?;
@@ -190,6 +199,14 @@ impl UserMap {
 
     pub fn get_latest_slot(&self) -> u64 {
         self.latest_slot.load(Ordering::Relaxed)
+    }
+
+    pub async fn update_with_order_record(&mut self, record: OrderRecord) -> SdkResult<()> {
+        if !self.contains(&record.user.to_string()) {
+            self.add_pubkey(&record.user).await?;
+        }
+
+        Ok(())
     }
 }
 
