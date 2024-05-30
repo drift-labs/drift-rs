@@ -8,7 +8,7 @@ use crate::utils::{decode, get_ws_url};
 use crate::websocket_program_account_subscriber::{
     ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
 };
-use crate::SdkResult;
+use crate::{types::SdkError, SdkResult};
 use anchor_lang::AccountDeserialize;
 use dashmap::DashMap;
 use drift::state::{events::OrderRecord, user::User};
@@ -109,7 +109,8 @@ impl UserMap {
 
     pub async fn add_pubkey(&mut self, user_account_pubkey: &Pubkey) -> SdkResult<()> {
         let user_data = self.rpc.get_account_data(user_account_pubkey).await?;
-        let user = User::try_deserialize(&mut user_data.as_slice()).unwrap();
+        let user = User::try_deserialize(&mut user_data.as_slice())
+            .map_err(|_e| SdkError::Deserializing)?;
         self.usermap.insert(user_account_pubkey.to_string(), user);
 
         Ok(())
