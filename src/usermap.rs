@@ -11,8 +11,7 @@ use crate::websocket_program_account_subscriber::{
 use crate::SdkResult;
 use anchor_lang::AccountDeserialize;
 use dashmap::DashMap;
-use drift::state::events::OrderRecord;
-use drift::state::user::User;
+use drift::state::{events::OrderRecord, user::User};
 use serde_json::json;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::nonblocking::rpc_client::RpcClient;
