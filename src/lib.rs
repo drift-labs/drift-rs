@@ -1206,10 +1206,12 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Place new orders for account
     pub fn place_orders(mut self, orders: Vec<OrderParams>) -> Self {
-        let readable_accounts: Vec<MarketId> = orders
-            .iter()
-            .map(|o| (o.market_index, o.market_type).into())
-            .collect();
+        let mut readable_markets = Self::get_user_markets(&[self.account_data()]);
+        readable_markets.extend(
+            orders
+                .iter()
+                .map(|o| MarketId::from((o.market_index, o.market_type))),
+        );
 
         let accounts = build_accounts(
             self.program_data,
@@ -1219,7 +1221,7 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
             },
             &[self.account_data.as_ref()],
-            readable_accounts.as_ref(),
+            readable_markets.as_ref(),
             &[],
         );
 
@@ -1301,6 +1303,7 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Cancel orders given ids
     pub fn cancel_orders_by_id(mut self, order_ids: Vec<u32>) -> Self {
+        let readable_markets = Self::get_user_markets(&[self.account_data()]);
         let accounts = build_accounts(
             self.program_data,
             drift::accounts::CancelOrder {
@@ -1309,7 +1312,7 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
             },
             &[self.account_data.as_ref()],
-            &[],
+            &readable_markets.as_ref(),
             &[],
         );
 
@@ -1325,6 +1328,7 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Cancel orders by given _user_ ids
     pub fn cancel_orders_by_user_id(mut self, user_order_ids: Vec<u8>) -> Self {
+        let readable_markets = Self::get_user_markets(&[self.account_data()]);
         let accounts = build_accounts(
             self.program_data,
             drift::accounts::CancelOrder {
@@ -1333,7 +1337,7 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
             },
             &[self.account_data.as_ref()],
-            &[],
+            readable_markets.as_ref(),
             &[],
         );
 
@@ -1353,6 +1357,7 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Modify existing order(s) by order id
     pub fn modify_orders(mut self, orders: &[(u32, ModifyOrderParams)]) -> Self {
+        let readable_markets = Self::get_user_markets(&[self.account_data()]);
         for (order_id, params) in orders {
             let accounts = build_accounts(
                 self.program_data,
@@ -1362,7 +1367,7 @@ impl<'a> TransactionBuilder<'a> {
                     user: self.sub_account,
                 },
                 &[self.account_data.as_ref()],
-                &[],
+                readable_markets.as_ref(),
                 &[],
             );
 
@@ -1382,6 +1387,7 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Modify existing order(s) by user order id
     pub fn modify_orders_by_user_id(mut self, orders: &[(u8, ModifyOrderParams)]) -> Self {
+        let readable_markets = Self::get_user_markets(&[self.account_data()]);
         for (user_order_id, params) in orders {
             let accounts = build_accounts(
                 self.program_data,
@@ -1391,7 +1397,7 @@ impl<'a> TransactionBuilder<'a> {
                     user: self.sub_account,
                 },
                 &[self.account_data.as_ref()],
-                &[],
+                readable_markets.as_ref(),
                 &[],
             );
 
@@ -1425,6 +1431,8 @@ impl<'a> TransactionBuilder<'a> {
         fulfillment_type: Option<SpotFulfillmentType>,
     ) -> Self {
         let (taker, taker_account) = taker_info;
+        let readable_markets = Self::get_user_markets(&[self.account_data(), taker_account]);
+
         let is_perp = order.market_type == MarketType::Perp;
         let perp_writable = [MarketId::perp(order.market_index)];
         let spot_writable = [MarketId::spot(order.market_index), MarketId::QUOTE_SPOT];
@@ -1439,7 +1447,7 @@ impl<'a> TransactionBuilder<'a> {
                 taker_stats: Wallet::derive_stats_account(taker, &constants::PROGRAM_ID),
             },
             &[self.account_data.as_ref(), &taker_account],
-            &[],
+            readable_markets.as_ref(),
             if is_perp {
                 &perp_writable
             } else {
@@ -1500,6 +1508,7 @@ impl<'a> TransactionBuilder<'a> {
         if let Some((ref _maker_pubkey, ref maker)) = maker_info {
             user_accounts.push(maker);
         }
+        let readable_markets = Self::get_user_markets(&user_accounts.as_ref());
 
         let is_perp = order.market_type == MarketType::Perp;
         let perp_writable = [MarketId::perp(order.market_index)];
@@ -1514,7 +1523,7 @@ impl<'a> TransactionBuilder<'a> {
                 user_stats: Wallet::derive_stats_account(&self.authority, &constants::PROGRAM_ID),
             },
             user_accounts.as_slice(),
-            &[],
+            readable_markets.as_ref(),
             if is_perp {
                 &perp_writable
             } else {
@@ -1579,6 +1588,27 @@ impl<'a> TransactionBuilder<'a> {
 
     pub fn account_data(&self) -> &Cow<'_, User> {
         &self.account_data
+    }
+
+    /// Return a list of the markets where Users' have active positions
+    fn get_user_markets(users: &[&User]) -> Vec<MarketId> {
+        let mut position_markets = Vec::<MarketId>::default();
+        for user in users {
+            position_markets.extend(
+                user.spot_positions
+                    .iter()
+                    .filter(|p| !p.is_available())
+                    .map(|p| MarketId::spot(p.market_index)),
+            );
+            position_markets.extend(
+                user.perp_positions
+                    .iter()
+                    .filter(|p| !p.is_available())
+                    .map(|p| MarketId::perp(p.market_index)),
+            );
+        }
+
+        position_markets
     }
 }
 
