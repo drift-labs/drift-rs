@@ -838,6 +838,24 @@ impl DriftClientBackend {
     }
 }
 
+/// Markets forced to include by `TransactionBuilder`
+#[derive(Default)]
+struct ForceMarkets {
+    readable: Vec<MarketId>,
+    writeable: Vec<MarketId>,
+}
+
+impl ForceMarkets {
+    /// Add a market to the forced markets in r/w mode
+    pub fn add_markets(&mut self, markets: &[MarketId], write: bool) {
+        if write {
+            self.writeable = markets.to_vec();
+        } else {
+            self.readable = markets.to_vec();
+        }
+    }
+}
+
 /// Composable Tx builder for Drift program
 ///
 /// Prefer `DriftClient::init_tx`
@@ -876,6 +894,8 @@ pub struct TransactionBuilder<'a> {
     legacy: bool,
     /// add additional lookup tables (v0 only)
     lookup_tables: Vec<AddressLookupTableAccount>,
+    /// some markets forced to include in the tx accounts list
+    force_markets: ForceMarkets,
 }
 
 impl<'a> TransactionBuilder<'a> {
@@ -906,7 +926,13 @@ impl<'a> TransactionBuilder<'a> {
             ixs: Default::default(),
             lookup_tables: vec![program_data.lookup_table.clone()],
             legacy: false,
+            force_markets: Default::default(),
         }
+    }
+    /// force given `markets` to be included in the final tx accounts list (ensure to call before building ixs)
+    pub fn force_include_markets(&mut self, readable: &[MarketId], writeable: &[MarketId]) {
+        self.force_markets.add_markets(readable, false);
+        self.force_markets.add_markets(writeable, true);
     }
     /// Use legacy tx mode
     pub fn legacy(mut self) -> Self {
@@ -1015,10 +1041,11 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Place new orders for account
     pub fn place_orders(mut self, orders: Vec<OrderParams>) -> Self {
-        let readable_accounts: Vec<MarketId> = orders
+        let mut readable_accounts: Vec<MarketId> = orders
             .iter()
             .map(|o| (o.market_index, o.market_type).into())
             .collect();
+        readable_accounts.extend(&self.force_markets.readable);
 
         let accounts = build_accounts(
             self.program_data,
@@ -1162,22 +1189,22 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Modify existing order(s) by order id
     pub fn modify_orders(mut self, orders: &[(u32, ModifyOrderParams)]) -> Self {
-        for (order_id, params) in orders {
-            let accounts = build_accounts(
-                self.program_data,
-                types::accounts::PlaceOrders {
-                    state: *state_account(),
-                    authority: self.authority,
-                    user: self.sub_account,
-                },
-                &[self.account_data.as_ref()],
-                &[],
-                &[],
-            );
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::ModifyOrder {
+                state: *state_account(),
+                authority: self.authority,
+                user: self.sub_account,
+            },
+            &[self.account_data.as_ref()],
+            self.force_markets.readable.as_slice(),
+            &[],
+        );
 
+        for (order_id, params) in orders {
             let ix = Instruction {
                 program_id: constants::PROGRAM_ID,
-                accounts,
+                accounts: accounts.clone(),
                 data: InstructionData::data(&drift_idl::instructions::ModifyOrder {
                     order_id: Some(*order_id),
                     modify_order_params: *params,
@@ -1191,22 +1218,22 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Modify existing order(s) by user order id
     pub fn modify_orders_by_user_id(mut self, orders: &[(u8, ModifyOrderParams)]) -> Self {
-        for (user_order_id, params) in orders {
-            let accounts = build_accounts(
-                self.program_data,
-                types::accounts::PlaceOrders {
-                    state: *state_account(),
-                    authority: self.authority,
-                    user: self.sub_account,
-                },
-                &[self.account_data.as_ref()],
-                &[],
-                &[],
-            );
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::PlaceOrders {
+                state: *state_account(),
+                authority: self.authority,
+                user: self.sub_account,
+            },
+            &[self.account_data.as_ref()],
+            self.force_markets.readable.as_slice(),
+            &[],
+        );
 
+        for (user_order_id, params) in orders {
             let ix = Instruction {
                 program_id: constants::PROGRAM_ID,
-                accounts,
+                accounts: accounts.clone(),
                 data: InstructionData::data(&drift_idl::instructions::ModifyOrderByUserId {
                     user_order_id: *user_order_id,
                     modify_order_params: *params,
@@ -1247,8 +1274,8 @@ impl<'a> TransactionBuilder<'a> {
                 taker: *taker,
                 taker_stats: Wallet::derive_stats_account(taker),
             },
-            &[self.account_data.as_ref(), taker_account],
-            &[],
+            &[self.account_data.as_ref(), &taker_account],
+            &self.force_markets.readable,
             if is_perp {
                 &perp_writable
             } else {
@@ -1323,7 +1350,7 @@ impl<'a> TransactionBuilder<'a> {
                 user_stats: Wallet::derive_stats_account(&self.authority),
             },
             user_accounts.as_slice(),
-            &[],
+            &self.force_markets.readable,
             if is_perp {
                 &perp_writable
             } else {
