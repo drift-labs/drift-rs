@@ -6,17 +6,13 @@ use drift::{
     ids::{pyth_program, switchboard_program},
     instructions::optional_accounts::AccountMaps,
     state::{
-        oracle::OracleSource,
-        oracle_map::OracleMap,
-        perp_market::PerpMarket,
-        perp_market_map::PerpMarketMap,
-        spot_market::SpotMarket,
-        spot_market_map::SpotMarketMap,
+        oracle::OracleSource, oracle_map::OracleMap, perp_market::PerpMarket,
+        perp_market_map::PerpMarketMap, spot_market::SpotMarket, spot_market_map::SpotMarketMap,
         user::User,
     },
 };
 use fnv::FnvHashSet;
-use solana_sdk::{account::Account, pubkey::Pubkey, pubkey};
+use solana_sdk::{account::Account, pubkey, pubkey::Pubkey};
 
 use crate::{
     constants, utils::zero_account_to_bytes, AccountProvider, DriftClient, SdkError, SdkResult,
@@ -115,7 +111,7 @@ impl AccountMapBuilder {
                 | OracleSource::PythStableCoin => &pyth_program::ID,
                 OracleSource::PythPull
                 | OracleSource::Pyth1KPull
-                | OracleSource::Pyth1MPull 
+                | OracleSource::Pyth1MPull
                 | OracleSource::PythStableCoinPull => &PYTH_PULL_ID,
                 OracleSource::Switchboard => &switchboard_program::ID,
                 OracleSource::QuoteAsset => &constants::DEFAULT_PUBKEY,

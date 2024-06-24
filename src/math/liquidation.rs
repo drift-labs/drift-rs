@@ -758,11 +758,8 @@ mod tests {
         );
         let mut perp_slice = [sol_perp];
         let mut spot_slice = [usdc_spot, sol_spot];
-        let mut accounts_map = build_account_map(
-            &mut perp_slice,
-            &mut spot_slice,
-            &mut [sol_oracle],
-        );
+        let mut accounts_map =
+            build_account_map(&mut perp_slice, &mut spot_slice, &mut [sol_oracle]);
         let liquidation_price =
             calculate_liquidation_price_inner(&user, sol_perp_index, &mut accounts_map).unwrap();
         dbg!(liquidation_price);
@@ -850,11 +847,8 @@ mod tests {
         );
         let mut perp_slice = [sol_perp];
         let mut spot_slice = [usdc_spot, sol_spot];
-        let mut accounts_map = build_account_map(
-            &mut perp_slice,
-            &mut spot_slice,
-            &mut [sol_oracle],
-        );
+        let mut accounts_map =
+            build_account_map(&mut perp_slice, &mut spot_slice, &mut [sol_oracle]);
         let liq_price =
             calculate_liquidation_price_inner(&user, sol_perp_index, &mut accounts_map).unwrap();
         dbg!(liq_price);
