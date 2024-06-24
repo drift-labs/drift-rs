@@ -20,24 +20,24 @@ rpc_tests = []
 test_utils = []
 
 [dependencies]
-anchor-lang = "0.27.0"
+anchor-lang = "=0.29.0"
 bytemuck = "1.13.0"
 base64 = "0.13"
-drift = { git = "https://github.com/drift-labs/protocol-v2.git", rev = "2bbe28c", features = [
+drift = { git = "https://github.com/drift-labs/protocol-v2.git", rev = "v2.84.0", features = [
     "mainnet-beta", "drift-rs"
 ] }
 env_logger = "0.10.1"
 fnv = "1.0.7"
 futures-util = "0.3.29"
-jit-proxy = { git = "https://github.com/drift-labs/jit-proxy", optional = true }
+jit-proxy = { git = "https://github.com/drift-labs/jit-proxy", rev = "8d73b08", optional = true }
 log = "0.4.20"
 reqwest = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
-solana-account-decoder = "1.14"
-solana-client = "1.14"
-solana-sdk = "1.14"
-solana-transaction-status = "1.14"
+solana-account-decoder = "1.16"
+solana-client = "1.16"
+solana-sdk = "1.16"
+solana-transaction-status = "1.16"
 thiserror = "1.0.38"
 tokio = { version = "1.34.0", features = ["full"] }
 tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
@@ -58,3 +58,6 @@ anchor-client = "0.27.0"
 anchor-lang = "*"
 bytes = "*"
 futures = "0.3.30"
+
+# [patch.crates-io]
+# anchor-lang = { path = "./vendor/anchor-lang" }

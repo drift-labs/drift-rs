@@ -1990,6 +1990,7 @@ mod tests {
                 executable: false,
                 lamports: 0,
                 rent_epoch: 0,
+                space: None,
             })
         });
         account_mocks.insert(RpcRequest::GetAccountInfo, account_response.clone());
@@ -2017,6 +2018,7 @@ mod tests {
                 executable: false,
                 lamports: 0,
                 rent_epoch: 0,
+                space: None,
             })
         });
         account_mocks.insert(RpcRequest::GetAccountInfo, account_response.clone());

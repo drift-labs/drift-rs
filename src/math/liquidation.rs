@@ -384,7 +384,7 @@ mod tests {
     use bytes::BytesMut;
     use drift::ids::pyth_program;
     use drift::state::oracle_map::OracleMap;
-    use drift::state::perp_market_map::{MarketSet, PerpMarketMap};
+    use drift::state::perp_market_map::PerpMarketMap;
     use drift::state::spot_market_map::SpotMarketMap;
     use drift::{
         math::constants::{
@@ -401,6 +401,7 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
 
     use super::*;
+    use crate::math::account_map_builder::MarketSet;
     use crate::{constants, MarketId, RpcAccountProvider, Wallet};
 
     const SOL_ORACLE: Pubkey = solana_sdk::pubkey!("J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix");
@@ -573,9 +574,11 @@ mod tests {
             PerpMarket,
             btc_perp
         );
+        let mut perp_slice = [sol_perp, btc_perp];
+        let mut spot_slice = [usdc_spot];
         let mut accounts_map = build_account_map(
-            &mut [sol_perp, btc_perp],
-            &mut [usdc_spot],
+            &mut perp_slice,
+            &mut spot_slice,
             &mut [sol_oracle, btc_oracle],
         );
 
@@ -620,8 +623,10 @@ mod tests {
             PerpMarket,
             sol_perp
         );
+        let mut perp_slice = [sol_perp];
+        let mut spot_slice = [usdc_spot];
         let mut accounts_map =
-            build_account_map(&mut [sol_perp], &mut [usdc_spot], &mut [sol_oracle]);
+            build_account_map(&mut perp_slice, &mut spot_slice, &mut [sol_oracle]);
 
         let liquidation_price =
             calculate_liquidation_price_inner(&user, sol_perp_index, &mut accounts_map).unwrap();
@@ -658,8 +663,10 @@ mod tests {
             PerpMarket,
             sol_perp
         );
+        let mut perp_slice = [sol_perp];
+        let mut spot_slice = [usdc_spot];
         let mut accounts_map =
-            build_account_map(&mut [sol_perp], &mut [usdc_spot], &mut [sol_oracle]);
+            build_account_map(&mut perp_slice, &mut spot_slice, &mut [sol_oracle]);
         let liquidation_price =
             calculate_liquidation_price_inner(&user, sol_perp_index, &mut accounts_map).unwrap();
         dbg!(liquidation_price);
@@ -702,9 +709,11 @@ mod tests {
             PerpMarket,
             btc_perp
         );
+        let mut perp_slice = [btc_perp];
+        let mut spot_slice = [usdc_spot, sol_spot];
         let mut accounts_map = build_account_map(
-            &mut [btc_perp],
-            &mut [usdc_spot, sol_spot],
+            &mut perp_slice,
+            &mut spot_slice,
             &mut [sol_oracle, btc_oracle],
         );
         let liquidation_price =
@@ -747,9 +756,11 @@ mod tests {
             PerpMarket,
             sol_perp
         );
+        let mut perp_slice = [sol_perp];
+        let mut spot_slice = [usdc_spot, sol_spot];
         let mut accounts_map = build_account_map(
-            &mut [sol_perp],
-            &mut [usdc_spot, sol_spot],
+            &mut perp_slice,
+            &mut spot_slice,
             &mut [sol_oracle],
         );
         let liquidation_price =
@@ -789,8 +800,10 @@ mod tests {
             PerpMarket,
             sol_perp
         );
+        let mut perp_slice = [sol_perp];
+        let mut spot_slice = [usdc_spot];
         let mut accounts_map =
-            build_account_map(&mut [sol_perp], &mut [usdc_spot], &mut [sol_oracle]);
+            build_account_map(&mut perp_slice, &mut spot_slice, &mut [sol_oracle]);
         let unrealized_pnl =
             calculate_unrealized_pnl_inner(&position, sol_perp_index, &mut accounts_map).unwrap();
         dbg!(unrealized_pnl);
@@ -835,9 +848,11 @@ mod tests {
             SpotMarket,
             sol_spot
         );
+        let mut perp_slice = [sol_perp];
+        let mut spot_slice = [usdc_spot, sol_spot];
         let mut accounts_map = build_account_map(
-            &mut [sol_perp],
-            &mut [usdc_spot, sol_spot],
+            &mut perp_slice,
+            &mut spot_slice,
             &mut [sol_oracle],
         );
         let liq_price =
@@ -871,8 +886,10 @@ mod tests {
             PerpMarket,
             sol_perp
         );
+        let mut sol_slice = [sol_perp];
+        let mut usdc_slice = [usdc_spot];
         let mut accounts_map =
-            build_account_map(&mut [sol_perp], &mut [usdc_spot], &mut [sol_oracle]);
+            build_account_map(&mut sol_slice, &mut usdc_slice, &mut [sol_oracle]);
         let unrealized_pnl =
             calculate_unrealized_pnl_inner(&position, sol_perp_index, &mut accounts_map).unwrap();
 
@@ -882,8 +899,8 @@ mod tests {
     }
 
     fn build_account_map<'a>(
-        perp: &mut [AccountInfo<'a>],
-        spot: &mut [AccountInfo<'a>],
+        perp: &'a mut [AccountInfo<'a>],
+        spot: &'a mut [AccountInfo<'a>],
         oracle: &mut [AccountInfo<'a>],
     ) -> AccountMaps<'a> {
         AccountMaps {
