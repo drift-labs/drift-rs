@@ -113,7 +113,6 @@ impl<T: AccountProvider> JitProxyClient<T> {
         let tx_builder = self
             .drift_client
             .init_tx(&wallet.sub_account(sub_account_id.unwrap_or(0)), false)
-            .await
             .unwrap();
         let program_data = tx_builder.program_data();
         let account_data = tx_builder.account_data();
