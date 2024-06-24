@@ -58,6 +58,3 @@ anchor-client = "0.27.0"
 anchor-lang = "*"
 bytes = "*"
 futures = "0.3.30"
-
-# [patch.crates-io]
-# anchor-lang = { path = "./vendor/anchor-lang" }
