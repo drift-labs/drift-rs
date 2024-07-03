@@ -36,7 +36,7 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
-        run: cargo check --all
+        run: cargo check --all-features
       - name: Clippy
         uses: giraffate/clippy-action@v1
         with:

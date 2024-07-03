@@ -16,11 +16,13 @@ use solana_sdk::{
     signature::Signature,
 };
 
+use std::borrow::Cow;
+
 use crate::{
     build_accounts,
     constants::{state_account, PROGRAM_ID},
     types::{MarketId, ReferrerInfo, RpcSendTransactionConfig, VersionedMessage},
-    AccountProvider, DriftClient, Pubkey, SdkError, SdkResult, Wallet,
+    AccountProvider, DriftClient, Pubkey, SdkError, SdkResult, TransactionBuilder, Wallet,
 };
 
 /// Ix parameters for jit-proxy program
@@ -97,12 +99,16 @@ impl<T: AccountProvider> JitProxyClient<T> {
     }
 
     /// Build a jit tx
+    ///
+    /// `params` JIT order params
+    /// `authority` drift authority pubkey
+    /// `sub_account` tuple (pubkey of the drift user account, data of drift user account)
     pub async fn build_jit_tx(
         &self,
         params: JitIxParams,
-        sub_account_id: Option<u16>,
+        authority: &Pubkey,
+        sub_account: (&Pubkey, &User),
     ) -> SdkResult<VersionedMessage> {
-        let wallet = self.drift_client.wallet();
         let order = params
             .taker
             .orders
@@ -110,10 +116,13 @@ impl<T: AccountProvider> JitProxyClient<T> {
             .find(|order| order.order_id == params.taker_order_id)
             .ok_or(SdkError::JitOrderNotFound)?;
 
-        let tx_builder = self
-            .drift_client
-            .init_tx(&wallet.sub_account(sub_account_id.unwrap_or(0)), false)
-            .unwrap();
+        let tx_builder = TransactionBuilder::new(
+            self.drift_client.program_data(),
+            *sub_account.0,
+            Cow::Borrowed(sub_account.1),
+            false,
+        );
+
         let program_data = tx_builder.program_data();
         let account_data = tx_builder.account_data();
 
@@ -130,11 +139,11 @@ impl<T: AccountProvider> JitProxyClient<T> {
             program_data,
             jit_proxy::accounts::Jit {
                 state: *state_account(),
-                user: wallet.default_sub_account(),
-                user_stats: Wallet::derive_stats_account(wallet.authority(), &PROGRAM_ID),
+                user: *sub_account.0,
+                user_stats: Wallet::derive_stats_account(authority, &PROGRAM_ID),
                 taker: params.taker_key,
                 taker_stats: params.taker_stats_key,
-                authority: *wallet.authority(),
+                authority: *authority,
                 drift_program: PROGRAM_ID,
             },
             &[&params.taker, account_data],
@@ -150,13 +159,15 @@ impl<T: AccountProvider> JitProxyClient<T> {
         if order.market_type == MarketType::Spot {
             let spot_market_vault = self
                 .drift_client
-                .get_spot_market_info(order.market_index)
-                .await?
+                .get_spot_market_account_and_slot(order.market_index)
+                .expect("spot market exists")
+                .data
                 .vault;
             let quote_spot_market_vault = self
                 .drift_client
-                .get_spot_market_info(QUOTE_SPOT_MARKET_INDEX)
-                .await?
+                .get_spot_market_account_and_slot(QUOTE_SPOT_MARKET_INDEX)
+                .expect("quote market exists")
+                .data
                 .vault;
             accounts.push(AccountMeta::new_readonly(spot_market_vault, false));
             accounts.push(AccountMeta::new_readonly(quote_spot_market_vault, false));
@@ -192,13 +203,9 @@ impl<T: AccountProvider> JitProxyClient<T> {
 
         let lut = program_data.lookup_table.clone();
 
-        let message = v0::Message::try_compile(
-            wallet.authority(),
-            ixs.as_slice(),
-            &[lut],
-            Default::default(),
-        )
-        .expect("failed to compile message");
+        let message =
+            v0::Message::try_compile(authority, ixs.as_slice(), &[lut], Default::default())
+                .expect("failed to compile message");
 
         Ok(VersionedMessage::V0(message))
     }
@@ -207,9 +214,15 @@ impl<T: AccountProvider> JitProxyClient<T> {
     pub async fn jit(
         &self,
         params: JitIxParams,
+        authority: &Pubkey,
         sub_account_id: Option<u16>,
     ) -> SdkResult<Signature> {
-        let tx = self.build_jit_tx(params, sub_account_id).await?;
+        let sub_account =
+            Wallet::derive_user_account(authority, sub_account_id.unwrap_or_default(), &PROGRAM_ID);
+        let sub_account_data = self.drift_client.get_user_account(&sub_account).await?;
+        let tx = self
+            .build_jit_tx(params, authority, (&sub_account, &sub_account_data))
+            .await?;
         self.drift_client
             .sign_and_send_with_config(tx, self.config)
             .await

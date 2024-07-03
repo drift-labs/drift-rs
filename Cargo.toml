@@ -46,7 +46,7 @@ dashmap = "5.5.3"
 rayon = "1.9.0"
 
 [dev-dependencies]
-pyth = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.67.0", features = [
+pyth = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.84.0", features = [
     "no-entrypoint",
 ] }
 borsh = "*"
@@ -54,7 +54,7 @@ hex = "*"
 hex-literal = "*"
 serde_json = "*"
 spl-associated-token-account = "1.1.2"
-anchor-client = "0.27.0"
+anchor-client = "*"
 anchor-lang = "*"
 bytes = "*"
 futures = "0.3.30"
