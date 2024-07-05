@@ -23,7 +23,7 @@ test_utils = []
 anchor-lang = "=0.29.0"
 bytemuck = "1.13.0"
 base64 = "0.13"
-drift = { git = "https://github.com/drift-labs/protocol-v2.git", rev = "v2.84.0", features = [
+drift = { git = "https://github.com/drift-labs/protocol-v2.git", rev = "v2.85.0", features = [
     "mainnet-beta", "drift-rs"
 ] }
 env_logger = "0.10.1"
@@ -54,7 +54,7 @@ hex = "*"
 hex-literal = "*"
 serde_json = "*"
 spl-associated-token-account = "1.1.2"
-anchor-client = "*"
-anchor-lang = "*"
+anchor-client = "=0.29.0"
+anchor-lang = "=0.29.0"
 bytes = "*"
 futures = "0.3.30"

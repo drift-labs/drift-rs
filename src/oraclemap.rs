@@ -376,6 +376,19 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
         dbg!("done sleeping");
 
+        let rlb_perp_market_oracle_pubkey = perp_market_map
+            .get(&17)
+            .expect("rlb perp market")
+            .data
+            .amm
+            .oracle;
+        let rlb_oracle = oracle_map
+            .get(&rlb_perp_market_oracle_pubkey)
+            .expect("rlb oracle");
+        dbg!("rlb oracle info:");
+        dbg!(rlb_oracle.data.price);
+        dbg!(rlb_oracle.slot);
+
         dbg!("perp market oracles");
         let mut last_sol_price = 0;
         let mut last_sol_slot = 0;
@@ -480,4 +493,7 @@ mod tests {
 
         let _ = oracle_map.unsubscribe().await;
     }
+
+
+
 }
