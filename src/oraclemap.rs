@@ -493,7 +493,4 @@ mod tests {
 
         let _ = oracle_map.unsubscribe().await;
     }
-
-
-
 }
