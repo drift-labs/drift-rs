@@ -8,7 +8,10 @@ use drift::{
     math::constants::QUOTE_SPOT_MARKET_INDEX,
     state::user::{MarketType, User},
 };
-pub use jit_proxy::state::{PostOnlyParam, PriceType};
+pub use jit_proxy::{
+    self,
+    state::{PostOnlyParam, PriceType},
+};
 use solana_sdk::{
     compute_budget::ComputeBudgetInstruction,
     instruction::{AccountMeta, Instruction},
