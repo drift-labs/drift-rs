@@ -3057,7 +3057,7 @@ dependencies = [
 [[package]]
 name = "pyth"
 version = "0.1.0"
-source = "git+https://github.com/drift-labs/protocol-v2.git?tag=v2.85.0#ba4529aee9d26a7fdeb9eb2550128ead24e61b2a"
+source = "git+https://github.com/drift-labs/protocol-v2.git?rev=cc511cd#cc511cdf32d74b531700f6f22dcf3e39127f8a9a"
 dependencies = [
  "anchor-lang",
  "arrayref",
