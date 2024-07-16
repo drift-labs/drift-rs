@@ -507,7 +507,7 @@ mod tests {
             .await
             .unwrap();
 
-        dbg!(calculate_liquidation_price_and_unrealized_pnl(&client, &user, 24).unwrap());
+        dbg!(calculate_liquidation_price_and_unrealized_pnl(&client, &user, 4).unwrap());
     }
 
     #[cfg(feature = "rpc_tests")]

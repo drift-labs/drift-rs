@@ -1330,8 +1330,8 @@ dependencies = [
 
 [[package]]
 name = "drift"
-version = "2.85.0"
-source = "git+https://github.com/drift-labs/protocol-v2.git?rev=cc511cd#cc511cdf32d74b531700f6f22dcf3e39127f8a9a"
+version = "2.85.1"
+source = "git+https://github.com/drift-labs/protocol-v2.git?tag=v2.85.1#90d1b1057bfed8eec273992d19260fdc65ab6850"
 dependencies = [
  "ahash 0.8.6",
  "anchor-lang",
@@ -1354,7 +1354,38 @@ dependencies = [
  "solana-program",
  "solana-security-txt",
  "static_assertions",
- "switchboard",
+ "switchboard 0.1.0 (git+https://github.com/drift-labs/protocol-v2.git?tag=v2.85.1)",
+ "thiserror",
+ "uint",
+]
+
+[[package]]
+name = "drift"
+version = "2.85.1"
+source = "git+https://github.com/drift-labs/protocol-v2.git?rev=v2.85.1#90d1b1057bfed8eec273992d19260fdc65ab6850"
+dependencies = [
+ "ahash 0.8.6",
+ "anchor-lang",
+ "anchor-spl",
+ "arrayref",
+ "base64 0.13.1",
+ "borsh 0.10.3",
+ "bytemuck",
+ "byteorder",
+ "drift-macros",
+ "enumflags2",
+ "num-derive 0.3.3",
+ "num-integer",
+ "num-traits",
+ "phoenix-v1",
+ "pyth-client",
+ "pyth-solana-receiver-sdk",
+ "pythnet-sdk",
+ "serum_dex",
+ "solana-program",
+ "solana-security-txt",
+ "static_assertions",
+ "switchboard 0.1.0 (git+https://github.com/drift-labs/protocol-v2.git?rev=v2.85.1)",
  "thiserror",
  "uint",
 ]
@@ -1379,7 +1410,7 @@ dependencies = [
  "bytemuck",
  "bytes",
  "dashmap",
- "drift",
+ "drift 2.85.1 (git+https://github.com/drift-labs/protocol-v2.git?tag=v2.85.1)",
  "env_logger 0.10.2",
  "fnv",
  "futures",
@@ -2262,13 +2293,13 @@ checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
 [[package]]
 name = "jit-proxy"
 version = "0.10.2"
-source = "git+https://github.com/jordy25519/jit-proxy?rev=efd13a#efd13ad5e8034133876c01f746fdb37721d9b8a0"
+source = "git+https://github.com/drift-labs/jit-proxy.git?rev=4576d7#4576d76357a4dd21db86647cb3619424c6bc84f9"
 dependencies = [
  "ahash 0.8.6",
  "anchor-lang",
  "anchor-spl",
  "bytemuck",
- "drift",
+ "drift 2.85.1 (git+https://github.com/drift-labs/protocol-v2.git?rev=v2.85.1)",
  "static_assertions",
 ]
 
@@ -3057,7 +3088,7 @@ dependencies = [
 [[package]]
 name = "pyth"
 version = "0.1.0"
-source = "git+https://github.com/drift-labs/protocol-v2.git?rev=cc511cd#cc511cdf32d74b531700f6f22dcf3e39127f8a9a"
+source = "git+https://github.com/drift-labs/protocol-v2.git?tag=v2.85.1#90d1b1057bfed8eec273992d19260fdc65ab6850"
 dependencies = [
  "anchor-lang",
  "arrayref",
@@ -5021,7 +5052,15 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 [[package]]
 name = "switchboard"
 version = "0.1.0"
-source = "git+https://github.com/drift-labs/protocol-v2.git?rev=cc511cd#cc511cdf32d74b531700f6f22dcf3e39127f8a9a"
+source = "git+https://github.com/drift-labs/protocol-v2.git?tag=v2.85.1#90d1b1057bfed8eec273992d19260fdc65ab6850"
+dependencies = [
+ "anchor-lang",
+]
+
+[[package]]
+name = "switchboard"
+version = "0.1.0"
+source = "git+https://github.com/drift-labs/protocol-v2.git?rev=v2.85.1#90d1b1057bfed8eec273992d19260fdc65ab6850"
 dependencies = [
  "anchor-lang",
 ]
