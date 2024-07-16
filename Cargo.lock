@@ -1331,7 +1331,7 @@ dependencies = [
 [[package]]
 name = "drift"
 version = "2.85.0"
-source = "git+https://github.com/drift-labs/protocol-v2.git?rev=v2.85.0#ba4529aee9d26a7fdeb9eb2550128ead24e61b2a"
+source = "git+https://github.com/drift-labs/protocol-v2.git?rev=cc511cd#cc511cdf32d74b531700f6f22dcf3e39127f8a9a"
 dependencies = [
  "ahash 0.8.6",
  "anchor-lang",
@@ -2262,7 +2262,7 @@ checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
 [[package]]
 name = "jit-proxy"
 version = "0.10.2"
-source = "git+https://github.com/jordy25519/jit-proxy?branch=update/v2.85.0#2f1c84d3a95a4aa545fe46ec9110a5e4eade8e53"
+source = "git+https://github.com/jordy25519/jit-proxy?rev=efd13a#efd13ad5e8034133876c01f746fdb37721d9b8a0"
 dependencies = [
  "ahash 0.8.6",
  "anchor-lang",
@@ -5021,7 +5021,7 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 [[package]]
 name = "switchboard"
 version = "0.1.0"
-source = "git+https://github.com/drift-labs/protocol-v2.git?rev=v2.85.0#ba4529aee9d26a7fdeb9eb2550128ead24e61b2a"
+source = "git+https://github.com/drift-labs/protocol-v2.git?rev=cc511cd#cc511cdf32d74b531700f6f22dcf3e39127f8a9a"
 dependencies = [
  "anchor-lang",
 ]

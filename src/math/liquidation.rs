@@ -501,6 +501,7 @@ mod tests {
         )
         .await
         .unwrap();
+        assert!(client.subscribe().await.is_ok());
         let user = client
             .get_user_account(&wallet.sub_account(0))
             .await
