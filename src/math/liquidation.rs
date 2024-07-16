@@ -501,12 +501,13 @@ mod tests {
         )
         .await
         .unwrap();
+        assert!(client.subscribe().await.is_ok());
         let user = client
             .get_user_account(&wallet.sub_account(0))
             .await
             .unwrap();
 
-        dbg!(calculate_liquidation_price_and_unrealized_pnl(&client, &user, 24).unwrap());
+        dbg!(calculate_liquidation_price_and_unrealized_pnl(&client, &user, 4).unwrap());
     }
 
     #[cfg(feature = "rpc_tests")]
