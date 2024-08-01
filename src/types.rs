@@ -85,6 +85,10 @@ impl MarketId {
         index: 0,
         kind: MarketType::Spot,
     };
+    /// Convert self into its parts
+    pub fn is_perp(self) -> bool {
+        self.kind == MarketType::Perp
+    }
 }
 
 impl From<(u16, MarketType)> for MarketId {
