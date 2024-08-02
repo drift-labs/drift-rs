@@ -12,7 +12,10 @@ pub use drift::{
         order_params::{ModifyOrderParams, OrderParams, PostOnlyParam},
         perp_market::PerpMarket,
         spot_market::SpotMarket,
-        user::{MarketType, Order, OrderType, PerpPosition, SpotPosition, User, UserStats},
+        user::{
+            MarketType, Order, OrderTriggerCondition, OrderType, PerpPosition, SpotPosition, User,
+            UserStats,
+        },
     },
 };
 use futures_util::sink::Sink;
