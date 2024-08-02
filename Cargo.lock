@@ -1330,8 +1330,8 @@ dependencies = [
 
 [[package]]
 name = "drift"
-version = "2.85.1"
-source = "git+https://github.com/drift-labs/protocol-v2.git?tag=v2.85.1#90d1b1057bfed8eec273992d19260fdc65ab6850"
+version = "2.89.0"
+source = "git+https://github.com/drift-labs/protocol-v2.git?tag=v2.89.0#71227ecbe411257f0a167e78eb64b65a5f5f270e"
 dependencies = [
  "ahash 0.8.6",
  "anchor-lang",
@@ -1346,6 +1346,7 @@ dependencies = [
  "num-derive 0.3.3",
  "num-integer",
  "num-traits",
+ "openbook-v2-light 0.1.0 (git+https://github.com/drift-labs/protocol-v2.git?tag=v2.89.0)",
  "phoenix-v1",
  "pyth-client",
  "pyth-solana-receiver-sdk",
@@ -1354,15 +1355,16 @@ dependencies = [
  "solana-program",
  "solana-security-txt",
  "static_assertions",
- "switchboard 0.1.0 (git+https://github.com/drift-labs/protocol-v2.git?tag=v2.85.1)",
+ "switchboard 0.1.0 (git+https://github.com/drift-labs/protocol-v2.git?tag=v2.89.0)",
+ "switchboard-on-demand 0.1.0 (git+https://github.com/drift-labs/protocol-v2.git?tag=v2.89.0)",
  "thiserror",
  "uint",
 ]
 
 [[package]]
 name = "drift"
-version = "2.85.1"
-source = "git+https://github.com/drift-labs/protocol-v2.git?rev=v2.85.1#90d1b1057bfed8eec273992d19260fdc65ab6850"
+version = "2.89.0"
+source = "git+https://github.com/drift-labs/protocol-v2.git?rev=v2.89.0#71227ecbe411257f0a167e78eb64b65a5f5f270e"
 dependencies = [
  "ahash 0.8.6",
  "anchor-lang",
@@ -1377,6 +1379,7 @@ dependencies = [
  "num-derive 0.3.3",
  "num-integer",
  "num-traits",
+ "openbook-v2-light 0.1.0 (git+https://github.com/drift-labs/protocol-v2.git?rev=v2.89.0)",
  "phoenix-v1",
  "pyth-client",
  "pyth-solana-receiver-sdk",
@@ -1385,7 +1388,8 @@ dependencies = [
  "solana-program",
  "solana-security-txt",
  "static_assertions",
- "switchboard 0.1.0 (git+https://github.com/drift-labs/protocol-v2.git?rev=v2.85.1)",
+ "switchboard 0.1.0 (git+https://github.com/drift-labs/protocol-v2.git?rev=v2.89.0)",
+ "switchboard-on-demand 0.1.0 (git+https://github.com/drift-labs/protocol-v2.git?rev=v2.89.0)",
  "thiserror",
  "uint",
 ]
@@ -1410,7 +1414,7 @@ dependencies = [
  "bytemuck",
  "bytes",
  "dashmap",
- "drift 2.85.1 (git+https://github.com/drift-labs/protocol-v2.git?tag=v2.85.1)",
+ "drift 2.89.0 (git+https://github.com/drift-labs/protocol-v2.git?tag=v2.89.0)",
  "env_logger 0.10.2",
  "fnv",
  "futures",
@@ -2293,13 +2297,13 @@ checksum = "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b"
 [[package]]
 name = "jit-proxy"
 version = "0.10.2"
-source = "git+https://github.com/drift-labs/jit-proxy.git?rev=4576d7#4576d76357a4dd21db86647cb3619424c6bc84f9"
+source = "git+https://github.com/drift-labs/jit-proxy.git?rev=a65ea26#a65ea26d8316bcba4888299558831d60d64cce4b"
 dependencies = [
  "ahash 0.8.6",
  "anchor-lang",
  "anchor-spl",
  "bytemuck",
- "drift 2.85.1 (git+https://github.com/drift-labs/protocol-v2.git?rev=v2.85.1)",
+ "drift 2.89.0 (git+https://github.com/drift-labs/protocol-v2.git?rev=v2.89.0)",
  "static_assertions",
 ]
 
@@ -2814,6 +2818,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 
 [[package]]
+name = "openbook-v2-light"
+version = "0.1.0"
+source = "git+https://github.com/drift-labs/protocol-v2.git?tag=v2.89.0#71227ecbe411257f0a167e78eb64b65a5f5f270e"
+dependencies = [
+ "anchor-lang",
+ "borsh 0.10.3",
+ "bytemuck",
+]
+
+[[package]]
+name = "openbook-v2-light"
+version = "0.1.0"
+source = "git+https://github.com/drift-labs/protocol-v2.git?rev=v2.89.0#71227ecbe411257f0a167e78eb64b65a5f5f270e"
+dependencies = [
+ "anchor-lang",
+ "borsh 0.10.3",
+ "bytemuck",
+]
+
+[[package]]
 name = "openssl"
 version = "0.10.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3104,7 +3128,7 @@ checksum = "44de48029c54ec1ca570786b5baeb906b0fc2409c8e0145585e287ee7a526c72"
 [[package]]
 name = "pyth-solana-receiver-sdk"
 version = "0.3.0"
-source = "git+https://github.com/drift-labs/pyth-crosschain?rev=04cf2c#04cf2c01642a2ce0a0f620652034755d3e81d576"
+source = "git+https://github.com/drift-labs/pyth-crosschain?rev=3e8a24ecd0bcf22b787313e2020f4186bb22c729#3e8a24ecd0bcf22b787313e2020f4186bb22c729"
 dependencies = [
  "anchor-lang",
  "hex",
@@ -3115,7 +3139,7 @@ dependencies = [
 [[package]]
 name = "pythnet-sdk"
 version = "2.1.0"
-source = "git+https://github.com/drift-labs/pyth-crosschain?rev=04cf2c#04cf2c01642a2ce0a0f620652034755d3e81d576"
+source = "git+https://github.com/drift-labs/pyth-crosschain?rev=3e8a24ecd0bcf22b787313e2020f4186bb22c729#3e8a24ecd0bcf22b787313e2020f4186bb22c729"
 dependencies = [
  "anchor-lang",
  "bincode",
@@ -5052,7 +5076,7 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 [[package]]
 name = "switchboard"
 version = "0.1.0"
-source = "git+https://github.com/drift-labs/protocol-v2.git?tag=v2.85.1#90d1b1057bfed8eec273992d19260fdc65ab6850"
+source = "git+https://github.com/drift-labs/protocol-v2.git?tag=v2.89.0#71227ecbe411257f0a167e78eb64b65a5f5f270e"
 dependencies = [
  "anchor-lang",
 ]
@@ -5060,9 +5084,29 @@ dependencies = [
 [[package]]
 name = "switchboard"
 version = "0.1.0"
-source = "git+https://github.com/drift-labs/protocol-v2.git?rev=v2.85.1#90d1b1057bfed8eec273992d19260fdc65ab6850"
+source = "git+https://github.com/drift-labs/protocol-v2.git?rev=v2.89.0#71227ecbe411257f0a167e78eb64b65a5f5f270e"
 dependencies = [
  "anchor-lang",
+]
+
+[[package]]
+name = "switchboard-on-demand"
+version = "0.1.0"
+source = "git+https://github.com/drift-labs/protocol-v2.git?tag=v2.89.0#71227ecbe411257f0a167e78eb64b65a5f5f270e"
+dependencies = [
+ "anchor-lang",
+ "bytemuck",
+ "solana-program",
+]
+
+[[package]]
+name = "switchboard-on-demand"
+version = "0.1.0"
+source = "git+https://github.com/drift-labs/protocol-v2.git?rev=v2.89.0#71227ecbe411257f0a167e78eb64b65a5f5f270e"
+dependencies = [
+ "anchor-lang",
+ "bytemuck",
+ "solana-program",
 ]
 
 [[package]]

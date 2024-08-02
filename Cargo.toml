@@ -23,13 +23,13 @@ test_utils = []
 anchor-lang = "=0.29.0"
 bytemuck = "1.13.0"
 base64 = "0.13"
-drift = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.85.1", features = [
+drift = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.89.0", features = [
     "mainnet-beta", "drift-rs"
 ] }
 env_logger = "0.10.1"
 fnv = "1.0.7"
 futures-util = "0.3.29"
-jit-proxy = { git = "https://github.com/drift-labs/jit-proxy.git", rev = "4576d7", optional = true }
+jit-proxy = { git = "https://github.com/drift-labs/jit-proxy.git", rev = "a65ea26", optional = true }
 log = "0.4.20"
 reqwest = "*"
 serde = { version = "*", features = ["derive"] }
