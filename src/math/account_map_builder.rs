@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use anchor_lang::prelude::AccountInfo;
 use drift::{
-    ids::{drift_oracle_receiver_program, pyth_program, switchboard_program},
+    ids::{drift_oracle_receiver_program, pyth_program, switchboard_on_demand, switchboard_program},
     instructions::optional_accounts::AccountMaps,
     state::{
         oracle::OracleSource, oracle_map::OracleMap, perp_market::PerpMarket,
@@ -113,6 +113,7 @@ impl<'a> AccountMapBuilder<'a> {
                 | OracleSource::Pyth1MPull
                 | OracleSource::PythStableCoinPull => &drift_oracle_receiver_program::ID,
                 OracleSource::Switchboard => &switchboard_program::ID,
+                OracleSource::SwitchboardOnDemand => &switchboard_on_demand::ID,
                 OracleSource::QuoteAsset => &constants::DEFAULT_PUBKEY,
                 OracleSource::Prelaunch => &drift::ID,
             };
