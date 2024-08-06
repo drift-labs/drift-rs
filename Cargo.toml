@@ -21,8 +21,9 @@ test_utils = []
 
 [dependencies]
 anchor-lang = "=0.29.0"
-bytemuck = "1.13.0"
 base64 = "0.13"
+bytemuck = "1.13.0"
+dashmap = "5.5.3"
 drift = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.89.0", features = [
     "mainnet-beta", "drift-rs"
 ] }
@@ -31,6 +32,8 @@ fnv = "1.0.7"
 futures-util = "0.3.29"
 jit-proxy = { git = "https://github.com/drift-labs/jit-proxy.git", rev = "a65ea26", optional = true }
 log = "0.4.20"
+rayon = "1.9.0"
+regex = "1.10.2"
 reqwest = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
@@ -41,20 +44,15 @@ solana-transaction-status = "1.16"
 thiserror = "1.0.38"
 tokio = { version = "1.34.0", features = ["full"] }
 tokio-tungstenite = { version = "0.21.0", features = ["native-tls"] }
-regex = "1.10.2"
-dashmap = "5.5.3"
-rayon = "1.9.0"
 
 [dev-dependencies]
-pyth = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.85.1", features = [
-    "no-entrypoint",
-] }
-borsh = "*"
-hex = "*"
-hex-literal = "*"
-serde_json = "*"
-spl-associated-token-account = "1.1.2"
 anchor-client = "=0.29.0"
-anchor-lang = "=0.29.0"
+borsh = "*"
 bytes = "*"
 futures = "0.3.30"
+hex = "*"
+hex-literal = "*"
+pyth = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.89.0", features = [
+    "no-entrypoint",
+] }
+spl-associated-token-account = "1.1.2"
