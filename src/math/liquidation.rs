@@ -162,8 +162,11 @@ pub fn calculate_liquidation_price_inner(
         .simulate_settled_lp_position(&perp_market, oracle_price_data.price)
         .map_err(|err| SdkError::Anchor(Box::new(err.into())))?;
 
-    let perp_free_collateral_delta =
-        calculate_perp_free_collateral_delta(&perp_position_with_lp, &perp_market);
+    let perp_free_collateral_delta = calculate_perp_free_collateral_delta(
+        &perp_position_with_lp,
+        &perp_market,
+        oracle_price_data.price,
+    );
 
     // user holding spot asset case
     let mut spot_free_collateral_delta = 0;
@@ -200,10 +203,16 @@ pub fn calculate_liquidation_price_inner(
     }
 }
 
-fn calculate_perp_free_collateral_delta(position: &PerpPosition, market: &PerpMarket) -> i64 {
+fn calculate_perp_free_collateral_delta(
+    position: &PerpPosition,
+    market: &PerpMarket,
+    oracle_price: i64,
+) -> i64 {
     let current_base_asset_amount = position.base_asset_amount;
 
-    let worst_case_base_amount = position.worst_case_base_asset_amount().unwrap();
+    let worst_case_base_amount = position
+        .worst_case_base_asset_amount(oracle_price, market.contract_type)
+        .unwrap();
     let margin_ratio = market
         .get_margin_ratio(
             worst_case_base_amount.unsigned_abs(),
