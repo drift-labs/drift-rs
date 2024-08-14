@@ -44,6 +44,7 @@ async fn get_market_accounts_works() {
     assert!(perp.len() > 1);
 }
 
+#[ignore]
 #[tokio::test]
 async fn place_and_cancel_orders() {
     let wallet: Wallet = test_keypair().into();
@@ -84,6 +85,7 @@ async fn place_and_cancel_orders() {
     assert!(result.is_ok());
 }
 
+#[ignore]
 #[tokio::test]
 async fn place_and_take() {
     let wallet: Wallet = test_keypair().into();

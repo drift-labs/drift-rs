@@ -19,11 +19,10 @@ use drift::{
 };
 use fnv::FnvHashSet;
 use futures_util::{future::BoxFuture, stream::FuturesOrdered, FutureExt, Stream, StreamExt};
-use log::{debug, warn};
+use log::{debug, info, warn};
 use regex::Regex;
 pub use solana_client::nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient};
 use solana_client::{
-    nonblocking::pubsub_client::PubsubClientError,
     rpc_client::GetConfirmedSignaturesForAddress2Config, rpc_config::RpcTransactionLogsConfig,
     rpc_response::RpcLogsResponse,
 };
@@ -134,7 +133,6 @@ impl EventSubscriber {
 struct LogEventStream {
     cache: Arc<RwLock<TxSignatureCache>>,
     endpoint: Arc<String>,
-    provider: Arc<PubsubClient>,
     sub_account: Pubkey,
     event_tx: Sender<DriftEvent>,
     commitment: CommitmentConfig,
@@ -142,10 +140,19 @@ struct LogEventStream {
 
 impl LogEventStream {
     /// Returns a future for running the configured log event stream
-    async fn stream_fn(mut self) {
+    async fn stream_fn(self) {
         let sub_account = self.sub_account;
-        let subscribe_result = self
-            .provider
+        info!(target: LOG_TARGET, "log stream connecting: {sub_account:?}");
+        let provider_init = PubsubClient::new(self.endpoint.as_str()).await;
+
+        // the provider's internal websocket connection can close, if so need to reconnect
+        if let Err(ref err) = provider_init {
+            warn!(target: LOG_TARGET, "log subscription failed {err:?}, retrying: {sub_account:?}");
+            return;
+        }
+
+        let provider = provider_init.unwrap();
+        let subscribe_result = provider
             .logs_subscribe(
                 solana_client::rpc_config::RpcTransactionLogsFilter::Mentions(vec![self
                     .sub_account
@@ -158,25 +165,8 @@ impl LogEventStream {
 
         // the provider's internal websocket connection can close, if so need to reconnect
         if let Err(ref err) = subscribe_result {
-            match err {
-                PubsubClientError::ConnectionClosed(_) => {
-                    drop(subscribe_result);
-                    warn!(target: LOG_TARGET, "log stream disconnected, reconnecting: {sub_account:?}");
-                    let _ = PubsubClient::new(&self.endpoint)
-                        .await
-                        .map(|provider| {
-                            self.provider = Arc::new(provider);
-                        })
-                        .map_err(|err| {
-                            warn!(target: LOG_TARGET, "log stream reconnect failed {err:?}, retrying: {sub_account:?}");
-                        });
-                    return;
-                }
-                subscribe_err => {
-                    warn!(target: LOG_TARGET, "log subscription failed {subscribe_err:?}, retrying: {sub_account:?}");
-                    return;
-                }
-            }
+            warn!(target: LOG_TARGET, "log subscription failed {err:?}, retrying: {sub_account:?}");
+            return;
         }
 
         let (mut log_stream, unsub_fn) = subscribe_result.unwrap();
@@ -247,7 +237,6 @@ async fn log_stream(
     debug!(target: LOG_TARGET, "stream events for {sub_account:?}");
     let (event_tx, event_rx) = channel(64);
 
-    let provider = Arc::new(PubsubClient::new(endpoint).await?);
     let cache = Arc::new(RwLock::new(TxSignatureCache::new(256)));
     let endpoint = Arc::new(endpoint.to_string());
 
@@ -257,7 +246,6 @@ async fn log_stream(
             let log_stream = LogEventStream {
                 endpoint: Arc::clone(&endpoint),
                 cache: Arc::clone(&cache),
-                provider: Arc::clone(&provider),
                 sub_account,
                 event_tx: event_tx.clone(),
                 commitment: CommitmentConfig::confirmed(),
@@ -733,16 +721,11 @@ mod test {
 
     #[tokio::test]
     async fn log_stream_handles_jit_proxy_events() {
-        let provider = PubsubClient::new("wss://api.devnet.solana.com")
-            .await
-            .expect("connects");
-
         let cache = TxSignatureCache::new(16);
         let (event_tx, mut event_rx) = channel(16);
 
         let mut log_stream = LogEventStream {
             cache: Arc::new(cache.into()),
-            provider: Arc::new(provider),
             endpoint: Arc::new("wss://api.devnet.solana.com".into()),
             sub_account: "GgZkrSFgTAXZn1rNtZ533wpZi6nxx8whJC9bxRESB22c"
                 .try_into()
