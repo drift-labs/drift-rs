@@ -201,7 +201,10 @@ impl LogEventStream {
             if let Some(event) = try_parse_log(log.as_str(), &signature, tx_idx) {
                 // unrelated events from same tx should not be emitted e.g. a filler tx which produces other fill events
                 if event.pertains_to(self.sub_account) {
-                    self.event_tx.try_send(event).expect("sent");
+                    if self.event_tx.send(event).await.is_err() {
+                        warn!("event receiver closed");
+                        return;
+                    }
                 }
             }
         }
@@ -210,7 +213,7 @@ impl LogEventStream {
 
 /// Creates a poll-ed stream using JSON-RPC interfaces
 fn polled_stream(provider: impl EventRpcProvider, sub_account: Pubkey) -> DriftEventStream {
-    let (event_tx, event_rx) = channel(64);
+    let (event_tx, event_rx) = channel(256);
     let cache = Arc::new(RwLock::new(TxSignatureCache::new(128)));
     let join_handle = tokio::spawn(
         PolledEventStream {
@@ -235,7 +238,7 @@ async fn log_stream(
     retry_policy: impl TaskRetryPolicy,
 ) -> SdkResult<DriftEventStream> {
     debug!(target: LOG_TARGET, "stream events for {sub_account:?}");
-    let (event_tx, event_rx) = channel(64);
+    let (event_tx, event_rx) = channel(256);
 
     let cache = Arc::new(RwLock::new(TxSignatureCache::new(256)));
     let endpoint = Arc::new(endpoint.to_string());
