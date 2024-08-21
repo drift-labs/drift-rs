@@ -46,6 +46,7 @@ use crate::{
 };
 
 const LOG_TARGET: &str = "events";
+const EMPTY_SIGNATURE: &str = "1111111111111111111111111111111111111111111111111111111111111111";
 
 impl EventRpcProvider for RpcClient {
     fn get_tx(
@@ -182,19 +183,24 @@ impl LogEventStream {
 
     /// Process a log response from RPC, emitting any relevant events
     async fn process_log(&self, response: RpcLogsResponse) {
-        let mut cache = self.cache.write().await;
-        if response.err.is_some() {
-            debug!(target: LOG_TARGET, "skipping failed tx: {}", response.signature);
-            return;
-        }
         let signature = response.signature;
-        // seems to block
-        // debug!(target: LOG_TARGET, "log extracting events, tx: {signature:?}");
-        if cache.contains(&signature) {
-            debug!(target: LOG_TARGET, "skipping cached tx: {signature:?}");
+        if response.err.is_some() {
+            debug!(target: LOG_TARGET, "skipping failed tx: {signature:?}");
             return;
         }
-        cache.insert(signature.clone());
+        if signature == EMPTY_SIGNATURE {
+            debug!(target: LOG_TARGET, "skipping empty signature: {signature:?}");
+            return;
+        }
+        // debug!(target: LOG_TARGET, "log extracting events, tx: {signature:?}");
+        {
+            let mut cache = self.cache.write().await;
+            if cache.contains(&signature) {
+                debug!(target: LOG_TARGET, "skipping cached tx: {signature:?}");
+                return;
+            }
+            cache.insert(signature.clone());
+        }
 
         for (tx_idx, log) in response.logs.iter().enumerate() {
             // a drift sub-account should not interact with any other program by definition
