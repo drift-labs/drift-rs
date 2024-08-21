@@ -189,10 +189,9 @@ impl LogEventStream {
             return;
         }
         if signature == EMPTY_SIGNATURE {
-            debug!(target: LOG_TARGET, "skipping empty signature: {signature:?}");
+            debug!(target: LOG_TARGET, "skipping empty signature");
             return;
         }
-        // debug!(target: LOG_TARGET, "log extracting events, tx: {signature:?}");
         {
             let mut cache = self.cache.write().await;
             if cache.contains(&signature) {
@@ -202,6 +201,7 @@ impl LogEventStream {
             cache.insert(signature.clone());
         }
 
+        debug!(target: LOG_TARGET, "log extracting events, tx: {signature:?}");
         for (tx_idx, log) in response.logs.iter().enumerate() {
             // a drift sub-account should not interact with any other program by definition
             if let Some(event) = try_parse_log(log.as_str(), &signature, tx_idx) {
