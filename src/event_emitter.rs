@@ -25,7 +25,6 @@ impl<T: Send + Clone + 'static> EventEmitter<T> {
 
         if let Ok(mut subs) = self.subscribers.lock() {
             subs.push(tx);
-            dbg!("SUBS LEN!!!!", subs.len());
         }
 
         thread::spawn(move || {
