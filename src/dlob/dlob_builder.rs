@@ -1,9 +1,11 @@
+use std::sync::Arc;
+
+use tokio::sync::Mutex;
+
 use crate::{
     dlob::dlob::DLOB, event_emitter::EventEmitter, slot_subscriber::SlotSubscriber,
     usermap::UserMap, SdkResult,
 };
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 pub struct DLOBBuilder {
     slot_subscriber: SlotSubscriber,
@@ -66,12 +68,11 @@ impl DLOBBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::memcmp::get_user_with_order_filter;
-    use crate::utils::get_ws_url;
     use env_logger;
-    use solana_sdk::commitment_config::CommitmentConfig;
-    use solana_sdk::commitment_config::CommitmentLevel;
+    use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
+
+    use super::*;
+    use crate::{memcmp::get_user_with_order_filter, utils::get_ws_url};
 
     #[tokio::test]
     #[cfg(rpc_tests)]

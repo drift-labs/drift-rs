@@ -1,12 +1,18 @@
-use crate::math::account_map_builder::AccountMapBuilder;
-use crate::{AccountProvider, DriftClient, SdkError, SdkResult};
-use drift::instructions::optional_accounts::AccountMaps;
-use drift::math::constants::PRICE_PRECISION;
-use drift::math::margin::{
-    calculate_margin_requirement_and_total_collateral_and_liability_info, MarginRequirementType,
+use drift::{
+    instructions::optional_accounts::AccountMaps,
+    math::{
+        constants::PRICE_PRECISION,
+        margin::{
+            calculate_margin_requirement_and_total_collateral_and_liability_info,
+            MarginRequirementType,
+        },
+    },
+    state::{margin_calculation::MarginContext, user::User},
 };
-use drift::state::margin_calculation::MarginContext;
-use drift::state::user::User;
+
+use crate::{
+    math::account_map_builder::AccountMapBuilder, AccountProvider, DriftClient, SdkError, SdkResult,
+};
 
 pub fn get_leverage<T: AccountProvider>(client: &DriftClient<T>, user: &User) -> SdkResult<u128> {
     let mut accounts_builder = AccountMapBuilder::default();
@@ -95,9 +101,10 @@ fn calculate_leverage(total_liability_value: u128, net_asset_value: i128) -> u12
 
 #[cfg(test)]
 mod tests {
+    use solana_sdk::signature::Keypair;
+
     use super::*;
     use crate::{Context, RpcAccountProvider, Wallet};
-    use solana_sdk::signature::Keypair;
 
     const RPC: &'static str = "rpc";
     const PRIVATE_KEY: &'static str = "private key";

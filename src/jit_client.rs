@@ -2,6 +2,8 @@
 //!
 //! Routes JIT maker orders via onchain jit-proxy program
 
+use std::borrow::Cow;
+
 use anchor_lang::InstructionData;
 pub use drift::math::auction::calculate_auction_price;
 use drift::{
@@ -15,8 +17,6 @@ use solana_sdk::{
     message::v0,
     signature::Signature,
 };
-
-use std::borrow::Cow;
 
 use crate::{
     build_accounts,

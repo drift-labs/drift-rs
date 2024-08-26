@@ -1,11 +1,17 @@
 use dashmap::{DashMap, DashSet};
-use drift::controller::position::PositionDirection;
-use drift::state::user::{Order, OrderTriggerCondition, OrderType};
+use drift::{
+    controller::position::PositionDirection,
+    state::user::{Order, OrderTriggerCondition, OrderType},
+};
 
-use crate::dlob::dlob_node::{NodeType, SortDirection};
-use crate::dlob::order_list::Orderlist;
-use crate::is_one_of_variant;
-use crate::math::order::is_resting_limit_order;
+use crate::{
+    dlob::{
+        dlob_node::{NodeType, SortDirection},
+        order_list::Orderlist,
+    },
+    is_one_of_variant,
+    math::order::is_resting_limit_order,
+};
 
 #[derive(Clone)]
 pub(crate) struct Market {

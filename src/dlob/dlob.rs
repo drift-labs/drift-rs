@@ -1,23 +1,25 @@
 #![allow(clippy::module_inception)]
 
+use std::{any::Any, collections::BinaryHeap, str::FromStr, sync::Arc};
+
 use dashmap::DashSet;
-use drift::state::oracle::OraclePriceData;
-use drift::state::user::{MarketType, Order, OrderStatus};
+use drift::state::{
+    oracle::OraclePriceData,
+    user::{MarketType, Order, OrderStatus},
+};
 use rayon::prelude::*;
 use solana_sdk::pubkey::Pubkey;
-use std::any::Any;
-use std::collections::BinaryHeap;
-use std::str::FromStr;
-use std::sync::Arc;
 
-use crate::dlob::dlob_node::{
-    create_node, get_order_signature, DLOBNode, DirectionalNode, Node, NodeType,
+use crate::{
+    dlob::{
+        dlob_node::{create_node, get_order_signature, DLOBNode, DirectionalNode, Node, NodeType},
+        market::{get_node_subtype_and_type, Exchange, OpenOrders, SubType},
+    },
+    event_emitter::Event,
+    math::order::is_resting_limit_order,
+    usermap::UserMap,
+    utils::market_type_to_string,
 };
-use crate::dlob::market::{get_node_subtype_and_type, Exchange, OpenOrders, SubType};
-use crate::event_emitter::Event;
-use crate::math::order::is_resting_limit_order;
-use crate::usermap::UserMap;
-use crate::utils::market_type_to_string;
 
 #[derive(Clone)]
 pub struct DLOB {
@@ -304,12 +306,13 @@ impl Event for DLOB {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use drift::{
         math::constants::PRICE_PRECISION_U64,
         state::user::{Order, OrderType},
     };
     use solana_sdk::pubkey::Pubkey;
+
+    use super::*;
 
     #[test]
     fn test_dlob_insert() {

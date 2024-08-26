@@ -85,11 +85,11 @@ impl Orderlist {
 
 #[cfg(test)]
 mod tests {
-    use crate::dlob::dlob_node::{create_node, NodeType};
-
-    use super::*;
     use drift::state::user::Order;
     use solana_sdk::pubkey::Pubkey;
+
+    use super::*;
+    use crate::dlob::dlob_node::{create_node, NodeType};
 
     #[test]
     fn test_insertion_and_ordering() {

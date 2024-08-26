@@ -1,7 +1,9 @@
 use anchor_lang::Discriminator;
-use drift::state::perp_market::PerpMarket;
-use drift::state::spot_market::SpotMarket;
-use drift::state::user::{MarketType, User};
+use drift::state::{
+    perp_market::PerpMarket,
+    spot_market::SpotMarket,
+    user::{MarketType, User},
+};
 use solana_client::rpc_filter::{Memcmp, RpcFilterType};
 
 pub fn get_user_filter() -> RpcFilterType {

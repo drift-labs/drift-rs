@@ -388,21 +388,20 @@ fn calculate_collateral_inner(
 mod tests {
     use std::str::FromStr;
 
-    use anchor_lang::prelude::AccountInfo;
-    use anchor_lang::{Owner, ZeroCopy};
+    use anchor_lang::{prelude::AccountInfo, Owner, ZeroCopy};
     use bytes::BytesMut;
-    use drift::ids::pyth_program;
-    use drift::state::oracle_map::OracleMap;
-    use drift::state::perp_market_map::PerpMarketMap;
-    use drift::state::spot_market_map::SpotMarketMap;
     use drift::{
+        ids::pyth_program,
         math::constants::{
             AMM_RESERVE_PRECISION, BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, PEG_PRECISION,
             SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64, SPOT_CUMULATIVE_INTEREST_PRECISION,
         },
         state::{
             oracle::{HistoricalOracleData, OracleSource},
+            oracle_map::OracleMap,
             perp_market::{MarketStatus, AMM},
+            perp_market_map::PerpMarketMap,
+            spot_market_map::SpotMarketMap,
             user::SpotPosition,
         },
     };
@@ -410,8 +409,9 @@ mod tests {
     use solana_sdk::pubkey::Pubkey;
 
     use super::*;
-    use crate::math::account_map_builder::MarketSet;
-    use crate::{constants, MarketId, RpcAccountProvider, Wallet};
+    use crate::{
+        constants, math::account_map_builder::MarketSet, MarketId, RpcAccountProvider, Wallet,
+    };
 
     const SOL_ORACLE: Pubkey = solana_sdk::pubkey!("J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix");
     const BTC_ORACLE: Pubkey = solana_sdk::pubkey!("GVXRSBjFk6e6J3NbVPXohDJetcTjaeeuykUpbQF8UoMU");

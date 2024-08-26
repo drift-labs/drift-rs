@@ -3,9 +3,6 @@
 use std::{borrow::Cow, sync::Arc, time::Duration};
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData, ToAccountMetas};
-use async_utils::{retry_policy, spawn_retry_task};
-use blockhash_subscriber::BlockhashSubscriber;
-use constants::derive_perp_market_account;
 use drift::{
     controller::position::PositionDirection,
     instructions::SpotFulfillmentType,
@@ -18,12 +15,9 @@ use drift::{
         user::{MarketType, Order, OrderStatus, PerpPosition, SpotPosition, User, UserStats},
     },
 };
-use event_emitter::EventEmitter;
 use fnv::FnvHashMap;
 use futures_util::{future::BoxFuture, FutureExt, StreamExt, TryFutureExt};
 use log::{debug, warn};
-use marketmap::MarketMap;
-use oraclemap::{Oracle, OracleMap};
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
     nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient},
@@ -51,15 +45,21 @@ use tokio::{
         RwLock,
     },
 };
-use user::DriftUser;
-use utils::get_ws_url;
-use websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber};
 
 use crate::{
+    async_utils::{retry_policy, spawn_retry_task},
+    blockhash_subscriber::BlockhashSubscriber,
     constants::{
-        derive_spot_market_account, market_lookup_table, state_account, MarketExt, ProgramData,
+        derive_perp_market_account, derive_spot_market_account, market_lookup_table, state_account,
+        MarketExt, ProgramData,
     },
-    utils::decode,
+    event_emitter::EventEmitter,
+    marketmap::MarketMap,
+    oraclemap::{Oracle, OracleMap},
+    types::*,
+    user::DriftUser,
+    utils::{decode, get_ws_url},
+    websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber},
 };
 
 // utils
@@ -94,9 +94,8 @@ pub mod usermap;
 // wrappers
 pub mod user;
 
+#[cfg(feature = "dlob")]
 pub mod dlob;
-
-use types::*;
 
 type AccountCache = Arc<RwLock<FnvHashMap<Pubkey, Receiver<(Account, Slot)>>>>;
 

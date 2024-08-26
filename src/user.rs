@@ -82,12 +82,11 @@ impl DriftUser {
 mod tests {
     use std::str::FromStr;
 
-    use super::*;
-    use crate::Context;
-    use crate::RpcAccountProvider;
     use anchor_lang::accounts::account_loader::AccountLoader;
-    use solana_sdk::account_info::AccountInfo;
-    use solana_sdk::signature::Keypair;
+    use solana_sdk::{account_info::AccountInfo, signature::Keypair};
+
+    use super::*;
+    use crate::{Context, RpcAccountProvider};
 
     #[tokio::test]
     #[cfg(feature = "rpc_tests")]

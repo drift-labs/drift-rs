@@ -76,12 +76,12 @@ mod tests {
     use std::str::FromStr;
 
     use anchor_client::Cluster;
+    use env_logger;
 
     use super::*;
     use crate::{
         utils::envs::mainnet_endpoint, websocket_program_account_subscriber::ProgramAccountUpdate,
     };
-    use env_logger;
 
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]

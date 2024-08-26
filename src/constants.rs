@@ -1,11 +1,11 @@
 use std::sync::OnceLock;
 
-use drift::state::{perp_market::PerpMarket, spot_market::SpotMarket};
 pub use drift::{
     math::constants::{
         BASE_PRECISION_U64 as BASE_PRECISION, PRICE_PRECISION,
         QUOTE_PRECISION_U64 as QUOTE_PRECISION, SPOT_BALANCE_PRECISION,
     },
+    state::{perp_market::PerpMarket, spot_market::SpotMarket},
     ID as PROGRAM_ID,
 };
 use solana_sdk::{address_lookup_table_account::AddressLookupTableAccount, pubkey::Pubkey};

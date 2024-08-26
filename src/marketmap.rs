@@ -1,28 +1,33 @@
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-
-use crate::event_emitter::EventEmitter;
-use crate::memcmp::get_market_filter;
-use crate::utils::{decode, get_ws_url};
-use crate::websocket_program_account_subscriber::{
-    ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
+use std::sync::{
+    atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc, Mutex,
 };
-use crate::{DataAndSlot, SdkResult};
+
 use anchor_lang::AccountDeserialize;
 use dashmap::DashMap;
-use drift::state::oracle::OracleSource;
-use drift::state::perp_market::PerpMarket;
-use drift::state::spot_market::SpotMarket;
-use drift::state::user::MarketType;
+use drift::state::{
+    oracle::OracleSource, perp_market::PerpMarket, spot_market::SpotMarket, user::MarketType,
+};
 use serde_json::json;
 use solana_account_decoder::UiAccountEncoding;
-use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_client::rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
-use solana_client::rpc_request::RpcRequest;
-use solana_client::rpc_response::{OptionalContext, RpcKeyedAccount};
-use solana_sdk::commitment_config::CommitmentConfig;
-use solana_sdk::pubkey::Pubkey;
+use solana_client::{
+    nonblocking::rpc_client::RpcClient,
+    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+    rpc_request::RpcRequest,
+    rpc_response::{OptionalContext, RpcKeyedAccount},
+};
+use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use tokio::sync::RwLock;
+
+use crate::{
+    event_emitter::EventEmitter,
+    memcmp::get_market_filter,
+    utils::{decode, get_ws_url},
+    websocket_program_account_subscriber::{
+        ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
+    },
+    DataAndSlot, SdkResult,
+};
 
 pub trait Market {
     const MARKET_TYPE: MarketType;
@@ -238,12 +243,11 @@ where
 
 #[cfg(test)]
 mod tests {
+    use drift::state::{perp_market::PerpMarket, spot_market::SpotMarket};
+    use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
+
     use super::*;
     use crate::marketmap::MarketMap;
-    use drift::state::perp_market::PerpMarket;
-    use drift::state::spot_market::SpotMarket;
-    use solana_sdk::commitment_config::CommitmentConfig;
-    use solana_sdk::commitment_config::CommitmentLevel;
 
     #[tokio::test]
     #[cfg(rpc_tests)]
