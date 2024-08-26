@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::time::Instant;
 
 use anchor_lang::AccountDeserialize;
 use futures_util::StreamExt;
@@ -12,35 +12,25 @@ use solana_client::{
 use solana_sdk::commitment_config::CommitmentConfig;
 
 use crate::{
-    event_emitter::{Event, EventEmitter},
+    event_emitter::EventEmitter,
     types::{DataAndSlot, SdkError, SdkResult},
     utils::decode,
 };
 
 #[derive(Clone, Debug)]
-pub struct ProgramAccountUpdate<T: Clone + Send + AccountDeserialize + 'static> {
+pub struct ProgramAccountUpdate<T: AccountDeserialize + Send> {
     pub pubkey: String,
     pub data_and_slot: DataAndSlot<T>,
-    pub now: std::time::Instant,
+    pub now: Instant,
 }
 
-impl<T: Clone + Send + AccountDeserialize + 'static> ProgramAccountUpdate<T> {
-    pub fn new(pubkey: String, data_and_slot: DataAndSlot<T>, now: std::time::Instant) -> Self {
+impl<T: AccountDeserialize + Send> ProgramAccountUpdate<T> {
+    pub fn new(pubkey: String, data_and_slot: DataAndSlot<T>, now: Instant) -> Self {
         Self {
             pubkey,
             data_and_slot,
             now,
         }
-    }
-}
-
-impl<T: Clone + Send + AccountDeserialize + 'static> Event for ProgramAccountUpdate<T> {
-    fn box_clone(&self) -> Box<dyn Event> {
-        Box::new((*self).clone())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 
@@ -51,21 +41,24 @@ pub struct WebsocketProgramAccountOptions {
     pub encoding: UiAccountEncoding,
 }
 
-pub struct WebsocketProgramAccountSubscriber {
+pub struct WebsocketProgramAccountSubscriber<T: AccountDeserialize + Send> {
     subscription_name: &'static str,
     url: String,
     pub(crate) options: WebsocketProgramAccountOptions,
     pub subscribed: bool,
-    pub event_emitter: EventEmitter,
+    pub event_emitter: EventEmitter<ProgramAccountUpdate<T>>,
     unsubscriber: Option<tokio::sync::mpsc::Sender<()>>,
 }
 
-impl WebsocketProgramAccountSubscriber {
+impl<T> WebsocketProgramAccountSubscriber<T>
+where
+    T: AccountDeserialize + Clone + Send + 'static,
+{
     pub fn new(
         subscription_name: &'static str,
         url: String,
         options: WebsocketProgramAccountOptions,
-        event_emitter: EventEmitter,
+        event_emitter: EventEmitter<ProgramAccountUpdate<T>>,
     ) -> Self {
         WebsocketProgramAccountSubscriber {
             subscription_name,
@@ -77,23 +70,17 @@ impl WebsocketProgramAccountSubscriber {
         }
     }
 
-    pub async fn subscribe<T>(&mut self) -> SdkResult<()>
-    where
-        T: AccountDeserialize + Clone + Send + 'static,
-    {
+    pub async fn subscribe(&mut self) -> SdkResult<()> {
         if self.subscribed {
             return Ok(());
         }
         self.subscribed = true;
-        self.subscribe_ws::<T>().await?;
+        self.subscribe_ws().await?;
 
         Ok(())
     }
 
-    async fn subscribe_ws<T>(&mut self) -> SdkResult<()>
-    where
-        T: AccountDeserialize + Clone + Send + 'static,
-    {
+    async fn subscribe_ws(&mut self) -> SdkResult<()> {
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.options.commitment),
             encoding: Some(self.options.encoding),
@@ -135,10 +122,10 @@ impl WebsocketProgramAccountSubscriber {
                                                 latest_slot = slot;
                                                 let pubkey = message.value.pubkey;
                                                 let account_data = message.value.account.data;
-                                                match decode(account_data) {
+                                                match decode(&account_data) {
                                                     Ok(data) => {
                                                         let data_and_slot = DataAndSlot::<T> { slot, data };
-                                                        event_emitter.emit(subscription_name, Box::new(ProgramAccountUpdate::new(pubkey, data_and_slot, std::time::Instant::now())));
+                                                        event_emitter.emit(ProgramAccountUpdate::new(pubkey, data_and_slot, Instant::now()));
                                                     },
                                                     Err(e) => {
                                                         error!("Error decoding account data {e}");

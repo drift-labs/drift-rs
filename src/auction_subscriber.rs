@@ -11,7 +11,7 @@ use crate::{
     memcmp::{get_user_filter, get_user_with_auction_filter},
     types::SdkResult,
     websocket_program_account_subscriber::{
-        WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
+        ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
     },
 };
 
@@ -23,8 +23,8 @@ pub struct AuctionSubscriberConfig {
 
 /// To subscribe to auction updates, subscribe to the event_emitter's "auction" event type.
 pub struct AuctionSubscriber {
-    pub subscriber: WebsocketProgramAccountSubscriber,
-    pub event_emitter: EventEmitter,
+    pub subscriber: WebsocketProgramAccountSubscriber<User>,
+    pub event_emitter: EventEmitter<ProgramAccountUpdate<User>>,
 }
 
 impl AuctionSubscriber {
@@ -59,7 +59,7 @@ impl AuctionSubscriber {
             return Ok(());
         }
 
-        self.subscriber.subscribe::<User>().await?;
+        self.subscriber.subscribe().await?;
 
         Ok(())
     }
@@ -101,9 +101,7 @@ mod tests {
         let emitter = auction_subscriber.event_emitter.clone();
 
         emitter.subscribe(AuctionSubscriber::SUBSCRIPTION_ID, move |event| {
-            if let Some(event) = event.as_any().downcast_ref::<ProgramAccountUpdate<User>>() {
-                log::info!("{:?}", event.now.elapsed());
-            }
+            log::info!("{:?}", event.now.elapsed());
         });
 
         let _ = auction_subscriber.subscribe().await;

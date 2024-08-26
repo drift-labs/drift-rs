@@ -12,7 +12,7 @@ pub struct DLOBBuilder {
     usermap: UserMap,
     rebuild_frequency: u64,
     dlob: DLOB,
-    event_emitter: EventEmitter,
+    event_emitter: EventEmitter<DLOB>,
 }
 
 impl DLOBBuilder {
@@ -57,8 +57,7 @@ impl DLOBBuilder {
     pub fn build(&mut self) {
         self.dlob
             .build_from_usermap(&self.usermap, self.slot_subscriber.current_slot());
-        self.event_emitter
-            .emit(DLOBBuilder::SUBSCRIPTION_ID, Box::new(self.dlob.clone()));
+        self.event_emitter.emit(self.dlob.clone());
     }
 
     pub fn get_dlob(&self) -> DLOB {

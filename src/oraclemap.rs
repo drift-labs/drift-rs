@@ -36,7 +36,7 @@ pub struct Oracle {
 pub(crate) struct OracleMap {
     subscribed: AtomicBool,
     pub(crate) oraclemap: Arc<DashMap<Pubkey, Oracle>>,
-    event_emitter: &'static EventEmitter,
+    event_emitter: &'static EventEmitter<AccountUpdate>,
     oracle_infos: DashMap<Pubkey, OracleSource>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
@@ -65,12 +65,9 @@ impl OracleMap {
 
         let sync_lock = if sync { Some(Mutex::new(())) } else { None };
 
-        let mut all_oracles = vec![];
-        all_oracles.extend(perp_oracles.clone());
-        all_oracles.extend(spot_oracles.clone());
-
-        let oracle_infos_map: DashMap<_, _> = all_oracles
+        let oracle_infos_map: DashMap<_, _> = perp_oracles
             .iter()
+            .chain(spot_oracles.iter())
             .map(|(_, pubkey, oracle_source)| (*pubkey, *oracle_source))
             .collect();
 
@@ -125,54 +122,50 @@ impl OracleMap {
             let oracle_source_by_oracle_key = self.oracle_infos.clone();
             let oracle_map = self.oraclemap.clone();
 
-            self.event_emitter
-                .subscribe(OracleMap::SUBSCRIPTION_ID, move |event| {
-                    if let Some(update) = event.as_any().downcast_ref::<AccountUpdate>() {
-                        let oracle_pubkey = Pubkey::from_str(&update.pubkey).expect("valid pubkey");
-                        let oracle_source_maybe = oracle_source_by_oracle_key.get(&oracle_pubkey);
-                        if let Some(oracle_source) = oracle_source_maybe {
-                            if let UiAccountData::Binary(blob, UiAccountEncoding::Base64) =
-                                &update.data.data
-                            {
-                                let mut data = base64::decode(blob).expect("valid data");
-                                let owner =
-                                    Pubkey::from_str(&update.data.owner).expect("valid pubkey");
-                                let mut lamports = update.data.lamports;
-                                let oracle_account_info = AccountInfo::new(
-                                    &oracle_pubkey,
-                                    false,
-                                    false,
-                                    &mut lamports,
-                                    &mut data,
-                                    &owner,
-                                    false,
-                                    update.data.rent_epoch,
+            self.event_emitter.subscribe(move |update| {
+                let oracle_pubkey = Pubkey::from_str(&update.pubkey).expect("valid pubkey");
+                let oracle_source_maybe = oracle_source_by_oracle_key.get(&oracle_pubkey);
+                if let Some(oracle_source) = oracle_source_maybe {
+                    if let UiAccountData::Binary(blob, UiAccountEncoding::Base64) =
+                        &update.data.data
+                    {
+                        let mut data = base64::decode(blob).expect("valid data");
+                        let owner = Pubkey::from_str(&update.data.owner).expect("valid pubkey");
+                        let mut lamports = update.data.lamports;
+                        let oracle_account_info = AccountInfo::new(
+                            &oracle_pubkey,
+                            false,
+                            false,
+                            &mut lamports,
+                            &mut data,
+                            &owner,
+                            false,
+                            update.data.rent_epoch,
+                        );
+                        match get_oracle_price(
+                            oracle_source.value(),
+                            &oracle_account_info,
+                            update.slot,
+                        ) {
+                            Ok(price_data) => {
+                                oracle_map.insert(
+                                    oracle_pubkey,
+                                    Oracle {
+                                        pubkey: oracle_pubkey,
+                                        data: price_data,
+                                        source: *oracle_source.value(),
+                                        slot: update.slot,
+                                        raw: data,
+                                    },
                                 );
-                                match get_oracle_price(
-                                    oracle_source.value(),
-                                    &oracle_account_info,
-                                    update.slot,
-                                ) {
-                                    Ok(price_data) => {
-                                        oracle_map.insert(
-                                            oracle_pubkey,
-                                            Oracle {
-                                                pubkey: oracle_pubkey,
-                                                data: price_data,
-                                                source: *oracle_source.value(),
-                                                slot: update.slot,
-                                                raw: data,
-                                            },
-                                        );
-                                    }
-                                    Err(err) => {
-                                        log::error!("Failed to get oracle price: {:?}", err)
-                                    }
-                                }
+                            }
+                            Err(err) => {
+                                log::error!("Failed to get oracle price: {:?}", err)
                             }
                         }
                     }
-                });
+                }
+            });
 
             let mut subscribers_clone = oracle_subscribers.clone();
 

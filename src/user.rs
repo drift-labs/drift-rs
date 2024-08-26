@@ -6,7 +6,7 @@ use solana_sdk::pubkey::Pubkey;
 use crate::{
     event_emitter::EventEmitter,
     utils::{decode, get_ws_url},
-    websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber},
+    websocket_account_subscriber::WebsocketAccountSubscriber,
     AccountProvider, DataAndSlot, DriftClient, SdkResult,
 };
 
@@ -50,20 +50,13 @@ impl DriftUser {
 
     pub async fn subscribe(&mut self) -> SdkResult<()> {
         let current_data_and_slot = self.data_and_slot.clone();
-        self.subscription
-            .event_emitter
-            .subscribe(DriftUser::SUBSCRIPTION_ID, move |event| {
-                if let Some(update) = event.as_any().downcast_ref::<AccountUpdate>() {
-                    let new_data =
-                        decode::<User>(update.data.data.clone()).expect("valid user data");
-                    let slot = update.slot;
-                    let mut data_and_slot = current_data_and_slot.write().unwrap();
-                    *data_and_slot = DataAndSlot {
-                        data: new_data,
-                        slot,
-                    };
-                }
-            });
+        self.subscription.event_emitter.subscribe(move |update| {
+            let mut data_and_slot = current_data_and_slot.write().unwrap();
+            *data_and_slot = DataAndSlot {
+                data: decode::<User>(&update.data.data).expect("valid user data"),
+                slot: update.slot,
+            };
+        });
         self.subscription.subscribe().await?;
         Ok(())
     }

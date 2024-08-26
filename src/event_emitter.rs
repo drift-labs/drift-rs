@@ -1,6 +1,4 @@
 use std::{
-    any::Any,
-    collections::HashMap,
     sync::{
         mpsc::{channel, Sender},
         Arc, Mutex,
@@ -8,61 +6,45 @@ use std::{
     thread,
 };
 
-type Subscribers = Arc<Mutex<HashMap<&'static str, Vec<Sender<Box<dyn Event>>>>>>;
-
-pub trait Event: Any + Send {
-    fn box_clone(&self) -> Box<dyn Event>;
-    fn as_any(&self) -> &dyn Any;
-}
-
-impl Clone for Box<dyn Event> {
-    fn clone(&self) -> Box<dyn Event> {
-        self.box_clone()
-    }
-}
+type Subscribers<T> = Arc<Mutex<Vec<Sender<T>>>>;
 
 #[derive(Clone)]
-pub struct EventEmitter {
-    subscribers: Subscribers,
+pub struct EventEmitter<T> {
+    subscribers: Subscribers<T>,
 }
 
-impl EventEmitter {
+impl<T: Send + Clone + 'static> EventEmitter<T> {
     pub fn new() -> Self {
         EventEmitter {
-            subscribers: Arc::new(Mutex::new(HashMap::new())),
+            subscribers: Arc::new(Mutex::new(Vec::default())),
         }
     }
 
-    pub fn subscribe<F: 'static + Send + Fn(Box<dyn Event>)>(
-        &self,
-        event_type: &'static str,
-        handler: F,
-    ) {
+    pub fn subscribe<F: 'static + Send + Fn(&T)>(&self, handler: F) {
         let (tx, rx) = channel();
 
         if let Ok(mut subs) = self.subscribers.lock() {
-            subs.entry(event_type).or_default().push(tx);
+            subs.push(tx);
+            dbg!("SUBS LEN!!!!", subs.len());
         }
 
         thread::spawn(move || {
             for event in rx {
-                handler(event);
+                handler(&event);
             }
         });
     }
 
-    pub fn emit(&self, event_type: &'static str, event: Box<dyn Event>) {
+    pub fn emit(&self, event: T) {
         if let Ok(subs) = self.subscribers.lock() {
-            if let Some(handlers) = subs.get(event_type) {
-                for handler in handlers {
-                    let _ = handler.send(event.clone());
-                }
+            for handler in subs.iter() {
+                let _ = handler.send(event.clone());
             }
         }
     }
 }
 
-impl Default for EventEmitter {
+impl<T: Send + Clone + 'static> Default for EventEmitter<T> {
     fn default() -> Self {
         Self::new()
     }
@@ -77,16 +59,6 @@ mod tests {
         message: String,
     }
 
-    impl Event for TestEvent {
-        fn box_clone(&self) -> Box<dyn Event> {
-            Box::new(self.clone())
-        }
-
-        fn as_any(&self) -> &dyn Any {
-            self
-        }
-    }
-
     #[test]
     fn test_event_emitter_with_captured_variable() {
         let event_emitter = EventEmitter::new();
@@ -94,18 +66,16 @@ mod tests {
 
         let (tx, rx) = channel::<String>();
 
-        event_emitter.subscribe("test_event", move |event| {
-            if let Some(test_event) = event.as_any().downcast_ref::<TestEvent>() {
-                // Use the captured variable in the handler.
-                let response = format!("{}: {}", captured_message, test_event.message);
-                tx.send(response).unwrap();
-            }
+        event_emitter.subscribe(move |event: &TestEvent| {
+            // Use the captured variable in the handler.
+            let response = format!("{}: {}", captured_message, event.message);
+            tx.send(response).unwrap();
         });
 
         let test_event = TestEvent {
             message: "Hello, world!".to_string(),
         };
-        event_emitter.emit("test_event", Box::new(test_event));
+        event_emitter.emit(test_event);
 
         let handler_response = rx.recv().unwrap();
         assert_eq!(handler_response, "Captured: Hello, world!");

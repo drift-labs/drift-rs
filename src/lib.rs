@@ -59,7 +59,7 @@ use crate::{
     types::*,
     user::DriftUser,
     utils::{decode, get_ws_url},
-    websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber},
+    websocket_account_subscriber::WebsocketAccountSubscriber,
 };
 
 // utils
@@ -787,7 +787,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
     async fn state_subscribe(&self) -> SdkResult<()> {
         let pubkey = *state_account();
 
-        let mut subscription = WebsocketAccountSubscriber::new(
+        let mut state_subscriber = WebsocketAccountSubscriber::new(
             "state",
             get_ws_url(&self.rpc_client.url()).expect("valid url"),
             pubkey,
@@ -797,15 +797,13 @@ impl<T: AccountProvider> DriftClientBackend<T> {
 
         let state = self.state_account.clone();
 
-        subscription.event_emitter.subscribe("state", move |event| {
-            if let Some(update) = event.as_any().downcast_ref::<AccountUpdate>() {
-                let new_data = decode::<State>(update.data.data.clone()).expect("valid state data");
-                let mut state_writer = state.write().unwrap();
-                *state_writer = new_data;
-            }
+        state_subscriber.event_emitter.subscribe(move |event| {
+            let new_data = decode::<State>(&event.data.data).expect("valid state data");
+            let mut state_writer = state.write().unwrap();
+            *state_writer = new_data;
         });
 
-        subscription.subscribe().await?;
+        state_subscriber.subscribe().await?;
 
         Ok(())
     }

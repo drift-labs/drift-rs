@@ -24,7 +24,7 @@ use crate::{
     memcmp::get_market_filter,
     utils::{decode, get_ws_url},
     websocket_program_account_subscriber::{
-        ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
+        WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
     },
     DataAndSlot, SdkResult,
 };
@@ -59,9 +59,9 @@ impl Market for SpotMarket {
     }
 }
 
-pub struct MarketMap<T: AccountDeserialize> {
+pub struct MarketMap<T: AccountDeserialize + Send> {
     subscribed: AtomicBool,
-    subscription: RwLock<WebsocketProgramAccountSubscriber>,
+    subscription: RwLock<WebsocketProgramAccountSubscriber<T>>,
     marketmap: Arc<DashMap<u16, DataAndSlot<T>>>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
@@ -72,7 +72,7 @@ pub struct MarketMap<T: AccountDeserialize> {
 
 impl<T> MarketMap<T>
 where
-    T: AccountDeserialize + Clone + Send + Sync + Market + bytemuck::Pod + 'static,
+    T: AccountDeserialize + Clone + Send + Sync + Market + 'static,
 {
     pub const SUBSCRIPTION_ID: &'static str = "marketmap";
 
@@ -120,30 +120,21 @@ where
         if !self.subscribed.load(Ordering::Relaxed) {
             let mut subscription_writer = self.subscription.write().await;
 
-            subscription_writer.subscribe::<T>().await?;
+            subscription_writer.subscribe().await?;
             self.subscribed.store(true, Ordering::Relaxed);
 
-            let marketmap = self.marketmap.clone();
+            let marketmap = Arc::clone(&self.marketmap);
             let latest_slot = self.latest_slot.clone();
 
-            subscription_writer.event_emitter.subscribe(
-                MarketMap::<T>::SUBSCRIPTION_ID,
-                move |event| {
-                    if let Some(update) = event.as_any().downcast_ref::<ProgramAccountUpdate<T>>() {
-                        let market_data_and_slot = update.data_and_slot.clone();
-                        if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
-                            latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
-                        }
-                        marketmap.insert(
-                            update.data_and_slot.clone().data.market_index(),
-                            DataAndSlot {
-                                data: market_data_and_slot.data,
-                                slot: update.data_and_slot.slot,
-                            },
-                        );
-                    }
-                },
-            );
+            subscription_writer.event_emitter.subscribe(move |update| {
+                if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
+                    latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
+                }
+                marketmap.insert(
+                    update.data_and_slot.data.market_index(),
+                    update.data_and_slot.clone(),
+                );
+            });
 
             drop(subscription_writer)
         }
@@ -161,7 +152,7 @@ where
     }
 
     pub fn values(&self) -> Vec<T> {
-        self.marketmap.iter().map(|x| x.data).collect()
+        self.marketmap.iter().map(|x| x.data.clone()).collect()
     }
 
     pub fn oracles(&self) -> Vec<(u16, Pubkey, OracleSource)> {
@@ -223,7 +214,7 @@ where
             for account in accounts.value {
                 let slot = accounts.context.slot;
                 let market_data = account.account.data;
-                let data = decode::<T>(market_data)?;
+                let data = decode::<T>(&market_data)?;
                 self.marketmap
                     .insert(data.market_index(), DataAndSlot { data, slot });
             }

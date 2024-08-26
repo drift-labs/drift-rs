@@ -115,7 +115,7 @@ pub fn dlob_subscribe_ws_json(market: &str) -> String {
 }
 
 #[inline(always)]
-pub fn decode<T>(data: UiAccountData) -> SdkResult<T>
+pub fn decode<T>(data: &UiAccountData) -> SdkResult<T>
 where
     T: AccountDeserialize,
 {

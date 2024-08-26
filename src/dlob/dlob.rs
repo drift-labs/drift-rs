@@ -1,6 +1,6 @@
 #![allow(clippy::module_inception)]
 
-use std::{any::Any, collections::BinaryHeap, str::FromStr, sync::Arc};
+use std::{collections::BinaryHeap, str::FromStr, sync::Arc};
 
 use dashmap::DashSet;
 use drift::state::{
@@ -15,7 +15,6 @@ use crate::{
         dlob_node::{create_node, get_order_signature, DLOBNode, DirectionalNode, Node, NodeType},
         market::{get_node_subtype_and_type, Exchange, OpenOrders, SubType},
     },
-    event_emitter::Event,
     math::order::is_resting_limit_order,
     usermap::UserMap,
     utils::market_type_to_string,
@@ -291,16 +290,6 @@ impl DLOB {
 impl Default for DLOB {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl Event for DLOB {
-    fn box_clone(&self) -> Box<dyn Event> {
-        Box::new((*self).clone())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }
 

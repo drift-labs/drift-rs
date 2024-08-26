@@ -25,14 +25,14 @@ use crate::{
     memcmp::{get_non_idle_user_filter, get_user_filter},
     utils::{decode, get_ws_url},
     websocket_program_account_subscriber::{
-        ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
+        WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
     },
     SdkResult,
 };
 
 pub struct UserMap {
     subscribed: bool,
-    subscription: WebsocketProgramAccountSubscriber,
+    subscription: WebsocketProgramAccountSubscriber<User>,
     pub(crate) usermap: Arc<DashMap<String, User>>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
@@ -58,7 +58,7 @@ impl UserMap {
         };
         let event_emitter = EventEmitter::new();
 
-        let url = get_ws_url(&endpoint.clone()).unwrap();
+        let url = get_ws_url(&endpoint).unwrap();
 
         let subscription = WebsocketProgramAccountSubscriber::new(
             UserMap::SUBSCRIPTION_ID,
@@ -90,26 +90,18 @@ impl UserMap {
         }
 
         if !self.subscribed {
-            self.subscription.subscribe::<User>().await?;
+            self.subscription.subscribe().await?;
             self.subscribed = true;
 
             let usermap = self.usermap.clone();
             let latest_slot = self.latest_slot.clone();
 
-            self.subscription
-                .event_emitter
-                .subscribe(UserMap::SUBSCRIPTION_ID, move |event| {
-                    if let Some(update) =
-                        event.as_any().downcast_ref::<ProgramAccountUpdate<User>>()
-                    {
-                        let user_data_and_slot = update.data_and_slot.clone();
-                        let user_pubkey = update.pubkey.to_string();
-                        if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
-                            latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
-                        }
-                        usermap.insert(user_pubkey, user_data_and_slot.data);
-                    }
-                });
+            self.subscription.event_emitter.subscribe(move |update| {
+                if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
+                    latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
+                }
+                usermap.insert(update.pubkey.clone(), update.data_and_slot.data);
+            });
         }
 
         Ok(())
@@ -184,7 +176,7 @@ impl UserMap {
             for account in accounts.value {
                 let pubkey = account.pubkey;
                 let user_data = account.account.data;
-                let data = decode::<User>(user_data)?;
+                let data = decode::<User>(&user_data)?;
                 self.usermap.insert(pubkey, data);
             }
 

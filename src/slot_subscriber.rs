@@ -5,14 +5,14 @@ use log::{debug, error, warn};
 use solana_client::nonblocking::pubsub_client::PubsubClient;
 
 use crate::{
-    event_emitter::{Event, EventEmitter},
+    event_emitter::EventEmitter,
     types::{SdkError, SdkResult},
 };
 
 /// To subscribe to slot updates, subscribe to the event_emitter's "slot" event type.
 pub struct SlotSubscriber {
     current_slot: Arc<Mutex<u64>>,
-    event_emitter: EventEmitter,
+    event_emitter: EventEmitter<SlotUpdate>,
     subscribed: bool,
     url: String,
     unsubscriber: Option<tokio::sync::mpsc::Sender<()>>,
@@ -26,16 +26,6 @@ pub struct SlotUpdate {
 impl SlotUpdate {
     pub fn new(latest_slot: u64) -> Self {
         Self { latest_slot }
-    }
-}
-
-impl Event for SlotUpdate {
-    fn box_clone(&self) -> Box<dyn Event> {
-        Box::new((*self).clone())
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
     }
 }
 
@@ -89,7 +79,7 @@ impl SlotSubscriber {
                                 let mut current_slot_guard = current_slot.lock().unwrap();
                                 if slot >= *current_slot_guard {
                                     *current_slot_guard = slot;
-                                    event_emitter.emit(SlotSubscriber::SUBSCRIPTION_ID, Box::new(SlotUpdate::new(slot)));
+                                    event_emitter.emit(SlotUpdate::new(slot));
                                 }
                             }
                             None => {

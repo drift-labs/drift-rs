@@ -3,26 +3,13 @@ use solana_account_decoder::{UiAccount, UiAccountEncoding};
 use solana_client::{nonblocking::pubsub_client::PubsubClient, rpc_config::RpcAccountInfoConfig};
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 
-use crate::{
-    event_emitter::{Event, EventEmitter},
-    SdkResult,
-};
+use crate::{event_emitter::EventEmitter, SdkResult};
 
 #[derive(Clone, Debug)]
 pub(crate) struct AccountUpdate {
     pub pubkey: String,
     pub data: UiAccount,
     pub slot: u64,
-}
-
-impl Event for AccountUpdate {
-    fn box_clone(&self) -> Box<dyn Event> {
-        Box::new((*self).clone())
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
 }
 
 #[derive(Clone)]
@@ -32,7 +19,7 @@ pub struct WebsocketAccountSubscriber {
     pubkey: Pubkey,
     pub(crate) commitment: CommitmentConfig,
     pub subscribed: bool,
-    pub event_emitter: EventEmitter,
+    pub(crate) event_emitter: EventEmitter<AccountUpdate>,
     unsubscriber: Option<tokio::sync::mpsc::Sender<()>>,
 }
 
@@ -42,7 +29,7 @@ impl WebsocketAccountSubscriber {
         url: String,
         pubkey: Pubkey,
         commitment: CommitmentConfig,
-        event_emitter: EventEmitter,
+        event_emitter: EventEmitter<AccountUpdate>,
     ) -> Self {
         WebsocketAccountSubscriber {
             subscription_name,
@@ -107,7 +94,7 @@ impl WebsocketAccountSubscriber {
                                                     data: message.value,
                                                     slot,
                                                 };
-                                                event_emitter.emit(subscription_name, Box::new(account_update));
+                                                event_emitter.emit(account_update);
                                             }
                                         }
                                         None => {
