@@ -267,7 +267,9 @@ impl SdkError {
             {
                 // inverse of anchor's 'From<ErrorCode> for u32'
                 return Some(unsafe {
-                    std::mem::transmute(code - anchor_lang::error::ERROR_CODE_OFFSET)
+                    std::mem::transmute::<u32, ErrorCode>(
+                        code - anchor_lang::error::ERROR_CODE_OFFSET,
+                    )
                 });
             }
         }

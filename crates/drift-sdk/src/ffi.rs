@@ -15,6 +15,10 @@ use crate::{
     SdkResult,
 };
 
+// c-abi compat for 128-bit integers is required (i.e rust >= 1.77.0)
+static_assertions::const_assert_eq!(align_of::<i128>(), 16);
+static_assertions::const_assert_eq!(align_of::<u128>(), 16);
+
 /// Defines an upgrade from plain IDL generated type into an FFI version with drift program functionality available
 pub trait IntoFfi {
     type Output;
@@ -71,6 +75,9 @@ impl<'a> AccountList<'a> {
     }
 }
 
+// TODO: AccountInfo is not FFI safe...
+// `std::rc::Rc<std::cell::RefCell<&mut u64>>`
+
 // Declarations of exported functions from `drift-ffi` lib
 // the types here must be C abi safe/compatible
 //
@@ -92,6 +99,7 @@ extern "C" {
 
     pub fn order_is_limit_order(ptr: *const types::Order) -> bool;
 
+    #[allow(improper_ctypes)]
     pub fn perp_market_get_margin_ratio(
         ptr: *const accounts::PerpMarket,
         size: u128,
@@ -100,23 +108,27 @@ extern "C" {
 
     pub fn perp_position_is_available(ptr: *const types::PerpPosition) -> bool;
     pub fn perp_position_is_open_position(ptr: *const types::PerpPosition) -> bool;
+    #[allow(improper_ctypes)]
     pub fn perp_position_worst_case_base_asset_amount(
         ptr: *const types::PerpPosition,
         oracle_price: i64,
         contract_type: ContractType,
     ) -> FfiResult<i128>;
+    #[allow(improper_ctypes)]
     pub fn perp_position_simulate_settled_lp_position(
         ptr: *const types::PerpPosition,
         market: *const accounts::PerpMarket,
         oracle_price: i64,
     ) -> FfiResult<types::PerpPosition>;
 
+    #[allow(improper_ctypes)]
     pub fn spot_market_get_asset_weight(
         ptr: *const accounts::SpotMarket,
         size: u128,
         oracle_price: i64,
         margin_requirement_type: MarginRequirementType,
     ) -> FfiResult<u32>;
+    #[allow(improper_ctypes)]
     pub fn spot_market_get_liability_weight(
         ptr: *const accounts::SpotMarket,
         size: u128,
@@ -124,6 +136,7 @@ extern "C" {
     ) -> FfiResult<u32>;
 
     pub fn spot_position_is_available(ptr: *const types::SpotPosition) -> bool;
+    #[allow(improper_ctypes)]
     pub fn spot_position_get_signed_token_amount(
         ptr: *const types::SpotPosition,
         market: *const accounts::SpotMarket,

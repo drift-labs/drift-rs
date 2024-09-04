@@ -6,7 +6,7 @@ use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use crate::{event_emitter::EventEmitter, SdkResult};
 
 #[derive(Clone, Debug)]
-pub(crate) struct AccountUpdate {
+pub struct AccountUpdate {
     pub pubkey: String,
     pub data: UiAccount,
     pub slot: u64,

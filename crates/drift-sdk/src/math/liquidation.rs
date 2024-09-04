@@ -160,10 +160,10 @@ pub fn calculate_liquidation_price_inner<'a>(
         .map_err(|_| SdkError::NoPosiiton(perp_market.market_index))?;
 
     let perp_position_with_lp =
-        perp_position.simulate_settled_lp_position(&perp_market, oracle_price)?;
+        perp_position.simulate_settled_lp_position(perp_market, oracle_price)?;
 
     let perp_free_collateral_delta =
-        calculate_perp_free_collateral_delta(&perp_position_with_lp, &perp_market, oracle_price);
+        calculate_perp_free_collateral_delta(&perp_position_with_lp, perp_market, oracle_price);
 
     // user holding spot asset case
     let mut spot_free_collateral_delta = 0;
@@ -171,7 +171,7 @@ pub fn calculate_liquidation_price_inner<'a>(
         if let Ok(spot_position) = user.ffi().get_spot_position(spot_market.market_index) {
             if !spot_position.is_available() {
                 spot_free_collateral_delta =
-                    calculate_spot_free_collateral_delta(&spot_position, &spot_market);
+                    calculate_spot_free_collateral_delta(&spot_position, spot_market);
             }
         }
     }
@@ -238,7 +238,7 @@ fn calculate_spot_free_collateral_delta(position: &ffi::SpotPosition, market: &S
         let weight = market
             .ffi()
             .get_asset_weight(
-                signed_token_amount.unsigned_abs() as u128,
+                signed_token_amount.unsigned_abs(),
                 0, // unused by Maintenance margin type, hence 0
                 MarginRequirementType::Maintenance,
             )

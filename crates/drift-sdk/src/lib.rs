@@ -1364,7 +1364,7 @@ impl<'a> TransactionBuilder<'a> {
                 accounts,
                 data: InstructionData::data(&drift_abi::instructions::ModifyOrder {
                     order_id: Some(*order_id),
-                    modify_order_params: params.clone(),
+                    modify_order_params: *params,
                 }),
             };
             self.ixs.push(ix);
@@ -1393,7 +1393,7 @@ impl<'a> TransactionBuilder<'a> {
                 accounts,
                 data: InstructionData::data(&drift_abi::instructions::ModifyOrderByUserId {
                     user_order_id: *user_order_id,
-                    modify_order_params: params.clone(),
+                    modify_order_params: *params,
                 }),
             };
             self.ixs.push(ix);
@@ -1431,7 +1431,7 @@ impl<'a> TransactionBuilder<'a> {
                 taker: *taker,
                 taker_stats: Wallet::derive_stats_account(taker, &constants::PROGRAM_ID),
             },
-            &[self.account_data.as_ref(), &taker_account],
+            &[self.account_data.as_ref(), taker_account],
             &[],
             if is_perp {
                 &perp_writable

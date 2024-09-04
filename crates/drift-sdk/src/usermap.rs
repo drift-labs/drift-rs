@@ -101,7 +101,7 @@ impl UserMap {
                 if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
                     latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
                 }
-                usermap.insert(update.pubkey.clone(), update.data_and_slot.data.clone());
+                usermap.insert(update.pubkey.clone(), update.data_and_slot.data);
             });
         }
 

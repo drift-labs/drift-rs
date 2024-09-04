@@ -8,10 +8,7 @@ use solana_sdk::{
     signature::Keypair,
 };
 
-use crate::{
-    drift_abi::types::MarketType,
-    types::{SdkError, SdkResult},
-};
+use crate::types::{SdkError, SdkResult};
 
 // kudos @wphan
 /// Try to parse secret `key` string
@@ -132,13 +129,6 @@ where
     T::deserialize(&mut decoded_data_slice).map_err(|err| SdkError::Anchor(Box::new(err.into())))
 }
 
-pub(crate) fn market_type_to_string(market_type: &MarketType) -> String {
-    match market_type {
-        MarketType::Perp => "perp".to_string(),
-        MarketType::Spot => "spot".to_string(),
-    }
-}
-
 /// Helper to deserialize account data as `T`
 pub fn deserialize_account<T: anchor_lang::AnchorDeserialize>(data: &mut &[u8]) -> Option<T> {
     T::deserialize(data).ok()
@@ -153,7 +143,7 @@ pub(crate) fn zero_account_to_bytes<T: bytemuck::Pod + anchor_lang::Discriminato
     account_data
 }
 
-#[cfg(any(test, test_utils))]
+#[cfg(any(test, feature = "test_utils"))]
 pub mod envs {
     //! test env vars
     use solana_sdk::signature::Keypair;

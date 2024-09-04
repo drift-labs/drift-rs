@@ -1413,6 +1413,7 @@ dependencies = [
  "solana-sdk",
  "solana-transaction-status",
  "spl-associated-token-account",
+ "static_assertions",
  "thiserror",
  "tokio",
  "tokio-tungstenite 0.21.0",
