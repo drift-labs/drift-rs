@@ -1,0 +1,57 @@
+[package]
+name = "drift-sdk"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.76.0"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/drift-labs/drift-rs"
+homepage = "https://drift.trade"
+description = """
+Rust SDK for interacting with the Drift V2 Protocol on the Solana blockchain.
+"""
+categories = ["solana", "trading", "defi", "dex"]
+keywords = ["solana", "trading", "defi", "dex", "drift", "protocol", "sdk"]
+
+[features]
+dlob = ["rayon"]
+# enable JIT client
+# jit = ["jit-proxy"]
+rpc_tests = []
+test_utils = []
+
+[dependencies]
+anchor-lang = "=0.29.0"
+base64 = "0.13"
+bytemuck = "1.13.0"
+dashmap = "5.5.3"
+drift-ffi = { path = "../drift-ffi", default-features = false } # import crossboundary types only
+#drift = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.92.0", features = [
+# "mainnet-beta", "drift-rs"
+#] }
+env_logger = "0.10.1"
+fnv = "1.0.7"
+futures-util = "0.3.29"
+# jit-proxy = { git = "https://github.com/drift-labs/jit-proxy.git", rev = "af5f2f4", optional = true }
+log = "0.4.20"
+rayon = { version = "1.9.0", optional = true }
+regex = "1.10.2"
+reqwest = "*"
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"
+solana-account-decoder = "2.0.7"
+solana-client = "2.0.7"
+solana-program = "2.0.7"
+solana-sdk = "2.0.7"
+solana-transaction-status = "2.0.7"
+thiserror = "1.0.38"
+tokio = { version = "*", features = ["full"] }
+tokio-tungstenite = { version = "*", features = ["native-tls"] }
+
+[dev-dependencies]
+borsh = "*"
+bytes = "*"
+futures = "0.3.30"
+hex = "*"
+hex-literal = "*"
+spl-associated-token-account = "4.0.0"
