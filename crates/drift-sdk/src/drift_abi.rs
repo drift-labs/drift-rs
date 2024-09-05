@@ -1,5 +1,7 @@
 #![allow(unused_imports)]
-#![doc = r" auto-generated IDL types"]
+#![doc = r""]
+#![doc = r" Auto-generated IDL types, manual edits do not persist (see `crates/drift-abi-gen`)"]
+#![doc = r" "]
 use anchor_lang::prelude::{
     account,
     borsh::{self},
@@ -10625,7 +10627,6 @@ pub mod errors {
 }
 pub mod events {
     use super::{types::*, *};
-    #[derive(InitSpace)]
     #[event]
     pub struct NewUserRecord {
         pub ts: i64,
@@ -10635,7 +10636,6 @@ pub mod events {
         pub name: [u8; 32],
         pub referrer: Pubkey,
     }
-    #[derive(InitSpace)]
     #[event]
     pub struct DepositRecord {
         pub ts: i64,
@@ -10655,7 +10655,6 @@ pub mod events {
         pub explanation: DepositExplanation,
         pub transfer_user: Option<Pubkey>,
     }
-    #[derive(InitSpace)]
     #[event]
     pub struct SpotInterestRecord {
         pub ts: i64,
@@ -10668,7 +10667,6 @@ pub mod events {
         pub optimal_borrow_rate: u32,
         pub max_borrow_rate: u32,
     }
-    #[derive(InitSpace)]
     #[event]
     pub struct FundingPaymentRecord {
         pub ts: i64,
@@ -10681,7 +10679,6 @@ pub mod events {
         pub amm_cumulative_funding_long: i128,
         pub amm_cumulative_funding_short: i128,
     }
-    #[derive(InitSpace)]
     #[event]
     pub struct FundingRateRecord {
         pub ts: i64,
@@ -10698,7 +10695,6 @@ pub mod events {
         pub base_asset_amount_with_amm: i128,
         pub base_asset_amount_with_unsettled_lp: i128,
     }
-    #[derive(InitSpace)]
     #[event]
     pub struct CurveRecord {
         pub ts: i64,
@@ -10722,14 +10718,12 @@ pub mod events {
         pub number_of_users: u32,
         pub market_index: u16,
     }
-    #[derive(InitSpace)]
     #[event]
     pub struct OrderRecord {
         pub ts: i64,
         pub user: Pubkey,
         pub order: Order,
     }
-    #[derive(InitSpace)]
     #[event]
     pub struct OrderActionRecord {
         pub ts: i64,
@@ -10761,7 +10755,6 @@ pub mod events {
         pub maker_order_cumulative_quote_asset_amount_filled: Option<u64>,
         pub oracle_price: i64,
     }
-    #[derive(InitSpace)]
     #[event]
     pub struct LPRecord {
         pub ts: i64,
@@ -10792,7 +10785,6 @@ pub mod events {
         pub perp_bankruptcy: PerpBankruptcyRecord,
         pub spot_bankruptcy: SpotBankruptcyRecord,
     }
-    #[derive(InitSpace)]
     #[event]
     pub struct SettlePnlRecord {
         pub ts: i64,
@@ -10805,7 +10797,6 @@ pub mod events {
         pub settle_price: i64,
         pub explanation: SettlePnlExplanation,
     }
-    #[derive(InitSpace)]
     #[event]
     pub struct InsuranceFundRecord {
         pub ts: i64,
@@ -10819,7 +10810,6 @@ pub mod events {
         pub total_if_shares_after: u128,
         pub amount: i64,
     }
-    #[derive(InitSpace)]
     #[event]
     pub struct InsuranceFundStakeRecord {
         pub ts: i64,
@@ -10835,7 +10825,6 @@ pub mod events {
         pub user_if_shares_after: u128,
         pub total_if_shares_after: u128,
     }
-    #[derive(InitSpace)]
     #[event]
     pub struct SwapRecord {
         pub ts: i64,
@@ -10848,7 +10837,6 @@ pub mod events {
         pub in_oracle_price: i64,
         pub fee: u64,
     }
-    #[derive(InitSpace)]
     #[event]
     pub struct SpotMarketVaultDepositRecord {
         pub ts: i64,

@@ -199,7 +199,7 @@ impl UserMap {
 mod tests {
 
     #[tokio::test]
-    #[cfg(rpc_tests)]
+    #[cfg(feature = "rpc_tests")]
     async fn test_usermap() {
         use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
 

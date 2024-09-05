@@ -160,6 +160,8 @@ fn generate_abi_types(idl: &Idl) -> String {
         );
         let type_tokens = match &type_def.type_def {
             TypeData::Enum { variants } => {
+                let mut has_complex_variant = false;
+
                 let variant_tokens =
                     variants
                         .iter()
@@ -179,6 +181,7 @@ fn generate_abi_types(idl: &Idl) -> String {
                                 }
                             }
                             EnumVariant::Complex { name, fields } => {
+                                has_complex_variant = true;
                                 let variant_name = Ident::new(name, proc_macro2::Span::call_site());
                                 let field_tokens = fields.iter().map(|field| {
                                     let field_name = Ident::new(
@@ -191,30 +194,30 @@ fn generate_abi_types(idl: &Idl) -> String {
                                         #field_name: #field_type,
                                     }
                                 });
-
-                                if i == 0 {
-                                    quote! {
-                                        // TODO: fix the Default derivation for complex enum variant
-                                        // idea: can move the default to the first Simple varieant
-                                        #variant_name {
-                                            #(#field_tokens)*
-                                        },
-                                    }
-                                } else {
-                                    quote! {
-                                        #variant_name {
-                                            #(#field_tokens)*
-                                        },
-                                    }
+                                quote! {
+                                    #variant_name {
+                                        #(#field_tokens)*
+                                    },
                                 }
                             }
                         });
 
-                quote! {
-                    #[repr(C)]
-                    #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq)]
-                    pub enum #type_name {
-                        #(#variant_tokens)*
+                if has_complex_variant {
+                    quote! {
+                        #[repr(C)]
+                        #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Debug, PartialEq)]
+                        pub enum #type_name {
+                            #(#variant_tokens)*
+                        }
+                    }
+                } else {
+                    // TODO: need more work to derive 'Default' on complex enums, not currently required
+                    quote! {
+                        #[repr(C)]
+                        #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq)]
+                        pub enum #type_name {
+                            #(#variant_tokens)*
+                        }
                     }
                 }
             }
@@ -414,7 +417,7 @@ fn generate_abi_types(idl: &Idl) -> String {
         });
 
         let struct_def = quote! {
-            #[derive(InitSpace)]
+            //#[derive(InitSpace)]
             #[event]
             pub struct #struct_name {
                 #(#fields)*
@@ -430,7 +433,9 @@ fn generate_abi_types(idl: &Idl) -> String {
     // Wrap generated code in modules with necessary imports
     let output = quote! {
         #![allow(unused_imports)]
-        //! auto-generated IDL types
+        //!
+        //! Auto-generated IDL types, manual edits do not persist (see `crates/drift-abi-gen`)
+        //! 
         use anchor_lang::prelude::{account, AnchorSerialize, AnchorDeserialize, InitSpace, event, error_code, msg, borsh::{self}};
         // use solana-sdk PUbkey, the vendored anchor-lang Pubkey maybe behind
         use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};

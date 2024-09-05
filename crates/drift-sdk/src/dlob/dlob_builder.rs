@@ -74,7 +74,7 @@ mod tests {
     use crate::{memcmp::get_user_with_order_filter, utils::get_ws_url};
 
     #[tokio::test]
-    #[cfg(rpc_tests)]
+    #[cfg(feature = "rpc_tests")]
     async fn test_dlob_builder() {
         env_logger::init();
         let endpoint = "rpc".to_string();
@@ -108,7 +108,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(rpc_tests)]
+    #[cfg(feature = "rpc_tests")]
     async fn test_build_time() {
         let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {

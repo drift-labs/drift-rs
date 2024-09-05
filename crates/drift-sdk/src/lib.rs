@@ -1919,7 +1919,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(rpc_tests)]
+    #[cfg(feature = "rpc_tests")]
     async fn test_marketmap_subscribe() {
         let endpoint = "rpc";
 

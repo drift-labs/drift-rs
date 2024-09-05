@@ -1,10 +1,12 @@
-use drift::math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64};
 use drift_sdk::{
     get_market_accounts,
+    math::constants::{BASE_PRECISION_I64, PRICE_PRECISION_U64},
     types::{Context, MarketId, NewOrder},
     DriftClient, RpcAccountProvider, Wallet,
 };
 use solana_sdk::signature::Keypair;
+
+const LAMPORTS_PER_SOL_I64: i64 = 1_000_000_000;
 
 /// keypair for integration tests
 fn test_keypair() -> Keypair {

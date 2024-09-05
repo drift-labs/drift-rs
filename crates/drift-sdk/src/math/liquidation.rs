@@ -3,8 +3,6 @@
 
 use std::ops::Neg;
 
-use drift_ffi::types::MarginRequirementType;
-
 use crate::{
     drift_abi::{
         accounts::{PerpMarket, User},
@@ -12,7 +10,7 @@ use crate::{
     },
     ffi::{
         self, calculate_margin_requirement_and_total_collateral_and_liability_info, AccountsList,
-        IntoFfi, MarginContextMode,
+        IntoFfi, MarginContextMode, MarginRequirementType,
     },
     math::{
         account_map_builder::AccountsListBuilder,
@@ -885,7 +883,7 @@ mod tests {
         bytes
     }
 
-    pub fn get_anchor_account_bytes<T: ZeroCopy + Owner>(account: &mut T) -> BytesMut {
+    pub fn get_anchor_account_bytes<T: ZeroCopy>(account: &mut T) -> BytesMut {
         let mut bytes = BytesMut::new();
         bytes.extend_from_slice(&T::discriminator());
         let data = bytemuck::bytes_of_mut(account);

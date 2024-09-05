@@ -341,7 +341,7 @@ mod tests {
     };
 
     #[tokio::test]
-    #[cfg(rpc_tests)]
+    #[cfg(feature = "rpc_tests")]
     async fn test_oracle_map() {
         let commitment = CommitmentConfig::processed();
         let endpoint = "rpc".to_string();

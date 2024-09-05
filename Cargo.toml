@@ -2,7 +2,7 @@
 name = "drift-sdk"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.76.0"
+build = "build.rs"
 license = "Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/drift-labs/drift-rs"
@@ -13,6 +13,9 @@ Rust SDK for interacting with the Drift V2 Protocol on the Solana blockchain.
 categories = ["solana", "trading", "defi", "dex"]
 keywords = ["solana", "trading", "defi", "dex", "drift", "protocol", "sdk"]
 
+[lib]
+path = "crates/drift-sdk/src/lib.rs"
+
 [features]
 dlob = ["rayon"]
 # enable JIT client
@@ -21,11 +24,11 @@ rpc_tests = []
 test_utils = []
 
 [dependencies]
-anchor-lang = "=0.29.0"
+abi_stable = "0.11"
+anchor-lang = "*"
 base64 = "0.13"
 bytemuck = "1.13.0"
 dashmap = "5.5.3"
-drift-ffi = { path = "../drift-ffi", default-features = false } # import crossboundary types only
 env_logger = "0.10.1"
 fnv = "1.0.7"
 futures-util = "0.3.29"
@@ -47,7 +50,6 @@ tokio = { version = "*", features = ["full"] }
 tokio-tungstenite = { version = "*", features = ["native-tls"] }
 
 [dev-dependencies]
-borsh = "*"
 bytes = "*"
 futures = "0.3.30"
 hex = "*"

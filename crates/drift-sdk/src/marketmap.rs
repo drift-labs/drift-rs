@@ -243,7 +243,7 @@ mod tests {
     };
 
     #[tokio::test]
-    #[cfg(rpc_tests)]
+    #[cfg(feature = "rpc_tests")]
     async fn test_marketmap_perp() {
         let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {
@@ -269,7 +269,7 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(rpc_tests)]
+    #[cfg(feature = "rpc_tests")]
     async fn test_marketmap_spot() {
         let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {
