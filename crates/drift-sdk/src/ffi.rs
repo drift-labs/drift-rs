@@ -63,8 +63,8 @@ pub struct AccountList<'a> {
 impl<'a> AccountList<'a> {
     pub fn new(accounts: &mut [AccountInfo<'a>]) -> Self {
         Self {
-            accounts: accounts.as_mut_ptr(),
             count: accounts.len(),
+            accounts: accounts.as_mut_ptr(),
         }
     }
     pub fn as_mut_slice(&'a mut self) -> &mut [AccountInfo<'a>] {

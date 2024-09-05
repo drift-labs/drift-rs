@@ -590,10 +590,8 @@ mod tests {
             PerpMarket,
             sol_perp
         );
-        let mut perp_slice = [sol_perp];
-        let mut spot_slice = [usdc_spot];
         let mut accounts_map =
-            AccountsList::new(&mut perp_slice, &mut spot_slice, &mut [sol_oracle]);
+            AccountsList::new(&mut [sol_perp], &mut [usdc_spot], &mut [sol_oracle]);
 
         let liquidation_price = calculate_liquidation_price_inner(
             &user,
@@ -783,7 +781,7 @@ mod tests {
             quote_entry_amount: 80 * QUOTE_PRECISION_I64,
             ..Default::default()
         };
-        let sol_usdc_price = 60;
+        let sol_usdc_price = 60 * QUOTE_PRECISION_I64;
 
         let unrealized_pnl = calculate_unrealized_pnl_inner(&position, sol_usdc_price).unwrap();
 
@@ -794,17 +792,15 @@ mod tests {
 
     #[test]
     fn liquidation_price_hedged_short() {
-        let sol_perp_index = 0;
-        let sol_spot_index = 1;
         let mut user = User::default();
         user.perp_positions[0] = PerpPosition {
-            market_index: sol_perp_index,
+            market_index: sol_perp_market().market_index,
             base_asset_amount: -10 * BASE_PRECISION_I64,
             quote_entry_amount: 80 * QUOTE_PRECISION_I64,
             ..Default::default()
         };
         user.spot_positions[0] = SpotPosition {
-            market_index: sol_spot_index,
+            market_index: sol_spot_market().market_index,
             scaled_balance: 10 * SPOT_BALANCE_PRECISION as u64,
             ..Default::default()
         };
@@ -840,11 +836,12 @@ mod tests {
             &user,
             &sol_perp_market(),
             Some(&sol_spot_market()),
-            sol_usdc_price,
+            sol_oracle_price.agg.price,
             &mut accounts_map,
         )
         .unwrap();
         dbg!(liq_price);
+
         // price down but fully hedged
         assert_eq!(liq_price, -1);
     }
@@ -857,7 +854,7 @@ mod tests {
             quote_entry_amount: -80 * QUOTE_PRECISION_I64,
             ..Default::default()
         };
-        let sol_usdc_price = 100;
+        let sol_usdc_price = 100 * QUOTE_PRECISION_I64;
 
         let unrealized_pnl = calculate_unrealized_pnl_inner(&position, sol_usdc_price).unwrap();
 
