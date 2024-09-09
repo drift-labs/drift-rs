@@ -2,7 +2,6 @@
 name = "drift-ffi"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.77" # >1.76.0 is required for u/i128 C-abi compat
 
 [lib]
 crate-type = ["cdylib"]
@@ -11,10 +10,18 @@ crate-type = ["cdylib"]
 abi_stable = "0.11"
 drift-program = { package = "drift", git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.93.0", features = [
     "mainnet-beta", "drift-rs"
-], optional = true }
-solana-program = { version = "1.16.*", optional = true }
-static_assertions = "1.1.0"
+] }
+# pin to whatever version drift-program uses
+hex = "*"
+solana-program = { version = "1.16.*" }
+solana-sdk = { version = "1.16.*" }
 
-[features]
-default = ["exports"]
-exports = ["solana-program", "drift-program"]
+# its possible to export some common types alongside the dylib build
+#[features]
+#default = ["exports"]
+#exports = ["solana-program", "drift-program"]
+
+[dev-dependencies]
+anchor-lang = "=0.29.0"
+bytemuck = "1.17"
+hex-literal = "*"

@@ -14,7 +14,7 @@ categories = ["solana", "trading", "defi", "dex"]
 keywords = ["solana", "trading", "defi", "dex", "drift", "protocol", "sdk"]
 
 [lib]
-path = "crates/drift-sdk/src/lib.rs"
+path = "crates/src/lib.rs"
 
 [features]
 dlob = ["rayon"]
@@ -44,7 +44,6 @@ solana-client = "2.0.7"
 solana-program = "2.0.7"
 solana-sdk = "2.0.7"
 solana-transaction-status = "2.0.7"
-static_assertions = "1.1.0"
 thiserror = "1.0.38"
 tokio = { version = "*", features = ["full"] }
 tokio-tungstenite = { version = "*", features = ["native-tls"] }

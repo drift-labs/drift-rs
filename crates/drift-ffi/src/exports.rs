@@ -1,7 +1,7 @@
-use core::slice;
-
+//!
+//! Define FFI for subset of drift program
+//!
 use abi_stable::std_types::RResult::{RErr, ROk};
-pub use drift_program::state::user::User;
 use drift_program::{
     math::margin::MarginRequirementType,
     state::{
@@ -12,36 +12,68 @@ use drift_program::{
         perp_market_map::PerpMarketMap,
         spot_market::SpotMarket,
         spot_market_map::SpotMarketMap,
-        user::{Order, PerpPosition, SpotPosition},
+        user::{Order, PerpPosition, SpotPosition, User},
     },
 };
-use solana_program::{account_info::AccountInfo, clock::Slot};
+use solana_program::{
+    account_info::{Account as _, AccountInfo, IntoAccountInfo},
+    clock::Slot,
+};
+use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::types::{FfiResult, MarginCalculation, MarginContextMode, OraclePriceData};
 
 #[no_mangle]
 pub extern "C" fn oracle_get_oracle_price(
     oracle_source: &OracleSource,
-    price_oracle: &AccountInfo,
+    price_oracle: &mut (Pubkey, Account),
     clock_slot: Slot,
 ) -> FfiResult<OraclePriceData> {
     to_ffi_result(
-        get_oracle_price_(oracle_source, price_oracle, clock_slot)
+        get_oracle_price_(oracle_source, &price_oracle.into_account_info(), clock_slot)
             .map(|o| unsafe { std::mem::transmute(o) }),
     )
 }
 
 #[no_mangle]
-pub extern "C" fn math_calculate_margin_requirement_and_total_collateral_and_liability_info<'a>(
+pub extern "C" fn math_calculate_margin_requirement_and_total_collateral_and_liability_info(
     user: &User,
-    accounts: &'a mut AccountsList<'a>,
+    accounts: &mut AccountsList,
     margin_context: MarginContextMode,
 ) -> FfiResult<MarginCalculation> {
+    let spot_accounts = accounts
+        .spot_markets
+        .iter_mut()
+        .map(IntoAccountInfo::into_account_info)
+        .collect::<Vec<_>>();
+    let spot_map =
+        SpotMarketMap::load(&Default::default(), &mut spot_accounts.iter().peekable()).unwrap();
+
+    let perp_accounts = accounts
+        .perp_markets
+        .iter_mut()
+        .map(IntoAccountInfo::into_account_info)
+        .collect::<Vec<_>>();
+    let perp_map =
+        PerpMarketMap::load(&Default::default(), &mut perp_accounts.iter().peekable()).unwrap();
+
+    let oracle_accounts = accounts
+        .oracles
+        .iter_mut()
+        .map(IntoAccountInfo::into_account_info)
+        .collect::<Vec<_>>();
+    let mut oracle_map = OracleMap::load(
+        &mut oracle_accounts.iter().peekable(),
+        accounts.latest_slot,
+        None,
+    )
+    .unwrap();
+
     let margin_calculation = drift_program::math::margin::calculate_margin_requirement_and_total_collateral_and_liability_info(
         user,
-        &PerpMarketMap::load(&Default::default(), &mut accounts.perp_markets.as_mut_slice().iter().peekable()).unwrap(),
-        &SpotMarketMap::load(&Default::default(), &mut accounts.spot_markets.as_mut_slice().iter().peekable()).unwrap(),
-        &mut OracleMap::load(&mut accounts.oracles.as_mut_slice().iter().peekable(), accounts.latest_slot, None).unwrap(),
+        &perp_map,
+        &spot_map,
+        &mut oracle_map,
         margin_context.into(),
     );
 
@@ -62,137 +94,142 @@ pub extern "C" fn math_calculate_margin_requirement_and_total_collateral_and_lia
 }
 
 #[no_mangle]
-pub extern "C" fn order_is_limit_order(ptr: *const Order) -> bool {
-    unsafe { *ptr }.is_limit_order()
+pub extern "C" fn order_is_limit_order(order: &Order) -> bool {
+    order.is_limit_order()
 }
 
 #[no_mangle]
 pub extern "C" fn perp_market_get_margin_ratio(
-    ptr: *const PerpMarket,
-    size: u128,
-    margin_type: crate::types::MarginRequirementType,
+    market: &PerpMarket,
+    size: compat::u128,
+    margin_type: MarginRequirementType,
 ) -> FfiResult<u32> {
-    to_ffi_result(unsafe { *ptr }.get_margin_ratio(size, margin_type.into()))
+    to_ffi_result(market.get_margin_ratio(size.0, margin_type))
 }
 
 #[no_mangle]
-pub extern "C" fn perp_position_is_available(ptr: *const PerpPosition) -> bool {
-    unsafe { *ptr }.is_available()
+pub extern "C" fn perp_position_is_available(position: &PerpPosition) -> bool {
+    position.is_available()
 }
 
 #[no_mangle]
-pub extern "C" fn perp_position_is_open_position(ptr: *const PerpPosition) -> bool {
-    unsafe { *ptr }.is_open_position()
+pub extern "C" fn perp_position_is_open_position(position: &PerpPosition) -> bool {
+    position.is_open_position()
 }
 
 #[no_mangle]
 pub extern "C" fn perp_position_worst_case_base_asset_amount(
-    ptr: *const PerpPosition,
+    position: &PerpPosition,
     oracle_price: i64,
-    contract_type: crate::types::ContractType,
-) -> FfiResult<i128> {
-    to_ffi_result(unsafe { *ptr }.worst_case_base_asset_amount(oracle_price, contract_type.into()))
+    contract_type: ContractType,
+) -> FfiResult<compat::i128> {
+    let res = position.worst_case_base_asset_amount(oracle_price, contract_type);
+    to_ffi_result(res.map(|r| compat::i128(r)))
 }
 
 #[no_mangle]
 pub extern "C" fn perp_position_simulate_settled_lp_position(
-    ptr: *const PerpPosition,
-    market: *const PerpMarket,
+    position: &PerpPosition,
+    market: &PerpMarket,
     oracle_price: i64,
 ) -> FfiResult<PerpPosition> {
-    let position = unsafe { *ptr };
-    let market = unsafe { *market };
-    to_ffi_result(position.simulate_settled_lp_position(&market, oracle_price))
+    to_ffi_result(position.simulate_settled_lp_position(market, oracle_price))
 }
 
 #[no_mangle]
 pub extern "C" fn spot_market_get_asset_weight(
-    ptr: *const SpotMarket,
-    size: u128,
+    market: &SpotMarket,
+    size: compat::u128,
     oracle_price: i64,
-    margin_requirement_type: crate::types::MarginRequirementType,
+    margin_requirement_type: MarginRequirementType,
 ) -> FfiResult<u32> {
-    to_ffi_result(unsafe { *ptr }.get_asset_weight(
-        size,
-        oracle_price,
-        &margin_requirement_type.into(),
-    ))
+    to_ffi_result(market.get_asset_weight(size.0, oracle_price, &margin_requirement_type))
 }
 
 #[no_mangle]
 pub extern "C" fn spot_market_get_liability_weight(
-    ptr: *const SpotMarket,
-    size: u128,
-    margin_requirement_type: crate::types::MarginRequirementType,
+    market: &SpotMarket,
+    size: compat::u128,
+    margin_requirement_type: MarginRequirementType,
 ) -> FfiResult<u32> {
-    to_ffi_result(unsafe { *ptr }.get_liability_weight(size, &margin_requirement_type.into()))
+    to_ffi_result(market.get_liability_weight(size.0, &margin_requirement_type))
 }
 
 #[no_mangle]
-pub extern "C" fn spot_position_is_available(ptr: *const SpotPosition) -> bool {
-    unsafe { *ptr }.is_available()
+pub extern "C" fn spot_position_is_available(position: &SpotPosition) -> bool {
+    position.is_available()
 }
 
 #[no_mangle]
 pub extern "C" fn spot_position_get_signed_token_amount(
-    ptr: *const SpotPosition,
-    market: *const SpotMarket,
-) -> FfiResult<i128> {
-    let market = unsafe { *market };
-    to_ffi_result(unsafe { *ptr }.get_signed_token_amount(&market))
+    position: &SpotPosition,
+    market: &SpotMarket,
+) -> FfiResult<compat::i128> {
+    to_ffi_result(
+        position
+            .get_signed_token_amount(&market)
+            .map(|r| compat::i128(r)),
+    )
 }
 
 #[no_mangle]
 pub extern "C" fn user_get_spot_position(
-    ptr: *const User,
+    user: &User,
     market_index: u16,
-) -> FfiResult<*const SpotPosition> {
-    to_ffi_result(
-        unsafe { *ptr }
-            .get_spot_position(market_index)
-            .map(|p| p as *const SpotPosition),
-    )
+) -> FfiResult<&SpotPosition> {
+    to_ffi_result(user.get_spot_position(market_index))
 }
 
 #[no_mangle]
 pub extern "C" fn user_get_perp_position(
-    ptr: *const User,
+    user: &User,
     market_index: u16,
-) -> FfiResult<*const PerpPosition> {
-    to_ffi_result(
-        unsafe { *ptr }
-            .get_perp_position(market_index)
-            .map(|p| p as *const PerpPosition),
-    )
+) -> FfiResult<&PerpPosition> {
+    to_ffi_result(user.get_perp_position(market_index))
 }
 
 //
 // Inbound Types
 //
 #[repr(C)]
-pub struct AccountsList<'a> {
-    pub perp_markets: AccountList<'a>,
-    pub spot_markets: AccountList<'a>,
-    pub oracles: AccountList<'a>,
-    pub latest_slot: Slot,
+#[derive(Debug)]
+pub struct AccountWithKey {
+    pub key: Pubkey,
+    pub account: Account,
 }
 
-#[repr(C)]
-pub struct AccountList<'a> {
-    accounts: *mut AccountInfo<'a>,
-    count: usize,
-}
-
-impl<'a> AccountList<'a> {
-    pub fn new(accounts: &mut [AccountInfo<'a>]) -> Self {
+impl From<(Pubkey, Account)> for AccountWithKey {
+    fn from(value: (Pubkey, Account)) -> Self {
         Self {
-            accounts: accounts.as_mut_ptr(),
-            count: accounts.len(),
+            key: value.0,
+            account: value.1,
         }
     }
-    fn as_mut_slice(&'a mut self) -> &mut [AccountInfo<'a>] {
-        unsafe { slice::from_raw_parts_mut(self.accounts, self.count) }
+}
+
+impl From<AccountWithKey> for (Pubkey, Account) {
+    fn from(value: AccountWithKey) -> Self {
+        (value.key, value.account)
     }
+}
+
+impl<'a> IntoAccountInfo<'a> for &'a mut AccountWithKey {
+    fn into_account_info(self) -> solana_sdk::account_info::AccountInfo<'a> {
+        let (lamports, data, owner, executable, rent_epoch) = self.account.get();
+        AccountInfo::new(
+            &self.key, false, false, lamports, data, owner, executable, rent_epoch,
+        )
+    }
+}
+
+/// FFI equivalent of an `AccountMap`
+#[repr(C)]
+#[derive(Debug)]
+pub struct AccountsList<'a> {
+    pub perp_markets: &'a mut [AccountWithKey],
+    pub spot_markets: &'a mut [AccountWithKey],
+    pub oracles: &'a mut [AccountWithKey],
+    pub latest_slot: Slot,
 }
 
 //
@@ -214,26 +251,6 @@ impl From<MarginContextMode> for MarginContext {
     }
 }
 
-impl From<crate::types::MarginRequirementType> for MarginRequirementType {
-    fn from(value: crate::types::MarginRequirementType) -> Self {
-        match value {
-            crate::types::MarginRequirementType::Fill => MarginRequirementType::Fill,
-            crate::types::MarginRequirementType::Initial => MarginRequirementType::Initial,
-            crate::types::MarginRequirementType::Maintenance => MarginRequirementType::Maintenance,
-        }
-    }
-}
-
-impl From<crate::types::ContractType> for ContractType {
-    fn from(value: crate::types::ContractType) -> Self {
-        match value {
-            crate::types::ContractType::Perpetual => ContractType::Perpetual,
-            crate::types::ContractType::Future => ContractType::Future,
-            crate::types::ContractType::Prediction => ContractType::Prediction,
-        }
-    }
-}
-
 /// Convert Drift program result into an FFI compatible version
 #[inline]
 pub(crate) fn to_ffi_result<T>(result: Result<T, drift_program::error::ErrorCode>) -> FfiResult<T> {
@@ -241,4 +258,35 @@ pub(crate) fn to_ffi_result<T>(result: Result<T, drift_program::error::ErrorCode
         Ok(r) => ROk(r),
         Err(err) => RErr(err.into()),
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use anchor_lang::AccountDeserialize;
+    use drift_program::state::spot_market::SpotMarket;
+
+    #[test]
+    fn spot_market_deser() {
+        let buf = hex_literal::hex!("64b1086ba84141270000000000000000000000000000000000000000000000000000000000000000fe650f0367d4a7ef9815a593ea15d36593f0643aaaf0149bb04be67ab851decd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000058961b0a0300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010a5d4e800000000000000000000000000000000000000000000000000000000e40b5402000000000000000000000000e40b54020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000401f000028230000e02e0000f82a000000000000e8030000000000000000000000000000000000000900000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
+        let s = SpotMarket::try_deserialize(&mut buf.as_slice()).unwrap();
+        dbg!(s);
+
+        let s1: &SpotMarket = bytemuck::from_bytes(&buf[8..std::mem::size_of::<SpotMarket>() + 8]);
+        dbg!(s1);
+
+        assert_eq!(&s, s1);
+    }
+}
+
+pub mod compat {
+    //! ffi compatibility types
+
+    /// rust 1.76.0 ffi compatible i128
+    #[repr(C, align(16))]
+    pub struct i128(pub std::primitive::i128);
+
+    /// rust 1.76.0 ffi compatible u128
+    #[repr(C, align(16))]
+    pub struct u128(pub std::primitive::u128);
+
 }

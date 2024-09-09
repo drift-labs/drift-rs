@@ -2,6 +2,7 @@
 //!
 //! DEV: _must_ not include solana-* crates
 use abi_stable::std_types::RResult;
+use drift_program::math::margin::MarginRequirementType;
 
 /// FFI type-safe equivalent of `MarginContext`
 #[repr(C)]
@@ -10,24 +11,6 @@ pub enum MarginContextMode {
     StandardMaintenance,
     StandardInitial,
     StandardCustom(MarginRequirementType),
-}
-
-/// FFI type-safe equivalent of `MarginRequirementType`
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum MarginRequirementType {
-    Initial,
-    Fill,
-    Maintenance,
-}
-
-/// FFI type-safe equivalent of `ContractType`
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub enum ContractType {
-    Perpetual,
-    Future,
-    Prediction,
 }
 
 #[repr(C)]
