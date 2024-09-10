@@ -3,10 +3,6 @@
 use std::{collections::BinaryHeap, str::FromStr, sync::Arc};
 
 use dashmap::DashSet;
-use drift_idl::state::{
-    oracle::OraclePriceData,
-    user::{MarketType, Order, OrderStatus},
-};
 use rayon::prelude::*;
 use solana_sdk::pubkey::Pubkey;
 
@@ -14,6 +10,10 @@ use crate::{
     dlob::{
         dlob_node::{create_node, get_order_signature, DLOBNode, DirectionalNode, Node, NodeType},
         market::{get_node_subtype_and_type, Exchange, OpenOrders, SubType},
+    },
+    drift_idl::{
+        ffi::OraclePriceData,
+        types::{MarketType, Order, OrderStatus},
     },
     math::order::is_resting_limit_order,
     usermap::UserMap,

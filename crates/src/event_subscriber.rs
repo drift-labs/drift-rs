@@ -427,7 +427,7 @@ pub fn try_parse_log(raw: &str, signature: &str, tx_idx: usize) -> Option<DriftE
         .strip_prefix(PROGRAM_LOG)
         .or_else(|| raw.strip_prefix(PROGRAM_DATA))
     {
-        if let Ok(borsh_bytes) = anchor_lang::__private::base64::decode(log) {
+        if let Ok(borsh_bytes) = base64::decode_config(log, base64::STANDARD) {
             let (disc, mut data) = borsh_bytes.split_at(8);
             let disc: [u8; 8] = disc.try_into().unwrap();
 

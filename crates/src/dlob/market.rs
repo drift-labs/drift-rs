@@ -1,14 +1,11 @@
 use dashmap::{DashMap, DashSet};
-use drift_idl::{
-    controller::position::PositionDirection,
-    state::user::{Order, OrderTriggerCondition, OrderType},
-};
 
 use crate::{
     dlob::{
         dlob_node::{NodeType, SortDirection},
         order_list::Orderlist,
     },
+    drift_idl::types::{Order, OrderTriggerCondition, OrderType, PositionDirection},
     is_one_of_variant,
     math::order::is_resting_limit_order,
 };

@@ -197,7 +197,7 @@ fn calculate_perp_free_collateral_delta(
 
     let worst_case_base_amount = position
         .ffi()
-        .worst_case_base_asset_amount(oracle_price, market.contract_type.into())
+        .worst_case_base_asset_amount(oracle_price, market.contract_type)
         .unwrap();
     let margin_ratio = market
         .ffi()
@@ -813,6 +813,7 @@ mod tests {
         let mut sol_oracle_price = get_pyth_price(sol_usdc_price, 6);
 
         crate::create_account_info!(sol_oracle_price, &SOL_ORACLE, pyth_program::ID, sol_oracle);
+
         crate::create_anchor_account_info!(
             usdc_spot_market(),
             Pubkey::new_unique(),
@@ -831,8 +832,6 @@ mod tests {
             SpotMarket,
             sol_spot
         );
-
-        // dbg!(hex::encode(&sol_spot.account.data));
 
         let mut perps = [sol_perp];
         let mut spot = [usdc_spot, sol_spot];
@@ -995,7 +994,7 @@ mod tests {
                 owner: $owner,
                 ..Default::default()
             };
-            let $name = (*$pubkey, acc).into();
+            let $name: crate::ffi::AccountWithKey = (*$pubkey, acc).into();
         };
     }
 

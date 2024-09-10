@@ -232,7 +232,7 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "rpc_tests")]
 mod tests {
     use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
 
@@ -243,7 +243,6 @@ mod tests {
     };
 
     #[tokio::test]
-    #[cfg(feature = "rpc_tests")]
     async fn test_marketmap_perp() {
         let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {
@@ -269,7 +268,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(feature = "rpc_tests")]
     async fn test_marketmap_spot() {
         let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {

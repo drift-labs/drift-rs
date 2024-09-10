@@ -1,7 +1,9 @@
-use drift_idl::state::{oracle::OraclePriceData, user::Order};
 use solana_sdk::pubkey::Pubkey;
 
-use crate::math::order::get_limit_price;
+use crate::{
+    drift_idl::{ffi::OraclePriceData, types::Order},
+    math::order::get_limit_price,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum NodeType {

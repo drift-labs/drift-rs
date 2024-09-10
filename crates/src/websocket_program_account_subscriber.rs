@@ -189,7 +189,7 @@ where
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "rpc_tests")]
 mod tests {
 
     use std::str::FromStr;
@@ -201,7 +201,6 @@ mod tests {
         utils::envs::mainnet_endpoint,
     };
 
-    #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn test_subscribe() {
         let filters = vec![get_user_filter(), get_non_idle_user_filter()];

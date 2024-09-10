@@ -256,6 +256,8 @@ pub enum SdkError {
     MaxReconnectionAttemptsReached,
     #[error("jit taker order not found")]
     JitOrderNotFound,
+    #[error("not data, client may be unsubsribed")]
+    NoData,
 }
 
 impl SdkError {

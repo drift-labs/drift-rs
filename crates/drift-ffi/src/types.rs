@@ -1,8 +1,8 @@
 //! cross-boundary FFI types
-//!
-//! DEV: _must_ not include solana-* crates
 use abi_stable::std_types::RResult;
-use drift_program::math::margin::MarginRequirementType;
+use drift_program::{
+    math::margin::MarginRequirementType, state::margin_calculation::MarginContext,
+};
 
 /// FFI type-safe equivalent of `MarginContext`
 #[repr(C)]
@@ -13,30 +13,38 @@ pub enum MarginContextMode {
     StandardCustom(MarginRequirementType),
 }
 
+impl From<MarginContextMode> for MarginContext {
+    fn from(value: MarginContextMode) -> Self {
+        match value {
+            MarginContextMode::StandardMaintenance => {
+                MarginContext::standard(MarginRequirementType::Maintenance)
+            }
+            MarginContextMode::StandardInitial => {
+                MarginContext::standard(MarginRequirementType::Initial)
+            }
+            MarginContextMode::StandardCustom(m) => MarginContext::standard(m),
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct MarginCalculation {
-    /// PRICE_PRECISION
-    pub total_collateral: i128,
-    /// PRICE_PRECISION
-    pub margin_requirement: u128,
+    pub total_collateral: compat::i128,
+    pub margin_requirement: compat::u128,
     pub all_oracles_valid: bool,
     pub with_perp_isolated_liability: bool,
     pub with_spot_isolated_liability: bool,
-    pub total_spot_asset_value: i128,
-    /// PRICE_PRECISION
-    pub total_spot_liability_value: u128,
-    /// PRICE_PRECISION
-    pub total_perp_liability_value: u128,
-    /// PRICE_PRECISION
-    pub total_perp_pnl: i128,
-    /// PRICE_PRECISION
-    pub open_orders_margin_requirement: u128,
+    pub total_spot_asset_value: compat::i128,
+    pub total_spot_liability_value: compat::u128,
+    pub total_perp_liability_value: compat::u128,
+    pub total_perp_pnl: compat::i128,
+    pub open_orders_margin_requirement: compat::u128,
 }
 
 impl MarginCalculation {
     pub fn get_free_collateral(&self) -> u128 {
-        (self.total_collateral - self.margin_requirement as i128).max(0) as u128
+        (self.total_collateral.0 - self.margin_requirement.0 as i128).max(0) as u128
     }
 }
 
@@ -51,3 +59,29 @@ pub struct OraclePriceData {
 
 /// C-ABI compatible result type for drift FFI calls
 pub type FfiResult<T> = RResult<T, u32>;
+
+pub mod compat {
+    //! ffi compatibility input types
+
+    /// rust 1.76.0 ffi compatible i128
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    #[repr(C, align(16))]
+    pub struct i128(pub std::primitive::i128);
+
+    impl From<std::primitive::i128> for self::i128 {
+        fn from(value: std::primitive::i128) -> Self {
+            Self(value)
+        }
+    }
+
+    /// rust 1.76.0 ffi compatible u128
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    #[repr(C, align(16))]
+    pub struct u128(pub std::primitive::u128);
+
+    impl From<std::primitive::u128> for self::u128 {
+        fn from(value: std::primitive::u128) -> Self {
+            Self(value)
+        }
+    }
+}

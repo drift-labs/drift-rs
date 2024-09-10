@@ -1017,7 +1017,7 @@ impl<T: AccountProvider> DriftClientBackend<T> {
 
         match self.get_oracle_price_data_and_slot(&oracle) {
             Some(o) => Ok(o.data.price),
-            None => Err(SdkError::InvalidAccount),
+            None => Err(SdkError::NoData),
         }
     }
 }

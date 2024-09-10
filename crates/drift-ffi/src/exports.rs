@@ -5,7 +5,6 @@ use abi_stable::std_types::RResult::{RErr, ROk};
 use drift_program::{
     math::margin::MarginRequirementType,
     state::{
-        margin_calculation::MarginContext,
         oracle::{get_oracle_price as get_oracle_price_, OracleSource},
         oracle_map::OracleMap,
         perp_market::{ContractType, PerpMarket},
@@ -21,7 +20,10 @@ use solana_program::{
 };
 use solana_sdk::{account::Account, pubkey::Pubkey};
 
-use crate::types::{FfiResult, MarginCalculation, MarginContextMode, OraclePriceData};
+use crate::types::{
+    compat::{self},
+    FfiResult, MarginCalculation, MarginContextMode, OraclePriceData,
+};
 
 #[no_mangle]
 pub extern "C" fn oracle_get_oracle_price(
@@ -78,16 +80,16 @@ pub extern "C" fn math_calculate_margin_requirement_and_total_collateral_and_lia
     );
 
     let m = margin_calculation.map(|m| MarginCalculation {
-        total_collateral: m.total_collateral,
-        margin_requirement: m.margin_requirement,
+        total_collateral: m.total_collateral.into(),
+        margin_requirement: m.margin_requirement.into(),
         all_oracles_valid: m.all_oracles_valid,
         with_perp_isolated_liability: m.with_perp_isolated_liability,
         with_spot_isolated_liability: m.with_spot_isolated_liability,
-        total_spot_asset_value: m.total_spot_asset_value,
-        total_spot_liability_value: m.total_spot_liability_value,
-        total_perp_liability_value: m.total_perp_liability_value,
-        total_perp_pnl: m.total_perp_pnl,
-        open_orders_margin_requirement: m.open_orders_margin_requirement,
+        total_spot_asset_value: m.total_spot_asset_value.into(),
+        total_spot_liability_value: m.total_spot_liability_value.into(),
+        total_perp_liability_value: m.total_perp_liability_value.into(),
+        total_perp_pnl: m.total_perp_pnl.into(),
+        open_orders_margin_requirement: m.open_orders_margin_requirement.into(),
     });
 
     to_ffi_result(m)
@@ -96,6 +98,11 @@ pub extern "C" fn math_calculate_margin_requirement_and_total_collateral_and_lia
 #[no_mangle]
 pub extern "C" fn order_is_limit_order(order: &Order) -> bool {
     order.is_limit_order()
+}
+
+#[no_mangle]
+pub extern "C" fn order_is_resting_limit_order(order: &Order, slot: u64) -> FfiResult<bool> {
+    to_ffi_result(order.is_resting_limit_order(slot))
 }
 
 #[no_mangle]
@@ -124,7 +131,7 @@ pub extern "C" fn perp_position_worst_case_base_asset_amount(
     contract_type: ContractType,
 ) -> FfiResult<compat::i128> {
     let res = position.worst_case_base_asset_amount(oracle_price, contract_type);
-    to_ffi_result(res.map(|r| compat::i128(r)))
+    to_ffi_result(res.map(compat::i128))
 }
 
 #[no_mangle]
@@ -165,11 +172,7 @@ pub extern "C" fn spot_position_get_signed_token_amount(
     position: &SpotPosition,
     market: &SpotMarket,
 ) -> FfiResult<compat::i128> {
-    to_ffi_result(
-        position
-            .get_signed_token_amount(&market)
-            .map(|r| compat::i128(r)),
-    )
+    to_ffi_result(position.get_signed_token_amount(market).map(compat::i128))
 }
 
 #[no_mangle]
@@ -235,22 +238,6 @@ pub struct AccountsList<'a> {
 //
 // Helpers
 //
-impl From<MarginContextMode> for MarginContext {
-    fn from(value: MarginContextMode) -> Self {
-        match value {
-            MarginContextMode::StandardMaintenance => {
-                MarginContext::standard(MarginRequirementType::Initial)
-            }
-            MarginContextMode::StandardInitial => {
-                MarginContext::standard(MarginRequirementType::Maintenance)
-            }
-            _ => {
-                panic!("unknown margin context mode");
-            }
-        }
-    }
-}
-
 /// Convert Drift program result into an FFI compatible version
 #[inline]
 pub(crate) fn to_ffi_result<T>(result: Result<T, drift_program::error::ErrorCode>) -> FfiResult<T> {
@@ -276,17 +263,4 @@ mod tests {
 
         assert_eq!(&s, s1);
     }
-}
-
-pub mod compat {
-    //! ffi compatibility types
-
-    /// rust 1.76.0 ffi compatible i128
-    #[repr(C, align(16))]
-    pub struct i128(pub std::primitive::i128);
-
-    /// rust 1.76.0 ffi compatible u128
-    #[repr(C, align(16))]
-    pub struct u128(pub std::primitive::u128);
-
 }

@@ -7,7 +7,7 @@ fn main() {
     let idlgen_crate_dir = current_dir.join(Path::new("crates/drift-idl-gen"));
     let output = std::process::Command::new("make")
         .current_dir(idlgen_crate_dir)
-        .args(&["build"])
+        .args(["build"])
         .output()
         .expect("idl-gen built");
 
@@ -18,7 +18,7 @@ fn main() {
     let ffi_crate_dir = current_dir.join(Path::new("crates/drift-ffi"));
     let output = std::process::Command::new("cargo")
         .current_dir(ffi_crate_dir)
-        .args(&["build", &format!("--profile={profile}")])
+        .args(["build", &format!("--profile={profile}")])
         .output()
         .expect("ffi built");
 

@@ -5,11 +5,6 @@
 use std::borrow::Cow;
 
 use anchor_lang::InstructionData;
-pub use drift_idl::math::auction::calculate_auction_price;
-use drift_idl::{
-    math::constants::QUOTE_SPOT_MARKET_INDEX,
-    state::user::{MarketType, User},
-};
 pub use jit_proxy::state::{PostOnlyParam, PriceType};
 use solana_sdk::{
     compute_budget::ComputeBudgetInstruction,
@@ -18,9 +13,11 @@ use solana_sdk::{
     signature::Signature,
 };
 
+pub use crate::drift_idl::math::auction::calculate_auction_price;
 use crate::{
     build_accounts,
     constants::{state_account, PROGRAM_ID},
+    drift_idl::{accounts::User, math::constants::QUOTE_SPOT_MARKET_INDEX, types::MarketType},
     types::{MarketId, ReferrerInfo, RpcSendTransactionConfig, VersionedMessage},
     AccountProvider, DriftClient, Pubkey, SdkError, SdkResult, TransactionBuilder, Wallet,
 };

@@ -113,14 +113,13 @@ impl SlotSubscriber {
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "rpc_tests")]
 mod tests {
     use std::str::FromStr;
 
     use super::*;
     use crate::utils::envs::mainnet_endpoint;
 
-    #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn test_subscribe() {
         let cluster = Cluster::from_str(&mainnet_endpoint()).unwrap();

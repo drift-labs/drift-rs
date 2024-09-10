@@ -2784,7 +2784,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for OpenbookV2FulfillmentConfig {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -2839,7 +2839,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for PhoenixV1FulfillmentConfig {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -2899,7 +2899,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for SerumV3FulfillmentConfig {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -2954,7 +2954,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InsuranceFundStake {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -3004,7 +3004,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for ProtocolIfSharesTransferConfig {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -3056,7 +3056,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for PrelaunchOracle {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -3133,7 +3133,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for PerpMarket {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -3241,7 +3241,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for SpotMarket {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -3311,7 +3311,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for State {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -3385,7 +3385,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for User {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -3455,7 +3455,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UserStats {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -3504,7 +3504,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for ReferrerName {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -3598,7 +3598,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InitializeUser {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -3686,7 +3686,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InitializeUserStats {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -3780,7 +3780,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InitializeReferrerName {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -3874,7 +3874,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for Deposit {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -3974,7 +3974,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for Withdraw {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -4062,7 +4062,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for TransferDeposit {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -4132,7 +4132,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for PlacePerpOrder {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -4202,7 +4202,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for CancelOrder {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -4272,7 +4272,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for CancelOrderByUserId {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -4342,7 +4342,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for CancelOrders {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -4412,7 +4412,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for CancelOrdersByIds {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -4482,7 +4482,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for ModifyOrder {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -4552,7 +4552,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for ModifyOrderByUserId {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -4628,7 +4628,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for PlaceAndTakePerpOrder {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -4716,7 +4716,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for PlaceAndMakePerpOrder {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -4786,7 +4786,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for PlaceSpotOrder {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -4862,7 +4862,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for PlaceAndTakeSpotOrder {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -4950,7 +4950,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for PlaceAndMakeSpotOrder {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -5020,7 +5020,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for PlaceOrders {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -5138,7 +5138,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for BeginSwap {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -5256,7 +5256,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for EndSwap {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -5326,7 +5326,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for AddPerpLpShares {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -5396,7 +5396,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for RemovePerpLpShares {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -5460,7 +5460,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for RemovePerpLpSharesInExpiringMarket {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -5524,7 +5524,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateUserName {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -5588,7 +5588,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateUserCustomMarginRatio {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -5652,7 +5652,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateUserMarginTradingEnabled {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -5716,7 +5716,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateUserDelegate {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -5780,7 +5780,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateUserReduceOnly {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -5844,7 +5844,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateUserAdvancedLp {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -5920,7 +5920,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for DeleteUser {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -6002,7 +6002,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for ReclaimRent {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -6090,7 +6090,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for FillPerpOrder {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -6166,7 +6166,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for RevertFill {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -6254,7 +6254,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for FillSpotOrder {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -6330,7 +6330,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for TriggerOrder {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -6406,7 +6406,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for ForceCancelOrders {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -6482,7 +6482,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateUserIdle {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -6558,7 +6558,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateUserOpenOrdersCount {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -6628,7 +6628,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for AdminDisableUpdatePerpBidAskTwap {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -6704,7 +6704,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for SettlePnl {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -6780,7 +6780,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for SettleMultiplePnls {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -6844,7 +6844,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for SettleFundingPayment {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -6908,7 +6908,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for SettleLp {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -6972,7 +6972,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for SettleExpiredMarket {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -7060,7 +7060,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for LiquidatePerp {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -7148,7 +7148,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for LiquidatePerpWithFill {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -7236,7 +7236,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for LiquidateSpot {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -7324,7 +7324,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for LiquidateBorrowForPerpPnl {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -7412,7 +7412,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for LiquidatePerpPnlForDeposit {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -7476,7 +7476,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for SetUserStatusToBeingLiquidated {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -7564,7 +7564,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for ResolvePerpPnlDeficit {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -7676,7 +7676,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for ResolvePerpBankruptcy {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -7788,7 +7788,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for ResolveSpotBankruptcy {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -7876,7 +7876,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for SettleRevenueToInsuranceFund {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -7946,7 +7946,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateFundingRate {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -8016,7 +8016,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePrelaunchOracle {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -8098,7 +8098,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpBidAskTwap {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -8174,7 +8174,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketCumulativeInterest {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -8238,7 +8238,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateAmms {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -8308,7 +8308,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketExpiry {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -8396,7 +8396,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateUserQuoteAssetInsuranceStake {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -8484,7 +8484,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateUserGovTokenInsuranceStake {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -8584,7 +8584,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InitializeInsuranceFundStake {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -8696,7 +8696,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for AddInsuranceFundStake {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -8778,7 +8778,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for RequestRemoveInsuranceFundStake {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -8860,7 +8860,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for CancelRequestRemoveInsuranceFundStake {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -8966,7 +8966,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for RemoveInsuranceFundStake {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -9066,7 +9066,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for TransferProtocolIfShares {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -9142,7 +9142,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePythPullOracle {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -9218,7 +9218,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for PostPythPullOracleUpdateAtomic {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -9288,7 +9288,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for PostMultiPythPullOracleUpdatesAtomic {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -9382,7 +9382,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for Initialize {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -9500,7 +9500,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InitializeSpotMarket {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -9594,7 +9594,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for DeleteInitializedSpotMarket {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -9712,7 +9712,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InitializeSerumFulfillmentConfig {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -9782,7 +9782,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSerumFulfillmentConfigStatus {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -9894,7 +9894,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InitializeOpenbookV2FulfillmentConfig {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -9964,7 +9964,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for OpenbookV2FulfillmentConfigStatus {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -10076,7 +10076,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InitializePhoenixFulfillmentConfig {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -10146,7 +10146,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for PhoenixFulfillmentConfigStatus {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -10216,7 +10216,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSerumVault {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -10304,7 +10304,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InitializePerpMarket {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -10374,7 +10374,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InitializePredictionMarket {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -10444,7 +10444,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for DeleteInitializedPerpMarket {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -10514,7 +10514,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for MoveAmmPrice {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -10584,7 +10584,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for RecenterPerpMarketAmm {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -10666,7 +10666,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketAmmSummaryStats {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -10736,7 +10736,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketExpiry {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -10812,7 +10812,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for SettleExpiredMarketPoolsToRevenuePool {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -10912,7 +10912,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for DepositIntoPerpMarketFeePool {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -11000,7 +11000,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for DepositIntoSpotMarketVault {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -11088,7 +11088,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for DepositIntoSpotMarketRevenuePool {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -11164,7 +11164,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for RepegAmmCurve {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -11240,7 +11240,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketAmmOracleTwap {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -11316,7 +11316,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for ResetPerpMarketAmmOracleTwap {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -11392,7 +11392,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateK {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -11462,7 +11462,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketMarginRatio {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -11532,7 +11532,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketFundingPeriod {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -11602,7 +11602,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketMaxImbalances {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -11672,7 +11672,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketLiquidationFee {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -11742,7 +11742,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateInsuranceFundUnstakingPeriod {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -11812,7 +11812,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketLiquidationFee {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -11882,7 +11882,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateWithdrawGuardThreshold {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -11952,7 +11952,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketIfFactor {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -12022,7 +12022,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketRevenueSettlePeriod {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -12092,7 +12092,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketStatus {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -12162,7 +12162,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketPausedOperations {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -12232,7 +12232,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketAssetTier {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -12302,7 +12302,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketMarginWeights {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -12372,7 +12372,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketBorrowRate {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -12442,7 +12442,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketMaxTokenDeposits {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -12512,7 +12512,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketMaxTokenBorrows {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -12585,7 +12585,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketScaleInitialAssetWeightStart {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -12661,7 +12661,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketOracle {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -12731,7 +12731,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketStepSizeAndTickSize {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -12801,7 +12801,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketMinOrderSize {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -12871,7 +12871,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketOrdersEnabled {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -12941,7 +12941,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketIfPausedOperations {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13011,7 +13011,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketName {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13081,7 +13081,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketStatus {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13151,7 +13151,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketPausedOperations {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13221,7 +13221,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketContractTier {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13291,7 +13291,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketImfFactor {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13361,7 +13361,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketUnrealizedAssetWeight {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13431,7 +13431,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketConcentrationCoef {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13501,7 +13501,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketCurveUpdateIntensity {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13574,7 +13574,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketTargetBaseAssetAmountPerLp {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13644,7 +13644,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketPerLpBase {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13708,7 +13708,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateLpCooldownTime {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13772,7 +13772,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpFeeStructure {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13836,7 +13836,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotFeeStructure {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13900,7 +13900,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateInitialPctToLiquidate {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -13964,7 +13964,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateLiquidationDuration {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14028,7 +14028,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateLiquidationMarginBufferRatio {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14092,7 +14092,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateOracleGuardRails {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14156,7 +14156,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateStateSettlementDuration {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14220,7 +14220,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateStateMaxNumberOfSubAccounts {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14284,7 +14284,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateStateMaxInitializeUserFee {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14360,7 +14360,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketOracle {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14430,7 +14430,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketBaseSpread {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14500,7 +14500,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateAmmJitIntensity {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14570,7 +14570,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketMaxSpread {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14640,7 +14640,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketStepSizeAndTickSize {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14710,7 +14710,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketName {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14780,7 +14780,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketMinOrderSize {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14850,7 +14850,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketMaxSlippageRatio {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14920,7 +14920,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketMaxFillReserveFraction {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -14990,7 +14990,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketMaxOpenInterest {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -15060,7 +15060,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketNumberOfUsers {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -15130,7 +15130,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketFeeAdjustment {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -15200,7 +15200,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketFeeAdjustment {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -15270,7 +15270,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketFuel {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -15340,7 +15340,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotMarketFuel {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -15416,7 +15416,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InitUserFuel {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -15480,7 +15480,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateAdmin {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -15544,7 +15544,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateWhitelistMint {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -15608,7 +15608,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateDiscountMint {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -15672,7 +15672,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateExchangeStatus {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -15736,7 +15736,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePerpAuctionDuration {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -15800,7 +15800,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateSpotAuctionDuration {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -15885,7 +15885,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InitializeProtocolIfSharesTransferConfig {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -15955,7 +15955,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdateProtocolIfSharesTransferConfig {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -16037,7 +16037,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InitializePrelaunchOracle {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -16113,7 +16113,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for UpdatePrelaunchOracleParams {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -16189,7 +16189,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for DeletePrelaunchOracle {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));
@@ -16271,7 +16271,7 @@ pub mod accounts {
     impl anchor_lang::AccountDeserialize for InitializePythPullOracle {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
-            if &Self::DISCRIMINATOR != given_disc {
+            if Self::DISCRIMINATOR != given_disc {
                 return Err(anchor_lang::error!(
                     anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
                 ));

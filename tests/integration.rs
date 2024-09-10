@@ -23,10 +23,10 @@ async fn get_oracle_prices() {
     )
     .await
     .expect("connects");
-    let price = client.oracle_price(MarketId::perp(0)).await.expect("ok");
+    let price = client.oracle_price(MarketId::perp(1)).await.expect("ok");
     assert!(price > 0);
     dbg!(price);
-    let price = client.oracle_price(MarketId::spot(1)).await.expect("ok");
+    let price = client.oracle_price(MarketId::spot(2)).await.expect("ok");
     assert!(price > 0);
     dbg!(price);
 }

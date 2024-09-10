@@ -308,7 +308,7 @@ fn generate_idl_types(idl: &Idl) -> String {
             impl anchor_lang::AccountDeserialize for #struct_name {
                 fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
                     let given_disc = &buf[..8];
-                    if &Self::DISCRIMINATOR != given_disc {
+                    if Self::DISCRIMINATOR != given_disc {
                         return Err(anchor_lang::error!(anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch));
                     }
                     Self::try_deserialize_unchecked(buf)
@@ -427,7 +427,7 @@ fn generate_idl_types(idl: &Idl) -> String {
             impl anchor_lang::AccountDeserialize for #struct_name {
                 fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
                     let given_disc = &buf[..8];
-                    if &Self::DISCRIMINATOR != given_disc {
+                    if Self::DISCRIMINATOR != given_disc {
                         return Err(anchor_lang::error!(anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch));
                     }
                     Self::try_deserialize_unchecked(buf)

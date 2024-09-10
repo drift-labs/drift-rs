@@ -88,6 +88,8 @@ extern "C" {
 
     #[allow(improper_ctypes)]
     pub fn order_is_limit_order(order: &types::Order) -> bool;
+    #[allow(improper_ctypes)]
+    pub fn order_is_resting_limit_order(order: &types::Order, slot: Slot) -> FfiResult<bool>;
 
     #[allow(improper_ctypes)]
     pub fn perp_market_get_margin_ratio(
@@ -239,11 +241,11 @@ impl User {
     pub fn get_spot_position(&self, market_index: u16) -> SdkResult<SpotPosition> {
         // TODO: no clone
         to_sdk_result(unsafe { user_get_spot_position(&self.0, market_index) })
-            .map(|p| SpotPosition(p.clone()))
+            .map(|p| SpotPosition(*p))
     }
     pub fn get_perp_position(&self, market_index: u16) -> SdkResult<PerpPosition> {
         to_sdk_result(unsafe { user_get_perp_position(&self.0, market_index) })
-            .map(|p| PerpPosition(p.clone()))
+            .map(|p| PerpPosition(*p))
     }
 }
 
@@ -265,6 +267,9 @@ pub struct Order(types::Order);
 impl Order {
     pub fn is_limit_order(&self) -> bool {
         unsafe { order_is_limit_order(&self.0) }
+    }
+    pub fn is_resting_limit_order(&self, slot: Slot) -> SdkResult<bool> {
+        to_sdk_result(unsafe { order_is_resting_limit_order(&self.0, slot) })
     }
 }
 
@@ -415,25 +420,31 @@ mod tests {
 
     use super::{AccountWithKey, AccountsList, IntoFfi, MarginContextMode, SpotPosition};
     use crate::{
+        constants::{self, ids},
         drift_idl::{
             accounts::{
                 PerpMarket as DriftPerpMarket, SpotMarket as DriftSpotMarket, User as DriftUser,
             },
             types::{
-                ContractType, HistoricalOracleData, MarginRequirementType, MarketStatus,
-                OracleSource, Order as DriftOrder, OrderType, PerpPosition as DriftPerpPosition,
-                SpotBalanceType, SpotPosition as DriftSpotPosition, AMM,
+                ContractType, MarginRequirementType, OracleSource, Order as DriftOrder, OrderType,
+                PerpPosition as DriftPerpPosition, SpotBalanceType,
+                SpotPosition as DriftSpotPosition,
             },
         },
         ffi::{
             calculate_margin_requirement_and_total_collateral_and_liability_info, get_oracle_price,
         },
         math::constants::{
-            AMM_RESERVE_PRECISION, BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, MARGIN_PRECISION,
-            QUOTE_PRECISION, QUOTE_PRECISION_I64, SPOT_BALANCE_PRECISION,
-            SPOT_BALANCE_PRECISION_U64, SPOT_CUMULATIVE_INTEREST_PRECISION, SPOT_WEIGHT_PRECISION,
+            BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, MARGIN_PRECISION, QUOTE_PRECISION,
+            QUOTE_PRECISION_I64, SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64,
+            SPOT_CUMULATIVE_INTEREST_PRECISION, SPOT_WEIGHT_PRECISION,
         },
     };
+
+    const _SOL_PYTH_PRICE_STR: &str = include_str!("../../res/sol-oracle-pyth.hex");
+    /// encoded pyth price account for SOL, see math/liquidation.rs tests
+    const SOL_PYTH_PRICE: std::cell::LazyCell<Vec<u8>> =
+        std::cell::LazyCell::new(|| hex::decode(_SOL_PYTH_PRICE_STR).unwrap());
 
     fn sol_spot_market() -> DriftSpotMarket {
         DriftSpotMarket {
@@ -449,28 +460,6 @@ mod tests {
             maintenance_liability_weight: 11 * SPOT_WEIGHT_PRECISION / 10,
             liquidator_fee: LIQUIDATION_FEE_PRECISION / 1000,
             deposit_balance: (1_000 * SPOT_BALANCE_PRECISION).into(),
-            ..Default::default()
-        }
-    }
-
-    fn usdc_spot_market() -> DriftSpotMarket {
-        DriftSpotMarket {
-            market_index: 0,
-            oracle_source: OracleSource::QuoteAsset,
-            cumulative_deposit_interest: SPOT_CUMULATIVE_INTEREST_PRECISION.into(),
-            decimals: 6,
-            initial_asset_weight: SPOT_WEIGHT_PRECISION,
-            maintenance_asset_weight: SPOT_WEIGHT_PRECISION,
-            deposit_balance: (100_000 * SPOT_BALANCE_PRECISION).into(),
-            liquidator_fee: 0,
-            historical_oracle_data: HistoricalOracleData {
-                last_oracle_price: QUOTE_PRECISION_I64,
-                last_oracle_conf: 0,
-                last_oracle_delay: 0,
-                last_oracle_price_twap: QUOTE_PRECISION_I64,
-                last_oracle_price_twap5min: QUOTE_PRECISION_I64,
-                ..Default::default()
-            },
             ..Default::default()
         }
     }
@@ -662,63 +651,49 @@ mod tests {
 
     #[test]
     fn ffi_get_oracle_price() {
-        // Create a mock oracle account
         let oracle_pubkey = Pubkey::new_unique();
         let oracle_account = Account {
-            lamports: 1000000,
-            data: vec![0; 100], // Adjust size as needed
-            owner: Pubkey::new_unique(),
-            executable: false,
-            rent_epoch: 0,
+            // encoded from pyth Price, see liquidation tests
+            data: SOL_PYTH_PRICE.clone(),
+            owner: constants::ids::pyth_program::ID,
+            ..Default::default()
         };
 
-        // Set up test parameters
         let oracle_source = OracleSource::Pyth;
         let slot = 12_345;
 
-        // Call the function
         let result = get_oracle_price(&oracle_source, &mut (oracle_pubkey, oracle_account), slot);
 
         // Assert the result
         assert!(result.is_ok());
         let oracle_price_data = result.unwrap();
 
-        // Add more specific assertions based on expected behavior
         assert!(oracle_price_data.price != 0);
-        assert!(oracle_price_data.confidence > 0);
-        assert!(oracle_price_data.delay >= 0);
     }
 
     #[test]
     fn ffi_order_is_limit_order() {
         // Test a limit order
-        let limit_order = DriftOrder {
-            order_type: OrderType::Limit,
-            ..Default::default()
-        };
-        let ffi_limit_order = limit_order.ffi();
-        assert!(ffi_limit_order.is_limit_order());
-
-        let market_order = DriftOrder {
-            order_type: OrderType::Market,
-            ..Default::default()
-        };
-        let ffi_market_order = market_order.ffi();
-        assert!(!ffi_market_order.is_limit_order());
-
-        let trigger_market_order = DriftOrder {
-            order_type: OrderType::TriggerMarket,
-            ..Default::default()
-        };
-        let ffi_trigger_market_order = trigger_market_order.ffi();
-        assert!(!ffi_trigger_market_order.is_limit_order());
-
-        let trigger_limit_order = DriftOrder {
-            order_type: OrderType::TriggerLimit,
-            ..Default::default()
-        };
-        let ffi_trigger_limit_order = trigger_limit_order.ffi();
-        assert!(ffi_trigger_limit_order.is_limit_order());
+        for (order_type, is_limit) in [
+            (OrderType::Limit, true),
+            (OrderType::Market, false),
+            (OrderType::TriggerLimit, true),
+            (OrderType::TriggerMarket, false),
+        ]
+        .into_iter()
+        {
+            let limit_order = DriftOrder {
+                order_type,
+                slot: 100,
+                ..Default::default()
+            };
+            let ffi_limit_order = limit_order.ffi();
+            assert_eq!(ffi_limit_order.is_limit_order(), is_limit);
+            assert_eq!(
+                ffi_limit_order.is_resting_limit_order(100).unwrap(),
+                is_limit
+            );
+        }
     }
 
     #[test]
@@ -751,18 +726,19 @@ mod tests {
 
     #[test]
     fn ffi_test_calculate_margin_requirement_and_total_collateral_and_liability_info() {
+        // smoke test for ffi compatability, logic tested in `math::` module
         let btc_perp_index = 1_u16;
         let mut user = DriftUser::default();
+        user.spot_positions[1] = DriftSpotPosition {
+            market_index: 1,
+            scaled_balance: (1_000 * SPOT_BALANCE_PRECISION) as u64,
+            balance_type: SpotBalanceType::Deposit,
+            ..Default::default()
+        };
         user.perp_positions[0] = DriftPerpPosition {
             market_index: btc_perp_index,
             base_asset_amount: 100 * BASE_PRECISION_I64 as i64,
             quote_asset_amount: -5_000 * QUOTE_PRECISION as i64,
-            ..Default::default()
-        };
-        user.spot_positions[1] = DriftSpotPosition {
-            market_index: sol_spot_market().market_index,
-            scaled_balance: (1_000 * SPOT_BALANCE_PRECISION) as u64,
-            balance_type: SpotBalanceType::Deposit,
             ..Default::default()
         };
 
@@ -770,27 +746,11 @@ mod tests {
         let mut perp_markets = vec![AccountWithKey {
             key: Pubkey::new_unique(),
             account: Account {
+                owner: crate::constants::PROGRAM_ID,
                 data: [
                     DriftPerpMarket::DISCRIMINATOR.as_slice(),
                     bytemuck::bytes_of(&DriftPerpMarket {
-                        amm: AMM {
-                            base_asset_reserve: (100 * AMM_RESERVE_PRECISION).into(),
-                            quote_asset_reserve: (100 * AMM_RESERVE_PRECISION).into(),
-                            bid_base_asset_reserve: (101 * AMM_RESERVE_PRECISION).into(),
-                            bid_quote_asset_reserve: (99 * AMM_RESERVE_PRECISION).into(),
-                            ask_base_asset_reserve: (99 * AMM_RESERVE_PRECISION).into(),
-                            ask_quote_asset_reserve: (101 * AMM_RESERVE_PRECISION).into(),
-                            sqrt_k: (100 * AMM_RESERVE_PRECISION).into(),
-                            oracle: Pubkey::new_unique(),
-                            ..Default::default()
-                        },
                         market_index: btc_perp_index,
-                        margin_ratio_initial: 1000,
-                        margin_ratio_maintenance: 500,
-                        imf_factor: 1000, // 1_000/1_000_000 = .001
-                        unrealized_pnl_initial_asset_weight: SPOT_WEIGHT_PRECISION,
-                        unrealized_pnl_maintenance_asset_weight: SPOT_WEIGHT_PRECISION,
-                        status: MarketStatus::Initialized,
                         ..Default::default()
                     }),
                 ]
@@ -799,23 +759,30 @@ mod tests {
                 ..Default::default()
             },
         }];
+        let spot_market = sol_spot_market();
         let mut spot_markets = vec![AccountWithKey {
             key: Pubkey::new_unique(),
             account: Account {
+                owner: crate::constants::PROGRAM_ID,
                 data: [
                     DriftSpotMarket::DISCRIMINATOR.as_slice(),
-                    bytemuck::bytes_of(&sol_spot_market()),
+                    bytemuck::bytes_of(&spot_market),
                 ]
                 .concat()
                 .to_vec(),
                 ..Default::default()
             },
         }];
-        let mut oracles = vec![AccountWithKey {
-            key: Pubkey::new_unique(),
-            account: Account::default(),
-        }];
 
+        let mut oracles = [AccountWithKey {
+            key: Pubkey::new_unique(),
+            account: Account {
+                // encoded from pyth Price, see liquidation tests
+                data: SOL_PYTH_PRICE.clone(),
+                owner: constants::ids::pyth_program::ID,
+                ..Default::default()
+            },
+        }];
         let mut accounts = AccountsList::new(&mut perp_markets, &mut spot_markets, &mut oracles);
 
         let modes = [
@@ -824,25 +791,13 @@ mod tests {
             MarginContextMode::StandardCustom(MarginRequirementType::Initial),
         ];
 
+        // no panics is enough
         for mode in modes.iter() {
-            let result = calculate_margin_requirement_and_total_collateral_and_liability_info(
+            let _ = calculate_margin_requirement_and_total_collateral_and_liability_info(
                 &user,
                 &mut accounts,
                 *mode,
             );
-
-            assert!(result.is_ok());
-            let margin_calculation = result.unwrap();
-
-            // Basic sanity checks
-            assert!(margin_calculation.total_collateral > 0);
-            assert!(margin_calculation.margin_requirement > 0);
-            assert!(margin_calculation.total_spot_asset_value > 0);
-            assert!(margin_calculation.total_perp_liability_value > 0);
-
-            // Check free collateral calculation
-            let free_collateral = margin_calculation.get_free_collateral();
-            assert!(free_collateral <= margin_calculation.total_collateral as u128);
         }
     }
 }

@@ -2,7 +2,7 @@
 
 use anchor_lang::AnchorDeserialize;
 use serde_json::json;
-use solana_account_decoder::UiAccountData;
+use solana_account_decoder::{UiAccountData, UiAccountEncoding};
 use solana_sdk::{
     account::Account, address_lookup_table::AddressLookupTableAccount, bs58, pubkey::Pubkey,
     signature::Keypair,
@@ -113,20 +113,19 @@ pub fn dlob_subscribe_ws_json(market: &str) -> String {
     .to_string()
 }
 
+/// NOTE: does not check the Anchor discrminator
 #[inline(always)]
 pub fn decode<T>(data: &UiAccountData) -> SdkResult<T>
 where
     T: AnchorDeserialize,
 {
     let data_str = match data {
-        UiAccountData::Binary(encoded, _) => encoded,
+        UiAccountData::Binary(data, UiAccountEncoding::Base64) => data,
         _ => return Err(SdkError::UnsupportedAccountData),
     };
 
-    let decoded_data = base64::decode(data_str)?;
-    let mut decoded_data_slice = decoded_data.as_slice();
-
-    T::deserialize(&mut decoded_data_slice).map_err(|err| SdkError::Anchor(Box::new(err.into())))
+    let anchor_bytes = base64::decode(data_str)?; // strip discriminator
+    T::deserialize(&mut &anchor_bytes[8..]).map_err(|err| SdkError::Anchor(Box::new(err.into())))
 }
 
 /// Helper to deserialize account data as `T`
