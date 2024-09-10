@@ -1,7 +1,10 @@
 use anchor_lang::Discriminator;
 use solana_client::rpc_filter::{Memcmp, RpcFilterType};
 
-use crate::{drift_idl::types::MarketType, types::User, PerpMarket, SpotMarket};
+use crate::types::{
+    accounts::{PerpMarket, SpotMarket, User},
+    MarketType,
+};
 
 pub fn get_user_filter() -> RpcFilterType {
     RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, User::discriminator().into()))

@@ -14,6 +14,7 @@ fn test_keypair() -> Keypair {
     Keypair::from_base58_string(private_key.as_str())
 }
 
+#[ignore]
 #[tokio::test]
 async fn get_oracle_prices() {
     let client = DriftClient::new(

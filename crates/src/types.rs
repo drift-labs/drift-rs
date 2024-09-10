@@ -21,16 +21,13 @@ use tokio_tungstenite::{tungstenite, MaybeTlsStream, WebSocketStream};
 
 // re-export types in public API
 pub use crate::drift_idl::{
-    accounts::{PerpMarket, SpotMarket, User, UserStats},
-    types::{ModifyOrderParams, OrderParams, PositionDirection, PostOnlyParam},
+    accounts::{self},
+    errors::{self},
+    events::{self},
+    instructions::{self},
+    types::*,
 };
-use crate::{
-    drift_idl::{
-        errors::ErrorCode,
-        types::{MarketType, OrderType},
-    },
-    Wallet,
-};
+use crate::{drift_idl::errors::ErrorCode, Wallet};
 
 pub type SdkResult<T> = Result<T, SdkError>;
 
@@ -369,7 +366,7 @@ pub trait MarketPrecision {
     fn min_order_size(&self) -> u64;
 }
 
-impl MarketPrecision for SpotMarket {
+impl MarketPrecision for accounts::SpotMarket {
     fn min_order_size(&self) -> u64 {
         self.min_order_size
     }
@@ -381,7 +378,7 @@ impl MarketPrecision for SpotMarket {
     }
 }
 
-impl MarketPrecision for PerpMarket {
+impl MarketPrecision for accounts::PerpMarket {
     fn min_order_size(&self) -> u64 {
         self.amm.min_order_size
     }
@@ -448,7 +445,7 @@ impl ReferrerInfo {
         self.referrer_stats
     }
 
-    pub fn get_referrer_info(taker_stats: UserStats) -> Option<Self> {
+    pub fn get_referrer_info(taker_stats: accounts::UserStats) -> Option<Self> {
         if taker_stats.referrer == Pubkey::default() {
             return None;
         }

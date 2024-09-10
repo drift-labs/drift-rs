@@ -2,9 +2,8 @@
 
 use std::{borrow::Cow, sync::Arc};
 
-use anchor_lang::{AnchorDeserialize, Discriminator, InstructionData};
-use futures_util::{future::BoxFuture, FutureExt, TryFutureExt};
-use log::error;
+use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
+use futures_util::TryFutureExt;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
     nonblocking::rpc_client::RpcClient,
@@ -31,16 +30,15 @@ use crate::{
         derive_perp_market_account, derive_spot_market_account, market_lookup_table, state_account,
         MarketExt, ProgramData,
     },
-    drift_idl::{
-        accounts::{State, User, UserStats},
-        traits::ToAccountMetas,
-        types::{MarketType, Order, OrderStatus, PerpPosition, SpotFulfillmentType, SpotPosition},
-    },
+    drift_idl::traits::ToAccountMetas,
     event_emitter::EventEmitter,
     ffi::IntoFfi,
     marketmap::MarketMap,
     oraclemap::{Oracle, OracleMap},
-    types::*,
+    types::{
+        accounts::{PerpMarket, SpotMarket, State, User, UserStats},
+        *,
+    },
     user::DriftUser,
     utils::{decode, get_ws_url},
     websocket_account_subscriber::WebsocketAccountSubscriber,
@@ -85,9 +83,9 @@ pub mod dlob;
 
 /// Provides solana Account fetching API
 pub trait AccountProvider: 'static + Sized + Send + Sync {
-    // TODO: async fn when it stabilizes
     /// Return the Account information of `account`
-    fn get_account(&self, account: Pubkey) -> BoxFuture<SdkResult<Account>>;
+    fn get_account(&self, account: Pubkey)
+        -> impl std::future::Future<Output = SdkResult<Account>>;
     /// the HTTP endpoint URL
     fn endpoint(&self) -> String;
     /// return configured commitment level of the provider
@@ -113,15 +111,14 @@ impl RpcAccountProvider {
             )),
         }
     }
-    async fn get_account_impl(&self, account: Pubkey) -> SdkResult<Account> {
-        let account_data: Account = self.client.get_account(&account).await?;
-        Ok(account_data)
-    }
 }
 
 impl AccountProvider for RpcAccountProvider {
-    fn get_account(&self, account: Pubkey) -> BoxFuture<SdkResult<Account>> {
-        self.get_account_impl(account).boxed()
+    async fn get_account(&self, account: Pubkey) -> SdkResult<Account> {
+        self.client
+            .get_account(&account)
+            .await
+            .map_err(|err| err.into())
     }
     fn endpoint(&self) -> String {
         self.client.url()
@@ -583,7 +580,7 @@ impl DriftClientBackend {
             spot_market_map,
             oracle_map: Arc::new(oracle_map),
             state_account: Arc::new(std::sync::RwLock::new(
-                State::deserialize(&mut state.data.as_ref()).expect("valid state"),
+                State::try_deserialize(&mut state.data.as_ref()).expect("valid state"),
             )),
             blockhash_subscriber,
         })
@@ -744,7 +741,7 @@ impl DriftClientBackend {
 
     /// Get all drift program accounts by Anchor type
     #[allow(dead_code)]
-    async fn get_program_accounts<U: AnchorDeserialize + Discriminator>(
+    async fn get_program_accounts<U: AccountDeserialize + Discriminator>(
         &self,
     ) -> SdkResult<Vec<U>> {
         let accounts = self
@@ -768,18 +765,17 @@ impl DriftClientBackend {
         accounts
             .iter()
             .map(|(_, account_data)| {
-                U::deserialize(&mut account_data.data.as_ref()).map_err(|err| {
-                    error!("{err:}?");
-                    SdkError::Deserializing
-                })
+                U::try_deserialize_unchecked(&mut account_data.data.as_ref())
+                    .map_err(|err| SdkError::Anchor(Box::new(err)))
             })
             .collect()
     }
 
     /// Fetch an `account` as an Anchor account type
-    async fn get_account<U: AnchorDeserialize>(&self, account: &Pubkey) -> SdkResult<U> {
+    async fn get_account<U: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<U> {
         let account_data = self.account_provider.get_account(*account).await?;
-        U::deserialize(&mut account_data.data.as_ref()).map_err(|_err| SdkError::InvalidAccount)
+        U::try_deserialize(&mut account_data.data.as_ref())
+            .map_err(|err| SdkError::Anchor(Box::new(err)))
     }
 
     /// Sign and send a tx to the network
@@ -953,7 +949,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            drift_idl::accounts::Deposit {
+            types::accounts::Deposit {
                 state: *state_account(),
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.authority, &constants::PROGRAM_ID),
@@ -991,7 +987,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            drift_idl::accounts::Withdraw {
+            types::accounts::Withdraw {
                 state: *state_account(),
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.authority, &constants::PROGRAM_ID),
@@ -1030,7 +1026,7 @@ impl<'a> TransactionBuilder<'a> {
 
         let accounts = build_accounts(
             self.program_data,
-            drift_idl::accounts::PlaceOrders {
+            types::accounts::PlaceOrders {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -1055,7 +1051,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn cancel_all_orders(mut self) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            drift_idl::accounts::CancelOrder {
+            types::accounts::CancelOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -1092,7 +1088,7 @@ impl<'a> TransactionBuilder<'a> {
         let (idx, kind) = market;
         let accounts = build_accounts(
             self.program_data,
-            drift_idl::accounts::CancelOrder {
+            types::accounts::CancelOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -1120,7 +1116,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn cancel_orders_by_id(mut self, order_ids: Vec<u32>) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            drift_idl::accounts::CancelOrder {
+            types::accounts::CancelOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -1144,7 +1140,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn cancel_orders_by_user_id(mut self, user_order_ids: Vec<u8>) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            drift_idl::accounts::CancelOrder {
+            types::accounts::CancelOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -1173,7 +1169,7 @@ impl<'a> TransactionBuilder<'a> {
         for (order_id, params) in orders {
             let accounts = build_accounts(
                 self.program_data,
-                drift_idl::accounts::PlaceOrders {
+                types::accounts::PlaceOrders {
                     state: *state_account(),
                     authority: self.authority,
                     user: self.sub_account,
@@ -1202,7 +1198,7 @@ impl<'a> TransactionBuilder<'a> {
         for (user_order_id, params) in orders {
             let accounts = build_accounts(
                 self.program_data,
-                drift_idl::accounts::PlaceOrders {
+                types::accounts::PlaceOrders {
                     state: *state_account(),
                     authority: self.authority,
                     user: self.sub_account,
@@ -1247,7 +1243,7 @@ impl<'a> TransactionBuilder<'a> {
         let spot_writable = [MarketId::spot(order.market_index), MarketId::QUOTE_SPOT];
         let mut accounts = build_accounts(
             self.program_data,
-            drift_idl::accounts::PlaceAndMakePerpOrder {
+            types::accounts::PlaceAndMakePerpOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -1324,7 +1320,7 @@ impl<'a> TransactionBuilder<'a> {
 
         let mut accounts = build_accounts(
             self.program_data,
-            drift_idl::accounts::PlaceAndTakePerpOrder {
+            types::accounts::PlaceAndTakePerpOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -1509,7 +1505,9 @@ pub async fn get_market_accounts(
         .get_account_data(state_account())
         .await
         .expect("state account fetch");
-    let state = State::deserialize(&mut state_data.as_slice()).expect("state deserializes");
+
+    let state = State::try_deserialize(&mut state_data.as_slice()).expect("state deserializes");
+
     let spot_market_pdas: Vec<Pubkey> = (0..state.number_of_spot_markets)
         .map(derive_spot_market_account)
         .collect();
@@ -1527,7 +1525,7 @@ pub async fn get_market_accounts(
         .into_iter()
         .map(|x| {
             let account = x.unwrap();
-            SpotMarket::deserialize(&mut account.data.as_slice()).unwrap()
+            SpotMarket::try_deserialize(&mut account.data.as_slice()).expect("market deserializes")
         })
         .collect();
 
@@ -1535,7 +1533,7 @@ pub async fn get_market_accounts(
         .into_iter()
         .map(|x| {
             let account = x.unwrap();
-            PerpMarket::deserialize(&mut account.data.as_slice()).unwrap()
+            PerpMarket::try_deserialize(&mut account.data.as_slice()).expect("market deserializes")
         })
         .collect();
 
@@ -1567,7 +1565,7 @@ impl Wallet {
     /// Construct a read-only wallet
     pub fn read_only(authority: Pubkey) -> Self {
         Self {
-            signer: Arc::new(Keypair::from_bytes(&[0_u8; 64]).expect("empty signer")),
+            signer: Arc::new(Keypair::new()),
             authority,
             stats: Wallet::derive_stats_account(&authority, &constants::PROGRAM_ID),
         }
@@ -1667,7 +1665,6 @@ impl From<Keypair> for Wallet {
 mod tests {
     use std::str::FromStr;
 
-    use drift_idl::accounts::PerpMarket;
     use serde_json::json;
     use solana_account_decoder::{UiAccount, UiAccountData};
     use solana_client::{
@@ -1675,6 +1672,7 @@ mod tests {
         rpc_request::RpcRequest,
         rpc_response::{Response, RpcResponseContext},
     };
+    use types::accounts::PerpMarket;
 
     use super::*;
 

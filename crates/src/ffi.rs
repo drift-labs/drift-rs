@@ -15,54 +15,6 @@ use crate::{
     SdkResult,
 };
 
-/// Defines an upgrade from plain IDL generated type into an FFI version with drift program functionality available
-pub trait IntoFfi {
-    type Output;
-    /// Convert self into an FFI type with drift-program functionality
-    fn ffi(&self) -> Self::Output;
-}
-
-/// FFI safe version of (pubkey, account)
-#[repr(C)]
-pub struct AccountWithKey {
-    pub key: Pubkey,
-    pub account: Account,
-}
-
-impl From<(Pubkey, Account)> for AccountWithKey {
-    fn from(value: (Pubkey, Account)) -> Self {
-        Self {
-            key: value.0,
-            account: value.1,
-        }
-    }
-}
-
-/// FFI equivalent of an `AccountMap`
-#[repr(C)]
-pub struct AccountsList<'a> {
-    pub perp_markets: &'a mut [AccountWithKey],
-    pub spot_markets: &'a mut [AccountWithKey],
-    pub oracles: &'a mut [AccountWithKey],
-    pub latest_slot: Slot,
-}
-
-impl<'a> AccountsList<'a> {
-    #[cfg(test)]
-    pub fn new(
-        perp_markets: &'a mut [AccountWithKey],
-        spot_markets: &'a mut [AccountWithKey],
-        oracles: &'a mut [AccountWithKey],
-    ) -> Self {
-        Self {
-            perp_markets,
-            spot_markets,
-            oracles,
-            latest_slot: 0,
-        }
-    }
-}
-
 // Declarations of exported functions from `drift-ffi` lib
 // the types here must be C abi safe/compatible
 //
@@ -97,7 +49,14 @@ extern "C" {
         size: u128,
         margin_type: MarginRequirementType,
     ) -> FfiResult<u32>;
+    #[allow(improper_ctypes)]
+    pub fn perp_market_get_open_interest(market: &accounts::PerpMarket) -> u128;
 
+    #[allow(improper_ctypes)]
+    pub fn perp_position_get_unrealized_pnl(
+        position: &types::PerpPosition,
+        oracle_price: i64,
+    ) -> FfiResult<i128>;
     pub fn perp_position_is_available(position: &types::PerpPosition) -> bool;
     pub fn perp_position_is_open_position(position: &types::PerpPosition) -> bool;
     #[allow(improper_ctypes)]
@@ -133,6 +92,11 @@ extern "C" {
         position: &types::SpotPosition,
         market: &accounts::SpotMarket,
     ) -> FfiResult<i128>;
+    #[allow(improper_ctypes)]
+    pub fn spot_position_get_token_amount(
+        position: &types::SpotPosition,
+        market: &accounts::SpotMarket,
+    ) -> FfiResult<u128>;
     #[allow(improper_ctypes)]
     pub fn user_get_spot_position(
         user: &accounts::User,
@@ -178,6 +142,9 @@ impl SpotPosition {
     pub fn get_signed_token_amount(&self, market: &accounts::SpotMarket) -> SdkResult<i128> {
         to_sdk_result(unsafe { spot_position_get_signed_token_amount(&self.0, market) })
     }
+    pub fn get_token_amount(&self, market: &accounts::SpotMarket) -> SdkResult<u128> {
+        to_sdk_result(unsafe { spot_position_get_token_amount(&self.0, market) })
+    }
 }
 
 impl IntoFfi for types::SpotPosition {
@@ -196,6 +163,9 @@ impl From<SpotPosition> for types::SpotPosition {
 pub struct PerpPosition(types::PerpPosition);
 
 impl PerpPosition {
+    pub fn get_unrealized_pnl(&self, oracle_price: i64) -> SdkResult<i128> {
+        to_sdk_result(unsafe { perp_position_get_unrealized_pnl(&self.0, oracle_price) })
+    }
     pub fn is_available(&self) -> bool {
         unsafe { perp_position_is_available(&self.0) }
     }
@@ -329,6 +299,9 @@ impl PerpMarket {
             perp_market_get_margin_ratio(&self.0, size, margin_requirement_type)
         })
     }
+    pub fn get_open_interest(&self) -> u128 {
+        unsafe { perp_market_get_open_interest(&self.0) }
+    }
 }
 
 impl IntoFfi for accounts::PerpMarket {
@@ -348,8 +321,9 @@ fn to_sdk_result<T>(value: FfiResult<T>) -> SdkResult<T> {
     match value {
         FfiResult::ROk(t) => Ok(t),
         FfiResult::RErr(code) => {
-            // TODO: something wrong in this conversion...
-            let error_code = unsafe { std::mem::transmute::<u32, ErrorCode>(code) };
+            let error_code = unsafe {
+                std::mem::transmute::<u32, ErrorCode>(code - anchor_lang::error::ERROR_CODE_OFFSET)
+            };
             Err(crate::SdkError::Anchor(Box::new(error_code.into())))
         }
     }
@@ -357,11 +331,52 @@ fn to_sdk_result<T>(value: FfiResult<T>) -> SdkResult<T> {
 
 pub mod abi_types {
     //! cross-boundary FFI types
-    //! DEV: _must_ not include solana-* crates
     use abi_stable::std_types::RResult;
+    use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
     use type_layout::TypeLayout;
 
     use crate::drift_idl::types::MarginRequirementType;
+
+    /// FFI safe version of (pubkey, account)
+    #[repr(C)]
+    pub struct AccountWithKey {
+        pub key: Pubkey,
+        pub account: Account,
+    }
+
+    impl From<(Pubkey, Account)> for AccountWithKey {
+        fn from(value: (Pubkey, Account)) -> Self {
+            Self {
+                key: value.0,
+                account: value.1,
+            }
+        }
+    }
+
+    /// FFI equivalent of an `AccountMap`
+    #[repr(C)]
+    pub struct AccountsList<'a> {
+        pub perp_markets: &'a mut [AccountWithKey],
+        pub spot_markets: &'a mut [AccountWithKey],
+        pub oracles: &'a mut [AccountWithKey],
+        pub latest_slot: Slot,
+    }
+
+    impl<'a> AccountsList<'a> {
+        #[cfg(test)]
+        pub fn new(
+            perp_markets: &'a mut [AccountWithKey],
+            spot_markets: &'a mut [AccountWithKey],
+            oracles: &'a mut [AccountWithKey],
+        ) -> Self {
+            Self {
+                perp_markets,
+                spot_markets,
+                oracles,
+                latest_slot: 0,
+            }
+        }
+    }
 
     /// FFI safe equivalent of `MarginContext`
     #[repr(C)]
@@ -407,6 +422,13 @@ pub mod abi_types {
 
     /// C-ABI compatible result type for drift FFI calls
     pub type FfiResult<T> = RResult<T, u32>;
+}
+
+/// Defines an upgrade from plain IDL generated type into an FFI version with drift program functionality available
+pub trait IntoFfi {
+    type Output;
+    /// Convert self into an FFI type with drift-program functionality
+    fn ffi(&self) -> Self::Output;
 }
 
 #[cfg(test)]
@@ -667,7 +689,8 @@ mod tests {
         assert!(result.is_ok());
         let oracle_price_data = result.unwrap();
 
-        assert!(oracle_price_data.price != 0);
+        dbg!(oracle_price_data.price);
+        assert!(oracle_price_data.price == 60 * QUOTE_PRECISION as i64);
     }
 
     #[test]

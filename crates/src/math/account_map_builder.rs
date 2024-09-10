@@ -3,11 +3,13 @@ use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::{
     constants::{self, ids, PROGRAM_ID},
-    drift_idl::types::OracleSource,
     ffi::{AccountWithKey, AccountsList, IntoFfi},
-    types::User,
+    types::{
+        accounts::{PerpMarket, SpotMarket, User},
+        OracleSource,
+    },
     utils::zero_account_to_bytes,
-    DriftClient, PerpMarket, SdkResult, SpotMarket,
+    DriftClient, SdkResult,
 };
 
 /// Builds an AccountList of relevant spot, perp, and oracle accounts from rpc

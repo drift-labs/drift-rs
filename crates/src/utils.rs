@@ -114,7 +114,8 @@ pub fn dlob_subscribe_ws_json(market: &str) -> String {
     .to_string()
 }
 
-/// NOTE: does not check the Anchor discrminator
+/// decode `UiAccountData` as anchor type `T`
+/// NOTE: does not check the Anchor discriminant
 #[inline(always)]
 pub fn decode<T>(data: &UiAccountData) -> SdkResult<T>
 where
@@ -128,11 +129,6 @@ where
     let anchor_bytes = base64::engine::general_purpose::STANDARD.decode(data_str)?;
     // [..8] strip anchor discriminator
     T::deserialize(&mut &anchor_bytes[8..]).map_err(|err| SdkError::Anchor(Box::new(err.into())))
-}
-
-/// Helper to deserialize account data as `T`
-pub fn deserialize_account<T: anchor_lang::AnchorDeserialize>(data: &mut &[u8]) -> Option<T> {
-    T::deserialize(data).ok()
 }
 
 pub(crate) fn zero_account_to_bytes<T: bytemuck::Pod + anchor_lang::Discriminator>(

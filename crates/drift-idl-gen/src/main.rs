@@ -450,11 +450,10 @@ fn generate_idl_types(idl: &Idl) -> String {
     // Generate enum for errors
     let error_variants = idl.errors.iter().map(|error| {
         let variant_name = Ident::new(&error.name, proc_macro2::Span::call_site());
-        let error_code = error.code;
         let error_msg = &error.msg;
         quote! {
             #[msg(#error_msg)]
-            #variant_name = #error_code,
+            #variant_name,
         }
     });
 

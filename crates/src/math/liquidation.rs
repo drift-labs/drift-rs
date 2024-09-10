@@ -4,10 +4,6 @@
 use std::ops::Neg;
 
 use crate::{
-    drift_idl::{
-        accounts::{PerpMarket, User},
-        types::{MarginRequirementType, PerpPosition},
-    },
     ffi::{
         self, calculate_margin_requirement_and_total_collateral_and_liability_info, AccountsList,
         IntoFfi, MarginContextMode,
@@ -19,7 +15,11 @@ use crate::{
             QUOTE_PRECISION_I128, QUOTE_PRECISION_I64, SPOT_WEIGHT_PRECISION,
         },
     },
-    AccountProvider, DriftClient, SdkError, SdkResult, SpotMarket,
+    types::{
+        accounts::{PerpMarket, SpotMarket, User},
+        MarginRequirementType, PerpPosition,
+    },
+    DriftClient, SdkError, SdkResult,
 };
 
 /// Info on a positions liquidation price and unrealized PnL
@@ -32,7 +32,7 @@ pub struct LiquidationAndPnlInfo {
 }
 
 /// Calculate the liquidation price and unrealized PnL of a user's perp position (given by `market_index`)
-pub fn calculate_liquidation_price_and_unrealized_pnl<T: AccountProvider>(
+pub fn calculate_liquidation_price_and_unrealized_pnl(
     client: &DriftClient,
     user: &User,
     market_index: u16,
@@ -73,7 +73,7 @@ pub fn calculate_liquidation_price_and_unrealized_pnl<T: AccountProvider>(
 }
 
 /// Calculate the unrealized pnl for user perp position, given by `market_index`
-pub fn calculate_unrealized_pnl<T: AccountProvider>(
+pub fn calculate_unrealized_pnl(
     client: &DriftClient,
     user: &User,
     market_index: u16,
@@ -102,7 +102,7 @@ pub fn calculate_unrealized_pnl_inner(
 
 /// Calculate the liquidation price of a user's perp position (given by `market_index`)
 /// Returns the liquidaton price (PRICE_PRECISION / 1e6)
-pub fn calculate_liquidation_price<T: AccountProvider>(
+pub fn calculate_liquidation_price(
     client: &DriftClient,
     user: &User,
     market_index: u16,
@@ -268,7 +268,7 @@ pub struct MarginRequirementInfo {
 }
 
 /// Calculate the margin requirements of `user`
-pub fn calculate_margin_requirements<T: AccountProvider>(
+pub fn calculate_margin_requirements(
     client: &DriftClient,
     user: &User,
 ) -> SdkResult<MarginRequirementInfo> {
@@ -309,7 +309,7 @@ pub struct CollateralInfo {
     pub free: i128,
 }
 
-pub fn calculate_collateral<T: AccountProvider>(
+pub fn calculate_collateral(
     client: &DriftClient,
     user: &User,
     margin_requirement_type: MarginRequirementType,
@@ -345,7 +345,6 @@ mod tests {
 
     use anchor_lang::Discriminator;
     use bytes::BytesMut;
-    use ffi::MarginCalculation;
     use solana_sdk::{account::Account, pubkey::Pubkey};
 
     use super::*;

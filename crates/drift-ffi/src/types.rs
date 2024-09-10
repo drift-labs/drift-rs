@@ -3,7 +3,49 @@ use abi_stable::std_types::RResult;
 use drift_program::{
     math::margin::MarginRequirementType, state::margin_calculation::MarginContext,
 };
+use solana_sdk::{account::Account, account_info::{AccountInfo, Account as _, IntoAccountInfo}, clock::Slot, pubkey::Pubkey};
 use type_layout::TypeLayout;
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct AccountWithKey {
+    pub key: Pubkey,
+    pub account: Account,
+}
+
+impl From<(Pubkey, Account)> for AccountWithKey {
+    fn from(value: (Pubkey, Account)) -> Self {
+        Self {
+            key: value.0,
+            account: value.1,
+        }
+    }
+}
+
+impl From<AccountWithKey> for (Pubkey, Account) {
+    fn from(value: AccountWithKey) -> Self {
+        (value.key, value.account)
+    }
+}
+
+impl<'a> IntoAccountInfo<'a> for &'a mut AccountWithKey {
+    fn into_account_info(self) -> AccountInfo<'a> {
+        let (lamports, data, owner, executable, rent_epoch) = self.account.get();
+        AccountInfo::new(
+            &self.key, false, false, lamports, data, owner, executable, rent_epoch,
+        )
+    }
+}
+
+/// FFI equivalent of an `AccountMap`
+#[repr(C)]
+#[derive(Debug)]
+pub struct AccountsList<'a> {
+    pub perp_markets: &'a mut [AccountWithKey],
+    pub spot_markets: &'a mut [AccountWithKey],
+    pub oracles: &'a mut [AccountWithKey],
+    pub latest_slot: Slot,
+}
 
 /// FFI type-safe equivalent of `MarginContext`
 #[repr(C)]

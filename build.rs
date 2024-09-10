@@ -4,14 +4,14 @@ fn main() {
     let current_dir = std::env::current_dir().unwrap();
 
     // generate types from IDL
-    // let idlgen_crate_dir = current_dir.join(Path::new("crates/drift-idl-gen"));
-    // let output = std::process::Command::new("make")
-    //     .current_dir(idlgen_crate_dir)
-    //     .args(["build"])
-    //     .output()
-    //     .expect("idl-gen built");
+    let idlgen_crate_dir = current_dir.join(Path::new("crates/drift-idl-gen"));
+    let output = std::process::Command::new("make")
+        .current_dir(idlgen_crate_dir)
+        .args(["build"])
+        .output()
+        .expect("idl-gen built");
 
-    // println!("idl-gen build: {output:?}");
+    println!("idl-gen build: {output:?}");
 
     // generate ffi lib
     let profile = "debug";
@@ -25,9 +25,6 @@ fn main() {
     println!("ffi build: {output:?}");
 
     // build sdk crate
-    /*
-       MACOSX_DEPLOYMENT_TARGET="14.4" RUSTFLAGS="-L native=$(shell pwd)/../drift-ffi/target/release -l dylib=drift_ffi" cargo build
-    */
     println!(
         "cargo:rustc-link-search=native={}/crates/drift-ffi/target/{profile}/",
         current_dir.to_string_lossy()

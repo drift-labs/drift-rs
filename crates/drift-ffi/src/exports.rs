@@ -15,14 +15,13 @@ use drift_program::{
     },
 };
 use solana_program::{
-    account_info::{Account as _, AccountInfo, IntoAccountInfo},
+    account_info::IntoAccountInfo,
     clock::Slot,
 };
 use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::types::{
-    compat::{self},
-    FfiResult, MarginCalculation, MarginContextMode, OraclePriceData,
+    compat::{self}, AccountsList, FfiResult, MarginCalculation, MarginContextMode, OraclePriceData
 };
 
 #[no_mangle]
@@ -115,6 +114,20 @@ pub extern "C" fn perp_market_get_margin_ratio(
 }
 
 #[no_mangle]
+pub extern "C" fn perp_market_get_open_interest(
+    market: &PerpMarket,
+) -> compat::u128 {
+    market.get_open_interest().into()
+}
+
+#[no_mangle]
+pub extern "C" fn perp_position_get_unrealized_pnl(position: &PerpPosition, oracle_price: i64) -> FfiResult<compat::i128> {
+    to_ffi_result(
+        position.get_unrealized_pnl(oracle_price).map(compat::i128)
+    )
+}
+
+#[no_mangle]
 pub extern "C" fn perp_position_is_available(position: &PerpPosition) -> bool {
     position.is_available()
 }
@@ -176,6 +189,14 @@ pub extern "C" fn spot_position_get_signed_token_amount(
 }
 
 #[no_mangle]
+pub extern "C" fn spot_position_get_token_amount(
+    position: &SpotPosition,
+    market: &SpotMarket,
+) -> FfiResult<compat::u128> {
+    to_ffi_result(position.get_token_amount(market).map(compat::u128))
+}
+
+#[no_mangle]
 pub extern "C" fn user_get_spot_position(
     user: &User,
     market_index: u16,
@@ -189,50 +210,6 @@ pub extern "C" fn user_get_perp_position(
     market_index: u16,
 ) -> FfiResult<&PerpPosition> {
     to_ffi_result(user.get_perp_position(market_index))
-}
-
-//
-// Inbound Types
-//
-#[repr(C)]
-#[derive(Debug)]
-pub struct AccountWithKey {
-    pub key: Pubkey,
-    pub account: Account,
-}
-
-impl From<(Pubkey, Account)> for AccountWithKey {
-    fn from(value: (Pubkey, Account)) -> Self {
-        Self {
-            key: value.0,
-            account: value.1,
-        }
-    }
-}
-
-impl From<AccountWithKey> for (Pubkey, Account) {
-    fn from(value: AccountWithKey) -> Self {
-        (value.key, value.account)
-    }
-}
-
-impl<'a> IntoAccountInfo<'a> for &'a mut AccountWithKey {
-    fn into_account_info(self) -> solana_sdk::account_info::AccountInfo<'a> {
-        let (lamports, data, owner, executable, rent_epoch) = self.account.get();
-        AccountInfo::new(
-            &self.key, false, false, lamports, data, owner, executable, rent_epoch,
-        )
-    }
-}
-
-/// FFI equivalent of an `AccountMap`
-#[repr(C)]
-#[derive(Debug)]
-pub struct AccountsList<'a> {
-    pub perp_markets: &'a mut [AccountWithKey],
-    pub spot_markets: &'a mut [AccountWithKey],
-    pub oracles: &'a mut [AccountWithKey],
-    pub latest_slot: Slot,
 }
 
 //

@@ -3,7 +3,7 @@ use crate::{
     ffi::{
         calculate_margin_requirement_and_total_collateral_and_liability_info, MarginContextMode,
     },
-    types::User,
+    types::accounts::User,
     DriftClient, SdkError, SdkResult,
 };
 

@@ -1944,6 +1944,7 @@ pub mod types {
         pub market_type: MarketType,
         pub market_index: u16,
     }
+    #[repr(C)]
     #[derive(
         AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
@@ -1955,6 +1956,7 @@ pub mod types {
         pub last_oracle_price_twap5min: i64,
         pub last_oracle_price_twap_ts: i64,
     }
+    #[repr(C)]
     #[derive(
         AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
@@ -16291,575 +16293,575 @@ pub mod errors {
     #[error_code]
     pub enum ErrorCode {
         #[msg("Invalid Spot Market Authority")]
-        InvalidSpotMarketAuthority = 6000u32,
+        InvalidSpotMarketAuthority,
         #[msg("Clearing house not insurance fund authority")]
-        InvalidInsuranceFundAuthority = 6001u32,
+        InvalidInsuranceFundAuthority,
         #[msg("Insufficient deposit")]
-        InsufficientDeposit = 6002u32,
+        InsufficientDeposit,
         #[msg("Insufficient collateral")]
-        InsufficientCollateral = 6003u32,
+        InsufficientCollateral,
         #[msg("Sufficient collateral")]
-        SufficientCollateral = 6004u32,
+        SufficientCollateral,
         #[msg("Max number of positions taken")]
-        MaxNumberOfPositions = 6005u32,
+        MaxNumberOfPositions,
         #[msg("Admin Controls Prices Disabled")]
-        AdminControlsPricesDisabled = 6006u32,
+        AdminControlsPricesDisabled,
         #[msg("Market Delisted")]
-        MarketDelisted = 6007u32,
+        MarketDelisted,
         #[msg("Market Index Already Initialized")]
-        MarketIndexAlreadyInitialized = 6008u32,
+        MarketIndexAlreadyInitialized,
         #[msg("User Account And User Positions Account Mismatch")]
-        UserAccountAndUserPositionsAccountMismatch = 6009u32,
+        UserAccountAndUserPositionsAccountMismatch,
         #[msg("User Has No Position In Market")]
-        UserHasNoPositionInMarket = 6010u32,
+        UserHasNoPositionInMarket,
         #[msg("Invalid Initial Peg")]
-        InvalidInitialPeg = 6011u32,
+        InvalidInitialPeg,
         #[msg("AMM repeg already configured with amt given")]
-        InvalidRepegRedundant = 6012u32,
+        InvalidRepegRedundant,
         #[msg("AMM repeg incorrect repeg direction")]
-        InvalidRepegDirection = 6013u32,
+        InvalidRepegDirection,
         #[msg("AMM repeg out of bounds pnl")]
-        InvalidRepegProfitability = 6014u32,
+        InvalidRepegProfitability,
         #[msg("Slippage Outside Limit Price")]
-        SlippageOutsideLimit = 6015u32,
+        SlippageOutsideLimit,
         #[msg("Order Size Too Small")]
-        OrderSizeTooSmall = 6016u32,
+        OrderSizeTooSmall,
         #[msg("Price change too large when updating K")]
-        InvalidUpdateK = 6017u32,
+        InvalidUpdateK,
         #[msg("Admin tried to withdraw amount larger than fees collected")]
-        AdminWithdrawTooLarge = 6018u32,
+        AdminWithdrawTooLarge,
         #[msg("Math Error")]
-        MathError = 6019u32,
+        MathError,
         #[msg("Conversion to u128/u64 failed with an overflow or underflow")]
-        BnConversionError = 6020u32,
+        BnConversionError,
         #[msg("Clock unavailable")]
-        ClockUnavailable = 6021u32,
+        ClockUnavailable,
         #[msg("Unable To Load Oracles")]
-        UnableToLoadOracle = 6022u32,
+        UnableToLoadOracle,
         #[msg("Price Bands Breached")]
-        PriceBandsBreached = 6023u32,
+        PriceBandsBreached,
         #[msg("Exchange is paused")]
-        ExchangePaused = 6024u32,
+        ExchangePaused,
         #[msg("Invalid whitelist token")]
-        InvalidWhitelistToken = 6025u32,
+        InvalidWhitelistToken,
         #[msg("Whitelist token not found")]
-        WhitelistTokenNotFound = 6026u32,
+        WhitelistTokenNotFound,
         #[msg("Invalid discount token")]
-        InvalidDiscountToken = 6027u32,
+        InvalidDiscountToken,
         #[msg("Discount token not found")]
-        DiscountTokenNotFound = 6028u32,
+        DiscountTokenNotFound,
         #[msg("Referrer not found")]
-        ReferrerNotFound = 6029u32,
+        ReferrerNotFound,
         #[msg("ReferrerNotFound")]
-        ReferrerStatsNotFound = 6030u32,
+        ReferrerStatsNotFound,
         #[msg("ReferrerMustBeWritable")]
-        ReferrerMustBeWritable = 6031u32,
+        ReferrerMustBeWritable,
         #[msg("ReferrerMustBeWritable")]
-        ReferrerStatsMustBeWritable = 6032u32,
+        ReferrerStatsMustBeWritable,
         #[msg("ReferrerAndReferrerStatsAuthorityUnequal")]
-        ReferrerAndReferrerStatsAuthorityUnequal = 6033u32,
+        ReferrerAndReferrerStatsAuthorityUnequal,
         #[msg("InvalidReferrer")]
-        InvalidReferrer = 6034u32,
+        InvalidReferrer,
         #[msg("InvalidOracle")]
-        InvalidOracle = 6035u32,
+        InvalidOracle,
         #[msg("OracleNotFound")]
-        OracleNotFound = 6036u32,
+        OracleNotFound,
         #[msg("Liquidations Blocked By Oracle")]
-        LiquidationsBlockedByOracle = 6037u32,
+        LiquidationsBlockedByOracle,
         #[msg("Can not deposit more than max deposit")]
-        MaxDeposit = 6038u32,
+        MaxDeposit,
         #[msg("Can not delete user that still has collateral")]
-        CantDeleteUserWithCollateral = 6039u32,
+        CantDeleteUserWithCollateral,
         #[msg("AMM funding out of bounds pnl")]
-        InvalidFundingProfitability = 6040u32,
+        InvalidFundingProfitability,
         #[msg("Casting Failure")]
-        CastingFailure = 6041u32,
+        CastingFailure,
         #[msg("InvalidOrder")]
-        InvalidOrder = 6042u32,
+        InvalidOrder,
         #[msg("InvalidOrderMaxTs")]
-        InvalidOrderMaxTs = 6043u32,
+        InvalidOrderMaxTs,
         #[msg("InvalidOrderMarketType")]
-        InvalidOrderMarketType = 6044u32,
+        InvalidOrderMarketType,
         #[msg("InvalidOrderForInitialMarginReq")]
-        InvalidOrderForInitialMarginReq = 6045u32,
+        InvalidOrderForInitialMarginReq,
         #[msg("InvalidOrderNotRiskReducing")]
-        InvalidOrderNotRiskReducing = 6046u32,
+        InvalidOrderNotRiskReducing,
         #[msg("InvalidOrderSizeTooSmall")]
-        InvalidOrderSizeTooSmall = 6047u32,
+        InvalidOrderSizeTooSmall,
         #[msg("InvalidOrderNotStepSizeMultiple")]
-        InvalidOrderNotStepSizeMultiple = 6048u32,
+        InvalidOrderNotStepSizeMultiple,
         #[msg("InvalidOrderBaseQuoteAsset")]
-        InvalidOrderBaseQuoteAsset = 6049u32,
+        InvalidOrderBaseQuoteAsset,
         #[msg("InvalidOrderIOC")]
-        InvalidOrderIOC = 6050u32,
+        InvalidOrderIOC,
         #[msg("InvalidOrderPostOnly")]
-        InvalidOrderPostOnly = 6051u32,
+        InvalidOrderPostOnly,
         #[msg("InvalidOrderIOCPostOnly")]
-        InvalidOrderIOCPostOnly = 6052u32,
+        InvalidOrderIOCPostOnly,
         #[msg("InvalidOrderTrigger")]
-        InvalidOrderTrigger = 6053u32,
+        InvalidOrderTrigger,
         #[msg("InvalidOrderAuction")]
-        InvalidOrderAuction = 6054u32,
+        InvalidOrderAuction,
         #[msg("InvalidOrderOracleOffset")]
-        InvalidOrderOracleOffset = 6055u32,
+        InvalidOrderOracleOffset,
         #[msg("InvalidOrderMinOrderSize")]
-        InvalidOrderMinOrderSize = 6056u32,
+        InvalidOrderMinOrderSize,
         #[msg("Failed to Place Post-Only Limit Order")]
-        PlacePostOnlyLimitFailure = 6057u32,
+        PlacePostOnlyLimitFailure,
         #[msg("User has no order")]
-        UserHasNoOrder = 6058u32,
+        UserHasNoOrder,
         #[msg("Order Amount Too Small")]
-        OrderAmountTooSmall = 6059u32,
+        OrderAmountTooSmall,
         #[msg("Max number of orders taken")]
-        MaxNumberOfOrders = 6060u32,
+        MaxNumberOfOrders,
         #[msg("Order does not exist")]
-        OrderDoesNotExist = 6061u32,
+        OrderDoesNotExist,
         #[msg("Order not open")]
-        OrderNotOpen = 6062u32,
+        OrderNotOpen,
         #[msg("FillOrderDidNotUpdateState")]
-        FillOrderDidNotUpdateState = 6063u32,
+        FillOrderDidNotUpdateState,
         #[msg("Reduce only order increased risk")]
-        ReduceOnlyOrderIncreasedRisk = 6064u32,
+        ReduceOnlyOrderIncreasedRisk,
         #[msg("Unable to load AccountLoader")]
-        UnableToLoadAccountLoader = 6065u32,
+        UnableToLoadAccountLoader,
         #[msg("Trade Size Too Large")]
-        TradeSizeTooLarge = 6066u32,
+        TradeSizeTooLarge,
         #[msg("User cant refer themselves")]
-        UserCantReferThemselves = 6067u32,
+        UserCantReferThemselves,
         #[msg("Did not receive expected referrer")]
-        DidNotReceiveExpectedReferrer = 6068u32,
+        DidNotReceiveExpectedReferrer,
         #[msg("Could not deserialize referrer")]
-        CouldNotDeserializeReferrer = 6069u32,
+        CouldNotDeserializeReferrer,
         #[msg("Could not deserialize referrer stats")]
-        CouldNotDeserializeReferrerStats = 6070u32,
+        CouldNotDeserializeReferrerStats,
         #[msg("User Order Id Already In Use")]
-        UserOrderIdAlreadyInUse = 6071u32,
+        UserOrderIdAlreadyInUse,
         #[msg("No positions liquidatable")]
-        NoPositionsLiquidatable = 6072u32,
+        NoPositionsLiquidatable,
         #[msg("Invalid Margin Ratio")]
-        InvalidMarginRatio = 6073u32,
+        InvalidMarginRatio,
         #[msg("Cant Cancel Post Only Order")]
-        CantCancelPostOnlyOrder = 6074u32,
+        CantCancelPostOnlyOrder,
         #[msg("InvalidOracleOffset")]
-        InvalidOracleOffset = 6075u32,
+        InvalidOracleOffset,
         #[msg("CantExpireOrders")]
-        CantExpireOrders = 6076u32,
+        CantExpireOrders,
         #[msg("CouldNotLoadMarketData")]
-        CouldNotLoadMarketData = 6077u32,
+        CouldNotLoadMarketData,
         #[msg("PerpMarketNotFound")]
-        PerpMarketNotFound = 6078u32,
+        PerpMarketNotFound,
         #[msg("InvalidMarketAccount")]
-        InvalidMarketAccount = 6079u32,
+        InvalidMarketAccount,
         #[msg("UnableToLoadMarketAccount")]
-        UnableToLoadPerpMarketAccount = 6080u32,
+        UnableToLoadPerpMarketAccount,
         #[msg("MarketWrongMutability")]
-        MarketWrongMutability = 6081u32,
+        MarketWrongMutability,
         #[msg("UnableToCastUnixTime")]
-        UnableToCastUnixTime = 6082u32,
+        UnableToCastUnixTime,
         #[msg("CouldNotFindSpotPosition")]
-        CouldNotFindSpotPosition = 6083u32,
+        CouldNotFindSpotPosition,
         #[msg("NoSpotPositionAvailable")]
-        NoSpotPositionAvailable = 6084u32,
+        NoSpotPositionAvailable,
         #[msg("InvalidSpotMarketInitialization")]
-        InvalidSpotMarketInitialization = 6085u32,
+        InvalidSpotMarketInitialization,
         #[msg("CouldNotLoadSpotMarketData")]
-        CouldNotLoadSpotMarketData = 6086u32,
+        CouldNotLoadSpotMarketData,
         #[msg("SpotMarketNotFound")]
-        SpotMarketNotFound = 6087u32,
+        SpotMarketNotFound,
         #[msg("InvalidSpotMarketAccount")]
-        InvalidSpotMarketAccount = 6088u32,
+        InvalidSpotMarketAccount,
         #[msg("UnableToLoadSpotMarketAccount")]
-        UnableToLoadSpotMarketAccount = 6089u32,
+        UnableToLoadSpotMarketAccount,
         #[msg("SpotMarketWrongMutability")]
-        SpotMarketWrongMutability = 6090u32,
+        SpotMarketWrongMutability,
         #[msg("SpotInterestNotUpToDate")]
-        SpotMarketInterestNotUpToDate = 6091u32,
+        SpotMarketInterestNotUpToDate,
         #[msg("SpotMarketInsufficientDeposits")]
-        SpotMarketInsufficientDeposits = 6092u32,
+        SpotMarketInsufficientDeposits,
         #[msg("UserMustSettleTheirOwnPositiveUnsettledPNL")]
-        UserMustSettleTheirOwnPositiveUnsettledPNL = 6093u32,
+        UserMustSettleTheirOwnPositiveUnsettledPNL,
         #[msg("CantUpdatePoolBalanceType")]
-        CantUpdatePoolBalanceType = 6094u32,
+        CantUpdatePoolBalanceType,
         #[msg("InsufficientCollateralForSettlingPNL")]
-        InsufficientCollateralForSettlingPNL = 6095u32,
+        InsufficientCollateralForSettlingPNL,
         #[msg("AMMNotUpdatedInSameSlot")]
-        AMMNotUpdatedInSameSlot = 6096u32,
+        AMMNotUpdatedInSameSlot,
         #[msg("AuctionNotComplete")]
-        AuctionNotComplete = 6097u32,
+        AuctionNotComplete,
         #[msg("MakerNotFound")]
-        MakerNotFound = 6098u32,
+        MakerNotFound,
         #[msg("MakerNotFound")]
-        MakerStatsNotFound = 6099u32,
+        MakerStatsNotFound,
         #[msg("MakerMustBeWritable")]
-        MakerMustBeWritable = 6100u32,
+        MakerMustBeWritable,
         #[msg("MakerMustBeWritable")]
-        MakerStatsMustBeWritable = 6101u32,
+        MakerStatsMustBeWritable,
         #[msg("MakerOrderNotFound")]
-        MakerOrderNotFound = 6102u32,
+        MakerOrderNotFound,
         #[msg("CouldNotDeserializeMaker")]
-        CouldNotDeserializeMaker = 6103u32,
+        CouldNotDeserializeMaker,
         #[msg("CouldNotDeserializeMaker")]
-        CouldNotDeserializeMakerStats = 6104u32,
+        CouldNotDeserializeMakerStats,
         #[msg("AuctionPriceDoesNotSatisfyMaker")]
-        AuctionPriceDoesNotSatisfyMaker = 6105u32,
+        AuctionPriceDoesNotSatisfyMaker,
         #[msg("MakerCantFulfillOwnOrder")]
-        MakerCantFulfillOwnOrder = 6106u32,
+        MakerCantFulfillOwnOrder,
         #[msg("MakerOrderMustBePostOnly")]
-        MakerOrderMustBePostOnly = 6107u32,
+        MakerOrderMustBePostOnly,
         #[msg("CantMatchTwoPostOnlys")]
-        CantMatchTwoPostOnlys = 6108u32,
+        CantMatchTwoPostOnlys,
         #[msg("OrderBreachesOraclePriceLimits")]
-        OrderBreachesOraclePriceLimits = 6109u32,
+        OrderBreachesOraclePriceLimits,
         #[msg("OrderMustBeTriggeredFirst")]
-        OrderMustBeTriggeredFirst = 6110u32,
+        OrderMustBeTriggeredFirst,
         #[msg("OrderNotTriggerable")]
-        OrderNotTriggerable = 6111u32,
+        OrderNotTriggerable,
         #[msg("OrderDidNotSatisfyTriggerCondition")]
-        OrderDidNotSatisfyTriggerCondition = 6112u32,
+        OrderDidNotSatisfyTriggerCondition,
         #[msg("PositionAlreadyBeingLiquidated")]
-        PositionAlreadyBeingLiquidated = 6113u32,
+        PositionAlreadyBeingLiquidated,
         #[msg("PositionDoesntHaveOpenPositionOrOrders")]
-        PositionDoesntHaveOpenPositionOrOrders = 6114u32,
+        PositionDoesntHaveOpenPositionOrOrders,
         #[msg("AllOrdersAreAlreadyLiquidations")]
-        AllOrdersAreAlreadyLiquidations = 6115u32,
+        AllOrdersAreAlreadyLiquidations,
         #[msg("CantCancelLiquidationOrder")]
-        CantCancelLiquidationOrder = 6116u32,
+        CantCancelLiquidationOrder,
         #[msg("UserIsBeingLiquidated")]
-        UserIsBeingLiquidated = 6117u32,
+        UserIsBeingLiquidated,
         #[msg("LiquidationsOngoing")]
-        LiquidationsOngoing = 6118u32,
+        LiquidationsOngoing,
         #[msg("WrongSpotBalanceType")]
-        WrongSpotBalanceType = 6119u32,
+        WrongSpotBalanceType,
         #[msg("UserCantLiquidateThemself")]
-        UserCantLiquidateThemself = 6120u32,
+        UserCantLiquidateThemself,
         #[msg("InvalidPerpPositionToLiquidate")]
-        InvalidPerpPositionToLiquidate = 6121u32,
+        InvalidPerpPositionToLiquidate,
         #[msg("InvalidBaseAssetAmountForLiquidatePerp")]
-        InvalidBaseAssetAmountForLiquidatePerp = 6122u32,
+        InvalidBaseAssetAmountForLiquidatePerp,
         #[msg("InvalidPositionLastFundingRate")]
-        InvalidPositionLastFundingRate = 6123u32,
+        InvalidPositionLastFundingRate,
         #[msg("InvalidPositionDelta")]
-        InvalidPositionDelta = 6124u32,
+        InvalidPositionDelta,
         #[msg("UserBankrupt")]
-        UserBankrupt = 6125u32,
+        UserBankrupt,
         #[msg("UserNotBankrupt")]
-        UserNotBankrupt = 6126u32,
+        UserNotBankrupt,
         #[msg("UserHasInvalidBorrow")]
-        UserHasInvalidBorrow = 6127u32,
+        UserHasInvalidBorrow,
         #[msg("DailyWithdrawLimit")]
-        DailyWithdrawLimit = 6128u32,
+        DailyWithdrawLimit,
         #[msg("DefaultError")]
-        DefaultError = 6129u32,
+        DefaultError,
         #[msg("Insufficient LP tokens")]
-        InsufficientLPTokens = 6130u32,
+        InsufficientLPTokens,
         #[msg("Cant LP with a market position")]
-        CantLPWithPerpPosition = 6131u32,
+        CantLPWithPerpPosition,
         #[msg("Unable to burn LP tokens")]
-        UnableToBurnLPTokens = 6132u32,
+        UnableToBurnLPTokens,
         #[msg("Trying to remove liqudity too fast after adding it")]
-        TryingToRemoveLiquidityTooFast = 6133u32,
+        TryingToRemoveLiquidityTooFast,
         #[msg("Invalid Spot Market Vault")]
-        InvalidSpotMarketVault = 6134u32,
+        InvalidSpotMarketVault,
         #[msg("Invalid Spot Market State")]
-        InvalidSpotMarketState = 6135u32,
+        InvalidSpotMarketState,
         #[msg("InvalidSerumProgram")]
-        InvalidSerumProgram = 6136u32,
+        InvalidSerumProgram,
         #[msg("InvalidSerumMarket")]
-        InvalidSerumMarket = 6137u32,
+        InvalidSerumMarket,
         #[msg("InvalidSerumBids")]
-        InvalidSerumBids = 6138u32,
+        InvalidSerumBids,
         #[msg("InvalidSerumAsks")]
-        InvalidSerumAsks = 6139u32,
+        InvalidSerumAsks,
         #[msg("InvalidSerumOpenOrders")]
-        InvalidSerumOpenOrders = 6140u32,
+        InvalidSerumOpenOrders,
         #[msg("FailedSerumCPI")]
-        FailedSerumCPI = 6141u32,
+        FailedSerumCPI,
         #[msg("FailedToFillOnExternalMarket")]
-        FailedToFillOnExternalMarket = 6142u32,
+        FailedToFillOnExternalMarket,
         #[msg("InvalidFulfillmentConfig")]
-        InvalidFulfillmentConfig = 6143u32,
+        InvalidFulfillmentConfig,
         #[msg("InvalidFeeStructure")]
-        InvalidFeeStructure = 6144u32,
+        InvalidFeeStructure,
         #[msg("Insufficient IF shares")]
-        InsufficientIFShares = 6145u32,
+        InsufficientIFShares,
         #[msg("the Market has paused this action")]
-        MarketActionPaused = 6146u32,
+        MarketActionPaused,
         #[msg("the Market status doesnt allow placing orders")]
-        MarketPlaceOrderPaused = 6147u32,
+        MarketPlaceOrderPaused,
         #[msg("the Market status doesnt allow filling orders")]
-        MarketFillOrderPaused = 6148u32,
+        MarketFillOrderPaused,
         #[msg("the Market status doesnt allow withdraws")]
-        MarketWithdrawPaused = 6149u32,
+        MarketWithdrawPaused,
         #[msg("Action violates the Protected Asset Tier rules")]
-        ProtectedAssetTierViolation = 6150u32,
+        ProtectedAssetTierViolation,
         #[msg("Action violates the Isolated Asset Tier rules")]
-        IsolatedAssetTierViolation = 6151u32,
+        IsolatedAssetTierViolation,
         #[msg("User Cant Be Deleted")]
-        UserCantBeDeleted = 6152u32,
+        UserCantBeDeleted,
         #[msg("Reduce Only Withdraw Increased Risk")]
-        ReduceOnlyWithdrawIncreasedRisk = 6153u32,
+        ReduceOnlyWithdrawIncreasedRisk,
         #[msg("Max Open Interest")]
-        MaxOpenInterest = 6154u32,
+        MaxOpenInterest,
         #[msg("Cant Resolve Perp Bankruptcy")]
-        CantResolvePerpBankruptcy = 6155u32,
+        CantResolvePerpBankruptcy,
         #[msg("Liquidation Doesnt Satisfy Limit Price")]
-        LiquidationDoesntSatisfyLimitPrice = 6156u32,
+        LiquidationDoesntSatisfyLimitPrice,
         #[msg("Margin Trading Disabled")]
-        MarginTradingDisabled = 6157u32,
+        MarginTradingDisabled,
         #[msg("Invalid Market Status to Settle Perp Pnl")]
-        InvalidMarketStatusToSettlePnl = 6158u32,
+        InvalidMarketStatusToSettlePnl,
         #[msg("PerpMarketNotInSettlement")]
-        PerpMarketNotInSettlement = 6159u32,
+        PerpMarketNotInSettlement,
         #[msg("PerpMarketNotInReduceOnly")]
-        PerpMarketNotInReduceOnly = 6160u32,
+        PerpMarketNotInReduceOnly,
         #[msg("PerpMarketSettlementBufferNotReached")]
-        PerpMarketSettlementBufferNotReached = 6161u32,
+        PerpMarketSettlementBufferNotReached,
         #[msg("PerpMarketSettlementUserHasOpenOrders")]
-        PerpMarketSettlementUserHasOpenOrders = 6162u32,
+        PerpMarketSettlementUserHasOpenOrders,
         #[msg("PerpMarketSettlementUserHasActiveLP")]
-        PerpMarketSettlementUserHasActiveLP = 6163u32,
+        PerpMarketSettlementUserHasActiveLP,
         #[msg("UnableToSettleExpiredUserPosition")]
-        UnableToSettleExpiredUserPosition = 6164u32,
+        UnableToSettleExpiredUserPosition,
         #[msg("UnequalMarketIndexForSpotTransfer")]
-        UnequalMarketIndexForSpotTransfer = 6165u32,
+        UnequalMarketIndexForSpotTransfer,
         #[msg("InvalidPerpPositionDetected")]
-        InvalidPerpPositionDetected = 6166u32,
+        InvalidPerpPositionDetected,
         #[msg("InvalidSpotPositionDetected")]
-        InvalidSpotPositionDetected = 6167u32,
+        InvalidSpotPositionDetected,
         #[msg("InvalidAmmDetected")]
-        InvalidAmmDetected = 6168u32,
+        InvalidAmmDetected,
         #[msg("InvalidAmmForFillDetected")]
-        InvalidAmmForFillDetected = 6169u32,
+        InvalidAmmForFillDetected,
         #[msg("InvalidAmmLimitPriceOverride")]
-        InvalidAmmLimitPriceOverride = 6170u32,
+        InvalidAmmLimitPriceOverride,
         #[msg("InvalidOrderFillPrice")]
-        InvalidOrderFillPrice = 6171u32,
+        InvalidOrderFillPrice,
         #[msg("SpotMarketBalanceInvariantViolated")]
-        SpotMarketBalanceInvariantViolated = 6172u32,
+        SpotMarketBalanceInvariantViolated,
         #[msg("SpotMarketVaultInvariantViolated")]
-        SpotMarketVaultInvariantViolated = 6173u32,
+        SpotMarketVaultInvariantViolated,
         #[msg("InvalidPDA")]
-        InvalidPDA = 6174u32,
+        InvalidPDA,
         #[msg("InvalidPDASigner")]
-        InvalidPDASigner = 6175u32,
+        InvalidPDASigner,
         #[msg("RevenueSettingsCannotSettleToIF")]
-        RevenueSettingsCannotSettleToIF = 6176u32,
+        RevenueSettingsCannotSettleToIF,
         #[msg("NoRevenueToSettleToIF")]
-        NoRevenueToSettleToIF = 6177u32,
+        NoRevenueToSettleToIF,
         #[msg("NoAmmPerpPnlDeficit")]
-        NoAmmPerpPnlDeficit = 6178u32,
+        NoAmmPerpPnlDeficit,
         #[msg("SufficientPerpPnlPool")]
-        SufficientPerpPnlPool = 6179u32,
+        SufficientPerpPnlPool,
         #[msg("InsufficientPerpPnlPool")]
-        InsufficientPerpPnlPool = 6180u32,
+        InsufficientPerpPnlPool,
         #[msg("PerpPnlDeficitBelowThreshold")]
-        PerpPnlDeficitBelowThreshold = 6181u32,
+        PerpPnlDeficitBelowThreshold,
         #[msg("MaxRevenueWithdrawPerPeriodReached")]
-        MaxRevenueWithdrawPerPeriodReached = 6182u32,
+        MaxRevenueWithdrawPerPeriodReached,
         #[msg("InvalidSpotPositionDetected")]
-        MaxIFWithdrawReached = 6183u32,
+        MaxIFWithdrawReached,
         #[msg("NoIFWithdrawAvailable")]
-        NoIFWithdrawAvailable = 6184u32,
+        NoIFWithdrawAvailable,
         #[msg("InvalidIFUnstake")]
-        InvalidIFUnstake = 6185u32,
+        InvalidIFUnstake,
         #[msg("InvalidIFUnstakeSize")]
-        InvalidIFUnstakeSize = 6186u32,
+        InvalidIFUnstakeSize,
         #[msg("InvalidIFUnstakeCancel")]
-        InvalidIFUnstakeCancel = 6187u32,
+        InvalidIFUnstakeCancel,
         #[msg("InvalidIFForNewStakes")]
-        InvalidIFForNewStakes = 6188u32,
+        InvalidIFForNewStakes,
         #[msg("InvalidIFRebase")]
-        InvalidIFRebase = 6189u32,
+        InvalidIFRebase,
         #[msg("InvalidInsuranceUnstakeSize")]
-        InvalidInsuranceUnstakeSize = 6190u32,
+        InvalidInsuranceUnstakeSize,
         #[msg("InvalidOrderLimitPrice")]
-        InvalidOrderLimitPrice = 6191u32,
+        InvalidOrderLimitPrice,
         #[msg("InvalidIFDetected")]
-        InvalidIFDetected = 6192u32,
+        InvalidIFDetected,
         #[msg("InvalidAmmMaxSpreadDetected")]
-        InvalidAmmMaxSpreadDetected = 6193u32,
+        InvalidAmmMaxSpreadDetected,
         #[msg("InvalidConcentrationCoef")]
-        InvalidConcentrationCoef = 6194u32,
+        InvalidConcentrationCoef,
         #[msg("InvalidSrmVault")]
-        InvalidSrmVault = 6195u32,
+        InvalidSrmVault,
         #[msg("InvalidVaultOwner")]
-        InvalidVaultOwner = 6196u32,
+        InvalidVaultOwner,
         #[msg("InvalidMarketStatusForFills")]
-        InvalidMarketStatusForFills = 6197u32,
+        InvalidMarketStatusForFills,
         #[msg("IFWithdrawRequestInProgress")]
-        IFWithdrawRequestInProgress = 6198u32,
+        IFWithdrawRequestInProgress,
         #[msg("NoIFWithdrawRequestInProgress")]
-        NoIFWithdrawRequestInProgress = 6199u32,
+        NoIFWithdrawRequestInProgress,
         #[msg("IFWithdrawRequestTooSmall")]
-        IFWithdrawRequestTooSmall = 6200u32,
+        IFWithdrawRequestTooSmall,
         #[msg("IncorrectSpotMarketAccountPassed")]
-        IncorrectSpotMarketAccountPassed = 6201u32,
+        IncorrectSpotMarketAccountPassed,
         #[msg("BlockchainClockInconsistency")]
-        BlockchainClockInconsistency = 6202u32,
+        BlockchainClockInconsistency,
         #[msg("InvalidIFSharesDetected")]
-        InvalidIFSharesDetected = 6203u32,
+        InvalidIFSharesDetected,
         #[msg("NewLPSizeTooSmall")]
-        NewLPSizeTooSmall = 6204u32,
+        NewLPSizeTooSmall,
         #[msg("MarketStatusInvalidForNewLP")]
-        MarketStatusInvalidForNewLP = 6205u32,
+        MarketStatusInvalidForNewLP,
         #[msg("InvalidMarkTwapUpdateDetected")]
-        InvalidMarkTwapUpdateDetected = 6206u32,
+        InvalidMarkTwapUpdateDetected,
         #[msg("MarketSettlementAttemptOnActiveMarket")]
-        MarketSettlementAttemptOnActiveMarket = 6207u32,
+        MarketSettlementAttemptOnActiveMarket,
         #[msg("MarketSettlementRequiresSettledLP")]
-        MarketSettlementRequiresSettledLP = 6208u32,
+        MarketSettlementRequiresSettledLP,
         #[msg("MarketSettlementAttemptTooEarly")]
-        MarketSettlementAttemptTooEarly = 6209u32,
+        MarketSettlementAttemptTooEarly,
         #[msg("MarketSettlementTargetPriceInvalid")]
-        MarketSettlementTargetPriceInvalid = 6210u32,
+        MarketSettlementTargetPriceInvalid,
         #[msg("UnsupportedSpotMarket")]
-        UnsupportedSpotMarket = 6211u32,
+        UnsupportedSpotMarket,
         #[msg("SpotOrdersDisabled")]
-        SpotOrdersDisabled = 6212u32,
+        SpotOrdersDisabled,
         #[msg("Market Being Initialized")]
-        MarketBeingInitialized = 6213u32,
+        MarketBeingInitialized,
         #[msg("Invalid Sub Account Id")]
-        InvalidUserSubAccountId = 6214u32,
+        InvalidUserSubAccountId,
         #[msg("Invalid Trigger Order Condition")]
-        InvalidTriggerOrderCondition = 6215u32,
+        InvalidTriggerOrderCondition,
         #[msg("Invalid Spot Position")]
-        InvalidSpotPosition = 6216u32,
+        InvalidSpotPosition,
         #[msg("Cant transfer between same user account")]
-        CantTransferBetweenSameUserAccount = 6217u32,
+        CantTransferBetweenSameUserAccount,
         #[msg("Invalid Perp Position")]
-        InvalidPerpPosition = 6218u32,
+        InvalidPerpPosition,
         #[msg("Unable To Get Limit Price")]
-        UnableToGetLimitPrice = 6219u32,
+        UnableToGetLimitPrice,
         #[msg("Invalid Liquidation")]
-        InvalidLiquidation = 6220u32,
+        InvalidLiquidation,
         #[msg("Spot Fulfillment Config Disabled")]
-        SpotFulfillmentConfigDisabled = 6221u32,
+        SpotFulfillmentConfigDisabled,
         #[msg("Invalid Maker")]
-        InvalidMaker = 6222u32,
+        InvalidMaker,
         #[msg("Failed Unwrap")]
-        FailedUnwrap = 6223u32,
+        FailedUnwrap,
         #[msg("Max Number Of Users")]
-        MaxNumberOfUsers = 6224u32,
+        MaxNumberOfUsers,
         #[msg("InvalidOracleForSettlePnl")]
-        InvalidOracleForSettlePnl = 6225u32,
+        InvalidOracleForSettlePnl,
         #[msg("MarginOrdersOpen")]
-        MarginOrdersOpen = 6226u32,
+        MarginOrdersOpen,
         #[msg("TierViolationLiquidatingPerpPnl")]
-        TierViolationLiquidatingPerpPnl = 6227u32,
+        TierViolationLiquidatingPerpPnl,
         #[msg("CouldNotLoadUserData")]
-        CouldNotLoadUserData = 6228u32,
+        CouldNotLoadUserData,
         #[msg("UserWrongMutability")]
-        UserWrongMutability = 6229u32,
+        UserWrongMutability,
         #[msg("InvalidUserAccount")]
-        InvalidUserAccount = 6230u32,
+        InvalidUserAccount,
         #[msg("CouldNotLoadUserData")]
-        CouldNotLoadUserStatsData = 6231u32,
+        CouldNotLoadUserStatsData,
         #[msg("UserWrongMutability")]
-        UserStatsWrongMutability = 6232u32,
+        UserStatsWrongMutability,
         #[msg("InvalidUserAccount")]
-        InvalidUserStatsAccount = 6233u32,
+        InvalidUserStatsAccount,
         #[msg("UserNotFound")]
-        UserNotFound = 6234u32,
+        UserNotFound,
         #[msg("UnableToLoadUserAccount")]
-        UnableToLoadUserAccount = 6235u32,
+        UnableToLoadUserAccount,
         #[msg("UserStatsNotFound")]
-        UserStatsNotFound = 6236u32,
+        UserStatsNotFound,
         #[msg("UnableToLoadUserStatsAccount")]
-        UnableToLoadUserStatsAccount = 6237u32,
+        UnableToLoadUserStatsAccount,
         #[msg("User Not Inactive")]
-        UserNotInactive = 6238u32,
+        UserNotInactive,
         #[msg("RevertFill")]
-        RevertFill = 6239u32,
+        RevertFill,
         #[msg("Invalid MarketAccount for Deletion")]
-        InvalidMarketAccountforDeletion = 6240u32,
+        InvalidMarketAccountforDeletion,
         #[msg("Invalid Spot Fulfillment Params")]
-        InvalidSpotFulfillmentParams = 6241u32,
+        InvalidSpotFulfillmentParams,
         #[msg("Failed to Get Mint")]
-        FailedToGetMint = 6242u32,
+        FailedToGetMint,
         #[msg("FailedPhoenixCPI")]
-        FailedPhoenixCPI = 6243u32,
+        FailedPhoenixCPI,
         #[msg("FailedToDeserializePhoenixMarket")]
-        FailedToDeserializePhoenixMarket = 6244u32,
+        FailedToDeserializePhoenixMarket,
         #[msg("InvalidPricePrecision")]
-        InvalidPricePrecision = 6245u32,
+        InvalidPricePrecision,
         #[msg("InvalidPhoenixProgram")]
-        InvalidPhoenixProgram = 6246u32,
+        InvalidPhoenixProgram,
         #[msg("InvalidPhoenixMarket")]
-        InvalidPhoenixMarket = 6247u32,
+        InvalidPhoenixMarket,
         #[msg("InvalidSwap")]
-        InvalidSwap = 6248u32,
+        InvalidSwap,
         #[msg("SwapLimitPriceBreached")]
-        SwapLimitPriceBreached = 6249u32,
+        SwapLimitPriceBreached,
         #[msg("SpotMarketReduceOnly")]
-        SpotMarketReduceOnly = 6250u32,
+        SpotMarketReduceOnly,
         #[msg("FundingWasNotUpdated")]
-        FundingWasNotUpdated = 6251u32,
+        FundingWasNotUpdated,
         #[msg("ImpossibleFill")]
-        ImpossibleFill = 6252u32,
+        ImpossibleFill,
         #[msg("CantUpdatePerpBidAskTwap")]
-        CantUpdatePerpBidAskTwap = 6253u32,
+        CantUpdatePerpBidAskTwap,
         #[msg("UserReduceOnly")]
-        UserReduceOnly = 6254u32,
+        UserReduceOnly,
         #[msg("InvalidMarginCalculation")]
-        InvalidMarginCalculation = 6255u32,
+        InvalidMarginCalculation,
         #[msg("CantPayUserInitFee")]
-        CantPayUserInitFee = 6256u32,
+        CantPayUserInitFee,
         #[msg("CantReclaimRent")]
-        CantReclaimRent = 6257u32,
+        CantReclaimRent,
         #[msg("InsuranceFundOperationPaused")]
-        InsuranceFundOperationPaused = 6258u32,
+        InsuranceFundOperationPaused,
         #[msg("NoUnsettledPnl")]
-        NoUnsettledPnl = 6259u32,
+        NoUnsettledPnl,
         #[msg("PnlPoolCantSettleUser")]
-        PnlPoolCantSettleUser = 6260u32,
+        PnlPoolCantSettleUser,
         #[msg("OracleInvalid")]
-        OracleNonPositive = 6261u32,
+        OracleNonPositive,
         #[msg("OracleTooVolatile")]
-        OracleTooVolatile = 6262u32,
+        OracleTooVolatile,
         #[msg("OracleTooUncertain")]
-        OracleTooUncertain = 6263u32,
+        OracleTooUncertain,
         #[msg("OracleStaleForMargin")]
-        OracleStaleForMargin = 6264u32,
+        OracleStaleForMargin,
         #[msg("OracleInsufficientDataPoints")]
-        OracleInsufficientDataPoints = 6265u32,
+        OracleInsufficientDataPoints,
         #[msg("OracleStaleForAMM")]
-        OracleStaleForAMM = 6266u32,
+        OracleStaleForAMM,
         #[msg("Unable to parse pull oracle message")]
-        UnableToParsePullOracleMessage = 6267u32,
+        UnableToParsePullOracleMessage,
         #[msg("Can not borow more than max borrows")]
-        MaxBorrows = 6268u32,
+        MaxBorrows,
         #[msg("Updates must be monotonically increasing")]
-        OracleUpdatesNotMonotonic = 6269u32,
+        OracleUpdatesNotMonotonic,
         #[msg("Trying to update price feed with the wrong feed id")]
-        OraclePriceFeedMessageMismatch = 6270u32,
+        OraclePriceFeedMessageMismatch,
         #[msg("The message in the update must be a PriceFeedMessage")]
-        OracleUnsupportedMessageType = 6271u32,
+        OracleUnsupportedMessageType,
         #[msg("Could not deserialize the message in the update")]
-        OracleDeserializeMessageFailed = 6272u32,
+        OracleDeserializeMessageFailed,
         #[msg("Wrong guardian set owner in update price atomic")]
-        OracleWrongGuardianSetOwner = 6273u32,
+        OracleWrongGuardianSetOwner,
         #[msg("Oracle post update atomic price feed account must be drift program")]
-        OracleWrongWriteAuthority = 6274u32,
+        OracleWrongWriteAuthority,
         #[msg("Oracle vaa owner must be wormhole program")]
-        OracleWrongVaaOwner = 6275u32,
+        OracleWrongVaaOwner,
         #[msg("Multi updates must have 2 or fewer accounts passed in remaining accounts")]
-        OracleTooManyPriceAccountUpdates = 6276u32,
+        OracleTooManyPriceAccountUpdates,
         #[msg("Don't have the same remaining accounts number and merkle price updates left")]
-        OracleMismatchedVaaAndPriceUpdates = 6277u32,
+        OracleMismatchedVaaAndPriceUpdates,
         #[msg("Remaining account passed is not a valid pda")]
-        OracleBadRemainingAccountPublicKey = 6278u32,
+        OracleBadRemainingAccountPublicKey,
         #[msg("FailedOpenbookV2CPI")]
-        FailedOpenbookV2CPI = 6279u32,
+        FailedOpenbookV2CPI,
         #[msg("InvalidOpenbookV2Program")]
-        InvalidOpenbookV2Program = 6280u32,
+        InvalidOpenbookV2Program,
         #[msg("InvalidOpenbookV2Market")]
-        InvalidOpenbookV2Market = 6281u32,
+        InvalidOpenbookV2Market,
         #[msg("Non zero transfer fee")]
-        NonZeroTransferFee = 6282u32,
+        NonZeroTransferFee,
         #[msg("Liquidation order failed to fill")]
-        LiquidationOrderFailedToFill = 6283u32,
+        LiquidationOrderFailedToFill,
         #[msg("Invalid prediction market order")]
-        InvalidPredictionMarketOrder = 6284u32,
+        InvalidPredictionMarketOrder,
     }
 }
 pub mod events {

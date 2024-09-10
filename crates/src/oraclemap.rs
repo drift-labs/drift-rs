@@ -127,16 +127,21 @@ impl OracleMap {
                     if let UiAccountData::Binary(base64_blob, UiAccountEncoding::Base64) =
                         &update.data.data
                     {
+                        let owner = Pubkey::from_str(&update.data.owner).expect("valid pubkey");
+                        let lamports = update.data.lamports;
                         let data = base64::engine::general_purpose::STANDARD
                             .decode(base64_blob)
                             .expect("valid base64");
-                        let owner = Pubkey::from_str(&update.data.owner).expect("valid pubkey");
-                        let lamports = update.data.lamports;
                         match get_oracle_price(
                             oracle_source.value(),
                             &mut (
                                 oracle_pubkey,
-                                Account::new_data(lamports, &data, &owner).expect("oracle account"),
+                                Account {
+                                    owner,
+                                    data: data.clone(),
+                                    lamports,
+                                    ..Default::default()
+                                },
                             ),
                             update.slot,
                         ) {
