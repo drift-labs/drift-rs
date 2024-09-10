@@ -9,7 +9,7 @@ Goals:
 <img src='./architecture.png'/>
 
 ## Developer Notes
-- this crate must be built with rust <= 1.76.0 to support [128-bit integer C-abi compatibility](https://blog.rust-lang.org/2024/03/30/i128-layout-update.html) to provide best compatibility with onchain data layouts
+- this crate must be built with rust <= 1.76.0 to provide compatibility with onchain data layouts (later rust versions have breaking changes [128-bit integer C-abi compatibility](https://blog.rust-lang.org/2024/03/30/i128-layout-update.html))
 
 - for rust users this crate is intended to be linked via compiler flags (not Cargo dependency) as it compiles to a (platform dependent) dynamic lib (`.so/.dylib/.dll`)
 
