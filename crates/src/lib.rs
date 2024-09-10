@@ -1513,6 +1513,7 @@ pub async fn get_market_accounts(
     let spot_market_pdas: Vec<Pubkey> = (0..state.number_of_spot_markets)
         .map(derive_spot_market_account)
         .collect();
+
     let perp_market_pdas: Vec<Pubkey> = (0..state.number_of_markets)
         .map(derive_perp_market_account)
         .collect();

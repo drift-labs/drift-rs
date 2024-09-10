@@ -549,9 +549,6 @@ mod tests {
         let mut accounts_map = AccountsList::new(&mut perps, &mut spot, &mut oracles);
 
         let margin_info = calculate_margin_requirements_inner(&user, &mut accounts_map).unwrap();
-        dbg!(margin_info);
-        dbg!(std::mem::align_of::<MarginCalculation>());
-        dbg!(std::mem::size_of::<MarginCalculation>());
 
         assert_eq!(
             MarginRequirementInfo {
