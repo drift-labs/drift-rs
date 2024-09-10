@@ -892,7 +892,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn new<'b>(
         program_data: &'b ProgramData,
         sub_account: Pubkey,
-        account_data: Cow<'b, User>,
+        user: Cow<'b, User>,
         delegated: bool,
     ) -> Self
     where
@@ -900,12 +900,12 @@ impl<'a> TransactionBuilder<'a> {
     {
         Self {
             authority: if delegated {
-                account_data.delegate
+                user.delegate
             } else {
-                account_data.authority
+                user.authority
             },
             program_data,
-            account_data,
+            account_data: user,
             sub_account,
             ixs: Default::default(),
             lookup_tables: vec![program_data.lookup_table.clone()],

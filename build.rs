@@ -14,7 +14,7 @@ fn main() {
     println!("idl-gen build: {output:?}");
 
     // generate ffi lib
-    let profile = "debug";
+    let profile = "release";
     let ffi_crate_dir = current_dir.join(Path::new("crates/drift-ffi"));
     let output = std::process::Command::new("cargo")
         .current_dir(ffi_crate_dir)

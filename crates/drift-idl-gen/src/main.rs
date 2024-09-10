@@ -331,6 +331,7 @@ fn generate_idl_types(idl: &Idl) -> String {
     // Generate structs for instructions
     for instr in &idl.instructions {
         let name = capitalize_first_letter(&instr.name);
+        let fn_name = to_snake_case(&instr.name);
         let struct_name = Ident::new(&name, proc_macro2::Span::call_site());
         let fields = instr.args.iter().map(|arg| {
             let field_name = Ident::new(&to_snake_case(&arg.name), proc_macro2::Span::call_site());
@@ -339,9 +340,9 @@ fn generate_idl_types(idl: &Idl) -> String {
                 pub #field_name: #field_type,
             }
         });
-
+        // https://github.com/coral-xyz/anchor/blob/e48e7e60a64de77d878cdb063965cf125bec741a/lang/syn/src/codegen/program/instruction.rs#L32
         let discriminator: TokenStream =
-            format!("{:?}", sighash("account", &name)).parse().unwrap();
+            format!("{:?}", sighash("global", &fn_name)).parse().unwrap();
         let struct_def = quote! {
             #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
             pub struct #struct_name {
