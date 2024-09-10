@@ -1,6 +1,7 @@
 //! SDK utility functions
 
 use anchor_lang::AnchorDeserialize;
+use base64::Engine;
 use serde_json::json;
 use solana_account_decoder::{UiAccountData, UiAccountEncoding};
 use solana_sdk::{
@@ -35,7 +36,7 @@ pub fn read_keypair_str_multi_format(key: &str) -> SdkResult<Keypair> {
     }
 
     // try to decode as base64 string
-    if let Ok(bytes) = base64::decode(key.as_bytes()) {
+    if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(key.as_bytes()) {
         return Keypair::from_bytes(&bytes).map_err(|_| SdkError::InvalidSeed);
     }
 
@@ -124,7 +125,8 @@ where
         _ => return Err(SdkError::UnsupportedAccountData),
     };
 
-    let anchor_bytes = base64::decode(data_str)?; // strip discriminator
+    let anchor_bytes = base64::engine::general_purpose::STANDARD.decode(data_str)?;
+    // [..8] strip anchor discriminator
     T::deserialize(&mut &anchor_bytes[8..]).map_err(|err| SdkError::Anchor(Box::new(err.into())))
 }
 
@@ -142,7 +144,7 @@ pub(crate) fn zero_account_to_bytes<T: bytemuck::Pod + anchor_lang::Discriminato
     account_data
 }
 
-#[cfg(any(test, feature = "test_utils"))]
+#[cfg(any(test, feature = "test_utils", feature = "rpc_tests"))]
 pub mod envs {
     //! test env vars
     use solana_sdk::signature::Keypair;

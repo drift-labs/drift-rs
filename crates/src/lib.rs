@@ -1,25 +1,19 @@
 //! Drift SDK
 
-use std::{borrow::Cow, sync::Arc, time::Duration};
+use std::{borrow::Cow, sync::Arc};
 
 use anchor_lang::{AnchorDeserialize, Discriminator, InstructionData};
-use drift_idl::{
-    accounts::{State, User, UserStats},
-    types::{MarketType, Order, OrderStatus, PerpPosition, SpotFulfillmentType, SpotPosition},
-};
-use fnv::FnvHashMap;
-use futures_util::{future::BoxFuture, FutureExt, StreamExt, TryFutureExt};
-use log::{debug, error, warn};
+use futures_util::{future::BoxFuture, FutureExt, TryFutureExt};
+use log::error;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
-    nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient},
+    nonblocking::rpc_client::RpcClient,
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_filter::{Memcmp, RpcFilterType},
 };
 use solana_sdk::{
     account::Account,
-    clock::Slot,
-    commitment_config::{CommitmentConfig, CommitmentLevel},
+    commitment_config::CommitmentConfig,
     compute_budget::ComputeBudgetInstruction,
     hash::Hash,
     instruction::{AccountMeta, Instruction},
@@ -29,22 +23,19 @@ use solana_sdk::{
     transaction::VersionedTransaction,
 };
 pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
-use tokio::{
-    select,
-    sync::{
-        watch::{self, Receiver},
-        RwLock,
-    },
-};
+use tokio::sync::RwLock;
 
 use crate::{
-    async_utils::{retry_policy, spawn_retry_task},
     blockhash_subscriber::BlockhashSubscriber,
     constants::{
         derive_perp_market_account, derive_spot_market_account, market_lookup_table, state_account,
         MarketExt, ProgramData,
     },
-    drift_idl::traits::ToAccountMetas,
+    drift_idl::{
+        accounts::{State, User, UserStats},
+        traits::ToAccountMetas,
+        types::{MarketType, Order, OrderStatus, PerpPosition, SpotFulfillmentType, SpotPosition},
+    },
     event_emitter::EventEmitter,
     ffi::IntoFfi,
     marketmap::MarketMap,
@@ -55,8 +46,6 @@ use crate::{
     websocket_account_subscriber::WebsocketAccountSubscriber,
 };
 
-pub mod drift_idl;
-
 // utils
 pub mod async_utils;
 pub mod ffi;
@@ -66,6 +55,7 @@ pub mod utils;
 
 // constants & types
 pub mod constants;
+pub mod drift_idl;
 pub mod types;
 
 // internal infra
@@ -92,10 +82,6 @@ pub mod user;
 
 #[cfg(feature = "dlob")]
 pub mod dlob;
-
-pub use crate::constants::PROGRAM_ID as ID;
-
-type AccountCache = Arc<RwLock<FnvHashMap<Pubkey, Receiver<(Account, Slot)>>>>;
 
 /// Provides solana Account fetching API
 pub trait AccountProvider: 'static + Sized + Send + Sync {
@@ -145,172 +131,6 @@ impl AccountProvider for RpcAccountProvider {
     }
 }
 
-/// Account provider using websocket subscriptions to receive and cache account updates
-#[derive(Clone)]
-pub struct WsAccountProvider {
-    url: String,
-    rpc_client: Arc<RpcClient>,
-    /// map from account pubkey to (account data, last modified ts)
-    account_cache: AccountCache,
-}
-
-struct AccountSubscription {
-    account: Pubkey,
-    url: String,
-    rpc_client: Arc<RpcClient>,
-    /// sink for account updates
-    tx: Arc<watch::Sender<(Account, Slot)>>,
-}
-
-impl AccountSubscription {
-    const RPC_CONFIG: RpcAccountInfoConfig = RpcAccountInfoConfig {
-        encoding: Some(UiAccountEncoding::Base64Zstd),
-        data_slice: None,
-        commitment: Some(CommitmentConfig {
-            commitment: CommitmentLevel::Confirmed,
-        }),
-        min_context_slot: None,
-    };
-    async fn stream_fn(self) {
-        let ws_client =
-            match PubsubClient::new(self.url.as_str().replace("http", "ws").as_str()).await {
-                Ok(ws_client) => ws_client,
-                Err(err) => {
-                    warn!(target: "account", "connect client {:?} failed: {err:?}", self.account);
-                    return;
-                }
-            };
-
-        let result = ws_client
-            .account_subscribe(&self.account, Some(Self::RPC_CONFIG))
-            .await;
-
-        if let Err(err) = result {
-            warn!(target: "account", "subscribe account {:?} failed: {err:?}", self.account);
-            return;
-        }
-        debug!(target: "account", "start account stream {:?}", self.account);
-        let (mut account_stream, unsub_fn) = result.unwrap();
-
-        let mut poll_interval = tokio::time::interval(Duration::from_secs(10));
-        let _ = poll_interval.tick().await; // ignore, immediate first tick
-        loop {
-            select! {
-                biased;
-                response = account_stream.next() => {
-                    if let Some(account_update) = response {
-                        let slot = account_update.context.slot;
-                        let account_data = account_update
-                            .value
-                            .decode::<Account>()
-                            .expect("account");
-                        self.tx.send_if_modified(|current| {
-                            if slot > current.1 {
-                                debug!(target: "account", "stream update writing to cache");
-                                *current = (account_data, slot);
-                                true
-                            } else {
-                                debug!(target: "account", "stream update old");
-                               false
-                            }
-                        });
-                    } else {
-                        // websocket subscription/stream closed, try reconnect..
-                        warn!(target: "account", "account stream closed: {:?}", self.account);
-                        break;
-                    }
-                }
-                _ = poll_interval.tick() => {
-                    if let Ok(account_data) = self.rpc_client.get_account_with_config(&self.account, Default::default()).await {
-                        self.tx.send_if_modified(|current| {
-                            let slot = account_data.context.slot;
-                            // only update with polled value if its newer
-                            if slot > current.1 {
-                                debug!(target: "account", "poll update, writing to cache");
-                                *current = (account_data.value.unwrap(), slot);
-                                true
-                            } else {
-                                debug!(target: "account", "poll update, too old");
-                                false
-                            }
-                        });
-                    } else {
-                        // consecutive errors would indicate an issue, there's not much that can be done besides log/panic...
-                    }
-                }
-            }
-        }
-        unsub_fn().await;
-        warn!(target: "account", "stream ended: {:?}", self.account);
-    }
-}
-
-impl WsAccountProvider {
-    /// Create a new WsAccountProvider given an endpoint that serves both http(s) and ws(s)
-    pub async fn new(url: &str) -> SdkResult<Self> {
-        Self::new_with_commitment(url, CommitmentConfig::confirmed()).await
-    }
-    /// Create a new WsAccountProvider with provided commitment level
-    pub async fn new_with_commitment(url: &str, commitment: CommitmentConfig) -> SdkResult<Self> {
-        Ok(Self {
-            url: url.to_string(),
-            rpc_client: Arc::new(RpcClient::new_with_commitment(url.to_string(), commitment)),
-            account_cache: Default::default(),
-        })
-    }
-    /// Subscribe to account updates via web-socket and polling
-    fn subscribe_account(&self, account: Pubkey, tx: watch::Sender<(Account, Slot)>) {
-        let rpc_client = Arc::clone(&self.rpc_client);
-        let tx = Arc::new(tx);
-        let url = self.url.clone();
-        spawn_retry_task(
-            move || {
-                let account_sub = AccountSubscription {
-                    account,
-                    url: url.clone(),
-                    rpc_client: Arc::clone(&rpc_client),
-                    tx: Arc::clone(&tx),
-                };
-                account_sub.stream_fn()
-            },
-            retry_policy::forever(5),
-        );
-    }
-    /// Fetch an account and initiate subscription for future updates
-    async fn get_account_impl(&self, account: Pubkey) -> SdkResult<Account> {
-        {
-            let cache = self.account_cache.read().await;
-            if let Some(account_data_rx) = cache.get(&account) {
-                let (account_data, _last_modified) = account_data_rx.borrow().clone();
-                return Ok(account_data);
-            }
-        }
-
-        // fetch initial account data, stream only updates on changes
-        let account_data: Account = self.rpc_client.get_account(&account).await?;
-        let (tx, rx) = watch::channel((account_data.clone(), 0));
-        {
-            let mut cache = self.account_cache.write().await;
-            cache.insert(account, rx);
-        }
-        self.subscribe_account(account, tx);
-
-        Ok(account_data)
-    }
-}
-
-impl AccountProvider for WsAccountProvider {
-    fn get_account(&self, account: Pubkey) -> BoxFuture<SdkResult<Account>> {
-        self.get_account_impl(account).boxed()
-    }
-    fn endpoint(&self) -> String {
-        self.rpc_client.url()
-    }
-    fn commitment_config(&self) -> CommitmentConfig {
-        self.rpc_client.commitment()
-    }
-}
-
 /// Drift Client API
 ///
 /// It is cheaply clone-able and consumers are encouraged to do so
@@ -318,22 +138,26 @@ impl AccountProvider for WsAccountProvider {
 /// as network connections or memory allocations
 #[derive(Clone)]
 #[must_use]
-pub struct DriftClient<T: AccountProvider> {
-    backend: &'static DriftClientBackend<T>,
+pub struct DriftClient {
+    backend: &'static DriftClientBackend,
     wallet: Wallet,
     pub active_sub_account_id: u16,
     pub sub_account_ids: Vec<u16>,
     pub users: Vec<DriftUser>,
 }
 
-impl<T: AccountProvider> DriftClient<T> {
-    pub async fn new(context: Context, account_provider: T, wallet: Wallet) -> SdkResult<Self> {
+impl DriftClient {
+    pub async fn new(
+        context: Context,
+        account_provider: RpcAccountProvider,
+        wallet: Wallet,
+    ) -> SdkResult<Self> {
         Self::new_with_opts(context, account_provider, wallet, ClientOpts::default()).await
     }
 
     pub async fn new_with_opts(
         context: Context,
-        account_provider: T,
+        account_provider: RpcAccountProvider,
         wallet: Wallet,
         opts: ClientOpts,
     ) -> SdkResult<Self> {
@@ -689,9 +513,9 @@ impl<T: AccountProvider> DriftClient<T> {
 
 /// Provides the heavy-lifting and network facing features of the SDK
 /// It is intended to be a singleton
-pub struct DriftClientBackend<T: AccountProvider> {
+pub struct DriftClientBackend {
     rpc_client: RpcClient,
-    account_provider: T,
+    account_provider: RpcAccountProvider,
     program_data: ProgramData,
     perp_market_map: MarketMap<PerpMarket>,
     spot_market_map: MarketMap<SpotMarket>,
@@ -700,9 +524,9 @@ pub struct DriftClientBackend<T: AccountProvider> {
     blockhash_subscriber: Arc<RwLock<BlockhashSubscriber>>,
 }
 
-impl<T: AccountProvider> DriftClientBackend<T> {
+impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
-    async fn new(context: Context, account_provider: T) -> SdkResult<DriftClientBackend<T>> {
+    async fn new(context: Context, account_provider: RpcAccountProvider) -> SdkResult<Self> {
         let rpc_client = RpcClient::new_with_commitment(
             account_provider.endpoint(),
             account_provider.commitment_config(),
@@ -1862,7 +1686,7 @@ mod tests {
         rpc_mocks: Mocks,
         account_provider_mocks: Mocks,
         keypair: Keypair,
-    ) -> DriftClient<RpcAccountProvider> {
+    ) -> DriftClient {
         let perp_market_map = MarketMap::<PerpMarket>::new(
             CommitmentConfig::processed(),
             DEVNET_ENDPOINT.to_string(),
@@ -1921,11 +1745,11 @@ mod tests {
     #[tokio::test]
     #[cfg(feature = "rpc_tests")]
     async fn test_marketmap_subscribe() {
-        let endpoint = "rpc";
+        use utils::envs::mainnet_endpoint;
 
         let client = DriftClient::new(
             Context::MainNet,
-            RpcAccountProvider::new(endpoint),
+            RpcAccountProvider::new(&mainnet_endpoint()),
             Keypair::new().into(),
         )
         .await

@@ -359,6 +359,7 @@ pub mod abi_types {
     //! cross-boundary FFI types
     //! DEV: _must_ not include solana-* crates
     use abi_stable::std_types::RResult;
+    use type_layout::TypeLayout;
 
     use crate::drift_idl::types::MarginRequirementType;
 
@@ -373,30 +374,25 @@ pub mod abi_types {
 
     // TODO: simplified version of MarginCalculation
     // can pipe through fill struct if needed
-    #[repr(C)]
-    #[derive(Copy, Clone, Debug, PartialEq)]
+    #[repr(C, align(16))]
+    #[derive(Copy, Clone, Debug, PartialEq, TypeLayout)]
     pub struct MarginCalculation {
-        /// PRICE_PRECISION
         pub total_collateral: i128,
-        /// PRICE_PRECISION
         pub margin_requirement: u128,
         pub all_oracles_valid: bool,
         pub with_perp_isolated_liability: bool,
         pub with_spot_isolated_liability: bool,
         pub total_spot_asset_value: i128,
-        /// PRICE_PRECISION
         pub total_spot_liability_value: u128,
-        /// PRICE_PRECISION
         pub total_perp_liability_value: u128,
-        /// PRICE_PRECISION
         pub total_perp_pnl: i128,
-        /// PRICE_PRECISION
         pub open_orders_margin_requirement: u128,
     }
 
     impl MarginCalculation {
         pub fn get_free_collateral(&self) -> u128 {
-            (self.total_collateral - self.margin_requirement as i128).max(0) as u128
+            (self.total_collateral - self.margin_requirement as i128) // safe cast, margin requirement >= 0
+                .max(0) as u128
         }
     }
 
@@ -417,10 +413,13 @@ pub mod abi_types {
 mod tests {
     use anchor_lang::Discriminator;
     use solana_sdk::{account::Account, pubkey::Pubkey};
+    use type_layout::TypeLayout;
 
-    use super::{AccountWithKey, AccountsList, IntoFfi, MarginContextMode, SpotPosition};
+    use super::{
+        AccountWithKey, AccountsList, IntoFfi, MarginCalculation, MarginContextMode, SpotPosition,
+    };
     use crate::{
-        constants::{self, ids},
+        constants::{self},
         drift_idl::{
             accounts::{
                 PerpMarket as DriftPerpMarket, SpotMarket as DriftSpotMarket, User as DriftUser,
@@ -799,5 +798,10 @@ mod tests {
                 *mode,
             );
         }
+    }
+
+    #[test]
+    fn layouts() {
+        dbg!(MarginCalculation::type_layout());
     }
 }

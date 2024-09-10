@@ -71,35 +71,26 @@ impl AuctionSubscriber {
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "rpc_tests")]
 mod tests {
-    use std::str::FromStr;
-
-    use env_logger;
-
     use super::*;
-    use crate::{
-        utils::envs::mainnet_endpoint, websocket_program_account_subscriber::ProgramAccountUpdate,
-    };
+    use crate::utils::envs::mainnet_endpoint;
 
-    #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn test_auction_subscriber() {
         env_logger::init();
-        let cluster = Cluster::from_str(&"rpc").unwrap();
-        let url = cluster.ws_url().to_string();
 
         let config = AuctionSubscriberConfig {
             commitment: CommitmentConfig::confirmed(),
             resub_timeout_ms: None,
-            url,
+            url: mainnet_endpoint(),
         };
 
         let mut auction_subscriber = AuctionSubscriber::new(config);
 
         let emitter = auction_subscriber.event_emitter.clone();
 
-        emitter.subscribe(AuctionSubscriber::SUBSCRIPTION_ID, move |event| {
+        emitter.subscribe(move |event| {
             log::info!("{:?}", event.now.elapsed());
         });
 

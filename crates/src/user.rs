@@ -7,7 +7,7 @@ use crate::{
     event_emitter::EventEmitter,
     utils::{decode, get_ws_url},
     websocket_account_subscriber::WebsocketAccountSubscriber,
-    AccountProvider, DataAndSlot, DriftClient, SdkResult,
+    DataAndSlot, DriftClient, SdkResult,
 };
 
 #[derive(Clone)]
@@ -21,9 +21,9 @@ pub struct DriftUser {
 impl DriftUser {
     pub const SUBSCRIPTION_ID: &'static str = "user";
 
-    pub async fn new<T: AccountProvider>(
+    pub async fn new(
         pubkey: Pubkey,
-        drift_client: &DriftClient<T>,
+        drift_client: &DriftClient,
         sub_account: u16,
     ) -> SdkResult<Self> {
         let subscription = WebsocketAccountSubscriber::new(
@@ -71,30 +71,25 @@ impl DriftUser {
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "rpc_tests")]
 mod tests {
-    use std::str::FromStr;
-
-    use anchor_lang::accounts::account_loader::AccountLoader;
-    use solana_sdk::{account_info::AccountInfo, signature::Keypair};
+    use solana_sdk::signature::Keypair;
 
     use super::*;
-    use crate::{Context, RpcAccountProvider};
+    use crate::{utils::envs::mainnet_endpoint, Context, RpcAccountProvider};
 
     #[tokio::test]
-    #[cfg(feature = "rpc_tests")]
     async fn test_user_subscribe() {
-        let url = "rpc";
         let client = DriftClient::new(
             Context::MainNet,
-            RpcAccountProvider::new(&url),
+            RpcAccountProvider::new(&mainnet_endpoint()),
             Keypair::new().into(),
         )
         .await
         .unwrap();
 
         let pubkey = Pubkey::from_str("DCdMynEZ8QwNniQvwSxU4a6bqvnKRhK39QDCMEVJQJzU").unwrap();
-        let mut user = DriftUser::new(pubkey, client).await.unwrap();
+        let mut user = DriftUser::new(pubkey, &client, 0).await.unwrap();
         user.subscribe().await.unwrap();
 
         loop {

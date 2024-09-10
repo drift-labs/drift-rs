@@ -4,10 +4,10 @@ use crate::{
         calculate_margin_requirement_and_total_collateral_and_liability_info, MarginContextMode,
     },
     types::User,
-    AccountProvider, DriftClient, SdkError, SdkResult,
+    DriftClient, SdkError, SdkResult,
 };
 
-pub fn get_leverage<T: AccountProvider>(client: &DriftClient<T>, user: &User) -> SdkResult<u128> {
+pub fn get_leverage(client: &DriftClient, user: &User) -> SdkResult<u128> {
     let mut builder = AccountsListBuilder::default();
     let mut accounts = builder.build(client, user)?;
 
@@ -28,18 +28,17 @@ pub fn get_leverage<T: AccountProvider>(client: &DriftClient<T>, user: &User) ->
         ));
     }
 
-    let total_liability_value = margin_calculation.total_perp_liability_value
-        + margin_calculation.total_spot_liability_value;
+    let total_liability_value = margin_calculation
+        .total_perp_liability_value
+        .checked_add(margin_calculation.total_spot_liability_value)
+        .expect("fits u128");
 
     let leverage = calculate_leverage(total_liability_value, net_asset_value);
 
     Ok(leverage)
 }
 
-pub fn get_spot_asset_value<T: AccountProvider>(
-    client: &DriftClient<T>,
-    user: &User,
-) -> SdkResult<i128> {
+pub fn get_spot_asset_value(client: &DriftClient, user: &User) -> SdkResult<i128> {
     let mut builder = AccountsListBuilder::default();
     let mut accounts = builder.build(client, user)?;
 
@@ -74,24 +73,27 @@ fn calculate_leverage(total_liability_value: u128, net_asset_value: i128) -> u12
     sign as u128 * (leverage * PRICE_PRECISION as f64) as u128
 }
 
-#[cfg(test)]
+#[cfg(feature = "rpc_tests")]
 mod tests {
     use solana_sdk::signature::Keypair;
 
     use super::*;
-    use crate::{Context, RpcAccountProvider, Wallet};
-
-    const RPC: &'static str = "rpc";
-    const PRIVATE_KEY: &'static str = "private key";
+    use crate::{
+        utils::envs::{mainnet_endpoint, test_keypair},
+        Context, RpcAccountProvider, Wallet,
+    };
 
     #[tokio::test]
-    #[cfg(feature = "rpc_tests")]
     async fn test_get_spot_market_value() {
-        let wallet: Wallet = Keypair::from_base58_string(PRIVATE_KEY).into();
+        let wallet: Wallet = test_keypair().into();
         let pubkey = wallet.authority().clone();
-        let drift_client = DriftClient::new(Context::MainNet, RpcAccountProvider::new(RPC), wallet)
-            .await
-            .expect("drift client");
+        let drift_client = DriftClient::new(
+            Context::MainNet,
+            RpcAccountProvider::new(&mainnet_endpoint()),
+            wallet,
+        )
+        .await
+        .expect("drift client");
         drift_client.subscribe().await.expect("subscribe");
 
         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
@@ -110,13 +112,16 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(feature = "rpc_tests")]
     async fn test_leverage() {
-        let wallet: Wallet = Keypair::from_base58_string(PRIVATE_KEY).into();
+        let wallet: Wallet = test_keypair().into();
         let pubkey = wallet.authority().clone();
-        let drift_client = DriftClient::new(Context::MainNet, RpcAccountProvider::new(RPC), wallet)
-            .await
-            .expect("drift client");
+        let drift_client = DriftClient::new(
+            Context::MainNet,
+            RpcAccountProvider::new & (mainnet_endpoint()),
+            wallet,
+        )
+        .await
+        .expect("drift client");
         drift_client.subscribe().await.expect("subscribe");
 
         tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;

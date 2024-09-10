@@ -251,6 +251,9 @@ pub(crate) fn to_ffi_result<T>(result: Result<T, drift_program::error::ErrorCode
 mod tests {
     use anchor_lang::AccountDeserialize;
     use drift_program::state::spot_market::SpotMarket;
+    use type_layout::TypeLayout;
+
+    use super::MarginCalculation;
 
     #[test]
     fn spot_market_deser() {
@@ -262,5 +265,10 @@ mod tests {
         dbg!(s1);
 
         assert_eq!(&s, s1);
+    }
+
+    #[test]
+    fn layouts() {
+        dbg!(MarginCalculation::type_layout());
     }
 }

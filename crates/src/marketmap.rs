@@ -234,22 +234,18 @@ where
 
 #[cfg(feature = "rpc_tests")]
 mod tests {
-    use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
+    use solana_sdk::commitment_config::CommitmentLevel;
 
     use super::*;
-    use crate::{
-        drift_idl::accounts::{PerpMarket, SpotMarket},
-        marketmap::MarketMap,
-    };
+    use crate::utils::envs::mainnet_endpoint;
 
     #[tokio::test]
     async fn test_marketmap_perp() {
-        let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {
             commitment: CommitmentLevel::Processed,
         };
 
-        let marketmap = MarketMap::<PerpMarket>::new(commitment, endpoint, true);
+        let marketmap = MarketMap::<PerpMarket>::new(commitment, mainnet_endpoint(), true);
         marketmap.subscribe().await.unwrap();
 
         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
@@ -269,12 +265,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_marketmap_spot() {
-        let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {
             commitment: CommitmentLevel::Processed,
         };
 
-        let marketmap = MarketMap::<SpotMarket>::new(commitment, endpoint, true);
+        let marketmap = MarketMap::<SpotMarket>::new(commitment, RPC, true);
         marketmap.subscribe().await.unwrap();
 
         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;

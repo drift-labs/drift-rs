@@ -6,6 +6,7 @@ use std::{
     },
 };
 
+use base64::Engine;
 use dashmap::DashMap;
 use solana_account_decoder::{UiAccountData, UiAccountEncoding};
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcAccountInfoConfig};
@@ -123,10 +124,12 @@ impl OracleMap {
                 let oracle_pubkey = Pubkey::from_str(&update.pubkey).expect("valid pubkey");
                 let oracle_source_maybe = oracle_source_by_oracle_key.get(&oracle_pubkey);
                 if let Some(oracle_source) = oracle_source_maybe {
-                    if let UiAccountData::Binary(blob, UiAccountEncoding::Base64) =
+                    if let UiAccountData::Binary(base64_blob, UiAccountEncoding::Base64) =
                         &update.data.data
                     {
-                        let data = base64::decode(blob).expect("valid data");
+                        let data = base64::engine::general_purpose::STANDARD
+                            .decode(base64_blob)
+                            .expect("valid base64");
                         let owner = Pubkey::from_str(&update.data.owner).expect("valid pubkey");
                         let lamports = update.data.lamports;
                         match get_oracle_price(
@@ -150,7 +153,7 @@ impl OracleMap {
                                 );
                             }
                             Err(err) => {
-                                log::error!("Failed to get oracle price: {:?}", err)
+                                log::error!("Failed to get oracle price: {err:?}")
                             }
                         }
                     }
@@ -329,17 +332,17 @@ mod tests {
     use crate::{
         drift_idl::accounts::{PerpMarket, SpotMarket},
         marketmap::MarketMap,
+        utils::envs::mainnet_endpoint,
     };
 
     #[tokio::test]
     async fn test_oracle_map() {
         let commitment = CommitmentConfig::processed();
-        let endpoint = "rpc".to_string();
 
         let spot_market_map =
-            MarketMap::<SpotMarket>::new(commitment.clone(), endpoint.clone(), true);
+            MarketMap::<SpotMarket>::new(commitment.clone(), mainnet_endpoint(), true);
         let perp_market_map =
-            MarketMap::<PerpMarket>::new(commitment.clone(), endpoint.clone(), true);
+            MarketMap::<PerpMarket>::new(commitment.clone(), mainnet_endpoint(), true);
 
         let _ = spot_market_map.sync().await;
         let _ = perp_market_map.sync().await;
@@ -361,7 +364,13 @@ mod tests {
         let oracle_infos_len = oracle_infos.len();
         dbg!(oracle_infos_len);
 
-        let oracle_map = OracleMap::new(commitment, endpoint, true, perp_oracles, spot_oracles);
+        let oracle_map = OracleMap::new(
+            commitment,
+            &mainnet_endpoint(),
+            true,
+            perp_oracles,
+            spot_oracles,
+        );
 
         let _ = oracle_map.subscribe().await;
 

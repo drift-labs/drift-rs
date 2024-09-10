@@ -191,9 +191,6 @@ where
 
 #[cfg(feature = "rpc_tests")]
 mod tests {
-
-    use std::str::FromStr;
-
     use super::*;
     use crate::{
         drift_idl::accounts::User,
@@ -210,28 +207,21 @@ mod tests {
             commitment,
             encoding: UiAccountEncoding::Base64,
         };
-        let cluster = Cluster::from_str(&mainnet_endpoint()).unwrap();
-        let url = cluster.ws_url().to_string();
-        let subscription_name = "Test".to_string();
+        let subscription_name = "Test";
 
-        let mut ws_subscriber = WebsocketProgramAccountSubscriber::new(
+        let mut ws_subscriber = WebsocketProgramAccountSubscriber::<User>::new(
             subscription_name,
-            url,
+            mainnet_endpoint(),
             options,
             EventEmitter::new(),
         );
 
-        let _ = ws_subscriber.subscribe::<User>().await;
+        let _ = ws_subscriber.subscribe().await;
         dbg!("sub'd");
 
-        ws_subscriber
-            .event_emitter
-            .clone()
-            .subscribe("Test", move |event| {
-                if let Some(event) = event.as_any().downcast_ref::<ProgramAccountUpdate<User>>() {
-                    dbg!(event);
-                }
-            });
+        ws_subscriber.event_emitter.clone().subscribe(move |event| {
+            dbg!(event);
+        });
 
         tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
         let _ = ws_subscriber.unsubscribe().await;

@@ -7,7 +7,7 @@ use crate::{
     ffi::{AccountWithKey, AccountsList, IntoFfi},
     types::User,
     utils::zero_account_to_bytes,
-    AccountProvider, DriftClient, PerpMarket, SdkResult, SpotMarket,
+    DriftClient, PerpMarket, SdkResult, SpotMarket,
 };
 
 /// Builds an AccountList of relevant spot, perp, and oracle accounts from rpc
@@ -21,11 +21,7 @@ pub(crate) struct AccountsListBuilder {
 
 impl AccountsListBuilder {
     /// Constructs the account map + drift state account
-    pub fn build<T: AccountProvider>(
-        &mut self,
-        client: &DriftClient<T>,
-        user: &User,
-    ) -> SdkResult<AccountsList> {
+    pub fn build(&mut self, client: &DriftClient, user: &User) -> SdkResult<AccountsList> {
         let mut oracles = FnvHashSet::<Pubkey>::default();
         let mut spot_markets = Vec::<SpotMarket>::with_capacity(user.spot_positions.len());
         let mut perp_markets = Vec::<PerpMarket>::with_capacity(user.perp_positions.len());

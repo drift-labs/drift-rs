@@ -33,7 +33,7 @@ pub struct LiquidationAndPnlInfo {
 
 /// Calculate the liquidation price and unrealized PnL of a user's perp position (given by `market_index`)
 pub fn calculate_liquidation_price_and_unrealized_pnl<T: AccountProvider>(
-    client: &DriftClient<T>,
+    client: &DriftClient,
     user: &User,
     market_index: u16,
 ) -> SdkResult<LiquidationAndPnlInfo> {
@@ -74,7 +74,7 @@ pub fn calculate_liquidation_price_and_unrealized_pnl<T: AccountProvider>(
 
 /// Calculate the unrealized pnl for user perp position, given by `market_index`
 pub fn calculate_unrealized_pnl<T: AccountProvider>(
-    client: &DriftClient<T>,
+    client: &DriftClient,
     user: &User,
     market_index: u16,
 ) -> SdkResult<i128> {
@@ -103,7 +103,7 @@ pub fn calculate_unrealized_pnl_inner(
 /// Calculate the liquidation price of a user's perp position (given by `market_index`)
 /// Returns the liquidaton price (PRICE_PRECISION / 1e6)
 pub fn calculate_liquidation_price<T: AccountProvider>(
-    client: &DriftClient<T>,
+    client: &DriftClient,
     user: &User,
     market_index: u16,
 ) -> SdkResult<i64> {
@@ -269,7 +269,7 @@ pub struct MarginRequirementInfo {
 
 /// Calculate the margin requirements of `user`
 pub fn calculate_margin_requirements<T: AccountProvider>(
-    client: &DriftClient<T>,
+    client: &DriftClient,
     user: &User,
 ) -> SdkResult<MarginRequirementInfo> {
     calculate_margin_requirements_inner(
@@ -310,7 +310,7 @@ pub struct CollateralInfo {
 }
 
 pub fn calculate_collateral<T: AccountProvider>(
-    client: &DriftClient<T>,
+    client: &DriftClient,
     user: &User,
     margin_requirement_type: MarginRequirementType,
 ) -> SdkResult<CollateralInfo> {
@@ -343,19 +343,15 @@ fn calculate_collateral_inner(
 mod tests {
     use std::str::FromStr;
 
-    use anchor_lang::{
-        AccountDeserialize, AccountSerialize, AnchorDeserialize, Discriminator, Space, ZeroCopy,
-    };
+    use anchor_lang::Discriminator;
     use bytes::BytesMut;
+    use ffi::MarginCalculation;
     use solana_sdk::{account::Account, pubkey::Pubkey};
 
     use super::*;
     use crate::{
         constants::{self, ids::pyth_program},
-        drift_idl::types::{
-            HistoricalIndexData, HistoricalOracleData, InsuranceFund, MarketStatus, OracleSource,
-            PoolBalance, SpotPosition, AMM,
-        },
+        drift_idl::types::{HistoricalOracleData, MarketStatus, OracleSource, SpotPosition, AMM},
         math::constants::{
             AMM_RESERVE_PRECISION, BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, PEG_PRECISION,
             PRICE_PRECISION_I64, SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64,
@@ -458,12 +454,14 @@ mod tests {
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn calculate_liq_price() {
+        use crate::utils::envs::mainnet_endpoint;
+
         let wallet = Wallet::read_only(
             Pubkey::from_str("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2").unwrap(),
         );
         let client = DriftClient::new(
             crate::Context::MainNet,
-            RpcAccountProvider::new("https://api.mainnet-beta.solana.com"),
+            RpcAccountProvider::new(mainnet_endpoint()),
             wallet.clone(),
         )
         .await
@@ -480,12 +478,14 @@ mod tests {
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn calculate_margin_requirements_works() {
+        use crate::utils::envs::mainnet_endpoint;
+
         let wallet = Wallet::read_only(
             Pubkey::from_str("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2").unwrap(),
         );
         let client = DriftClient::new(
             crate::Context::MainNet,
-            RpcAccountProvider::new("https://api.mainnet-beta.solana.com"),
+            RpcAccountProvider::new(mainnet_endpoint()),
             wallet.clone(),
         )
         .await
@@ -550,6 +550,8 @@ mod tests {
 
         let margin_info = calculate_margin_requirements_inner(&user, &mut accounts_map).unwrap();
         dbg!(margin_info);
+        dbg!(std::mem::align_of::<MarginCalculation>());
+        dbg!(std::mem::size_of::<MarginCalculation>());
 
         assert_eq!(
             MarginRequirementInfo {
@@ -596,11 +598,13 @@ mod tests {
         let mut oracles = [sol_oracle];
         let mut accounts_map = AccountsList::new(&mut perps, &mut spot, &mut oracles);
 
+        let sol_spot = sol_spot_market();
+        let sol_perp = sol_perp_market();
         let liquidation_price = calculate_liquidation_price_inner(
             &user,
-            &sol_perp_market(),
-            Some(&sol_spot_market()),
-            sol_usdc_price,
+            &sol_perp,
+            Some(&sol_spot),
+            sol_usdc_price * QUOTE_PRECISION_I64,
             &mut accounts_map,
         )
         .unwrap();
@@ -648,7 +652,7 @@ mod tests {
             &user,
             &sol_perp_market(),
             Some(&sol_spot_market()),
-            sol_usdc_price,
+            sol_usdc_price * QUOTE_PRECISION_I64,
             &mut accounts_map,
         )
         .unwrap();
@@ -703,7 +707,7 @@ mod tests {
             &user,
             &btc_perp_market(),
             None,
-            btc_usdc_price,
+            btc_usdc_price * QUOTE_PRECISION_I64,
             &mut accounts_map,
         )
         .unwrap();
@@ -756,7 +760,7 @@ mod tests {
             &user,
             &sol_perp_market(),
             Some(&sol_spot_market()),
-            sol_usdc_price,
+            sol_usdc_price * QUOTE_PRECISION_I64,
             &mut accounts_map,
         )
         .unwrap();
@@ -842,14 +846,13 @@ mod tests {
             &user,
             &sol_perp_market(),
             Some(&sol_spot_market()),
-            sol_oracle_price.agg.price,
+            sol_usdc_price * QUOTE_PRECISION_I64,
             &mut accounts_map,
         )
         .expect("got price");
         dbg!(liq_price);
 
-        // price down but fully hedged
-        assert_eq!(liq_price, -1);
+        assert_eq!(liq_price, 60 * QUOTE_PRECISION_I64);
     }
 
     #[test]

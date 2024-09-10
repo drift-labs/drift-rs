@@ -69,14 +69,14 @@ impl JitIxParams {
 
 #[derive(Clone)]
 pub struct JitProxyClient<T: AccountProvider> {
-    drift_client: DriftClient<T>,
+    drift_client: DriftClient,
     config: RpcSendTransactionConfig,
     cu_params: Option<ComputeBudgetParams>,
 }
 
 impl<T: AccountProvider> JitProxyClient<T> {
     pub fn new(
-        drift_client: DriftClient<T>,
+        drift_client: DriftClient,
         config: Option<RpcSendTransactionConfig>,
         cu_params: Option<ComputeBudgetParams>,
     ) -> Self {

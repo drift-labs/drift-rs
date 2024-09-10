@@ -4,14 +4,14 @@ fn main() {
     let current_dir = std::env::current_dir().unwrap();
 
     // generate types from IDL
-    let idlgen_crate_dir = current_dir.join(Path::new("crates/drift-idl-gen"));
-    let output = std::process::Command::new("make")
-        .current_dir(idlgen_crate_dir)
-        .args(["build"])
-        .output()
-        .expect("idl-gen built");
+    // let idlgen_crate_dir = current_dir.join(Path::new("crates/drift-idl-gen"));
+    // let output = std::process::Command::new("make")
+    //     .current_dir(idlgen_crate_dir)
+    //     .args(["build"])
+    //     .output()
+    //     .expect("idl-gen built");
 
-    println!("idl-gen build: {output:?}");
+    // println!("idl-gen build: {output:?}");
 
     // generate ffi lib
     let profile = "debug";

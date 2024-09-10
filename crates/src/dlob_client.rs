@@ -262,7 +262,7 @@ where
     s.parse().map_err(de::Error::custom)
 }
 
-#[cfg(test)]
+#[cfg(feature = "rpc_tests")]
 mod tests {
     use futures_util::StreamExt;
     use solana_sdk::signature::Keypair;
@@ -272,7 +272,6 @@ mod tests {
         types::Context, utils::envs::mainnet_endpoint, DriftClient, MarketExt, RpcAccountProvider,
     };
 
-    #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn pull_l2_book() {
         let url = "https://dlob.drift.trade";
@@ -283,7 +282,6 @@ mod tests {
         dbg!(spot_book);
     }
 
-    #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn stream_l2_book() {
         let url = "https://dlob.drift.trade";
@@ -295,7 +293,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn pull_l3_book() {
         let url = "https://dlob.drift.trade";
@@ -306,7 +303,6 @@ mod tests {
         dbg!(spot_book);
     }
 
-    #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn stream_l3_book() {
         let url = "https://dlob.drift.trade";
@@ -318,7 +314,6 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn subscribe_ws() {
         let client = DriftClient::new(

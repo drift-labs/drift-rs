@@ -2,7 +2,6 @@
 #![doc = r""]
 #![doc = r" Auto-generated IDL types, manual edits do not persist (see `crates/drift-idl-gen`)"]
 #![doc = r""]
-use self::traits::ToAccountMetas;
 use anchor_lang::{
     prelude::{
         account,
@@ -12,6 +11,8 @@ use anchor_lang::{
     Discriminator,
 };
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
+
+use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
     pub trait ToAccountMetas {
@@ -1779,8 +1780,9 @@ pub mod instructions {
     impl anchor_lang::InstructionData for InitializePythPullOracle {}
 }
 pub mod types {
-    use super::*;
     use std::ops::Mul;
+
+    use super::*;
     #[doc = r" backwards compatible u128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
     #[doc = r" https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]
     #[derive(
@@ -1942,7 +1944,6 @@ pub mod types {
         pub market_type: MarketType,
         pub market_index: u16,
     }
-    #[repr(C)]
     #[derive(
         AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
@@ -1954,7 +1955,6 @@ pub mod types {
         pub last_oracle_price_twap5min: i64,
         pub last_oracle_price_twap_ts: i64,
     }
-    #[repr(C)]
     #[derive(
         AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]

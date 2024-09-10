@@ -64,16 +64,15 @@ impl BlockhashSubscriber {
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "rpc_tests")]
 mod tests {
     use super::*;
+    use crate::utils::envs::mainnet_endpoint;
 
-    #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn test_blockhash_subscribe() {
-        let rpc = "rpc";
         let blockhash_subscriber =
-            Arc::new(RwLock::new(BlockhashSubscriber::new(2, rpc.to_string())));
+            Arc::new(RwLock::new(BlockhashSubscriber::new(2, mainnet_endpoint())));
         BlockhashSubscriber::subscribe(blockhash_subscriber.clone()).await;
 
         for i in 0..=10 {

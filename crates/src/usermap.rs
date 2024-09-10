@@ -197,6 +197,7 @@ impl UserMap {
 
 #[cfg(feature = "rpc_tests")]
 mod tests {
+    use crate::utils::envs::mainnet_endpoint;
 
     #[tokio::test]
     async fn test_usermap() {
@@ -204,12 +205,11 @@ mod tests {
 
         use crate::usermap::UserMap;
 
-        let endpoint = "rpc_url".to_string();
         let commitment = CommitmentConfig {
             commitment: CommitmentLevel::Processed,
         };
 
-        let mut usermap = UserMap::new(commitment, endpoint, true);
+        let mut usermap = UserMap::new(commitment, mainnet_endpoint(), true);
         usermap.subscribe().await.unwrap();
 
         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;

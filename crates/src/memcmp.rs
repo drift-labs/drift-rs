@@ -21,11 +21,13 @@ pub fn get_user_with_order_filter() -> RpcFilterType {
 
 pub fn get_market_filter(market_type: MarketType) -> RpcFilterType {
     match market_type {
-        MarketType::Spot => {
-            RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, SpotMarket::discriminator().into()))
-        }
-        MarketType::Perp => {
-            RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, PerpMarket::discriminator().into()))
-        }
+        MarketType::Spot => RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
+            0,
+            SpotMarket::discriminator().to_vec(),
+        )),
+        MarketType::Perp => RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
+            0,
+            PerpMarket::discriminator().to_vec(),
+        )),
     }
 }

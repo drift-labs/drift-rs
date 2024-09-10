@@ -15,6 +15,7 @@ drift-program = { package = "drift", git = "https://github.com/drift-labs/protoc
 hex = "*"
 solana-program = { version = "1.16.*" }
 solana-sdk = { version = "1.16.*" }
+type-layout = "*"
 
 # its possible to export some common types alongside the dylib build
 #[features]
@@ -23,5 +24,5 @@ solana-sdk = { version = "1.16.*" }
 
 [dev-dependencies]
 anchor-lang = "=0.29.0"
-bytemuck = "1.17"
+bytemuck = "1.18"
 hex-literal = "*"

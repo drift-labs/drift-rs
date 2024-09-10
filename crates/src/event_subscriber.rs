@@ -7,6 +7,7 @@ use std::{
 };
 
 use anchor_lang::{AnchorDeserialize, Discriminator};
+use base64::Engine;
 use fnv::FnvHashSet;
 use futures_util::{future::BoxFuture, stream::FuturesOrdered, FutureExt, Stream, StreamExt};
 use log::{debug, info, warn};
@@ -427,7 +428,7 @@ pub fn try_parse_log(raw: &str, signature: &str, tx_idx: usize) -> Option<DriftE
         .strip_prefix(PROGRAM_LOG)
         .or_else(|| raw.strip_prefix(PROGRAM_DATA))
     {
-        if let Ok(borsh_bytes) = base64::decode_config(log, base64::STANDARD) {
+        if let Ok(borsh_bytes) = base64::engine::general_purpose::STANDARD.decode(log) {
             let (disc, mut data) = borsh_bytes.split_at(8);
             let disc: [u8; 8] = disc.try_into().unwrap();
 
@@ -686,12 +687,10 @@ impl TxSignatureCache {
     }
 }
 
-// TODO: FIX
-#[cfg(test3)]
+#[cfg(test)]
 mod test {
-    use std::io::Write;
-
     use anchor_lang::prelude::*;
+    use base64::Engine;
     use fnv::FnvHashMap;
     use futures_util::future::ready;
     use solana_sdk::{
@@ -704,13 +703,9 @@ mod test {
     use tokio::sync::Mutex;
 
     use super::*;
-    use crate::{
-        async_utils::retry_policy,
-        drift_idl::state::{events::get_order_action_record, traits::Size},
-        SdkError,
-    };
+    use crate::{async_utils::retry_policy, SdkError};
 
-    #[ignore]
+    #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn event_streaming_logs() {
         let mut event_stream = EventSubscriber::subscribe(
@@ -941,8 +936,7 @@ mod test {
                             ..Default::default()
                         }),
                         0,
-                    )
-                    .unwrap(),
+                    ),
                     OrderRecord {
                         ts: id as i64,
                         user: sub_account,
@@ -966,14 +960,8 @@ mod test {
                     sub_account,
                     Signature::from_str(s).unwrap(),
                     Some(vec![
-                        format!(
-                            "{PROGRAM_LOG}{}",
-                            serialize_event::<_, { OrderActionRecord::INIT_SPACE }>(oar)
-                        ),
-                        format!(
-                            "{PROGRAM_LOG}{}",
-                            serialize_event::<_, { OrderRecord::INIT_SPACE }>(or),
-                        ),
+                        format!("{PROGRAM_LOG}{}", serialize_event(oar)),
+                        format!("{PROGRAM_LOG}{}", serialize_event(or),),
                     ]),
                 ),
             );
@@ -1061,23 +1049,81 @@ mod test {
     }
 
     /// serialize event to string like Drift program log
-    pub fn serialize_event<T: AnchorSerialize + Discriminator, const N: usize>(event: T) -> String {
-        let data_buf = [0u8; N];
-        let mut out_buf = [0u8; N];
-        let mut data_writer = std::io::Cursor::new(data_buf);
-        data_writer
-            .write_all(&<T as Discriminator>::discriminator())
-            .unwrap();
-        borsh::to_writer(&mut data_writer, &event).unwrap();
-        let data_len = data_writer.position() as usize;
+    pub fn serialize_event<T: AnchorSerialize + Discriminator>(event: T) -> String {
+        let mut data_buf = T::discriminator().to_vec();
+        event.serialize(&mut data_buf).expect("serializes");
+        base64::engine::general_purpose::STANDARD.encode(data_buf)
+    }
 
-        let out_len = base64::encode_config_slice(
-            &data_writer.into_inner()[0..data_len],
-            base64::STANDARD,
-            out_buf.as_mut_slice(),
-        );
-
-        let msg_bytes = &out_buf[0..out_len];
-        unsafe { std::str::from_utf8_unchecked(msg_bytes) }.to_string()
+    pub fn get_order_action_record(
+        ts: i64,
+        action: OrderAction,
+        action_explanation: OrderActionExplanation,
+        market_index: u16,
+        filler: Option<Pubkey>,
+        fill_record_id: Option<u64>,
+        filler_reward: Option<u64>,
+        base_asset_amount_filled: Option<u64>,
+        quote_asset_amount_filled: Option<u64>,
+        taker_fee: Option<u64>,
+        maker_rebate: Option<u64>,
+        referrer_reward: Option<u64>,
+        quote_asset_amount_surplus: Option<i64>,
+        spot_fulfillment_method_fee: Option<u64>,
+        taker: Option<Pubkey>,
+        taker_order: Option<Order>,
+        maker: Option<Pubkey>,
+        maker_order: Option<Order>,
+        oracle_price: i64,
+    ) -> OrderActionRecord {
+        OrderActionRecord {
+            ts,
+            action,
+            action_explanation,
+            market_index,
+            market_type: if let Some(taker_order) = taker_order {
+                taker_order.market_type
+            } else if let Some(maker_order) = maker_order {
+                maker_order.market_type
+            } else {
+                panic!("inalid order");
+            },
+            filler,
+            filler_reward,
+            fill_record_id,
+            base_asset_amount_filled,
+            quote_asset_amount_filled,
+            taker_fee,
+            maker_fee: match maker_rebate {
+                Some(maker_rebate) => Some(maker_rebate as i64),
+                None => None,
+            },
+            referrer_reward: match referrer_reward {
+                Some(referrer_reward) if referrer_reward > 0 => {
+                    Some(referrer_reward.try_into().unwrap())
+                }
+                _ => None,
+            },
+            quote_asset_amount_surplus,
+            spot_fulfillment_method_fee,
+            taker,
+            taker_order_id: taker_order.map(|order| order.order_id),
+            taker_order_direction: taker_order.map(|order| order.direction),
+            taker_order_base_asset_amount: taker_order.map(|order| order.base_asset_amount),
+            taker_order_cumulative_base_asset_amount_filled: taker_order
+                .map(|order| order.base_asset_amount_filled),
+            taker_order_cumulative_quote_asset_amount_filled: taker_order
+                .as_ref()
+                .map(|order| order.quote_asset_amount_filled),
+            maker,
+            maker_order_id: maker_order.map(|order| order.order_id),
+            maker_order_direction: maker_order.map(|order| order.direction),
+            maker_order_base_asset_amount: maker_order.map(|order| order.base_asset_amount),
+            maker_order_cumulative_base_asset_amount_filled: maker_order
+                .map(|order| order.base_asset_amount_filled),
+            maker_order_cumulative_quote_asset_amount_filled: maker_order
+                .map(|order| order.quote_asset_amount_filled),
+            oracle_price,
+        }
     }
 }

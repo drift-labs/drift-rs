@@ -3,6 +3,7 @@ use abi_stable::std_types::RResult;
 use drift_program::{
     math::margin::MarginRequirementType, state::margin_calculation::MarginContext,
 };
+use type_layout::TypeLayout;
 
 /// FFI type-safe equivalent of `MarginContext`
 #[repr(C)]
@@ -27,8 +28,8 @@ impl From<MarginContextMode> for MarginContext {
     }
 }
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[repr(C, align(16))]
+#[derive(Copy, Clone, Debug, PartialEq, TypeLayout)]
 pub struct MarginCalculation {
     pub total_collateral: compat::i128,
     pub margin_requirement: compat::u128,
@@ -44,7 +45,10 @@ pub struct MarginCalculation {
 
 impl MarginCalculation {
     pub fn get_free_collateral(&self) -> u128 {
-        (self.total_collateral.0 - self.margin_requirement.0 as i128).max(0) as u128
+        (self.total_collateral.0 - self.margin_requirement.0 as i128) // cast ok, margin_requirement > 0
+            .max(0)
+            .try_into()
+            .expect("fits u128")
     }
 }
 
