@@ -12,6 +12,8 @@ use solana_sdk::{address_lookup_table_account::AddressLookupTableAccount, pubkey
 
 use crate::types::Context;
 
+pub const JIT_PROXY_ID: Pubkey =
+    solana_sdk::pubkey!("J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP");
 pub const DEFAULT_PUBKEY: Pubkey = solana_sdk::pubkey!("11111111111111111111111111111111");
 
 static STATE_ACCOUNT: OnceLock<Pubkey> = OnceLock::new();

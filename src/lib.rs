@@ -83,7 +83,6 @@ pub mod blockhash_subscriber;
 pub mod dlob_client;
 pub mod event_subscriber;
 
-#[cfg(feature = "jit")]
 pub mod jit_client;
 
 pub mod marketmap;
