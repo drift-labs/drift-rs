@@ -14,8 +14,6 @@ categories = ["solana", "trading", "defi", "dex"]
 keywords = ["solana", "trading", "defi", "dex", "drift", "protocol", "sdk"]
 
 [features]
-# enable JIT client
-jit = ["jit-proxy"]
 rpc_tests = []
 test_utils = []
 
@@ -24,13 +22,12 @@ anchor-lang = "=0.29.0"
 base64 = "0.13"
 bytemuck = "1.13.0"
 dashmap = "5.5.3"
-drift = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.92.0", features = [
+drift = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.93.0", features = [
     "mainnet-beta", "drift-rs"
 ] }
 env_logger = "0.10.1"
 fnv = "1.0.7"
 futures-util = "0.3.29"
-jit-proxy = { git = "https://github.com/drift-labs/jit-proxy.git", rev = "af5f2f4", optional = true }
 log = "0.4.20"
 rayon = "1.9.0"
 regex = "1.10.2"
@@ -52,7 +49,7 @@ bytes = "*"
 futures = "0.3.30"
 hex = "*"
 hex-literal = "*"
-pyth = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.92.0", features = [
+pyth = { git = "https://github.com/drift-labs/protocol-v2.git", tag = "v2.93.0", features = [
     "no-entrypoint",
 ] }
 spl-associated-token-account = "1.1.2"

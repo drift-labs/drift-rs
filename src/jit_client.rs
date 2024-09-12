@@ -1,29 +1,41 @@
 //! JIT proxy client
 //!
 //! Routes JIT maker orders via onchain jit-proxy program
+use std::borrow::Cow;
 
-use anchor_lang::InstructionData;
+use anchor_lang::{
+    prelude::borsh::{self, BorshDeserialize, BorshSerialize},
+    AnchorDeserialize, AnchorSerialize, InstructionData,
+};
 pub use drift::math::auction::calculate_auction_price;
 use drift::{
     math::constants::QUOTE_SPOT_MARKET_INDEX,
-    state::user::{MarketType, User},
+    state::{
+        order_params::PostOnlyParam,
+        user::{MarketType, User},
+    },
 };
-pub use jit_proxy::state::{PostOnlyParam, PriceType};
+use solana_client::rpc_config::RpcSendTransactionConfig;
 use solana_sdk::{
     compute_budget::ComputeBudgetInstruction,
     instruction::{AccountMeta, Instruction},
-    message::v0,
+    message::{v0, VersionedMessage},
+    pubkey::Pubkey,
     signature::Signature,
 };
 
-use std::borrow::Cow;
-
 use crate::{
     build_accounts,
-    constants::{state_account, PROGRAM_ID},
-    types::{MarketId, ReferrerInfo, RpcSendTransactionConfig, VersionedMessage},
-    AccountProvider, DriftClient, Pubkey, SdkError, SdkResult, TransactionBuilder, Wallet,
+    constants::{self, state_account, JIT_PROXY_ID},
+    AccountProvider, DriftClient, MarketId, ReferrerInfo, SdkError, SdkResult, TransactionBuilder,
+    Wallet,
 };
+
+#[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq)]
+pub enum PriceType {
+    Limit,
+    Oracle,
+}
 
 /// Ix parameters for jit-proxy program
 pub struct JitIxParams {
@@ -137,14 +149,14 @@ impl<T: AccountProvider> JitProxyClient<T> {
 
         let mut accounts = build_accounts(
             program_data,
-            jit_proxy::accounts::Jit {
+            self::accounts::Jit {
                 state: *state_account(),
                 user: *sub_account.0,
-                user_stats: Wallet::derive_stats_account(authority, &PROGRAM_ID),
+                user_stats: Wallet::derive_stats_account(authority, &constants::PROGRAM_ID),
                 taker: params.taker_key,
                 taker_stats: params.taker_stats_key,
                 authority: *authority,
-                drift_program: PROGRAM_ID,
+                drift_program: constants::PROGRAM_ID,
             },
             &[&params.taker, account_data],
             &[],
@@ -173,7 +185,7 @@ impl<T: AccountProvider> JitProxyClient<T> {
             accounts.push(AccountMeta::new_readonly(quote_spot_market_vault, false));
         }
 
-        let jit_params = jit_proxy::instructions::JitParams {
+        let jit_params = self::instruction::JitParams {
             taker_order_id: params.taker_order_id,
             max_position: params.max_position,
             min_position: params.min_position,
@@ -184,9 +196,9 @@ impl<T: AccountProvider> JitProxyClient<T> {
         };
 
         let ix = Instruction {
-            program_id: jit_proxy::id(),
+            program_id: JIT_PROXY_ID,
             accounts,
-            data: jit_proxy::instruction::Jit { params: jit_params }.data(),
+            data: instruction::Jit { params: jit_params }.data(),
         };
 
         let mut ixs = Vec::with_capacity(3);
@@ -217,8 +229,11 @@ impl<T: AccountProvider> JitProxyClient<T> {
         authority: &Pubkey,
         sub_account_id: Option<u16>,
     ) -> SdkResult<Signature> {
-        let sub_account =
-            Wallet::derive_user_account(authority, sub_account_id.unwrap_or_default(), &PROGRAM_ID);
+        let sub_account = Wallet::derive_user_account(
+            authority,
+            sub_account_id.unwrap_or_default(),
+            &constants::PROGRAM_ID,
+        );
         let sub_account_data = self.drift_client.get_user_account(&sub_account).await?;
         let tx = self
             .build_jit_tx(params, authority, (&sub_account, &sub_account_data))
@@ -249,5 +264,75 @@ impl ComputeBudgetParams {
 
     pub fn cu_limit(&self) -> u32 {
         self.cu_limit
+    }
+}
+
+pub mod instruction {
+    use super::*;
+    #[derive(BorshDeserialize, BorshSerialize)]
+    pub struct Jit {
+        pub params: JitParams,
+    }
+    impl anchor_lang::Discriminator for Jit {
+        const DISCRIMINATOR: [u8; 8] = [99, 42, 97, 140, 152, 62, 167, 234];
+    }
+    impl anchor_lang::InstructionData for Jit {}
+
+    impl anchor_lang::Owner for Jit {
+        fn owner() -> Pubkey {
+            JIT_PROXY_ID
+        }
+    }
+
+    #[derive(Debug, Clone, Copy, AnchorSerialize, AnchorDeserialize, PartialEq, Eq)]
+    pub struct JitParams {
+        pub taker_order_id: u32,
+        pub max_position: i64,
+        pub min_position: i64,
+        pub bid: i64,
+        pub ask: i64,
+        pub price_type: PriceType,
+        pub post_only: Option<PostOnlyParam>,
+    }
+}
+
+pub mod accounts {
+    use super::*;
+
+    /// this is generated from `#[derive(Accounts)]` from `__client_accounts_jit`
+    #[derive(anchor_lang::AnchorSerialize)]
+    pub struct Jit {
+        pub state: Pubkey,
+        pub user: Pubkey,
+        pub user_stats: Pubkey,
+        pub taker: Pubkey,
+        pub taker_stats: Pubkey,
+        pub authority: Pubkey,
+        pub drift_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::ToAccountMetas for Jit {
+        fn to_account_metas(
+            &self,
+            is_signer: Option<bool>,
+        ) -> Vec<anchor_lang::solana_program::instruction::AccountMeta> {
+            vec![
+                anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
+                    self.state, false,
+                ),
+                anchor_lang::solana_program::instruction::AccountMeta::new(self.user, false),
+                anchor_lang::solana_program::instruction::AccountMeta::new(self.user_stats, false),
+                anchor_lang::solana_program::instruction::AccountMeta::new(self.taker, false),
+                anchor_lang::solana_program::instruction::AccountMeta::new(self.taker_stats, false),
+                anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
+                    self.authority,
+                    true,
+                ),
+                anchor_lang::solana_program::instruction::AccountMeta::new_readonly(
+                    self.drift_program,
+                    false,
+                ),
+            ]
+        }
     }
 }
