@@ -239,8 +239,8 @@ pub enum SdkError {
     CouldntDecode(#[from] base64::DecodeError),
     #[error("Couldn't join task: {0}")]
     CouldntJoin(#[from] tokio::task::JoinError),
-    #[error("Couldn't send unsubscribe message: {0}")]
-    CouldntUnsubscribe(#[from] tokio::sync::mpsc::error::SendError<()>),
+    #[error("Couldn't send unsubscribe message")]
+    CouldntUnsubscribe,
     #[error("MathError")]
     MathError(String),
     #[error("{0}")]
@@ -255,6 +255,10 @@ pub enum SdkError {
     JitOrderNotFound,
     #[error("not data, client may be unsubsribed")]
     NoData,
+    #[error("component is already subscribed")]
+    AlreadySubscribed,
+    #[error("invalid URL")]
+    InvalidUrl,
 }
 
 impl SdkError {
@@ -390,39 +394,6 @@ impl MarketPrecision for accounts::PerpMarket {
     }
 }
 
-#[derive(Clone)]
-pub struct ClientOpts {
-    active_sub_account_id: u16,
-    sub_account_ids: Vec<u16>,
-}
-
-impl Default for ClientOpts {
-    fn default() -> Self {
-        Self {
-            active_sub_account_id: 0,
-            sub_account_ids: vec![0],
-        }
-    }
-}
-
-impl ClientOpts {
-    pub fn new(active_sub_account_id: u16, sub_account_ids: Option<Vec<u16>>) -> Self {
-        let sub_account_ids = sub_account_ids.unwrap_or(vec![active_sub_account_id]);
-        Self {
-            active_sub_account_id,
-            sub_account_ids,
-        }
-    }
-
-    pub fn active_sub_account_id(&self) -> u16 {
-        self.active_sub_account_id
-    }
-
-    pub fn sub_account_ids(self) -> Vec<u16> {
-        self.sub_account_ids
-    }
-}
-
 #[derive(Copy, Clone)]
 pub struct ReferrerInfo {
     referrer: Pubkey,
@@ -450,10 +421,8 @@ impl ReferrerInfo {
             return None;
         }
 
-        let user_account_pubkey =
-            Wallet::derive_user_account(&taker_stats.referrer, 0, &crate::constants::PROGRAM_ID);
-        let user_stats_pubkey =
-            Wallet::derive_stats_account(&taker_stats.referrer, &crate::constants::PROGRAM_ID);
+        let user_account_pubkey = Wallet::derive_user_account(&taker_stats.referrer, 0);
+        let user_stats_pubkey = Wallet::derive_stats_account(&taker_stats.referrer);
 
         Some(Self {
             referrer: user_account_pubkey,

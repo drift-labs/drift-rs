@@ -15,7 +15,7 @@ fn main() {
 
     // generate ffi lib
     let profile = "release";
-    let ffi_crate_dir = current_dir.join(Path::new("crates/drift-ffi"));
+    let ffi_crate_dir = current_dir.join(Path::new("crates/drift-ffi-sys"));
     let output = std::process::Command::new("cargo")
         .current_dir(ffi_crate_dir)
         .args(["build", &format!("--profile={profile}")])
@@ -26,8 +26,8 @@ fn main() {
 
     // build sdk crate
     println!(
-        "cargo:rustc-link-search=native={}/crates/drift-ffi/target/{profile}/",
+        "cargo:rustc-link-search=native={}/crates/drift-ffi-sys/target/{profile}/",
         current_dir.to_string_lossy()
     );
-    println!("cargo:rustc-link-lib=dylib=drift_ffi");
+    println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
 }

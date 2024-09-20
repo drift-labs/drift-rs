@@ -1,78 +1,109 @@
 use futures_util::StreamExt;
-use solana_account_decoder::{UiAccount, UiAccountEncoding};
-use solana_client::{nonblocking::pubsub_client::PubsubClient, rpc_config::RpcAccountInfoConfig};
+use log::warn;
+use solana_account_decoder::UiAccountEncoding;
+use solana_client::{
+    nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient},
+    rpc_config::RpcAccountInfoConfig,
+};
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
+use tokio::sync::oneshot;
 
-use crate::{event_emitter::EventEmitter, SdkResult};
+use crate::{utils::get_http_url, SdkError, SdkResult};
+
+/// Handle for unsubscribing from network updates
+pub type UnsubHandle = oneshot::Sender<()>;
 
 #[derive(Clone, Debug)]
 pub struct AccountUpdate {
-    pub pubkey: String,
-    pub data: UiAccount,
+    /// Address of the account
+    pub pubkey: Pubkey,
+    /// Owner of the account
+    pub owner: Pubkey,
+    pub lamports: u64,
+    /// Serialized account data (e.g. Anchor/Borsh)
+    pub data: Vec<u8>,
+    /// Slot retrieved
     pub slot: u64,
 }
 
 #[derive(Clone)]
 pub struct WebsocketAccountSubscriber {
-    subscription_name: &'static str,
     url: String,
-    pubkey: Pubkey,
+    pub(crate) pubkey: Pubkey,
     pub(crate) commitment: CommitmentConfig,
-    pub subscribed: bool,
-    pub(crate) event_emitter: EventEmitter<AccountUpdate>,
-    unsubscriber: Option<tokio::sync::mpsc::Sender<()>>,
 }
 
 impl WebsocketAccountSubscriber {
-    pub fn new(
-        subscription_name: &'static str,
-        url: String,
-        pubkey: Pubkey,
-        commitment: CommitmentConfig,
-        event_emitter: EventEmitter<AccountUpdate>,
-    ) -> Self {
+    pub fn new(url: String, pubkey: Pubkey, commitment: CommitmentConfig) -> Self {
         WebsocketAccountSubscriber {
-            subscription_name,
             url,
             pubkey,
             commitment,
-            subscribed: false,
-            event_emitter,
-            unsubscriber: None,
         }
     }
 
-    pub async fn subscribe(&mut self) -> SdkResult<()> {
-        if self.subscribed {
-            return Ok(());
+    /// Start a Ws account subscription task
+    ///
+    /// `subscription_name` some user defined identifier for the subscription
+    /// `handler_fn` handles updates from the subscription task
+    ///
+    /// Fetches the account to set the initial value, then uses event based updates
+    pub async fn subscribe<F>(
+        &self,
+        subscription_name: &'static str,
+        handler_fn: F,
+    ) -> SdkResult<UnsubHandle>
+    where
+        F: 'static + Send + Fn(&AccountUpdate),
+    {
+        // seed initial account state
+        log::info!("seeding account: {subscription_name}-{:?}", self.pubkey);
+        let mut owner = Pubkey::default();
+        let rpc = RpcClient::new(get_http_url(&self.url)?);
+        match rpc
+            .get_account_with_commitment(&self.pubkey, self.commitment)
+            .await
+        {
+            Ok(response) => {
+                if let Some(account) = response.value {
+                    owner = account.owner;
+                    handler_fn(&AccountUpdate {
+                        owner,
+                        lamports: account.lamports,
+                        pubkey: self.pubkey,
+                        data: account.data,
+                        slot: response.context.slot,
+                    });
+                } else {
+                    return Err(SdkError::InvalidAccount);
+                }
+            }
+            Err(err) => {
+                warn!("seeding account failed: {err:?}");
+                return Err(err.into());
+            }
         }
+        drop(rpc);
 
-        self.subscribed = true;
-        self.subscribe_ws().await?;
-        Ok(())
-    }
-
-    async fn subscribe_ws(&mut self) -> SdkResult<()> {
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.commitment),
-            encoding: Some(UiAccountEncoding::Base64),
+            encoding: Some(UiAccountEncoding::Base64Zstd),
             ..RpcAccountInfoConfig::default()
         };
-        let (unsub_tx, mut unsub_rx) = tokio::sync::mpsc::channel::<()>(1);
-        self.unsubscriber = Some(unsub_tx);
 
         let mut attempt = 0;
         let max_reconnection_attempts = 20;
         let base_delay = tokio::time::Duration::from_secs(2);
 
         let url = self.url.clone();
+        let (unsub_tx, mut unsub_rx) = oneshot::channel::<()>();
 
         tokio::spawn({
-            let event_emitter = self.event_emitter.clone();
             let mut latest_slot = 0;
-            let subscription_name = self.subscription_name;
             let pubkey = self.pubkey;
+
             async move {
+                log::debug!("spawn account subscriber: {subscription_name}-{pubkey:?}");
                 loop {
                     let pubsub = PubsubClient::new(&url).await?;
 
@@ -83,18 +114,23 @@ impl WebsocketAccountSubscriber {
                         Ok((mut account_updates, account_unsubscribe)) => loop {
                             attempt = 0;
                             tokio::select! {
+                                biased;
                                 message = account_updates.next() => {
                                     match message {
                                         Some(message) => {
                                             let slot = message.context.slot;
                                             if slot >= latest_slot {
                                                 latest_slot = slot;
-                                                let account_update = AccountUpdate {
-                                                    pubkey: pubkey.to_string(),
-                                                    data: message.value,
-                                                    slot,
-                                                };
-                                                event_emitter.emit(account_update);
+                                                if let Some(data) = message.value.data.decode() {
+                                                    let account_update = AccountUpdate {
+                                                        owner,
+                                                        lamports: message.value.lamports,
+                                                        pubkey,
+                                                        data,
+                                                        slot,
+                                                    };
+                                                    handler_fn(&account_update);
+                                                }
                                             }
                                         }
                                         None => {
@@ -104,13 +140,10 @@ impl WebsocketAccountSubscriber {
                                         }
                                     }
                                 }
-                                unsub = unsub_rx.recv() => {
-                                    if unsub.is_some() {
-                                        log::debug!("{}: Unsubscribing from account stream", subscription_name);
-                                        account_unsubscribe().await;
-                                        return Ok(());
-
-                                    }
+                                _ = &mut unsub_rx => {
+                                    log::debug!("{}: Unsubscribing from account stream", subscription_name);
+                                    account_unsubscribe().await;
+                                    return Ok(());
                                 }
                             }
                         },
@@ -133,27 +166,18 @@ impl WebsocketAccountSubscriber {
                     }
 
                     let delay_duration = base_delay * 2_u32.pow(attempt);
-                    log::debug!(
-                        "{}: Reconnecting in {:?}",
+                    log::warn!(
+                        "{}: reconnecting in {:?}",
                         subscription_name,
                         delay_duration
                     );
                     tokio::time::sleep(delay_duration).await;
                     attempt += 1;
                 }
+                log::warn!("account subscriber ended: {subscription_name}-{pubkey:?}");
             }
         });
-        Ok(())
-    }
 
-    pub async fn unsubscribe(&mut self) -> SdkResult<()> {
-        if self.subscribed && self.unsubscriber.is_some() {
-            if let Err(e) = self.unsubscriber.as_ref().unwrap().send(()).await {
-                log::error!("Failed to send unsubscribe signal: {:?}", e);
-                return Err(crate::SdkError::CouldntUnsubscribe(e));
-            }
-            self.subscribed = false;
-        }
-        Ok(())
+        Ok(unsub_tx)
     }
 }

@@ -1,24 +1,18 @@
-use std::{
-    str::FromStr,
-    sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc, Mutex,
-    },
+use std::sync::{
+    atomic::{AtomicBool, AtomicU64, Ordering},
+    Arc, Mutex,
 };
 
-use base64::Engine;
 use dashmap::DashMap;
-use solana_account_decoder::{UiAccountData, UiAccountEncoding};
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcAccountInfoConfig};
 use solana_sdk::{account::Account, commitment_config::CommitmentConfig, pubkey::Pubkey};
 use tokio::sync::RwLock;
 
 use crate::{
     drift_idl::types::OracleSource,
-    event_emitter::EventEmitter,
     ffi::{get_oracle_price, OraclePriceData},
     utils::get_ws_url,
-    websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber},
+    websocket_account_subscriber::{AccountUpdate, UnsubHandle, WebsocketAccountSubscriber},
     SdkResult,
 };
 
@@ -34,13 +28,12 @@ pub struct Oracle {
 pub(crate) struct OracleMap {
     subscribed: AtomicBool,
     pub(crate) oraclemap: Arc<DashMap<Pubkey, Oracle>>,
-    event_emitter: &'static EventEmitter<AccountUpdate>,
     oracle_infos: DashMap<Pubkey, OracleSource>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
     commitment: CommitmentConfig,
     rpc: RpcClient,
-    oracle_subscribers: RwLock<Vec<WebsocketAccountSubscriber>>,
+    oracle_subscribers: RwLock<Vec<UnsubHandle>>,
     perp_oracles: DashMap<u16, Pubkey>,
     spot_oracles: DashMap<u16, Pubkey>,
 }
@@ -56,8 +49,6 @@ impl OracleMap {
         spot_oracles: Vec<(u16, Pubkey, OracleSource)>,
     ) -> Self {
         let oraclemap = Arc::new(DashMap::new());
-
-        let event_emitter = EventEmitter::new();
 
         let rpc = RpcClient::new_with_commitment(endpoint.clone(), commitment);
 
@@ -86,9 +77,8 @@ impl OracleMap {
             sync_lock,
             latest_slot: Arc::new(AtomicU64::new(0)),
             commitment,
-            event_emitter: Box::leak(Box::new(event_emitter)),
             rpc,
-            oracle_subscribers: RwLock::new(vec![]),
+            oracle_subscribers: Default::default(),
             perp_oracles: perp_oracles_map,
             spot_oracles: spot_oracles_map,
         }
@@ -99,83 +89,37 @@ impl OracleMap {
             self.sync().await?;
         }
 
-        if !self.subscribed.load(Ordering::Relaxed) {
-            let url = get_ws_url(&self.rpc.url()).expect("valid url");
+        if self.subscribed.load(Ordering::Relaxed) {
+            return Ok(());
+        }
 
-            let mut oracle_subscribers = vec![];
-            for oracle_info in self.oracle_infos.iter() {
-                let oracle_pubkey = oracle_info.key();
-                let oracle_subscriber = WebsocketAccountSubscriber::new(
-                    OracleMap::SUBSCRIPTION_ID,
-                    url.clone(),
-                    *oracle_pubkey,
-                    self.commitment,
-                    self.event_emitter.clone(),
-                );
-                oracle_subscribers.push(oracle_subscriber);
-            }
+        let url = get_ws_url(&self.rpc.url()).expect("valid url");
 
-            self.subscribed.store(true, Ordering::Relaxed);
+        let mut pending_subscriptions =
+            Vec::<WebsocketAccountSubscriber>::with_capacity(self.oracle_infos.len());
+        for oracle_info in self.oracle_infos.iter() {
+            let oracle_pubkey = oracle_info.key();
+            let oracle_subscriber =
+                WebsocketAccountSubscriber::new(url.clone(), *oracle_pubkey, self.commitment);
+            pending_subscriptions.push(oracle_subscriber);
+        }
 
-            let oracle_source_by_oracle_key = self.oracle_infos.clone();
-            let oracle_map = self.oraclemap.clone();
+        self.subscribed.store(true, Ordering::Relaxed);
 
-            self.event_emitter.subscribe(move |update| {
-                let oracle_pubkey = Pubkey::from_str(&update.pubkey).expect("valid pubkey");
-                let oracle_source_maybe = oracle_source_by_oracle_key.get(&oracle_pubkey);
-                if let Some(oracle_source) = oracle_source_maybe {
-                    if let UiAccountData::Binary(base64_blob, UiAccountEncoding::Base64) =
-                        &update.data.data
-                    {
-                        let owner = Pubkey::from_str(&update.data.owner).expect("valid pubkey");
-                        let lamports = update.data.lamports;
-                        let data = base64::engine::general_purpose::STANDARD
-                            .decode(base64_blob)
-                            .expect("valid base64");
-                        match get_oracle_price(
-                            oracle_source.value(),
-                            &mut (
-                                oracle_pubkey,
-                                Account {
-                                    owner,
-                                    data: data.clone(),
-                                    lamports,
-                                    ..Default::default()
-                                },
-                            ),
-                            update.slot,
-                        ) {
-                            Ok(price_data) => {
-                                oracle_map.insert(
-                                    oracle_pubkey,
-                                    Oracle {
-                                        pubkey: oracle_pubkey,
-                                        data: price_data,
-                                        source: *oracle_source.value(),
-                                        slot: update.slot,
-                                        raw: data,
-                                    },
-                                );
-                            }
-                            Err(err) => {
-                                log::error!("Failed to get oracle price: {err:?}")
-                            }
-                        }
-                    }
-                }
-            });
-
-            let mut subscribers_clone = oracle_subscribers.clone();
-
-            let subscribe_futures = subscribers_clone
-                .iter_mut()
-                .map(|subscriber| subscriber.subscribe())
-                .collect::<Vec<_>>();
-            let results = futures_util::future::join_all(subscribe_futures).await;
-            results.into_iter().collect::<Result<Vec<_>, _>>()?;
-
-            let mut oracle_subscribers_mut = self.oracle_subscribers.write().await;
-            *oracle_subscribers_mut = oracle_subscribers;
+        let mut oracle_subscribers = self.oracle_subscribers.write().await;
+        for s in pending_subscriptions.iter() {
+            let source = self
+                .oracle_infos
+                .get(&s.pubkey)
+                .expect("oracle source")
+                .clone();
+            let unsub = s
+                .subscribe(Self::SUBSCRIPTION_ID, {
+                    let oracle_map = Arc::clone(&self.oraclemap);
+                    move |update| handler_fn(&oracle_map, source, update)
+                })
+                .await?;
+            oracle_subscribers.push(unsub);
         }
 
         Ok(())
@@ -184,17 +128,15 @@ impl OracleMap {
     pub async fn unsubscribe(&self) -> SdkResult<()> {
         if self.subscribed.load(Ordering::Relaxed) {
             let mut oracle_subscribers = self.oracle_subscribers.write().await;
-            let unsubscribe_futures = oracle_subscribers
-                .iter_mut()
-                .map(|subscriber| subscriber.unsubscribe())
-                .collect::<Vec<_>>();
+            for unsub in oracle_subscribers.drain(..) {
+                let _ = unsub.send(());
+            }
 
-            let results = futures_util::future::join_all(unsubscribe_futures).await;
-            results.into_iter().collect::<Result<Vec<_>, _>>()?;
             self.subscribed.store(false, Ordering::Relaxed);
             self.oraclemap.clear();
             self.latest_slot.store(0, Ordering::Relaxed);
         }
+
         Ok(())
     }
 
@@ -202,7 +144,7 @@ impl OracleMap {
     async fn sync(&self) -> SdkResult<()> {
         let sync_lock = self.sync_lock.as_ref().expect("expected sync lock");
 
-        let lock = match sync_lock.try_lock() {
+        let _lock = match sync_lock.try_lock() {
             Ok(lock) => lock,
             Err(_) => return Ok(()),
         };
@@ -246,7 +188,7 @@ impl OracleMap {
             if let Some(oracle_account) = account {
                 let oracle_pubkey = oracle_info.0;
                 let price_data = get_oracle_price(
-                    &oracle_info.1,
+                    oracle_info.1,
                     &mut (oracle_pubkey, oracle_account.clone()),
                     slot,
                 )?;
@@ -265,9 +207,12 @@ impl OracleMap {
 
         self.latest_slot.store(slot, Ordering::Relaxed);
 
-        drop(lock);
-
         Ok(())
+    }
+
+    /// Return whether the `OracleMap`` is subscribed to network changes
+    pub fn is_subscribed(&self) -> bool {
+        self.subscribed.load(Ordering::Relaxed)
     }
 
     #[allow(dead_code)]
@@ -303,31 +248,75 @@ impl OracleMap {
 
         self.oracle_infos.insert(oracle, source);
 
-        let mut new_oracle_subscriber = WebsocketAccountSubscriber::new(
-            OracleMap::SUBSCRIPTION_ID,
+        let new_oracle_subscriber = WebsocketAccountSubscriber::new(
             get_ws_url(&self.rpc.url()).expect("valid url"),
             oracle,
             self.commitment,
-            self.event_emitter.clone(),
         );
+        let oracle_source = self
+            .oracle_infos
+            .get(&oracle)
+            .expect("oracle source")
+            .clone();
 
-        new_oracle_subscriber.subscribe().await?;
+        let unsub = new_oracle_subscriber
+            .subscribe(Self::SUBSCRIPTION_ID, {
+                let oracle_map = Arc::clone(&self.oraclemap);
+                move |update| handler_fn(&oracle_map, oracle_source, update)
+            })
+            .await?;
+
         let mut oracle_subscribers = self.oracle_subscribers.write().await;
-        oracle_subscribers.push(new_oracle_subscriber);
+        oracle_subscribers.push(unsub);
 
         Ok(())
     }
 
-    pub fn update_spot_oracle(&self, market_index: u16, oracle: Pubkey) {
-        self.spot_oracles.insert(market_index, oracle);
-    }
-
-    pub fn update_perp_oracle(&self, market_index: u16, oracle: Pubkey) {
-        self.perp_oracles.insert(market_index, oracle);
-    }
-
     pub fn get_latest_slot(&self) -> u64 {
         self.latest_slot.load(Ordering::Relaxed)
+    }
+}
+
+/// Handler fn for new oracle account data
+fn handler_fn(
+    oracle_map: &Arc<DashMap<Pubkey, Oracle>>,
+    oracle_source: OracleSource,
+    update: &AccountUpdate,
+) {
+    let oracle_pubkey = update.pubkey;
+    let lamports = update.lamports;
+    match get_oracle_price(
+        oracle_source,
+        &mut (
+            oracle_pubkey,
+            Account {
+                owner: update.owner,
+                data: update.data.clone(),
+                lamports,
+                ..Default::default()
+            },
+        ),
+        update.slot,
+    ) {
+        Ok(price_data) => {
+            oracle_map
+                .entry(oracle_pubkey)
+                .and_modify(|o| {
+                    o.data = price_data;
+                    o.slot = update.slot;
+                    o.raw.clone_from(&update.data);
+                })
+                .or_insert(Oracle {
+                    pubkey: oracle_pubkey,
+                    data: price_data,
+                    source: oracle_source,
+                    slot: update.slot,
+                    raw: update.data.clone(),
+                });
+        }
+        Err(err) => {
+            log::error!("Failed to get oracle price: {err:?}")
+        }
     }
 }
 

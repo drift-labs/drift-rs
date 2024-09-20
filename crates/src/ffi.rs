@@ -2,6 +2,7 @@
 //! FFI shims
 //! Defines wrapper types for ergonomic access to drift-program logic
 //!
+use abi_stable::std_types::ROption;
 use solana_program::clock::Slot;
 use solana_sdk::{account::Account, pubkey::Pubkey};
 
@@ -23,7 +24,14 @@ use crate::{
 // the result is that this code can use its own solana-program/* crates without restriction from the version used by drift program
 extern "C" {
     #[allow(improper_ctypes)]
-    // tuple ok: compile the ffi crate with same rust version = same layout
+    pub fn math_calculate_auction_price(
+        order: &Order,
+        slot: Slot,
+        tick_size: u64,
+        oracle_price: ROption<i64>,
+        is_prediction_market: bool,
+    ) -> FfiResult<u64>;
+    #[allow(improper_ctypes)]
     pub fn math_calculate_margin_requirement_and_total_collateral_and_liability_info(
         user: &accounts::User,
         accounts: &mut AccountsList,
@@ -31,9 +39,8 @@ extern "C" {
     ) -> FfiResult<MarginCalculation>;
 
     #[allow(improper_ctypes)]
-    // tuple ok: compile the ffi crate with same rust version = same layout
     pub fn oracle_get_oracle_price(
-        orace_source: &OracleSource,
+        orace_source: OracleSource,
         oracle_account: &mut (Pubkey, Account),
         slot: Slot,
     ) -> FfiResult<OraclePriceData>;
@@ -113,11 +120,30 @@ extern "C" {
 // Shims for SDK
 //
 pub fn get_oracle_price(
-    orace_source: &OracleSource,
+    orace_source: OracleSource,
     oracle_account: &mut (Pubkey, Account),
     slot: Slot,
 ) -> SdkResult<OraclePriceData> {
     to_sdk_result(unsafe { oracle_get_oracle_price(orace_source, oracle_account, slot) })
+}
+
+pub fn calculate_auction_price(
+    order: &Order,
+    slot: Slot,
+    tick_size: u64,
+    oracle_price: Option<i64>,
+    is_prediction_market: bool,
+) -> SdkResult<u64> {
+    let res = unsafe {
+        math_calculate_auction_price(
+            order,
+            slot,
+            tick_size,
+            oracle_price.into(),
+            is_prediction_market,
+        )
+    };
+    to_sdk_result(res)
 }
 
 pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
@@ -683,7 +709,7 @@ mod tests {
         let oracle_source = OracleSource::Pyth;
         let slot = 12_345;
 
-        let result = get_oracle_price(&oracle_source, &mut (oracle_pubkey, oracle_account), slot);
+        let result = get_oracle_price(oracle_source, &mut (oracle_pubkey, oracle_account), slot);
 
         // Assert the result
         assert!(result.is_ok());

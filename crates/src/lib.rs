@@ -1,18 +1,20 @@
 //! Drift SDK
 
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, sync::Arc, time::Duration};
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
+use constants::PROGRAM_ID;
 use futures_util::TryFutureExt;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
     nonblocking::rpc_client::RpcClient,
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_filter::{Memcmp, RpcFilterType},
+    rpc_response::Response,
 };
 use solana_sdk::{
     account::Account,
-    commitment_config::CommitmentConfig,
+    clock::Slot,
     compute_budget::ComputeBudgetInstruction,
     hash::Hash,
     instruction::{AccountMeta, Instruction},
@@ -22,7 +24,7 @@ use solana_sdk::{
     transaction::VersionedTransaction,
 };
 pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
-use tokio::sync::RwLock;
+use utils::get_http_url;
 
 use crate::{
     blockhash_subscriber::BlockhashSubscriber,
@@ -31,7 +33,6 @@ use crate::{
         MarketExt, ProgramData,
     },
     drift_idl::traits::ToAccountMetas,
-    event_emitter::EventEmitter,
     ffi::IntoFfi,
     marketmap::MarketMap,
     oraclemap::{Oracle, OracleMap},
@@ -39,9 +40,7 @@ use crate::{
         accounts::{PerpMarket, SpotMarket, State, User, UserStats},
         *,
     },
-    user::DriftUser,
-    utils::{decode, get_ws_url},
-    websocket_account_subscriber::WebsocketAccountSubscriber,
+    user::UserMap,
 };
 
 // utils
@@ -57,7 +56,7 @@ pub mod drift_idl;
 pub mod types;
 
 // internal infra
-pub mod event_emitter;
+pub mod polled_account_subscriber;
 pub mod websocket_account_subscriber;
 pub mod websocket_program_account_subscriber;
 
@@ -66,8 +65,8 @@ pub mod auction_subscriber;
 pub mod blockhash_subscriber;
 pub mod dlob_client;
 pub mod event_subscriber;
+pub mod priority_fee_subscriber;
 
-#[cfg(feature = "jit")]
 pub mod jit_client;
 
 pub mod marketmap;
@@ -81,53 +80,6 @@ pub mod user;
 #[cfg(feature = "dlob")]
 pub mod dlob;
 
-/// Provides solana Account fetching API
-pub trait AccountProvider: 'static + Sized + Send + Sync {
-    /// Return the Account information of `account`
-    fn get_account(&self, account: Pubkey)
-        -> impl std::future::Future<Output = SdkResult<Account>>;
-    /// the HTTP endpoint URL
-    fn endpoint(&self) -> String;
-    /// return configured commitment level of the provider
-    fn commitment_config(&self) -> CommitmentConfig;
-}
-
-/// Account provider that always fetches from RPC
-#[derive(Clone)]
-pub struct RpcAccountProvider {
-    client: Arc<RpcClient>,
-}
-
-impl RpcAccountProvider {
-    pub fn new(endpoint: &str) -> Self {
-        Self::with_commitment(endpoint, CommitmentConfig::confirmed())
-    }
-    /// Create a new RPC account provider with provided commitment level
-    pub fn with_commitment(endpoint: &str, commitment: CommitmentConfig) -> Self {
-        Self {
-            client: Arc::new(RpcClient::new_with_commitment(
-                endpoint.to_string(),
-                commitment,
-            )),
-        }
-    }
-}
-
-impl AccountProvider for RpcAccountProvider {
-    async fn get_account(&self, account: Pubkey) -> SdkResult<Account> {
-        self.client
-            .get_account(&account)
-            .await
-            .map_err(|err| err.into())
-    }
-    fn endpoint(&self) -> String {
-        self.client.url()
-    }
-    fn commitment_config(&self) -> CommitmentConfig {
-        self.client.commitment()
-    }
-}
-
 /// Drift Client API
 ///
 /// It is cheaply clone-able and consumers are encouraged to do so
@@ -138,60 +90,37 @@ impl AccountProvider for RpcAccountProvider {
 pub struct DriftClient {
     backend: &'static DriftClientBackend,
     wallet: Wallet,
-    pub active_sub_account_id: u16,
-    pub sub_account_ids: Vec<u16>,
-    pub users: Vec<DriftUser>,
 }
 
 impl DriftClient {
-    pub async fn new(
-        context: Context,
-        account_provider: RpcAccountProvider,
-        wallet: Wallet,
-    ) -> SdkResult<Self> {
-        Self::new_with_opts(context, account_provider, wallet, ClientOpts::default()).await
-    }
-
-    pub async fn new_with_opts(
-        context: Context,
-        account_provider: RpcAccountProvider,
-        wallet: Wallet,
-        opts: ClientOpts,
-    ) -> SdkResult<Self> {
+    /// Create a new `DriftClient` instance
+    ///
+    /// `context` devnet or mainnet
+    /// `rpc_client` an RpcClient instance
+    /// `wallet` wallet to use for tx signing convenience
+    pub async fn new(context: Context, rpc_client: RpcClient, wallet: Wallet) -> SdkResult<Self> {
+        // check URL format here to fail early, otherwise happens at request time.
+        let _ = get_http_url(&rpc_client.url())?;
         Ok(Self {
             backend: Box::leak(Box::new(
-                DriftClientBackend::new(context, account_provider).await?,
+                DriftClientBackend::new(context, Arc::new(rpc_client)).await?,
             )),
             wallet,
-            active_sub_account_id: opts.active_sub_account_id(),
-            sub_account_ids: opts.sub_account_ids(),
-            users: vec![],
         })
     }
 
-    pub async fn add_user(&mut self, sub_account_id: u16) -> SdkResult<()> {
-        let pubkey = Wallet::derive_user_account(
-            self.wallet.authority(),
-            sub_account_id,
-            &constants::PROGRAM_ID,
-        );
-        let mut user = DriftUser::new(pubkey, self, sub_account_id).await?;
-        user.subscribe().await?;
-        self.users.push(user);
-        Ok(())
-    }
-
-    pub fn get_user(&self, sub_account_id: u16) -> Option<&DriftUser> {
-        self.users.iter().find(|u| u.sub_account == sub_account_id)
-    }
-
-    /// Subscribe to the Drift Client Backend
+    /// Starts background subscriptions for live Solana and Drift data e.g. latest blockhashes, oracle prices, markets, etc.
+    /// The client will subsequently use these values from memory where possible rather
+    /// than perform network queries.
+    ///
     /// This is a no-op if already subscribed
     pub async fn subscribe(&self) -> SdkResult<()> {
         self.backend.subscribe().await
     }
 
-    /// Unsubscribe from the Drift Client Backend
+    /// Unsubscribe from network resources
+    /// Subsequent queries will pull from the network ad-hoc
+    ///
     /// This is a no-op if not subscribed
     pub async fn unsubscribe(&self) -> SdkResult<()> {
         self.backend.unsubscribe().await
@@ -203,13 +132,10 @@ impl DriftClient {
     }
 
     /// Return on-chain program metadata
+    ///
+    /// Useful for inspecting market ids and config
     pub fn program_data(&self) -> &ProgramData {
         &self.backend.program_data
-    }
-
-    /// Get the active sub account id
-    pub fn get_sub_account_id_for_ix(&self, sub_account_id: Option<u16>) -> u16 {
-        sub_account_id.unwrap_or(self.active_sub_account_id)
     }
 
     /// Get an account's open order by id
@@ -317,7 +243,7 @@ impl DriftClient {
             .copied())
     }
 
-    /// Return the DriftClient's wallet
+    /// Return the `DriftClient`'s wallet
     pub fn wallet(&self) -> &Wallet {
         &self.wallet
     }
@@ -328,46 +254,51 @@ impl DriftClient {
     ///
     /// Returns the deserialized account data (`User`)
     pub async fn get_user_account(&self, account: &Pubkey) -> SdkResult<User> {
-        self.backend.get_account(account).await
+        self.backend.get_user_account(account).await
     }
 
     /// Get a stats account
     ///
     /// Returns the deserialized account data (`UserStats`)
     pub async fn get_user_stats(&self, authority: &Pubkey) -> SdkResult<UserStats> {
-        let user_stats_pubkey = Wallet::derive_stats_account(authority, &constants::PROGRAM_ID);
+        let user_stats_pubkey = Wallet::derive_stats_account(authority);
         self.backend.get_account(&user_stats_pubkey).await
     }
 
     /// Get the latest recent_block_hash
     pub async fn get_latest_blockhash(&self) -> SdkResult<Hash> {
-        self.backend
-            .client()
-            .get_latest_blockhash()
-            .await
-            .map_err(SdkError::Rpc)
+        self.backend.get_latest_blockhash().await
     }
 
     /// Sign and send a tx to the network
     ///
     /// Returns the signature on success
     pub async fn sign_and_send(&self, tx: VersionedMessage) -> SdkResult<Signature> {
+        let recent_block_hash = self.backend.get_latest_blockhash().await?;
         self.backend
-            .sign_and_send(self.wallet(), tx)
+            .sign_and_send(self.wallet(), tx, recent_block_hash)
             .await
             .map_err(|err| err.to_out_of_sol_error().unwrap_or(err))
     }
 
     /// Sign and send a tx to the network
     ///
+    ///  `recent_block_hash` some block hash to use for tx signing, if not provided it will be automatically set
+    ///  `config` custom RPC config to use when submitting the tx
+    ///
     /// Returns the signature on success
     pub async fn sign_and_send_with_config(
         &self,
         tx: VersionedMessage,
+        recent_block_hash: Option<Hash>,
         config: RpcSendTransactionConfig,
     ) -> SdkResult<Signature> {
+        let recent_block_hash = match recent_block_hash {
+            Some(h) => h,
+            None => self.backend.get_latest_blockhash().await?,
+        };
         self.backend
-            .sign_and_send_with_config(self.wallet(), tx, config)
+            .sign_and_send_with_config(self.wallet(), tx, recent_block_hash, config)
             .await
             .map_err(|err| err.to_out_of_sol_error().unwrap_or(err))
     }
@@ -390,7 +321,7 @@ impl DriftClient {
     ///
     /// Returns None if symbol does not map to any known market
     pub fn market_lookup(&self, symbol: &str) -> Option<MarketId> {
-        if symbol.contains('-') {
+        if symbol.to_ascii_lowercase().ends_with("-perp") {
             let markets = self.program_data().perp_market_configs();
             if let Some(market) = markets
                 .iter()
@@ -413,7 +344,7 @@ impl DriftClient {
 
     /// Get live oracle price for `market`
     pub async fn oracle_price(&self, market: MarketId) -> SdkResult<i64> {
-        self.backend.oracle_price(market)
+        self.backend.oracle_price(market).await
     }
 
     /// Initialize a transaction given a (sub)account address
@@ -426,21 +357,18 @@ impl DriftClient {
     ///     .build();
     /// ```
     /// Returns a `TransactionBuilder` for composing the tx
-    pub fn init_tx(&self, account: &Pubkey, delegated: bool) -> SdkResult<TransactionBuilder> {
-        let user = self.get_user(self.active_sub_account_id);
-
-        match user {
-            Some(user) => {
-                let account_data = user.get_user_account();
-                Ok(TransactionBuilder::new(
-                    self.program_data(),
-                    *account,
-                    Cow::Owned(account_data),
-                    delegated,
-                ))
-            }
-            None => Err(SdkError::Generic("user".to_string())),
-        }
+    pub async fn init_tx(
+        &self,
+        account: &Pubkey,
+        delegated: bool,
+    ) -> SdkResult<TransactionBuilder> {
+        let account_data = self.get_user_account(account).await?;
+        Ok(TransactionBuilder::new(
+            self.program_data(),
+            *account,
+            Cow::Owned(account_data),
+            delegated,
+        ))
     }
 
     pub async fn get_recent_priority_fees(
@@ -511,44 +439,31 @@ impl DriftClient {
 /// Provides the heavy-lifting and network facing features of the SDK
 /// It is intended to be a singleton
 pub struct DriftClientBackend {
-    rpc_client: RpcClient,
-    account_provider: RpcAccountProvider,
+    rpc_client: Arc<RpcClient>,
     program_data: ProgramData,
+    blockhash_subscriber: BlockhashSubscriber,
+    user_map: user::UserMap,
     perp_market_map: MarketMap<PerpMarket>,
     spot_market_map: MarketMap<SpotMarket>,
-    oracle_map: Arc<OracleMap>,
-    state_account: Arc<std::sync::RwLock<State>>,
-    blockhash_subscriber: Arc<RwLock<BlockhashSubscriber>>,
+    oracle_map: OracleMap,
 }
 
 impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
-    async fn new(context: Context, account_provider: RpcAccountProvider) -> SdkResult<Self> {
-        let rpc_client = RpcClient::new_with_commitment(
-            account_provider.endpoint(),
-            account_provider.commitment_config(),
-        );
-
-        let perp_market_map = MarketMap::<PerpMarket>::new(
-            account_provider.commitment_config(),
-            account_provider.endpoint(),
-            true,
-        );
-        let spot_market_map = MarketMap::<SpotMarket>::new(
-            account_provider.commitment_config(),
-            account_provider.endpoint(),
-            true,
-        );
+    async fn new(context: Context, rpc_client: Arc<RpcClient>) -> SdkResult<Self> {
+        let perp_market_map =
+            MarketMap::<PerpMarket>::new(rpc_client.commitment(), rpc_client.url(), true);
+        let spot_market_map =
+            MarketMap::<SpotMarket>::new(rpc_client.commitment(), rpc_client.url(), true);
 
         let lookup_table_address = market_lookup_table(context);
 
-        let (_, _, lut, state) = tokio::try_join!(
+        let (_, _, lut) = tokio::try_join!(
             perp_market_map.sync(),
             spot_market_map.sync(),
             rpc_client
                 .get_account(&lookup_table_address)
                 .map_err(Into::into),
-            rpc_client.get_account(state_account()).map_err(Into::into),
         )?;
         let lookup_table = utils::deserialize_alt(lookup_table_address, &lut)?;
 
@@ -556,78 +471,48 @@ impl DriftClientBackend {
         let spot_oracles = spot_market_map.oracles();
 
         let oracle_map = OracleMap::new(
-            account_provider.commitment_config(),
-            account_provider.endpoint(),
+            rpc_client.commitment(),
+            rpc_client.url(),
             true,
             perp_oracles,
             spot_oracles,
         );
 
-        let blockhash_subscriber = Arc::new(RwLock::new(BlockhashSubscriber::new(
-            2,
-            account_provider.endpoint(),
-        )));
-
         Ok(Self {
-            rpc_client,
-            account_provider,
+            rpc_client: Arc::clone(&rpc_client),
+            blockhash_subscriber: BlockhashSubscriber::new(
+                Duration::from_secs(2),
+                Arc::clone(&rpc_client),
+            ),
             program_data: ProgramData::new(
                 spot_market_map.values(),
                 perp_market_map.values(),
                 lookup_table,
             ),
+            user_map: UserMap::new(rpc_client.url(), rpc_client.commitment()),
             perp_market_map,
             spot_market_map,
-            oracle_map: Arc::new(oracle_map),
-            state_account: Arc::new(std::sync::RwLock::new(
-                State::try_deserialize(&mut state.data.as_ref()).expect("valid state"),
-            )),
-            blockhash_subscriber,
+            oracle_map,
         })
     }
 
+    /// Start subscription workers for live program data
     async fn subscribe(&self) -> SdkResult<()> {
-        tokio::try_join!(
+        self.blockhash_subscriber.subscribe();
+        let _ = tokio::try_join!(
             self.perp_market_map.subscribe(),
             self.spot_market_map.subscribe(),
             self.oracle_map.subscribe(),
-            self.state_subscribe(),
-            BlockhashSubscriber::subscribe(self.blockhash_subscriber.clone()),
         )?;
+
         Ok(())
     }
 
+    /// End subscriptions for for live program data
     async fn unsubscribe(&self) -> SdkResult<()> {
-        tokio::try_join!(
-            self.perp_market_map.unsubscribe(),
-            self.spot_market_map.unsubscribe(),
-            self.oracle_map.unsubscribe(),
-        )?;
-        Ok(())
-    }
-
-    async fn state_subscribe(&self) -> SdkResult<()> {
-        let pubkey = *state_account();
-
-        let mut state_subscriber = WebsocketAccountSubscriber::new(
-            "state",
-            get_ws_url(&self.rpc_client.url()).expect("valid url"),
-            pubkey,
-            self.rpc_client.commitment(),
-            EventEmitter::new(),
-        );
-
-        let state = self.state_account.clone();
-
-        state_subscriber.event_emitter.subscribe(move |event| {
-            let new_data = decode::<State>(&event.data.data).expect("valid state data");
-            let mut state_writer = state.write().unwrap();
-            *state_writer = new_data;
-        });
-
-        state_subscriber.subscribe().await?;
-
-        Ok(())
+        self.perp_market_map.unsubscribe()?;
+        self.spot_market_map.unsubscribe()?;
+        self.oracle_map.unsubscribe().await
     }
 
     fn get_perp_market_account_and_slot(
@@ -666,12 +551,7 @@ impl DriftClientBackend {
             .expect("oracle");
 
         if oracle != current_oracle {
-            let source = market.data.amm.oracle_source;
-            let clone = self.oracle_map.clone();
-            tokio::task::spawn_local(async move {
-                let _ = clone.add_oracle(oracle, source).await;
-                clone.update_perp_oracle(market_index, oracle)
-            });
+            panic!("invalid perp oracle: {}", market_index);
         }
 
         self.get_oracle_price_data_and_slot(&current_oracle)
@@ -687,12 +567,7 @@ impl DriftClientBackend {
             .expect("oracle");
 
         if oracle != current_oracle {
-            let source = market.data.oracle_source;
-            let clone = self.oracle_map.clone();
-            tokio::task::spawn_local(async move {
-                let _ = clone.add_oracle(oracle, source).await;
-                clone.update_spot_oracle(market_index, oracle);
-            });
+            panic!("invalid spot oracle: {}", market_index);
         }
 
         self.get_oracle_price_data_and_slot(&market.data.oracle)
@@ -773,9 +648,34 @@ impl DriftClientBackend {
 
     /// Fetch an `account` as an Anchor account type
     async fn get_account<U: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<U> {
-        let account_data = self.account_provider.get_account(*account).await?;
-        U::try_deserialize(&mut account_data.data.as_ref())
+        let account_data = self.rpc_client.get_account_data(account).await?;
+        U::try_deserialize(&mut account_data.as_ref())
             .map_err(|err| SdkError::Anchor(Box::new(err)))
+    }
+
+    /// Fetch `User` data of `account`
+    ///
+    /// uses cache if possible, otherwise fallback to network query
+    async fn get_user_account(&self, account: &Pubkey) -> SdkResult<User> {
+        if let Some(user) = self.user_map.user_account_data(account) {
+            Ok(user)
+        } else {
+            self.get_account(account).await
+        }
+    }
+
+    /// Returns latest blockhash
+    ///
+    /// Uses latest cached value if available, fallsback to network fetch
+    pub async fn get_latest_blockhash(&self) -> SdkResult<Hash> {
+        match self.blockhash_subscriber.get_latest_blockhash() {
+            Some(hash) => Ok(hash),
+            None => self
+                .client()
+                .get_latest_blockhash()
+                .await
+                .map_err(SdkError::Rpc),
+        }
     }
 
     /// Sign and send a tx to the network
@@ -785,15 +685,13 @@ impl DriftClientBackend {
         &self,
         wallet: &Wallet,
         tx: VersionedMessage,
+        recent_block_hash: Hash,
     ) -> SdkResult<Signature> {
-        let blockhash_reader = self.blockhash_subscriber.read().await;
-        let recent_block_hash = blockhash_reader.get_valid_blockhash();
-        drop(blockhash_reader);
         let tx = wallet.sign_tx(tx, recent_block_hash)?;
         self.rpc_client
             .send_transaction(&tx)
             .await
-            .map_err(|err| err.into())
+            .map_err(Into::into)
     }
 
     /// Sign and send a tx to the network with custom send config
@@ -804,40 +702,63 @@ impl DriftClientBackend {
         &self,
         wallet: &Wallet,
         tx: VersionedMessage,
+        recent_block_hash: Hash,
         config: RpcSendTransactionConfig,
     ) -> SdkResult<Signature> {
-        let blockhash_reader = self.blockhash_subscriber.read().await;
-        let recent_block_hash = blockhash_reader.get_valid_blockhash();
-        drop(blockhash_reader);
         let tx = wallet.sign_tx(tx, recent_block_hash)?;
         self.rpc_client
             .send_transaction_with_config(&tx, config)
             .await
-            .map_err(|err| err.into())
+            .map_err(Into::into)
     }
 
     /// Fetch the live oracle price for `market`
-    pub fn oracle_price(&self, market: MarketId) -> SdkResult<i64> {
-        let oracle = match market.kind {
+    pub async fn oracle_price(&self, market: MarketId) -> SdkResult<i64> {
+        let (oracle, oracle_source) = match market.kind {
             MarketType::Perp => {
                 let market = self
                     .program_data
                     .perp_market_config_by_index(market.index)
                     .ok_or(SdkError::InvalidOracle)?;
-                market.amm.oracle
+                (market.amm.oracle, market.amm.oracle_source)
             }
             MarketType::Spot => {
                 let market = self
                     .program_data
                     .spot_market_config_by_index(market.index)
                     .ok_or(SdkError::InvalidOracle)?;
-                market.oracle
+                (market.oracle, market.oracle_source)
             }
         };
 
-        match self.get_oracle_price_data_and_slot(&oracle) {
-            Some(o) => Ok(o.data.price),
-            None => Err(SdkError::NoData),
+        if self.oracle_map.is_subscribed() {
+            Ok(self
+                .get_oracle_price_data_and_slot(&oracle)
+                .expect("oracle exists")
+                .data
+                .price)
+        } else {
+            let (account_data, slot) = self.get_account_with_slot(&oracle).await?;
+            ffi::get_oracle_price(oracle_source, &mut (oracle, account_data), slot).map(|o| o.price)
+        }
+    }
+
+    /// Get account via rpc along with retrieved slot number
+    pub async fn get_account_with_slot(&self, pubkey: &Pubkey) -> SdkResult<(Account, Slot)> {
+        match self
+            .rpc_client
+            .get_account_with_commitment(pubkey, self.rpc_client.commitment())
+            .await
+        {
+            Ok(Response {
+                context,
+                value: Some(account),
+            }) => Ok((account, context.slot)),
+            Ok(Response {
+                context: _,
+                value: None,
+            }) => Err(SdkError::InvalidAccount),
+            Err(err) => Err(err.into()),
         }
     }
 }
@@ -952,7 +873,7 @@ impl<'a> TransactionBuilder<'a> {
             types::accounts::Deposit {
                 state: *state_account(),
                 user: self.sub_account,
-                user_stats: Wallet::derive_stats_account(&self.authority, &constants::PROGRAM_ID),
+                user_stats: Wallet::derive_stats_account(&self.authority),
                 authority: self.authority,
                 spot_market_vault: constants::derive_spot_market_vault(spot_market_index),
                 user_token_account,
@@ -990,7 +911,7 @@ impl<'a> TransactionBuilder<'a> {
             types::accounts::Withdraw {
                 state: *state_account(),
                 user: self.sub_account,
-                user_stats: Wallet::derive_stats_account(&self.authority, &constants::PROGRAM_ID),
+                user_stats: Wallet::derive_stats_account(&self.authority),
                 authority: self.authority,
                 spot_market_vault: constants::derive_spot_market_vault(spot_market_index),
                 user_token_account,
@@ -1247,9 +1168,9 @@ impl<'a> TransactionBuilder<'a> {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
-                user_stats: Wallet::derive_stats_account(&self.authority, &constants::PROGRAM_ID),
+                user_stats: Wallet::derive_stats_account(&self.authority),
                 taker: *taker,
-                taker_stats: Wallet::derive_stats_account(taker, &constants::PROGRAM_ID),
+                taker_stats: Wallet::derive_stats_account(taker),
             },
             &[self.account_data.as_ref(), taker_account],
             &[],
@@ -1262,7 +1183,7 @@ impl<'a> TransactionBuilder<'a> {
 
         if let Some(referrer) = referrer {
             accounts.push(AccountMeta::new(
-                Wallet::derive_stats_account(&referrer, &constants::PROGRAM_ID),
+                Wallet::derive_stats_account(&referrer),
                 false,
             ));
             accounts.push(AccountMeta::new(referrer, false));
@@ -1324,7 +1245,7 @@ impl<'a> TransactionBuilder<'a> {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
-                user_stats: Wallet::derive_stats_account(&self.authority, &constants::PROGRAM_ID),
+                user_stats: Wallet::derive_stats_account(&self.authority),
             },
             user_accounts.as_slice(),
             &[],
@@ -1338,7 +1259,7 @@ impl<'a> TransactionBuilder<'a> {
         if referrer.is_some_and(|r| !maker_info.is_some_and(|(m, _)| m == r)) {
             let referrer = referrer.unwrap();
             accounts.push(AccountMeta::new(
-                Wallet::derive_stats_account(&referrer, &constants::PROGRAM_ID),
+                Wallet::derive_stats_account(&referrer),
                 false,
             ));
             accounts.push(AccountMeta::new(referrer, false));
@@ -1506,7 +1427,8 @@ pub async fn get_market_accounts(
         .await
         .expect("state account fetch");
 
-    let state = State::try_deserialize(&mut state_data.as_slice()).expect("state deserializes");
+    let state =
+        State::try_deserialize_unchecked(&mut state_data.as_slice()).expect("state deserializes");
 
     let spot_market_pdas: Vec<Pubkey> = (0..state.number_of_spot_markets)
         .map(derive_spot_market_account)
@@ -1567,7 +1489,7 @@ impl Wallet {
         Self {
             signer: Arc::new(Keypair::new()),
             authority,
-            stats: Wallet::derive_stats_account(&authority, &constants::PROGRAM_ID),
+            stats: Wallet::derive_stats_account(&authority),
         }
     }
     /// Init wallet from base58 encoded seed, uses default sub-account
@@ -1588,37 +1510,35 @@ impl Wallet {
     /// `authority` keypair for tx signing
     pub fn new(authority: Keypair) -> Self {
         Self {
-            stats: Wallet::derive_stats_account(&authority.pubkey(), &constants::PROGRAM_ID),
+            stats: Wallet::derive_stats_account(&authority.pubkey()),
             authority: authority.pubkey(),
             signer: Arc::new(authority),
         }
     }
     /// Convert the wallet into a delegated one by providing the `authority` public key
     pub fn to_delegated(&mut self, authority: Pubkey) {
-        self.stats = Wallet::derive_stats_account(&authority, &constants::PROGRAM_ID);
+        self.stats = Wallet::derive_stats_account(&authority);
         self.authority = authority;
     }
     /// Calculate the address of a drift user account/sub-account
-    pub fn derive_user_account(
-        authority: &Pubkey,
-        sub_account_id: u16,
-        program: &Pubkey,
-    ) -> Pubkey {
+    pub fn derive_user_account(authority: &Pubkey, sub_account_id: u16) -> Pubkey {
         let (account_drift_pda, _seed) = Pubkey::find_program_address(
             &[
                 &b"user"[..],
                 authority.as_ref(),
                 &sub_account_id.to_le_bytes(),
             ],
-            program,
+            &PROGRAM_ID,
         );
         account_drift_pda
     }
 
     /// Calculate the address of a drift stats account
-    pub fn derive_stats_account(account: &Pubkey, program: &Pubkey) -> Pubkey {
-        let (account_drift_pda, _seed) =
-            Pubkey::find_program_address(&[&b"user_stats"[..], account.as_ref()], program);
+    pub fn derive_stats_account(account: &Pubkey) -> Pubkey {
+        let (account_drift_pda, _seed) = Pubkey::find_program_address(
+            &[&b"user_stats"[..], account.as_ref()],
+            &constants::PROGRAM_ID,
+        );
         account_drift_pda
     }
 
@@ -1651,7 +1571,7 @@ impl Wallet {
     }
     /// Calculate the drift user address given a `sub_account_id`
     pub fn sub_account(&self, sub_account_id: u16) -> Pubkey {
-        Self::derive_user_account(self.authority(), sub_account_id, &constants::PROGRAM_ID)
+        Self::derive_user_account(self.authority(), sub_account_id)
     }
 }
 
@@ -1681,11 +1601,7 @@ mod tests {
     const DEVNET_ENDPOINT: &str = "https://api.devnet.solana.com";
 
     /// Init a new `DriftClient` with provided mocked RPC responses
-    async fn setup(
-        rpc_mocks: Mocks,
-        account_provider_mocks: Mocks,
-        keypair: Keypair,
-    ) -> DriftClient {
+    async fn setup(rpc_mocks: Mocks, keypair: Keypair) -> DriftClient {
         let perp_market_map = MarketMap::<PerpMarket>::new(
             CommitmentConfig::processed(),
             DEVNET_ENDPOINT.to_string(),
@@ -1697,44 +1613,39 @@ mod tests {
             false,
         );
 
+        let rpc_client = Arc::new(RpcClient::new_mock_with_mocks(
+            DEVNET_ENDPOINT.to_string(),
+            rpc_mocks,
+        ));
         let backend = DriftClientBackend {
-            rpc_client: RpcClient::new_mock_with_mocks(DEVNET_ENDPOINT.to_string(), rpc_mocks),
-            account_provider: RpcAccountProvider {
-                client: Arc::new(RpcClient::new_mock_with_mocks(
-                    DEVNET_ENDPOINT.to_string(),
-                    account_provider_mocks,
-                )),
-            },
+            rpc_client: Arc::clone(&rpc_client),
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map: Arc::new(OracleMap::new(
+            oracle_map: OracleMap::new(
                 CommitmentConfig::processed(),
                 DEVNET_ENDPOINT.to_string(),
                 true,
                 vec![],
                 vec![],
-            )),
-            state_account: Arc::new(std::sync::RwLock::new(State::default())),
-            blockhash_subscriber: Arc::new(RwLock::new(BlockhashSubscriber::new(
-                2,
-                DEVNET_ENDPOINT.to_string(),
-            ))),
+            ),
+            blockhash_subscriber: BlockhashSubscriber::new(
+                Duration::from_secs(2),
+                Arc::clone(&rpc_client),
+            ),
+            user_map: UserMap::new(DEVNET_ENDPOINT.to_string(), CommitmentConfig::processed()),
         };
 
         DriftClient {
             backend: Box::leak(Box::new(backend)),
             wallet: Wallet::new(keypair),
-            active_sub_account_id: 0,
-            sub_account_ids: vec![0],
-            users: vec![],
         }
     }
 
     #[tokio::test]
     async fn test_backend_send_sync() {
         let account_mocks = Mocks::default();
-        let client = setup(Default::default(), account_mocks, Keypair::new()).await;
+        let client = setup(account_mocks, Keypair::new()).await;
 
         tokio::task::spawn(async move {
             let _ = client.clone();
@@ -1777,7 +1688,7 @@ mod tests {
     async fn get_market_accounts() {
         let client = DriftClient::new(
             Context::DevNet,
-            RpcAccountProvider::new(DEVNET_ENDPOINT),
+            RpcClient::new(DEVNET_ENDPOINT.into()),
             Keypair::new().into(),
         )
         .await
@@ -1819,7 +1730,7 @@ mod tests {
         });
         account_mocks.insert(RpcRequest::GetAccountInfo, account_response.clone());
 
-        let client = setup(Default::default(), account_mocks, Keypair::new()).await;
+        let client = setup(account_mocks, Keypair::new()).await;
 
         let orders = client.all_orders(&user).await.unwrap();
         assert_eq!(orders.len(), 3);
@@ -1846,7 +1757,7 @@ mod tests {
             })
         });
         account_mocks.insert(RpcRequest::GetAccountInfo, account_response.clone());
-        let client = setup(Default::default(), account_mocks, Keypair::new()).await;
+        let client = setup(account_mocks, Keypair::new()).await;
 
         let (spot, perp) = client.all_positions(&user).await.unwrap();
         assert_eq!(spot.len(), 1);
@@ -1862,5 +1773,66 @@ mod tests {
         assert_eq!(rw.authority, ro.authority);
         assert_eq!(rw.stats, ro.stats);
         assert_eq!(rw.default_sub_account(), ro.default_sub_account());
+    }
+
+    /*
+    running 1 test
+    [crates/src/lib.rs:1788:9] (std::time::Instant::now() - t0).as_millis() = 206 // one instance (1st)
+    [crates/src/lib.rs:1814:9] (std::time::Instant::now() - t0).as_millis() = 298 // multiple instances (2nd)
+    test tests::benchmarket_arc_client ... ok
+
+    [crates/src/lib.rs:1796:9] (std::time::Instant::now() - t0).as_millis() = 283 // multiple instances (1st)
+    [crates/src/lib.rs:1814:9] (std::time::Instant::now() - t0).as_millis() = 252 // one instance (2nd)
+
+    [crates/src/lib.rs:1805:9] (std::time::Instant::now() - t0).as_millis() = 328 // multiple instances (1st)
+    [crates/src/lib.rs:1823:9] (std::time::Instant::now() - t0).as_millis() = 194  // one instance (2nd)
+
+    [crates/src/lib.rs:1808:9] (std::time::Instant::now() - t0).as_millis() = 311 // multiple instances (1st)
+    [crates/src/lib.rs:1826:9] (std::time::Instant::now() - t0).as_millis() = 295  // one instance (2nd)
+
+    [crates/src/lib.rs:1812:9] (std::time::Instant::now() - t0).as_millis() = 438 // multiple instances (1st)
+    [crates/src/lib.rs:1830:9] (std::time::Instant::now() - t0).as_millis() = 202  // one instance (2nd)
+     */
+
+    #[ignore]
+    #[tokio::test]
+    async fn benchmarket_arc_client() {
+        let rpc_client_0 = RpcClient::new(DEVNET_ENDPOINT.into());
+        let rpc_client_1 = RpcClient::new(DEVNET_ENDPOINT.into());
+        let rpc_client_2 = RpcClient::new(DEVNET_ENDPOINT.into());
+        let rpc_client_3 = RpcClient::new(DEVNET_ENDPOINT.into());
+        let rpc_client_4 = RpcClient::new(DEVNET_ENDPOINT.into());
+        let rpc_client_5 = RpcClient::new(DEVNET_ENDPOINT.into());
+        let rpc_client_6 = RpcClient::new(DEVNET_ENDPOINT.into());
+        let rpc_client_7 = RpcClient::new(DEVNET_ENDPOINT.into());
+
+        let t0 = std::time::Instant::now();
+        tokio::join!(
+            rpc_client_0.get_latest_blockhash(),
+            rpc_client_1.get_latest_blockhash(),
+            rpc_client_2.get_latest_blockhash(),
+            rpc_client_3.get_latest_blockhash(),
+            rpc_client_4.get_latest_blockhash(),
+            rpc_client_5.get_latest_blockhash(),
+            rpc_client_6.get_latest_blockhash(),
+            rpc_client_7.get_latest_blockhash(),
+        );
+        dbg!((std::time::Instant::now() - t0).as_millis());
+        tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+
+        let rpc_client = RpcClient::new(DEVNET_ENDPOINT.into());
+
+        let t0 = std::time::Instant::now();
+        tokio::join!(
+            rpc_client.get_latest_blockhash(),
+            rpc_client.get_latest_blockhash(),
+            rpc_client.get_latest_blockhash(),
+            rpc_client.get_latest_blockhash(),
+            rpc_client.get_latest_blockhash(),
+            rpc_client.get_latest_blockhash(),
+            rpc_client.get_latest_blockhash(),
+            rpc_client.get_latest_blockhash(),
+        );
+        dbg!((std::time::Instant::now() - t0).as_millis());
     }
 }

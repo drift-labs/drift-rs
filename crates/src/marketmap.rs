@@ -1,5 +1,5 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicU64, Ordering},
+    atomic::{AtomicU64, Ordering},
     Arc, Mutex,
 };
 
@@ -14,16 +14,15 @@ use solana_client::{
     rpc_response::{OptionalContext, RpcKeyedAccount},
 };
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
-use tokio::sync::RwLock;
 
 use crate::{
     constants,
     drift_idl::types::{MarketType, OracleSource},
-    event_emitter::EventEmitter,
     memcmp::get_market_filter,
     utils::{decode, get_ws_url},
     websocket_program_account_subscriber::{
-        WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
+        ProgramAccountUpdate, UnsubHandle, WebsocketProgramAccountOptions,
+        WebsocketProgramAccountSubscriber,
     },
     DataAndSlot, PerpMarket, SdkResult, SpotMarket,
 };
@@ -59,8 +58,7 @@ impl Market for SpotMarket {
 }
 
 pub struct MarketMap<T: AnchorDeserialize + Send> {
-    subscribed: AtomicBool,
-    subscription: RwLock<WebsocketProgramAccountSubscriber<T>>,
+    subscription: WebsocketProgramAccountSubscriber,
     marketmap: Arc<DashMap<u16, DataAndSlot<T>>>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
@@ -82,16 +80,10 @@ where
             commitment,
             encoding: UiAccountEncoding::Base64,
         };
-        let event_emitter = EventEmitter::new();
 
         let url = get_ws_url(&endpoint.clone()).unwrap();
 
-        let subscription = WebsocketProgramAccountSubscriber::new(
-            MarketMap::<T>::SUBSCRIPTION_ID,
-            url,
-            options,
-            event_emitter,
-        );
+        let subscription = WebsocketProgramAccountSubscriber::new(url, options);
 
         let marketmap = Arc::new(DashMap::new());
 
@@ -100,8 +92,7 @@ where
         let sync_lock = if sync { Some(Mutex::new(())) } else { None };
 
         Self {
-            subscribed: AtomicBool::new(false),
-            subscription: RwLock::new(subscription),
+            subscription,
             marketmap,
             sync_lock,
             latest_slot: Arc::new(AtomicU64::new(0)),
@@ -111,21 +102,15 @@ where
         }
     }
 
-    pub async fn subscribe(&self) -> SdkResult<()> {
+    pub async fn subscribe(&self) -> SdkResult<UnsubHandle> {
         if self.sync_lock.is_some() {
             self.sync().await?;
         }
 
-        if !self.subscribed.load(Ordering::Relaxed) {
-            let mut subscription_writer = self.subscription.write().await;
-
-            subscription_writer.subscribe().await?;
-            self.subscribed.store(true, Ordering::Relaxed);
-
+        Ok(self.subscription.subscribe(Self::SUBSCRIPTION_ID, {
             let marketmap = Arc::clone(&self.marketmap);
             let latest_slot = self.latest_slot.clone();
-
-            subscription_writer.event_emitter.subscribe(move |update| {
+            move |update: &ProgramAccountUpdate<T>| {
                 if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
                     latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
                 }
@@ -133,20 +118,14 @@ where
                     update.data_and_slot.data.market_index(),
                     update.data_and_slot.clone(),
                 );
-            });
-
-            drop(subscription_writer)
-        }
-        Ok(())
+            }
+        }))
     }
 
-    pub async fn unsubscribe(&self) -> SdkResult<()> {
-        if self.subscribed.load(Ordering::Relaxed) {
-            self.subscription.write().await.unsubscribe().await?;
-            self.subscribed.store(false, Ordering::Relaxed);
-            self.marketmap.clear();
-            self.latest_slot.store(0, Ordering::Relaxed);
-        }
+    pub fn unsubscribe(&self) -> SdkResult<()> {
+        self.marketmap.clear();
+        self.latest_slot.store(0, Ordering::Relaxed);
+
         Ok(())
     }
 
@@ -185,10 +164,7 @@ where
             Err(_) => return Ok(()),
         };
 
-        let subscription_reader = self.subscription.read().await;
-        let options = subscription_reader.options.clone();
-        drop(subscription_reader);
-
+        let options = self.subscription.options.clone();
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.commitment),
             encoding: Some(options.encoding),

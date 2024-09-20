@@ -9,6 +9,8 @@ Goals:
 <img src='./architecture.png'/>
 
 ## Developer Notes
+- rust-analyzer support: Open this crate/folder, `drift-ffi-sys` as its own project. It is not included in the drift-rs cargo workspace as that would break [goal 2)] above (since this crate relies on older solana/anchor crate versions.)
+
 - this crate must be built with rust <= 1.76.0 to provide compatibility with onchain data layouts (later rust versions have breaking changes [128-bit integer C-abi compatibility](https://blog.rust-lang.org/2024/03/30/i128-layout-update.html))
 
 - for rust users this crate is intended to be linked via compiler flags (not Cargo dependency) as it compiles to a (platform dependent) dynamic lib (`.so/.dylib/.dll`)

@@ -1,9 +1,12 @@
 //!
 //! Define FFI for subset of drift program
 //!
-use abi_stable::std_types::RResult::{RErr, ROk};
+use abi_stable::std_types::{
+    ROption,
+    RResult::{RErr, ROk},
+};
 use drift_program::{
-    math::margin::MarginRequirementType,
+    math::{self, margin::MarginRequirementType},
     state::{
         oracle::{get_oracle_price as get_oracle_price_, OracleSource},
         oracle_map::OracleMap,
@@ -14,26 +17,45 @@ use drift_program::{
         user::{Order, PerpPosition, SpotPosition, User},
     },
 };
-use solana_program::{
-    account_info::IntoAccountInfo,
-    clock::Slot,
-};
+use solana_program::{account_info::IntoAccountInfo, clock::Slot};
 use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::types::{
-    compat::{self}, AccountsList, FfiResult, MarginCalculation, MarginContextMode, OraclePriceData
+    compat::{self},
+    AccountsList, FfiResult, MarginCalculation, MarginContextMode, OraclePriceData,
 };
 
 #[no_mangle]
 pub extern "C" fn oracle_get_oracle_price(
-    oracle_source: &OracleSource,
+    oracle_source: OracleSource,
     price_oracle: &mut (Pubkey, Account),
     clock_slot: Slot,
 ) -> FfiResult<OraclePriceData> {
     to_ffi_result(
-        get_oracle_price_(oracle_source, &price_oracle.into_account_info(), clock_slot)
-            .map(|o| unsafe { std::mem::transmute(o) }),
+        get_oracle_price_(
+            &oracle_source,
+            &price_oracle.into_account_info(),
+            clock_slot,
+        )
+        .map(|o| unsafe { std::mem::transmute(o) }),
     )
+}
+
+#[no_mangle]
+pub extern "C" fn math_calculate_auction_price(
+    order: &Order,
+    slot: Slot,
+    tick_size: u64,
+    oracle_price: ROption<i64>,
+    is_prediction_market: bool,
+) -> FfiResult<u64> {
+    to_ffi_result(math::auction::calculate_auction_price(
+        order,
+        slot,
+        tick_size,
+        oracle_price.into(),
+        is_prediction_market,
+    ))
 }
 
 #[no_mangle]
@@ -114,17 +136,16 @@ pub extern "C" fn perp_market_get_margin_ratio(
 }
 
 #[no_mangle]
-pub extern "C" fn perp_market_get_open_interest(
-    market: &PerpMarket,
-) -> compat::u128 {
+pub extern "C" fn perp_market_get_open_interest(market: &PerpMarket) -> compat::u128 {
     market.get_open_interest().into()
 }
 
 #[no_mangle]
-pub extern "C" fn perp_position_get_unrealized_pnl(position: &PerpPosition, oracle_price: i64) -> FfiResult<compat::i128> {
-    to_ffi_result(
-        position.get_unrealized_pnl(oracle_price).map(compat::i128)
-    )
+pub extern "C" fn perp_position_get_unrealized_pnl(
+    position: &PerpPosition,
+    oracle_price: i64,
+) -> FfiResult<compat::i128> {
+    to_ffi_result(position.get_unrealized_pnl(oracle_price).map(compat::i128))
 }
 
 #[no_mangle]
@@ -221,31 +242,5 @@ pub(crate) fn to_ffi_result<T>(result: Result<T, drift_program::error::ErrorCode
     match result {
         Ok(r) => ROk(r),
         Err(err) => RErr(err.into()),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use anchor_lang::AccountDeserialize;
-    use drift_program::state::spot_market::SpotMarket;
-    use type_layout::TypeLayout;
-
-    use super::MarginCalculation;
-
-    #[test]
-    fn spot_market_deser() {
-        let buf = hex_literal::hex!("64b1086ba84141270000000000000000000000000000000000000000000000000000000000000000fe650f0367d4a7ef9815a593ea15d36593f0643aaaf0149bb04be67ab851decd000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000058961b0a0300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010a5d4e800000000000000000000000000000000000000000000000000000000e40b5402000000000000000000000000e40b54020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000401f000028230000e02e0000f82a000000000000e8030000000000000000000000000000000000000900000001000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
-        let s = SpotMarket::try_deserialize(&mut buf.as_slice()).unwrap();
-        dbg!(s);
-
-        let s1: &SpotMarket = bytemuck::from_bytes(&buf[8..std::mem::size_of::<SpotMarket>() + 8]);
-        dbg!(s1);
-
-        assert_eq!(&s, s1);
-    }
-
-    #[test]
-    fn layouts() {
-        dbg!(MarginCalculation::type_layout());
     }
 }

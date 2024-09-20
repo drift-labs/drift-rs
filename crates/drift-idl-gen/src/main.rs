@@ -511,6 +511,8 @@ fn generate_idl_types(idl: &Idl) -> String {
         pub mod traits {
             use solana_sdk::instruction::AccountMeta;
 
+            /// This is distinct from the anchor version of the trait
+            /// reimplemented to ensure the types used are from solana crates _not_ the anchor vendored versions which may be lagging behind
             pub trait ToAccountMetas {
                 fn to_account_metas(&self) -> Vec<AccountMeta>;
             }

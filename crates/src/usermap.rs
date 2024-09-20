@@ -22,18 +22,18 @@ use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use crate::{
     constants,
     drift_idl::accounts::User,
-    event_emitter::EventEmitter,
     memcmp::{get_non_idle_user_filter, get_user_filter},
     utils::{decode, get_ws_url},
     websocket_program_account_subscriber::{
-        WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
+        UnsubHandle, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
     },
     SdkResult,
 };
 
-pub struct UserMap {
+/// Subscribes to the _all_ Drift users' account updates via Ws program subscribe
+pub struct GlobalUserMap {
     subscribed: bool,
-    subscription: WebsocketProgramAccountSubscriber<User>,
+    subscription: WebsocketProgramAccountSubscriber,
     pub(crate) usermap: Arc<DashMap<String, User>>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
@@ -41,7 +41,7 @@ pub struct UserMap {
     rpc: RpcClient,
 }
 
-impl UserMap {
+impl GlobalUserMap {
     pub const SUBSCRIPTION_ID: &'static str = "usermap";
 
     pub fn new(
@@ -57,21 +57,12 @@ impl UserMap {
             commitment,
             encoding: UiAccountEncoding::Base64,
         };
-        let event_emitter = EventEmitter::new();
-
         let url = get_ws_url(&endpoint).unwrap();
 
-        let subscription = WebsocketProgramAccountSubscriber::new(
-            UserMap::SUBSCRIPTION_ID,
-            url,
-            options,
-            event_emitter,
-        );
+        let subscription = WebsocketProgramAccountSubscriber::new(url, options);
 
         let usermap = Arc::new(DashMap::new());
-
         let rpc = RpcClient::new_with_commitment(endpoint.clone(), commitment);
-
         let sync_lock = if sync { Some(Mutex::new(())) } else { None };
 
         Self {
@@ -85,33 +76,29 @@ impl UserMap {
         }
     }
 
-    pub async fn subscribe(&mut self) -> SdkResult<()> {
+    pub async fn subscribe(&self) -> SdkResult<UnsubHandle> {
         if self.sync_lock.is_some() {
             self.sync().await?;
         }
 
-        if !self.subscribed {
-            self.subscription.subscribe().await?;
-            self.subscribed = true;
-
-            let usermap = self.usermap.clone();
-            let latest_slot = self.latest_slot.clone();
-
-            self.subscription.event_emitter.subscribe(move |update| {
-                if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
-                    latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
+        let unsub = self
+            .subscription
+            .subscribe::<User, _>(Self::SUBSCRIPTION_ID, {
+                let latest_slot = self.latest_slot.clone();
+                let user_map = self.usermap.clone();
+                move |update| {
+                    if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
+                        latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
+                    }
+                    user_map.insert(update.pubkey.clone(), update.data_and_slot.data);
                 }
-                usermap.insert(update.pubkey.clone(), update.data_and_slot.data);
             });
-        }
 
-        Ok(())
+        Ok(unsub)
     }
 
-    pub async fn unsubscribe(&mut self) -> SdkResult<()> {
+    pub fn unsubscribe(self) -> SdkResult<()> {
         if self.subscribed {
-            self.subscription.unsubscribe().await?;
-            self.subscribed = false;
             self.usermap.clear();
             self.latest_slot.store(0, Ordering::Relaxed);
         }
@@ -145,10 +132,10 @@ impl UserMap {
     }
 
     #[allow(clippy::await_holding_lock)]
-    async fn sync(&mut self) -> SdkResult<()> {
+    async fn sync(&self) -> SdkResult<()> {
         let sync_lock = self.sync_lock.as_ref().expect("expected sync lock");
 
-        let lock = match sync_lock.try_lock() {
+        let _lock = match sync_lock.try_lock() {
             Ok(lock) => lock,
             Err(_) => return Ok(()),
         };
@@ -186,7 +173,6 @@ impl UserMap {
                 .store(accounts.context.slot, Ordering::Relaxed);
         }
 
-        drop(lock);
         Ok(())
     }
 
@@ -203,13 +189,13 @@ mod tests {
     async fn test_usermap() {
         use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
 
-        use crate::usermap::UserMap;
+        use crate::usermap::GlobalUserMap;
 
         let commitment = CommitmentConfig {
             commitment: CommitmentLevel::Processed,
         };
 
-        let mut usermap = UserMap::new(commitment, mainnet_endpoint(), true);
+        let mut usermap = GlobalUserMap::new(commitment, mainnet_endpoint(), true);
         usermap.subscribe().await.unwrap();
 
         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;

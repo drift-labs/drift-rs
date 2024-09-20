@@ -1,8 +1,9 @@
 use drift_sdk::{
+    event_subscriber::RpcClient,
     get_market_accounts,
     math::constants::{BASE_PRECISION_I64, PRICE_PRECISION_U64},
     types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam},
-    DriftClient, RpcAccountProvider, TransactionBuilder, Wallet,
+    DriftClient, TransactionBuilder, Wallet,
 };
 use solana_sdk::signature::Keypair;
 
@@ -19,7 +20,7 @@ fn test_keypair() -> Keypair {
 async fn get_oracle_prices() {
     let client = DriftClient::new(
         Context::DevNet,
-        RpcAccountProvider::new("https://api.devnet.solana.com"),
+        RpcClient::new("https://api.devnet.solana.com".into()),
         Keypair::new().into(),
     )
     .await
@@ -36,7 +37,7 @@ async fn get_oracle_prices() {
 async fn get_market_accounts_works() {
     let client = DriftClient::new(
         Context::DevNet,
-        RpcAccountProvider::new("https://api.devnet.solana.com"),
+        RpcClient::new("https://api.devnet.solana.com".into()),
         Keypair::new().into(),
     )
     .await
@@ -52,7 +53,7 @@ async fn place_and_cancel_orders() {
     let wallet: Wallet = test_keypair().into();
     let client = DriftClient::new(
         Context::DevNet,
-        RpcAccountProvider::new("https://api.devnet.solana.com"),
+        RpcClient::new("https://api.devnet.solana.com".into()),
         wallet.clone(),
     )
     .await
@@ -100,7 +101,7 @@ async fn place_and_take() {
     let wallet: Wallet = test_keypair().into();
     let client = DriftClient::new(
         Context::DevNet,
-        RpcAccountProvider::new("https://api.devnet.solana.com"),
+        RpcClient::new("https://api.devnet.solana.com".into()),
         wallet.clone(),
     )
     .await
@@ -114,6 +115,7 @@ async fn place_and_take() {
         .build();
     let tx = client
         .init_tx(&wallet.default_sub_account(), false)
+        .await
         .unwrap()
         .place_and_take(order, None, None, None)
         .build();

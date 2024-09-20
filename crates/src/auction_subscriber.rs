@@ -1,18 +1,21 @@
 // Standard Library Imports
 
 // External Crate Imports
+use std::sync::Mutex;
+
 use solana_account_decoder::UiAccountEncoding;
 use solana_sdk::commitment_config::CommitmentConfig;
+use tokio::sync::oneshot;
 
 // Internal Crate/Module Imports
 use crate::{
     drift_idl::accounts::User,
-    event_emitter::EventEmitter,
     memcmp::{get_user_filter, get_user_with_auction_filter},
     types::SdkResult,
     websocket_program_account_subscriber::{
         ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
     },
+    SdkError,
 };
 
 pub struct AuctionSubscriberConfig {
@@ -21,51 +24,48 @@ pub struct AuctionSubscriberConfig {
     pub url: String,
 }
 
-/// To subscribe to auction updates, subscribe to the event_emitter's "auction" event type.
+/// Subscribes to all user auction events across all markets
 pub struct AuctionSubscriber {
-    pub subscriber: WebsocketProgramAccountSubscriber<User>,
-    pub event_emitter: EventEmitter<ProgramAccountUpdate<User>>,
+    subscriber: WebsocketProgramAccountSubscriber,
+    unsub: Mutex<Option<oneshot::Sender<()>>>,
 }
 
 impl AuctionSubscriber {
     pub const SUBSCRIPTION_ID: &'static str = "auction";
 
     pub fn new(config: AuctionSubscriberConfig) -> Self {
-        let event_emitter = EventEmitter::new();
-
         let filters = vec![get_user_filter(), get_user_with_auction_filter()];
-
         let websocket_options = WebsocketProgramAccountOptions {
             filters,
             commitment: config.commitment,
             encoding: UiAccountEncoding::Base64,
         };
 
-        let subscriber = WebsocketProgramAccountSubscriber::new(
-            AuctionSubscriber::SUBSCRIPTION_ID,
-            config.url,
-            websocket_options,
-            event_emitter.clone(),
-        );
-
-        AuctionSubscriber {
-            subscriber,
-            event_emitter,
+        Self {
+            subscriber: WebsocketProgramAccountSubscriber::new(config.url, websocket_options),
+            unsub: Mutex::new(None),
         }
     }
 
-    pub async fn subscribe(&mut self) -> SdkResult<()> {
-        if self.subscriber.subscribed {
-            return Ok(());
-        }
-
-        self.subscriber.subscribe().await?;
-
-        Ok(())
+    /// Start the auction subscription task
+    pub fn subscribe<F>(self, handler_fn: F)
+    where
+        F: 'static + Send + Fn(&ProgramAccountUpdate<User>),
+    {
+        let mut guard = self.unsub.try_lock().expect("uncontested");
+        let unsub = self.subscriber.subscribe(Self::SUBSCRIPTION_ID, handler_fn);
+        guard.replace(unsub);
     }
 
-    pub async fn unsubscribe(&mut self) -> SdkResult<()> {
-        self.subscriber.unsubscribe().await?;
+    /// Unsubscribe stopping the auction subscription task
+    pub fn unsubscribe(self) -> SdkResult<()> {
+        let mut guard = self.unsub.lock().expect("acquired");
+        if let Some(unsub) = guard.take() {
+            if unsub.send(()).is_err() {
+                log::error!("unsub failed");
+                return Err(SdkError::CouldntUnsubscribe);
+            }
+        }
 
         Ok(())
     }

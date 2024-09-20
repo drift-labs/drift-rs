@@ -5,6 +5,7 @@ use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey
 use crate::{
     drift_idl::accounts::{PerpMarket, SpotMarket},
     types::Context,
+    MarketId, MarketType,
 };
 
 /// Drift program address
@@ -16,6 +17,9 @@ static STATE_ACCOUNT: OnceLock<Pubkey> = OnceLock::new();
 
 pub const TOKEN_PROGRAM_ID: Pubkey =
     solana_sdk::pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+
+pub const JIT_PROXY_ID: Pubkey =
+    solana_sdk::pubkey!("J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP");
 
 /// Return the market lookup table
 pub(crate) const fn market_lookup_table(context: Context) -> Pubkey {
@@ -162,6 +166,19 @@ impl ProgramData {
     /// Return the perp market config given a market index
     pub fn perp_market_config_by_index(&self, market_index: u16) -> Option<&'static PerpMarket> {
         self.perp_markets.get(market_index as usize)
+    }
+
+    /// Given some drift `MarketId`'s maps them to associated public keys
+    pub fn markets_to_accounts(&self, markets: &[MarketId]) -> Vec<Pubkey> {
+        let accounts: Vec<Pubkey> = markets
+            .iter()
+            .filter_map(|x| match x.kind {
+                MarketType::Spot => self.spot_market_config_by_index(x.index).map(|x| x.pubkey),
+                MarketType::Perp => self.perp_market_config_by_index(x.index).map(|x| x.pubkey),
+            })
+            .collect();
+
+        accounts
     }
 }
 

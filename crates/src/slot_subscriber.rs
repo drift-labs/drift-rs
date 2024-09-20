@@ -3,19 +3,15 @@ use std::sync::{Arc, Mutex};
 use futures_util::StreamExt;
 use log::{debug, error, warn};
 use solana_client::nonblocking::pubsub_client::PubsubClient;
+use tokio::sync::oneshot;
 
-use crate::{
-    event_emitter::EventEmitter,
-    types::{SdkError, SdkResult},
-};
+use crate::types::{SdkError, SdkResult};
 
 /// To subscribe to slot updates, subscribe to the event_emitter's "slot" event type.
 pub struct SlotSubscriber {
     current_slot: Arc<Mutex<u64>>,
-    event_emitter: EventEmitter<SlotUpdate>,
-    subscribed: bool,
     url: String,
-    unsubscriber: Option<tokio::sync::mpsc::Sender<()>>,
+    unsub: Mutex<Option<oneshot::Sender<()>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -32,14 +28,16 @@ impl SlotUpdate {
 impl SlotSubscriber {
     pub const SUBSCRIPTION_ID: &'static str = "slot";
 
+    pub fn is_subscribed(&self) -> bool {
+        let guard = self.unsub.lock().expect("acquired");
+        guard.is_some()
+    }
+
     pub fn new(url: String) -> Self {
-        let event_emitter = EventEmitter::new();
         Self {
             current_slot: Arc::new(Mutex::new(0)),
-            event_emitter,
-            subscribed: false,
             url,
-            unsubscriber: None,
+            unsub: Mutex::new(None),
         }
     }
 
@@ -48,30 +46,34 @@ impl SlotSubscriber {
         *slot_guard
     }
 
-    pub async fn subscribe(&mut self) -> SdkResult<()> {
-        if self.subscribed {
+    pub async fn subscribe<F>(&mut self, handler_fn: F) -> SdkResult<()>
+    where
+        F: 'static + Send + Fn(SlotUpdate),
+    {
+        if self.is_subscribed() {
             return Ok(());
         }
-        self.subscribed = true;
-        self.subscribe_ws().await?;
+        self.subscribe_ws(handler_fn).await?;
         Ok(())
     }
 
-    async fn subscribe_ws(&mut self) -> SdkResult<()> {
-        let pubsub = PubsubClient::new(&self.url.clone()).await?;
-
-        let event_emitter = self.event_emitter.clone();
-
-        let (unsub_tx, mut unsub_rx) = tokio::sync::mpsc::channel::<()>(1);
-
-        self.unsubscriber = Some(unsub_tx);
-
+    async fn subscribe_ws<F>(&mut self, handler_fn: F) -> SdkResult<()>
+    where
+        F: 'static + Send + Fn(SlotUpdate),
+    {
+        let pubsub = PubsubClient::new(&self.url).await?;
+        let (unsub_tx, mut unsub_rx) = oneshot::channel::<()>();
+        {
+            let mut guard = self.unsub.try_lock().expect("uncontested");
+            *guard = Some(unsub_tx);
+        }
         let current_slot = self.current_slot.clone();
 
         tokio::spawn(async move {
             let (mut slot_updates, unsubscriber) = pubsub.slot_subscribe().await.unwrap();
             loop {
                 tokio::select! {
+                    biased;
                     message = slot_updates.next() => {
                         match message {
                             Some(message) => {
@@ -79,7 +81,7 @@ impl SlotSubscriber {
                                 let mut current_slot_guard = current_slot.lock().unwrap();
                                 if slot >= *current_slot_guard {
                                     *current_slot_guard = slot;
-                                    event_emitter.emit(SlotUpdate::new(slot));
+                                    handler_fn(SlotUpdate::new(slot));
                                 }
                             }
                             None => {
@@ -89,7 +91,7 @@ impl SlotSubscriber {
                             }
                         }
                     }
-                    _ = unsub_rx.recv() => {
+                    _ = &mut unsub_rx => {
                         debug!("Unsubscribing.");
                         unsubscriber().await;
                         break;
@@ -101,14 +103,15 @@ impl SlotSubscriber {
         Ok(())
     }
 
-    pub async fn unsubscribe(&mut self) -> SdkResult<()> {
-        if self.subscribed && self.unsubscriber.is_some() {
-            if let Err(e) = self.unsubscriber.as_ref().unwrap().send(()).await {
-                error!("Failed to send unsubscribe signal: {:?}", e);
-                return Err(SdkError::CouldntUnsubscribe(e));
+    pub async fn unsubscribe(&self) -> SdkResult<()> {
+        let mut guard = self.unsub.lock().expect("acquired");
+        if let Some(unsub) = guard.take() {
+            if unsub.send(()).is_err() {
+                error!("Failed to send unsubscribe signal");
+                return Err(SdkError::CouldntUnsubscribe);
             }
-            self.subscribed = false;
         }
+
         Ok(())
     }
 }

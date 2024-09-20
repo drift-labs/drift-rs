@@ -356,7 +356,7 @@ mod tests {
             PRICE_PRECISION_I64, SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64,
             SPOT_CUMULATIVE_INTEREST_PRECISION,
         },
-        MarketId, RpcAccountProvider, Wallet,
+        MarketId, Wallet,
     };
 
     const SOL_ORACLE: Pubkey = solana_sdk::pubkey!("J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix");
@@ -453,6 +453,8 @@ mod tests {
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn calculate_liq_price() {
+        use solana_client::nonblocking::rpc_client::RpcClient;
+
         use crate::utils::envs::mainnet_endpoint;
 
         let wallet = Wallet::read_only(
@@ -460,7 +462,7 @@ mod tests {
         );
         let client = DriftClient::new(
             crate::Context::MainNet,
-            RpcAccountProvider::new(mainnet_endpoint()),
+            RpcClient::new(mainnet_endpoint()),
             wallet.clone(),
         )
         .await
@@ -477,6 +479,8 @@ mod tests {
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn calculate_margin_requirements_works() {
+        use solana_client::nonblocking::rpc_client::RpcClient;
+
         use crate::utils::envs::mainnet_endpoint;
 
         let wallet = Wallet::read_only(
@@ -484,7 +488,7 @@ mod tests {
         );
         let client = DriftClient::new(
             crate::Context::MainNet,
-            RpcAccountProvider::new(mainnet_endpoint()),
+            RpcClient::new(mainnet_endpoint()),
             wallet.clone(),
         )
         .await

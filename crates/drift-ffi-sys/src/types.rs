@@ -3,7 +3,12 @@ use abi_stable::std_types::RResult;
 use drift_program::{
     math::margin::MarginRequirementType, state::margin_calculation::MarginContext,
 };
-use solana_sdk::{account::Account, account_info::{AccountInfo, Account as _, IntoAccountInfo}, clock::Slot, pubkey::Pubkey};
+use solana_sdk::{
+    account::Account,
+    account_info::{Account as _, AccountInfo, IntoAccountInfo},
+    clock::Slot,
+    pubkey::Pubkey,
+};
 use type_layout::TypeLayout;
 
 #[repr(C)]

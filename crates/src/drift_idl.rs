@@ -14,6 +14,8 @@ use anchor_lang::{
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
+    #[doc = r" This is distinct from the anchor version of the trait"]
+    #[doc = r" reimplemented to ensure the types used are from solana crates _not_ the anchor vendored versions which may be lagging behind"]
     pub trait ToAccountMetas {
         fn to_account_metas(&self) -> Vec<AccountMeta>;
     }

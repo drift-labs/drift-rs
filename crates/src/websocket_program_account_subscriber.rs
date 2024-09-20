@@ -10,13 +10,16 @@ use solana_client::{
     rpc_filter::RpcFilterType,
 };
 use solana_sdk::commitment_config::CommitmentConfig;
+use tokio::sync::oneshot;
 
 use crate::{
     constants,
-    event_emitter::EventEmitter,
-    types::{DataAndSlot, SdkError, SdkResult},
+    types::{DataAndSlot, SdkError},
     utils::decode,
 };
+
+/// Handle for unsubscribing from network updates
+pub type UnsubHandle = oneshot::Sender<()>;
 
 #[derive(Clone, Debug)]
 pub struct ProgramAccountUpdate<T: AnchorDeserialize + Send> {
@@ -42,46 +45,25 @@ pub struct WebsocketProgramAccountOptions {
     pub encoding: UiAccountEncoding,
 }
 
-pub struct WebsocketProgramAccountSubscriber<T: AnchorDeserialize + Send> {
-    subscription_name: &'static str,
+pub struct WebsocketProgramAccountSubscriber {
     url: String,
     pub(crate) options: WebsocketProgramAccountOptions,
-    pub subscribed: bool,
-    pub event_emitter: EventEmitter<ProgramAccountUpdate<T>>,
-    unsubscriber: Option<tokio::sync::mpsc::Sender<()>>,
 }
 
-impl<T> WebsocketProgramAccountSubscriber<T>
-where
-    T: AnchorDeserialize + Clone + Send + 'static,
-{
-    pub fn new(
-        subscription_name: &'static str,
-        url: String,
-        options: WebsocketProgramAccountOptions,
-        event_emitter: EventEmitter<ProgramAccountUpdate<T>>,
-    ) -> Self {
-        WebsocketProgramAccountSubscriber {
-            subscription_name,
-            url,
-            options,
-            subscribed: false,
-            event_emitter,
-            unsubscriber: None,
-        }
+impl WebsocketProgramAccountSubscriber {
+    pub fn new(url: String, options: WebsocketProgramAccountOptions) -> Self {
+        WebsocketProgramAccountSubscriber { url, options }
     }
 
-    pub async fn subscribe(&mut self) -> SdkResult<()> {
-        if self.subscribed {
-            return Ok(());
-        }
-        self.subscribed = true;
-        self.subscribe_ws().await?;
-
-        Ok(())
-    }
-
-    async fn subscribe_ws(&mut self) -> SdkResult<()> {
+    /// Start a GPA subscription task
+    ///
+    /// `subscription_name` some user defined identifier for the subscription
+    /// `handler_fn` handles updates from the subscription task
+    pub fn subscribe<T, F>(&self, subscription_name: &'static str, handler_fn: F) -> UnsubHandle
+    where
+        T: AnchorDeserialize + Clone + Send + 'static,
+        F: 'static + Send + Fn(&ProgramAccountUpdate<T>),
+    {
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.options.commitment),
             encoding: Some(self.options.encoding),
@@ -93,99 +75,87 @@ where
             ..RpcProgramAccountsConfig::default()
         };
 
-        let (unsub_tx, mut unsub_rx) = tokio::sync::mpsc::channel::<()>(1);
-        self.unsubscriber = Some(unsub_tx);
-
+        let (unsub_tx, mut unsub_rx) = oneshot::channel::<()>();
         let mut attempt = 0;
         let max_reconnection_attempts = 20;
         let base_delay = tokio::time::Duration::from_secs(5);
-
         let url = self.url.clone();
-        tokio::spawn({
-            let event_emitter = self.event_emitter.clone();
+
+        tokio::spawn(async move {
             let mut latest_slot = 0;
-            let subscription_name = self.subscription_name;
-            async move {
-                loop {
-                    let pubsub = PubsubClient::new(&url).await?;
-                    match pubsub
-                        .program_subscribe(&constants::PROGRAM_ID, Some(config.clone()))
-                        .await
-                    {
-                        Ok((mut accounts, unsubscriber)) => loop {
-                            attempt = 0;
-                            tokio::select! {
-                                message = accounts.next() => {
-                                    match message {
-                                        Some(message) => {
-                                            let slot = message.context.slot;
-                                            if slot >= latest_slot {
-                                                latest_slot = slot;
-                                                let pubkey = message.value.pubkey;
-                                                let account_data = message.value.account.data;
-                                                match decode(&account_data) {
-                                                    Ok(data) => {
-                                                        let data_and_slot = DataAndSlot::<T> { slot, data };
-                                                        event_emitter.emit(ProgramAccountUpdate::new(pubkey, data_and_slot, Instant::now()));
-                                                    },
-                                                    Err(e) => {
-                                                        error!("Error decoding account data {e}");
-                                                    }
+            let result = 'outer: loop {
+                let pubsub = PubsubClient::new(&url).await.expect("connects");
+                match pubsub
+                    .program_subscribe(&constants::PROGRAM_ID, Some(config.clone()))
+                    .await
+                {
+                    Ok((mut accounts, unsubscriber)) => loop {
+                        attempt = 0;
+                        tokio::select! {
+                            biased;
+                            message = accounts.next() => {
+                                match message {
+                                    Some(message) => {
+                                        let slot = message.context.slot;
+                                        if slot >= latest_slot {
+                                            latest_slot = slot;
+                                            let pubkey = message.value.pubkey;
+                                            let account_data = message.value.account.data;
+                                            match decode(&account_data) {
+                                                Ok(data) => {
+                                                    let data_and_slot = DataAndSlot::<T> { slot, data };
+                                                    handler_fn(&ProgramAccountUpdate::new(pubkey, data_and_slot, Instant::now()));
+                                                },
+                                                Err(e) => {
+                                                    error!("Error decoding account data {e}");
                                                 }
                                             }
                                         }
-                                        None => {
-                                            warn!("{} stream ended", subscription_name);
-                                            unsubscriber().await;
-                                            break;
-                                        }
+                                    },
+                                    None => {
+                                        warn!("stream ended: {subscription_name}");
+                                        unsubscriber().await;
+                                        break;
                                     }
                                 }
-                                _ = unsub_rx.recv() => {
-                                    debug!("Unsubscribing.");
-                                    unsubscriber().await;
-                                    return Ok(());
-                                }
                             }
-                        },
-                        Err(_) => {
-                            error!("Failed to subscribe to program stream, retrying.");
-                            attempt += 1;
-                            if attempt >= max_reconnection_attempts {
-                                error!("Max reconnection attempts reached.");
-                                return Err(SdkError::MaxReconnectionAttemptsReached);
+                            _ = &mut unsub_rx => {
+                                warn!("unsubscribing: {subscription_name}");
+                                unsubscriber().await;
+                                break 'outer Ok(())
                             }
                         }
+                    },
+                    Err(_) => {
+                        error!("Failed to subscribe to program stream, retrying.");
+                        attempt += 1;
+                        if attempt >= max_reconnection_attempts {
+                            error!("Max reconnection attempts reached.");
+                            break 'outer Err(SdkError::MaxReconnectionAttemptsReached);
+                        }
                     }
-
-                    if attempt >= max_reconnection_attempts {
-                        error!("Max reconnection attempts reached.");
-                        return Err(SdkError::MaxReconnectionAttemptsReached);
-                    }
-
-                    let delay_duration = base_delay * 2_u32.pow(attempt);
-                    debug!(
-                        "{}: Reconnecting in {:?}",
-                        subscription_name, delay_duration
-                    );
-                    tokio::time::sleep(delay_duration).await;
-                    attempt += 1;
                 }
+
+                if attempt >= max_reconnection_attempts {
+                    error!("Max reconnection attempts reached.");
+                    break 'outer Err(SdkError::MaxReconnectionAttemptsReached);
+                }
+
+                let delay_duration = base_delay * 2_u32.pow(attempt);
+                debug!(
+                    "{}: Reconnecting in {:?}",
+                    subscription_name, delay_duration
+                );
+                tokio::time::sleep(delay_duration).await;
+                attempt += 1;
+            };
+
+            if result.is_err() {
+                panic!("subscription task failed");
             }
         });
 
-        Ok(())
-    }
-
-    pub async fn unsubscribe(&mut self) -> SdkResult<()> {
-        if self.subscribed && self.unsubscriber.is_some() {
-            if let Err(e) = self.unsubscriber.as_ref().unwrap().send(()).await {
-                error!("Failed to send unsubscribe signal: {:?}", e);
-                return Err(SdkError::CouldntUnsubscribe(e));
-            }
-            self.subscribed = false;
-        }
-        Ok(())
+        unsub_tx
     }
 }
 

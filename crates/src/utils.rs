@@ -86,18 +86,26 @@ pub fn http_to_ws(url: &str) -> Result<String, &'static str> {
     Ok(format!("{}/ws", base_url.trim_end_matches('/')))
 }
 
-pub fn get_ws_url(url: &str) -> Result<String, &'static str> {
-    let base_url = if url.starts_with("http://") {
-        url.replacen("http://", "ws://", 1)
-    } else if url.starts_with("https://") {
-        url.replacen("https://", "wss://", 1)
+/// Convert a url string into a Ws equivalent
+pub fn get_ws_url(url: &str) -> SdkResult<String> {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        Ok(url.replacen("http", "ws", 1))
     } else if url.starts_with("wss://") || url.starts_with("ws://") {
-        url.to_string()
+        Ok(url.to_string())
     } else {
-        return Err("Invalid URL scheme");
-    };
+        Err(SdkError::InvalidUrl)
+    }
+}
 
-    Ok(base_url)
+/// Convert a url string into an Http equivalent
+pub fn get_http_url(url: &str) -> SdkResult<String> {
+    if url.starts_with("http://") || url.starts_with("https://") {
+        Ok(url.to_string())
+    } else if url.starts_with("ws://") || url.starts_with("wss://") {
+        Ok(url.replacen("ws", "http", 1))
+    } else {
+        Err(SdkError::InvalidUrl)
+    }
 }
 
 pub fn dlob_subscribe_ws_json(market: &str) -> String {
@@ -140,7 +148,7 @@ pub(crate) fn zero_account_to_bytes<T: bytemuck::Pod + anchor_lang::Discriminato
     account_data
 }
 
-#[cfg(any(test, feature = "test_utils", feature = "rpc_tests"))]
+#[cfg(any(test, feature = "rpc_tests"))]
 pub mod envs {
     //! test env vars
     use solana_sdk::signature::Keypair;
