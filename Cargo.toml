@@ -24,7 +24,7 @@ anchor-lang = "=0.29.0"
 base64 = "0.13"
 bytemuck = "1.13.0"
 dashmap = "5.5.3"
-drift = { git = "https://github.com/drift-labs/protocol-v2.git", rev = "feeab90b1b023a4c98821a9fd1c648215d074527", features = [
+drift = { git = "https://github.com/drift-labs/protocol-v2.git", rev = "c8eb3372bfdae0faf7f82a7247edeeee29ec901a", features = [
     "mainnet-beta", "drift-rs"
 ] }
 env_logger = "0.10.1"
