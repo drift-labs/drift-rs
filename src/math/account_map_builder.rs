@@ -6,6 +6,7 @@ use drift::{
         drift_oracle_receiver_program, pyth_program, switchboard_on_demand, switchboard_program,
     },
     instructions::optional_accounts::AccountMaps,
+    math::constants::QUOTE_SPOT_MARKET_INDEX,
     state::{
         oracle::OracleSource, oracle_map::OracleMap, perp_market::PerpMarket,
         perp_market_map::PerpMarketMap, spot_market::SpotMarket, spot_market_map::SpotMarketMap,
@@ -46,13 +47,18 @@ impl<'a> AccountMapBuilder<'a> {
             let market = client
                 .get_spot_market_account(p.market_index)
                 .expect("spot market");
-            oracles.insert(market.oracle);
-            self.accounts.push((market.pubkey, Account::default()));
-            spot_markets.push(market);
+            if oracles.insert(market.oracle) {
+                self.accounts.push((market.pubkey, Account::default()));
+                spot_markets.push(market);
+            }
         }
 
-        let quote_market = client.get_spot_market_account(0).expect("spot market");
+        let quote_market = client
+            .get_spot_market_account(QUOTE_SPOT_MARKET_INDEX)
+            .expect("spot market");
         if oracles.insert(quote_market.oracle) {
+            self.accounts
+                .push((quote_market.pubkey, Account::default()));
             spot_markets.push(quote_market);
         }
 
