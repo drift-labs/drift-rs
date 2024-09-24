@@ -19,6 +19,9 @@ on:
       - "**.toml"
       - "**.lock"
       - ".github/workflows/*.yml"
+    
+env:
+ CI_NIGHTLY_TOOLCHAIN: "1.76.0-x86_64-unknown-linux-gnu"
 
 jobs:
   format-build-test:
@@ -31,11 +34,12 @@ jobs:
       - name: Install rust nightly
         run: | 
           rustup install nightly
-          rustup component add rustc-codegen-cranelift-preview --toolchain nightly-x86_64-unknown-linux-gnu
+          rustup component add rustc-codegen-cranelift-preview --toolchain $CI_NIGHTLY_TOOLCHAIN
+          rustup component add rustfmt --toolchain $CI_NIGHTLY_TOOLCHAIN
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
-        run: rustup run nightly-x86_64-unknown-linux-gnu cargo check --all-features
+        run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo check --all-features
         env:
           RUSTFLAGS: "-Zcodegen-backend=cranelift"
       # - name: Clippy
@@ -46,4 +50,4 @@ jobs:
       - name: Test
         env:
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
-        run: rustup run nightly-x86_64-unknown-linux-gnu cargo test --all
+        run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo test --all
