@@ -286,9 +286,9 @@ fn generate_idl_types(idl: &Idl) -> String {
                 const DISCRIMINATOR: [u8; 8] = #discriminator;
             }
             #[automatically_derived]
-            impl anchor_lang::__private::bytemuck::Pod for #struct_name {}
+            unsafe impl anchor_lang::__private::bytemuck::Pod for #struct_name {}
             #[automatically_derived]
-            impl anchor_lang::__private::bytemuck::Zeroable for #struct_name {}
+            unsafe impl anchor_lang::__private::bytemuck::Zeroable for #struct_name {}
             #[automatically_derived]
             impl anchor_lang::ZeroCopy for #struct_name {}
             #[automatically_derived]

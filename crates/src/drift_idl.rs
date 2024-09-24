@@ -2784,8 +2784,6 @@ pub mod accounts {
             Ok(())
         }
     }
-    ///a fasdfasdfasdfads
-    /// this will dissapear on rebuild
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for OpenbookV2FulfillmentConfig {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {

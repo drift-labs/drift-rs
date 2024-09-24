@@ -4,11 +4,13 @@ fn main() {
     let current_dir = std::env::current_dir().unwrap().canonicalize().unwrap();
 
     // Generate rust types from anchor IDL
-    let idl_mod_rs = match drift_idl_gen::generate_rust_types(Path::new("res/drift.json")) {
+    let idl_source_path = &current_dir.join(Path::new("res/drift.json"));
+    let idl_mod_rs = match drift_idl_gen::generate_rust_types(&idl_source_path) {
         Ok(idl_mod_rs) => idl_mod_rs,
         Err(err) => panic!("generating IDL failed: {err:?}"),
     };
-    let mut file = File::create("drift_idl.rs").expect("create IDL .rs");
+    let idl_mod_path = current_dir.join(Path::new("crates/src/drift_idl.rs"));
+    let mut file = File::create(&idl_mod_path).expect("create IDL .rs");
     file.write_all(idl_mod_rs.as_bytes())
         .expect("wrote IDL .rs");
 
