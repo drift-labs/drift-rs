@@ -51,19 +51,24 @@ fn main() {
     }
 
     // Build ffi crate and link
-    let output = std::process::Command::new("rustup")
+    let mut ffi_build = std::process::Command::new("rustup");
+    ffi_build
         .env_clear()
         .envs(ffi_build_envs)
         .current_dir(drift_ffi_sys_crate.clone())
-        .args([
-            "run",
-            &ffi_toolchain,
-            "cargo",
-            "build",
-            "--profile={profile}",
-        ])
-        .output()
-        .expect("drift-ffi-sys built");
+        .args(["run", &ffi_toolchain, "cargo", "build"]);
+
+    match profile.as_str() {
+        "debug" => (),
+        "release" => {
+            ffi_build.arg("--release");
+        }
+        custom => {
+            ffi_build.arg(&format!("--profile={custom}"));
+        }
+    }
+
+    let output = ffi_build.output().expect("drift-ffi-sys built");
 
     if !output.status.success() {
         panic!(
