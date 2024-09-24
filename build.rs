@@ -84,4 +84,5 @@ fn main() {
         drift_ffi_sys_crate.to_string_lossy(),
     );
     println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
+    panic!("build.rs complete")
 }
