@@ -34,8 +34,8 @@ jobs:
       - name: Install rust nightly
         run: | 
           rustup install nightly
-          rustup component add rustc-codegen-cranelift-preview --toolchain $CI_NIGHTLY_TOOLCHAIN
-          rustup component add rustfmt --toolchain $CI_NIGHTLY_TOOLCHAIN
+          rustup component add --toolchain $CI_NIGHTLY_TOOLCHAIN rustc-codegen-cranelift-preview 
+          rustup component add --toolchain $CI_NIGHTLY_TOOLCHAIN rustfmt
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
