@@ -1,9 +1,7 @@
 //! SDK utility functions
 
-use anchor_lang::AnchorDeserialize;
 use base64::Engine;
 use serde_json::json;
-use solana_account_decoder::{UiAccountData, UiAccountEncoding};
 use solana_sdk::{
     account::Account, address_lookup_table::AddressLookupTableAccount, bs58, pubkey::Pubkey,
     signature::Keypair,
@@ -120,23 +118,6 @@ pub fn dlob_subscribe_ws_json(market: &str) -> String {
         "market": market,
     })
     .to_string()
-}
-
-/// decode `UiAccountData` as anchor type `T`
-/// NOTE: does not check the Anchor discriminant
-#[inline(always)]
-pub fn decode<T>(data: &UiAccountData) -> SdkResult<T>
-where
-    T: AnchorDeserialize,
-{
-    let data_str = match data {
-        UiAccountData::Binary(data, UiAccountEncoding::Base64) => data,
-        _ => return Err(SdkError::UnsupportedAccountData),
-    };
-
-    let anchor_bytes = base64::engine::general_purpose::STANDARD.decode(data_str)?;
-    // [..8] strip anchor discriminator
-    T::deserialize(&mut &anchor_bytes[8..]).map_err(|err| SdkError::Anchor(Box::new(err.into())))
 }
 
 pub(crate) fn zero_account_to_bytes<T: bytemuck::Pod + anchor_lang::Discriminator>(

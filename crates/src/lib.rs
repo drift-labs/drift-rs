@@ -146,7 +146,7 @@ impl DriftClient {
         account: &Pubkey,
         order_id: u32,
     ) -> SdkResult<Option<Order>> {
-        let user = self.backend.get_account::<User>(account).await?;
+        let user = self.backend.get_user_account(account).await?;
 
         Ok(user.orders.iter().find(|o| o.order_id == order_id).copied())
     }
@@ -159,7 +159,7 @@ impl DriftClient {
         account: &Pubkey,
         user_order_id: u8,
     ) -> SdkResult<Option<Order>> {
-        let user = self.backend.get_account::<User>(account).await?;
+        let user = self.backend.get_user_account(account).await?;
 
         Ok(user
             .orders
@@ -172,7 +172,7 @@ impl DriftClient {
     ///
     /// `account` the drift user PDA
     pub async fn all_orders(&self, account: &Pubkey) -> SdkResult<Vec<Order>> {
-        let user = self.backend.get_account::<User>(account).await?;
+        let user = self.backend.get_user_account(account).await?;
 
         Ok(user
             .orders
@@ -189,7 +189,7 @@ impl DriftClient {
         &self,
         account: &Pubkey,
     ) -> SdkResult<(Vec<SpotPosition>, Vec<PerpPosition>)> {
-        let user = self.backend.get_account::<User>(account).await?;
+        let user = self.backend.get_user_account(account).await?;
 
         Ok((
             user.spot_positions
@@ -215,7 +215,7 @@ impl DriftClient {
         account: &Pubkey,
         market_index: u16,
     ) -> SdkResult<Option<PerpPosition>> {
-        let user = self.backend.get_account::<User>(account).await?;
+        let user = self.backend.get_user_account(account).await?;
 
         Ok(user
             .perp_positions
@@ -234,7 +234,7 @@ impl DriftClient {
         account: &Pubkey,
         market_index: u16,
     ) -> SdkResult<Option<SpotPosition>> {
-        let user = self.backend.get_account::<User>(account).await?;
+        let user = self.backend.get_user_account(account).await?;
 
         Ok(user
             .spot_positions
@@ -249,8 +249,9 @@ impl DriftClient {
     }
 
     /// Get the user account data
+    /// Uses cached value if subscribed, fallsback to network query
     ///
-    /// `account` the drift user PDA
+    /// `account` the drift user PDA (subaccount)
     ///
     /// Returns the deserialized account data (`User`)
     pub async fn get_user_account(&self, account: &Pubkey) -> SdkResult<User> {
@@ -434,6 +435,18 @@ impl DriftClient {
         self.backend
             .get_oracle_price_data_and_slot_for_spot_market(market_index)
     }
+
+    /// Subscribe to updates for some `subaccount`
+    /// The latest value may be retreived with `get_user_account(..)`
+    pub async fn subscribe_user(&self, subaccount: &Pubkey) -> SdkResult<()> {
+        self.backend.user_map.subscribe_user(subaccount).await
+    }
+
+    /// Unsubscribe from updates for `subaccount`
+    /// The latest value may be retreived with `get_user_account(..)`
+    pub fn unsubscribe_user(&self, subaccount: &Pubkey) -> SdkResult<()> {
+        Ok(self.backend.user_map.unsubscribe_user(subaccount))
+    }
 }
 
 /// Provides the heavy-lifting and network facing features of the SDK
@@ -510,6 +523,7 @@ impl DriftClientBackend {
 
     /// End subscriptions for for live program data
     async fn unsubscribe(&self) -> SdkResult<()> {
+        self.blockhash_subscriber.unsubscribe();
         self.perp_market_map.unsubscribe()?;
         self.spot_market_map.unsubscribe()?;
         self.oracle_map.unsubscribe().await
@@ -713,6 +727,7 @@ impl DriftClientBackend {
     }
 
     /// Fetch the live oracle price for `market`
+    /// Uses latest local value from an `OracleMap` if subscribed, fallsback to network query
     pub async fn oracle_price(&self, market: MarketId) -> SdkResult<i64> {
         let (oracle, oracle_source) = match market.kind {
             MarketType::Perp => {
@@ -731,7 +746,7 @@ impl DriftClientBackend {
             }
         };
 
-        if self.oracle_map.is_subscribed() {
+        if self.oracle_map.is_subscribed().await {
             Ok(self
                 .get_oracle_price_data_and_slot(&oracle)
                 .expect("oracle exists")

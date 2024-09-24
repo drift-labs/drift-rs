@@ -1,9 +1,10 @@
 use std::sync::{
-    atomic::{AtomicBool, AtomicU64, Ordering},
+    atomic::{AtomicU64, Ordering},
     Arc, Mutex,
 };
 
 use dashmap::DashMap;
+use futures_util::{stream::FuturesUnordered, StreamExt};
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcAccountInfoConfig};
 use solana_sdk::{account::Account, commitment_config::CommitmentConfig, pubkey::Pubkey};
 use tokio::sync::RwLock;
@@ -26,12 +27,10 @@ pub struct Oracle {
 }
 
 pub(crate) struct OracleMap {
-    subscribed: AtomicBool,
     pub(crate) oraclemap: Arc<DashMap<Pubkey, Oracle>>,
     oracle_infos: DashMap<Pubkey, OracleSource>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
-    commitment: CommitmentConfig,
     rpc: RpcClient,
     oracle_subscribers: RwLock<Vec<UnsubHandle>>,
     perp_oracles: DashMap<u16, Pubkey>,
@@ -49,9 +48,7 @@ impl OracleMap {
         spot_oracles: Vec<(u16, Pubkey, OracleSource)>,
     ) -> Self {
         let oraclemap = Arc::new(DashMap::new());
-
         let rpc = RpcClient::new_with_commitment(endpoint.clone(), commitment);
-
         let sync_lock = if sync { Some(Mutex::new(())) } else { None };
 
         let oracle_infos_map: DashMap<_, _> = perp_oracles
@@ -71,12 +68,10 @@ impl OracleMap {
             .collect();
 
         Self {
-            subscribed: AtomicBool::new(false),
             oraclemap,
             oracle_infos: oracle_infos_map,
             sync_lock,
             latest_slot: Arc::new(AtomicU64::new(0)),
-            commitment,
             rpc,
             oracle_subscribers: Default::default(),
             perp_oracles: perp_oracles_map,
@@ -89,7 +84,7 @@ impl OracleMap {
             self.sync().await?;
         }
 
-        if self.subscribed.load(Ordering::Relaxed) {
+        if self.is_subscribed().await {
             return Ok(());
         }
 
@@ -100,42 +95,41 @@ impl OracleMap {
         for oracle_info in self.oracle_infos.iter() {
             let oracle_pubkey = oracle_info.key();
             let oracle_subscriber =
-                WebsocketAccountSubscriber::new(url.clone(), *oracle_pubkey, self.commitment);
+                WebsocketAccountSubscriber::new(url.clone(), *oracle_pubkey, self.rpc.commitment());
             pending_subscriptions.push(oracle_subscriber);
         }
 
-        self.subscribed.store(true, Ordering::Relaxed);
-
-        let mut oracle_subscribers = self.oracle_subscribers.write().await;
-        for s in pending_subscriptions.iter() {
+        let futs_iter = pending_subscriptions.iter().map(|s| {
             let source = self
                 .oracle_infos
                 .get(&s.pubkey)
                 .expect("oracle source")
                 .clone();
-            let unsub = s
-                .subscribe(Self::SUBSCRIPTION_ID, {
-                    let oracle_map = Arc::clone(&self.oraclemap);
-                    move |update| handler_fn(&oracle_map, source, update)
-                })
-                .await?;
-            oracle_subscribers.push(unsub);
+            s.subscribe(Self::SUBSCRIPTION_ID, {
+                let oracle_map = Arc::clone(&self.oraclemap);
+                move |update| handler_fn(&oracle_map, source, update)
+            })
+        });
+        let mut subscription_futs = FuturesUnordered::from_iter(futs_iter);
+
+        let mut oracle_subscriptions = self.oracle_subscribers.write().await;
+        while let Some(unsub) = subscription_futs.next().await {
+            oracle_subscriptions.push(unsub.expect("oracle subscribed"));
         }
 
         Ok(())
     }
 
     pub async fn unsubscribe(&self) -> SdkResult<()> {
-        if self.subscribed.load(Ordering::Relaxed) {
+        {
             let mut oracle_subscribers = self.oracle_subscribers.write().await;
             for unsub in oracle_subscribers.drain(..) {
                 let _ = unsub.send(());
             }
-
-            self.subscribed.store(false, Ordering::Relaxed);
-            self.oraclemap.clear();
-            self.latest_slot.store(0, Ordering::Relaxed);
         }
+
+        self.oraclemap.clear();
+        self.latest_slot.store(0, Ordering::Relaxed);
 
         Ok(())
     }
@@ -150,7 +144,7 @@ impl OracleMap {
         };
 
         let account_config = RpcAccountInfoConfig {
-            commitment: Some(self.commitment),
+            commitment: Some(self.rpc.commitment()),
             encoding: None,
             ..RpcAccountInfoConfig::default()
         };
@@ -211,8 +205,9 @@ impl OracleMap {
     }
 
     /// Return whether the `OracleMap`` is subscribed to network changes
-    pub fn is_subscribed(&self) -> bool {
-        self.subscribed.load(Ordering::Relaxed)
+    pub async fn is_subscribed(&self) -> bool {
+        let subscribers = self.oracle_subscribers.read().await;
+        !subscribers.is_empty()
     }
 
     #[allow(dead_code)]
@@ -251,7 +246,7 @@ impl OracleMap {
         let new_oracle_subscriber = WebsocketAccountSubscriber::new(
             get_ws_url(&self.rpc.url()).expect("valid url"),
             oracle,
-            self.commitment,
+            self.rpc.commitment(),
         );
         let oracle_source = self
             .oracle_infos

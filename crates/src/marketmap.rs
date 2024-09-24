@@ -19,7 +19,7 @@ use crate::{
     constants,
     drift_idl::types::{MarketType, OracleSource},
     memcmp::get_market_filter,
-    utils::{decode, get_ws_url},
+    utils::get_ws_url,
     websocket_program_account_subscriber::{
         ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
     },
@@ -63,7 +63,7 @@ pub struct MarketMap<T: AnchorDeserialize + Send> {
     latest_slot: Arc<AtomicU64>,
     commitment: CommitmentConfig,
     rpc: RpcClient,
-    synced: bool,
+    unsub: Mutex<Option<UnsubHandle>>,
 }
 
 impl<T> MarketMap<T>
@@ -77,17 +77,13 @@ where
         let options = WebsocketProgramAccountOptions {
             filters,
             commitment,
-            encoding: UiAccountEncoding::Base64,
+            encoding: UiAccountEncoding::Base64Zstd,
         };
 
         let url = get_ws_url(&endpoint.clone()).unwrap();
-
         let subscription = WebsocketProgramAccountSubscriber::new(url, options);
-
         let marketmap = Arc::new(DashMap::new());
-
         let rpc = RpcClient::new_with_commitment(endpoint.clone(), commitment);
-
         let sync_lock = if sync { Some(Mutex::new(())) } else { None };
 
         Self {
@@ -97,16 +93,16 @@ where
             latest_slot: Arc::new(AtomicU64::new(0)),
             commitment,
             rpc,
-            synced: false,
+            unsub: Mutex::default(),
         }
     }
 
-    pub async fn subscribe(&self) -> SdkResult<UnsubHandle> {
+    pub async fn subscribe(&self) -> SdkResult<()> {
         if self.sync_lock.is_some() {
             self.sync().await?;
         }
 
-        Ok(self.subscription.subscribe(Self::SUBSCRIPTION_ID, {
+        let unsub = self.subscription.subscribe(Self::SUBSCRIPTION_ID, {
             let marketmap = Arc::clone(&self.marketmap);
             let latest_slot = self.latest_slot.clone();
             move |update: &ProgramAccountUpdate<T>| {
@@ -118,12 +114,22 @@ where
                     update.data_and_slot.clone(),
                 );
             }
-        }))
+        });
+        let mut guard = self.unsub.lock().unwrap();
+        *guard = Some(unsub);
+
+        Ok(())
     }
 
     pub fn unsubscribe(&self) -> SdkResult<()> {
-        self.marketmap.clear();
-        self.latest_slot.store(0, Ordering::Relaxed);
+        let mut guard = self.unsub.lock().expect("uncontested");
+        if let Some(unsub) = guard.take() {
+            if unsub.send(()).is_err() {
+                log::error!("couldn't unsubscribe");
+            }
+            self.marketmap.clear();
+            self.latest_slot.store(0, Ordering::Relaxed);
+        }
 
         Ok(())
     }
@@ -152,7 +158,7 @@ where
 
     #[allow(clippy::await_holding_lock)]
     pub(crate) async fn sync(&self) -> SdkResult<()> {
-        if self.synced {
+        if self.unsub.lock().unwrap().is_some() {
             return Ok(());
         }
 
@@ -177,9 +183,9 @@ where
             sort_results: None,
         };
 
-        let response = self
+        let response: OptionalContext<Vec<RpcKeyedAccount>> = self
             .rpc
-            .send::<OptionalContext<Vec<RpcKeyedAccount>>>(
+            .send(
                 RpcRequest::GetProgramAccounts,
                 json!([constants::PROGRAM_ID.to_string(), gpa_config]),
             )
@@ -188,8 +194,9 @@ where
         if let OptionalContext::Context(accounts) = response {
             for account in accounts.value {
                 let slot = accounts.context.slot;
-                let market_data = account.account.data;
-                let data = decode::<T>(&market_data)?;
+                let market_data = account.account.data.decode().expect("Market data");
+                let data: T = AnchorDeserialize::deserialize(&mut &market_data[8..])
+                    .expect("deserializes Market");
                 self.marketmap
                     .insert(data.market_index(), DataAndSlot { data, slot });
             }

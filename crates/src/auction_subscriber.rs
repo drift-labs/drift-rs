@@ -33,7 +33,7 @@ impl AuctionSubscriber {
         let websocket_options = WebsocketProgramAccountOptions {
             filters,
             commitment: config.commitment,
-            encoding: UiAccountEncoding::Base64,
+            encoding: UiAccountEncoding::Base64Zstd,
         };
 
         Self {

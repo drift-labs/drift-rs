@@ -54,7 +54,7 @@ impl WebsocketAccountSubscriber {
         F: 'static + Send + Fn(&AccountUpdate),
     {
         // seed initial account state
-        log::info!("seeding account: {subscription_name}-{:?}", self.pubkey);
+        log::debug!("seeding account: {subscription_name}-{:?}", self.pubkey);
         let mut owner = Pubkey::default();
         let rpc = RpcClient::new(get_http_url(&self.url)?);
         match rpc

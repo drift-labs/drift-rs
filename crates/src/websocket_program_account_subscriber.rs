@@ -15,7 +15,6 @@ use tokio::sync::oneshot;
 use crate::{
     constants,
     types::{DataAndSlot, SdkError},
-    utils::decode,
     UnsubHandle,
 };
 
@@ -98,14 +97,15 @@ impl WebsocketProgramAccountSubscriber {
                                         if slot >= latest_slot {
                                             latest_slot = slot;
                                             let pubkey = message.value.pubkey;
-                                            let account_data = message.value.account.data;
-                                            match decode(&account_data) {
+                                            let data = &message.value.account.data.decode().expect("account has data");
+                                            match T::deserialize(&mut &data[8..]) {
                                                 Ok(data) => {
                                                     let data_and_slot = DataAndSlot::<T> { slot, data };
                                                     handler_fn(&ProgramAccountUpdate::new(pubkey, data_and_slot, Instant::now()));
                                                 },
-                                                Err(e) => {
-                                                    error!("Error decoding account data {e}");
+                                                Err(err) => {
+                                                    // The account at this pubkey does not match `T`
+                                                    panic!("invalid account data: {err:?}");
                                                 }
                                             }
                                         }

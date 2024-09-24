@@ -6,7 +6,7 @@ use std::{
     },
 };
 
-use anchor_lang::AnchorDeserialize;
+use anchor_lang::{AccountDeserialize, AnchorDeserialize};
 use dashmap::DashMap;
 use serde_json::json;
 use solana_account_decoder::UiAccountEncoding;
@@ -23,7 +23,7 @@ use crate::{
     constants,
     drift_idl::accounts::User,
     memcmp::{get_non_idle_user_filter, get_user_filter},
-    utils::{decode, get_ws_url},
+    utils::get_ws_url,
     websocket_program_account_subscriber::{
         WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
     },
@@ -55,7 +55,7 @@ impl GlobalUserMap {
         let options = WebsocketProgramAccountOptions {
             filters,
             commitment,
-            encoding: UiAccountEncoding::Base64,
+            encoding: UiAccountEncoding::Base64Zstd,
         };
         let url = get_ws_url(&endpoint).unwrap();
 
@@ -164,8 +164,9 @@ impl GlobalUserMap {
         if let OptionalContext::Context(accounts) = response {
             for account in accounts.value {
                 let pubkey = account.pubkey;
-                let user_data = account.account.data;
-                let data = decode::<User>(&user_data)?;
+                let user_data = account.account.data.decode().expect("User data");
+                let data = User::try_deserialize_unchecked(&mut user_data.as_slice())
+                    .expect("User desrializes");
                 self.usermap.insert(pubkey, data);
             }
 
