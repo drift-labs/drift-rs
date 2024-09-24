@@ -184,100 +184,119 @@ impl ProgramData {
 
 pub mod ids {
     pub mod pyth_program {
-        use solana_program::declare_id;
-        declare_id!("FsJ3A3u2vn5cTVofAjvy6y5kwABJAqYWpe4975bi2epH");
+        use solana_sdk::pubkey::Pubkey;
+        pub const ID: Pubkey = solana_sdk::pubkey!("FsJ3A3u2vn5cTVofAjvy6y5kwABJAqYWpe4975bi2epH");
     }
 
     pub mod wormhole_program {
-        use solana_program::declare_id;
-        declare_id!("HDwcJBJXjL9FpJ7UBsYBtaDjsBUhuLCUYoz3zr8SWWaQ");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("HDwcJBJXjL9FpJ7UBsYBtaDjsBUhuLCUYoz3zr8SWWaQ");
     }
 
     pub mod drift_oracle_receiver_program {
-        use solana_program::declare_id;
-        declare_id!("G6EoTTTgpkNBtVXo96EQp2m6uwwVh2Kt6YidjkmQqoha");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("G6EoTTTgpkNBtVXo96EQp2m6uwwVh2Kt6YidjkmQqoha");
     }
 
     pub mod switchboard_program {
-        use solana_program::declare_id;
-        declare_id!("SW1TCH7qEPTdLsDHRgPuMQjbQxKdH2aBStViMFnt64f");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("SW1TCH7qEPTdLsDHRgPuMQjbQxKdH2aBStViMFnt64f");
     }
 
     pub mod switchboard_on_demand {
-        use solana_program::declare_id;
-        declare_id!("SBondMDrcV3K4kxZR1HNVT7osZxAHVHgYXL5Ze1oMUv");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("SBondMDrcV3K4kxZR1HNVT7osZxAHVHgYXL5Ze1oMUv");
     }
 
     pub mod bonk_oracle {
-        use solana_program::declare_id;
-        declare_id!("8ihFLu5FimgTQ1Unh4dVyEHUGodJ5gJQCrQf4KUVB9bN");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("8ihFLu5FimgTQ1Unh4dVyEHUGodJ5gJQCrQf4KUVB9bN");
     }
 
     pub mod bonk_pull_oracle {
-        use solana_program::declare_id;
-        declare_id!("GojbSnJuPdKDT1ZuHuAM5t9oz6bxTo1xhUKpTua2F72p");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("GojbSnJuPdKDT1ZuHuAM5t9oz6bxTo1xhUKpTua2F72p");
     }
 
     pub mod pepe_oracle {
-        use solana_program::declare_id;
-        declare_id!("FSfxunDmjjbDV2QxpyxFCAPKmYJHSLnLuvQXDLkMzLBm");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("FSfxunDmjjbDV2QxpyxFCAPKmYJHSLnLuvQXDLkMzLBm");
     }
 
     pub mod pepe_pull_oracle {
-        use solana_program::declare_id;
-        declare_id!("CLxofhtzvLiErpn25wvUzpZXEqBhuZ6WMEckEraxyuGt");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("CLxofhtzvLiErpn25wvUzpZXEqBhuZ6WMEckEraxyuGt");
     }
 
     pub mod wen_oracle {
-        use solana_program::declare_id;
-        declare_id!("6Uo93N83iF5U9KwC8eQpogx4XptMT4wSKfje7hB1Ufko");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("6Uo93N83iF5U9KwC8eQpogx4XptMT4wSKfje7hB1Ufko");
     }
 
     pub mod wen_pull_oracle {
-        use solana_program::declare_id;
-        declare_id!("F47c7aJgYkfKXQ9gzrJaEpsNwUKHprysregTWXrtYLFp");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("F47c7aJgYkfKXQ9gzrJaEpsNwUKHprysregTWXrtYLFp");
     }
 
     pub mod usdc_oracle {
-        use solana_program::declare_id;
-        declare_id!("Gnt27xtC473ZT2Mw5u8wZ68Z3gULkSTb5DuxJy7eJotD");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("Gnt27xtC473ZT2Mw5u8wZ68Z3gULkSTb5DuxJy7eJotD");
     }
 
     pub mod usdc_pull_oracle {
-        use solana_program::declare_id;
-        declare_id!("En8hkHLkRe9d9DraYmBTrus518BvmVH448YcvmrFM6Ce");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("En8hkHLkRe9d9DraYmBTrus518BvmVH448YcvmrFM6Ce");
     }
 
     pub mod jupiter_mainnet_6 {
-        use solana_program::declare_id;
-        declare_id!("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4");
     }
     pub mod jupiter_mainnet_4 {
-        use solana_program::declare_id;
-        declare_id!("JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("JUP4Fb2cqiRUcaTHdrPC8h2gNsA2ETXiPDD33WcGuJB");
     }
     pub mod jupiter_mainnet_3 {
-        use solana_program::declare_id;
-        declare_id!("JUP3c2Uh3WA4Ng34tw6kPd2G4C5BB21Xo36Je1s32Ph");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("JUP3c2Uh3WA4Ng34tw6kPd2G4C5BB21Xo36Je1s32Ph");
     }
 
     pub mod marinade_mainnet {
-        use solana_program::declare_id;
-        declare_id!("MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("MarBmsSgKXdrN1egZf5sqe1TMai9K1rChYNDJgjq7aD");
     }
 
     pub mod usdt_oracle {
-        use solana_program::declare_id;
-        declare_id!("3vxLXJqLqF3JG5TCbYycbKWRBbCJQLxQmBGCkyqEEefL");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("3vxLXJqLqF3JG5TCbYycbKWRBbCJQLxQmBGCkyqEEefL");
     }
 
     pub mod usdt_pull_oracle {
-        use solana_program::declare_id;
-        declare_id!("BekJ3P5G3iFeC97sXHuKnUHofCFj9Sbo7uyF2fkKwvit");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("BekJ3P5G3iFeC97sXHuKnUHofCFj9Sbo7uyF2fkKwvit");
     }
 
     pub mod admin_hot_wallet {
-        use solana_program::declare_id;
-        declare_id!("5hMjmxexWu954pX9gB9jkHxMqdjpxArQS2XdvkaevRax");
+        use solana_sdk::pubkey::Pubkey;
+
+        pub const ID: Pubkey = solana_sdk::pubkey!("5hMjmxexWu954pX9gB9jkHxMqdjpxArQS2XdvkaevRax");
     }
 }

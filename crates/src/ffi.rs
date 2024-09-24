@@ -3,8 +3,7 @@
 //! Defines wrapper types for ergonomic access to drift-program logic
 //!
 use abi_stable::std_types::ROption;
-use solana_program::clock::Slot;
-use solana_sdk::{account::Account, pubkey::Pubkey};
+use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 
 pub use self::abi_types::*;
 use crate::{

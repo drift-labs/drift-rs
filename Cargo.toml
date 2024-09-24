@@ -25,7 +25,7 @@ rpc_tests = []
 abi_stable = "0.11"
 anchor-lang = "*"
 base64 = "0.21"
-bytemuck = "1.18.0"
+bytemuck = "1.17.0"
 dashmap = "5"
 env_logger = "*"
 fnv = "1"
@@ -33,17 +33,14 @@ futures-util = "0.3"
 log = "*"
 rayon = { version = "1.9.0", optional = true }
 regex = "1.10"
-reqwest = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 solana-account-decoder = "2.0.8"
 solana-client = "2.0.8"
-solana-program = "2.0.8"
 solana-sdk = "2.0.8"
 solana-transaction-status = "2.0.8"
 thiserror = "1"
 tokio = { version = "*", features = ["full"] }
-tokio-tungstenite = { version = "*", features = ["native-tls"] }
 type-layout = "*"
 
 [dev-dependencies]
@@ -51,7 +48,6 @@ bytes = "*"
 futures = "0.3"
 hex = "*"
 hex-literal = "*"
-spl-associated-token-account = "4.0.0"
 
 [build-dependencies]
 drift-idl-gen = { "path" = "crates/drift-idl-gen"}

@@ -282,6 +282,8 @@ pub mod instruction {
 }
 
 pub mod accounts {
+    use solana_sdk::instruction::AccountMeta;
+
     use super::*;
     use crate::drift_idl::traits::ToAccountMetas;
 
@@ -298,15 +300,15 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl ToAccountMetas for Jit {
-        fn to_account_metas(&self) -> Vec<solana_program::instruction::AccountMeta> {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
             vec![
-                solana_program::instruction::AccountMeta::new_readonly(self.state, false),
-                solana_program::instruction::AccountMeta::new(self.user, false),
-                solana_program::instruction::AccountMeta::new(self.user_stats, false),
-                solana_program::instruction::AccountMeta::new(self.taker, false),
-                solana_program::instruction::AccountMeta::new(self.taker_stats, false),
-                solana_program::instruction::AccountMeta::new_readonly(self.authority, true),
-                solana_program::instruction::AccountMeta::new_readonly(self.drift_program, false),
+                AccountMeta::new_readonly(self.state, false),
+                AccountMeta::new(self.user, false),
+                AccountMeta::new(self.user_stats, false),
+                AccountMeta::new(self.taker, false),
+                AccountMeta::new(self.taker_stats, false),
+                AccountMeta::new_readonly(self.authority, true),
+                AccountMeta::new_readonly(self.drift_program, false),
             ]
         }
     }

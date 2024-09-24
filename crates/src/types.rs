@@ -4,7 +4,6 @@ use std::{
 };
 
 use anchor_lang::AnchorDeserialize;
-use futures_util::sink::Sink;
 pub use solana_client::rpc_config::RpcSendTransactionConfig;
 pub use solana_sdk::{
     commitment_config::CommitmentConfig, message::VersionedMessage,
@@ -16,8 +15,7 @@ use solana_sdk::{
     transaction::TransactionError,
 };
 use thiserror::Error;
-use tokio::{net::TcpStream, sync::oneshot};
-use tokio_tungstenite::{tungstenite, MaybeTlsStream, WebSocketStream};
+use tokio::sync::oneshot;
 
 // re-export types in public API
 pub use crate::drift_idl::{
@@ -183,29 +181,8 @@ impl NewOrder {
     }
 }
 
-#[derive(Debug)]
-pub struct SinkError(
-    pub <WebSocketStream<MaybeTlsStream<TcpStream>> as Sink<tungstenite::Message>>::Error,
-);
-
-impl std::fmt::Display for SinkError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "WebSocket Sink Error: {}", self.0)
-    }
-}
-
-impl std::error::Error for SinkError {}
-
-impl From<SinkError> for SdkError {
-    fn from(err: SinkError) -> Self {
-        SdkError::SubscriptionFailure(err)
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum SdkError {
-    #[error("{0}")]
-    Http(#[from] reqwest::Error),
     #[error("{0}")]
     Rpc(#[from] solana_client::client_error::ClientError),
     #[error("{0}")]
@@ -228,10 +205,6 @@ pub enum SdkError {
     OutOfSOL,
     #[error("{0}")]
     Signing(#[from] solana_sdk::signer::SignerError),
-    #[error("WebSocket connection failed {0}")]
-    ConnectionError(#[from] tungstenite::Error),
-    #[error("Subscription failure: {0}")]
-    SubscriptionFailure(SinkError),
     #[error("Received Error from websocket")]
     WebsocketError,
     #[error("Missed DLOB heartbeat")]
