@@ -26,7 +26,14 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v2
-      - name: Install toolchain
+      - name: Install primary toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: 1.81.0
+          components: rustfmt
+          default: true
+      - name: Install ffi toolchain (1.76.0)
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal

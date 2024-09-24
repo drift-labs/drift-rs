@@ -33,6 +33,7 @@ fn main() {
         .filter(|(k, _v)| !k.starts_with("CARGO") && !k.starts_with("RUSTC"))
         .collect();
     println!("{ffi_build_envs:?}");
+    let profile = std::env::var("PROFILE").expect("cargo PROFILE set");
 
     // force drift-ffi-sys to build with specific toolchain (arch=x86_64, version=<=1.76.0)
     // this ensures zero copy deserialization works correctly with the onchain data layout
@@ -54,7 +55,13 @@ fn main() {
         .env_clear()
         .envs(ffi_build_envs)
         .current_dir(drift_ffi_sys_crate.clone())
-        .args(["run", &ffi_toolchain, "cargo", "build", "--release"])
+        .args([
+            "run",
+            &ffi_toolchain,
+            "cargo",
+            "build",
+            "--profile={profile}",
+        ])
         .output()
         .expect("drift-ffi-sys built");
 
@@ -66,7 +73,7 @@ fn main() {
     }
 
     println!(
-        "cargo:rustc-link-search=native={}/target/release",
+        "cargo:rustc-link-search=native={}/target/{profile}",
         drift_ffi_sys_crate.to_string_lossy(),
     );
     println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
