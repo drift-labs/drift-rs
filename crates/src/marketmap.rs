@@ -21,10 +21,9 @@ use crate::{
     memcmp::get_market_filter,
     utils::{decode, get_ws_url},
     websocket_program_account_subscriber::{
-        ProgramAccountUpdate, UnsubHandle, WebsocketProgramAccountOptions,
-        WebsocketProgramAccountSubscriber,
+        ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
     },
-    DataAndSlot, PerpMarket, SdkResult, SpotMarket,
+    DataAndSlot, PerpMarket, SdkResult, SpotMarket, UnsubHandle,
 };
 
 pub trait Market {

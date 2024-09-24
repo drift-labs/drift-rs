@@ -16,10 +16,8 @@ use crate::{
     constants,
     types::{DataAndSlot, SdkError},
     utils::decode,
+    UnsubHandle,
 };
-
-/// Handle for unsubscribing from network updates
-pub type UnsubHandle = oneshot::Sender<()>;
 
 #[derive(Clone, Debug)]
 pub struct ProgramAccountUpdate<T: AnchorDeserialize + Send> {

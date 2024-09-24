@@ -9,7 +9,7 @@ use crate::{
         OracleSource,
     },
     utils::zero_account_to_bytes,
-    DriftClient, SdkResult,
+    DriftClient, MarketId, SdkResult,
 };
 
 /// Builds an AccountList of relevant spot, perp, and oracle accounts from rpc
@@ -36,11 +36,14 @@ impl AccountsListBuilder {
             let market = client
                 .get_spot_market_account(p.market_index)
                 .expect("spot market");
-            oracles.insert(market.oracle);
-            spot_markets.push(market);
+            if oracles.insert(market.oracle) {
+                spot_markets.push(market);
+            }
         }
 
-        let quote_market = client.get_spot_market_account(0).expect("spot market");
+        let quote_market = client
+            .get_spot_market_account(MarketId::QUOTE_SPOT.index)
+            .expect("spot market");
         if oracles.insert(quote_market.oracle) {
             spot_markets.push(quote_market);
         }
@@ -87,9 +90,7 @@ impl AccountsListBuilder {
 
         for oracle_key in oracles.iter() {
             let oracle = client
-                .backend
-                .oracle_map
-                .get(oracle_key)
+                .get_oracle_price_data_and_slot(oracle_key)
                 .expect("oracle exists");
             let owner = match oracle.source {
                 OracleSource::Pyth

@@ -1,13 +1,8 @@
-// Standard Library Imports
-
-// External Crate Imports
 use std::sync::Mutex;
 
 use solana_account_decoder::UiAccountEncoding;
 use solana_sdk::commitment_config::CommitmentConfig;
-use tokio::sync::oneshot;
 
-// Internal Crate/Module Imports
 use crate::{
     drift_idl::accounts::User,
     memcmp::{get_user_filter, get_user_with_auction_filter},
@@ -15,7 +10,7 @@ use crate::{
     websocket_program_account_subscriber::{
         ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
     },
-    SdkError,
+    SdkError, UnsubHandle,
 };
 
 pub struct AuctionSubscriberConfig {
@@ -27,7 +22,7 @@ pub struct AuctionSubscriberConfig {
 /// Subscribes to all user auction events across all markets
 pub struct AuctionSubscriber {
     subscriber: WebsocketProgramAccountSubscriber,
-    unsub: Mutex<Option<oneshot::Sender<()>>>,
+    unsub: Mutex<Option<UnsubHandle>>,
 }
 
 impl AuctionSubscriber {

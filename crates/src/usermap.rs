@@ -25,9 +25,9 @@ use crate::{
     memcmp::{get_non_idle_user_filter, get_user_filter},
     utils::{decode, get_ws_url},
     websocket_program_account_subscriber::{
-        UnsubHandle, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
+        WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
     },
-    SdkResult,
+    SdkResult, UnsubHandle,
 };
 
 /// Subscribes to the _all_ Drift users' account updates via Ws program subscribe

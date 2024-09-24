@@ -1,6 +1,7 @@
 use std::{
-    fs::{self, File},
+    fs::{self},
     io::Write,
+    path::Path,
     process::{Command, Stdio},
 };
 
@@ -341,8 +342,9 @@ fn generate_idl_types(idl: &Idl) -> String {
             }
         });
         // https://github.com/coral-xyz/anchor/blob/e48e7e60a64de77d878cdb063965cf125bec741a/lang/syn/src/codegen/program/instruction.rs#L32
-        let discriminator: TokenStream =
-            format!("{:?}", sighash("global", &fn_name)).parse().unwrap();
+        let discriminator: TokenStream = format!("{:?}", sighash("global", &fn_name))
+            .parse()
+            .unwrap();
         let struct_def = quote! {
             #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
             pub struct #struct_name {
@@ -543,20 +545,20 @@ fn generate_idl_types(idl: &Idl) -> String {
             )]
             #[repr(C)]
             pub struct u128(pub [u8; 16]);
-        
+
             impl u128 {
                 /// convert self into the std `u128` type
                 pub fn as_u128(&self) -> std::primitive::u128 {
                     std::primitive::u128::from_le_bytes(self.0)
                 }
             }
-        
+
             impl From<std::primitive::u128> for self::u128 {
                 fn from(value: std::primitive::u128) -> Self {
                     Self(value.to_le_bytes())
                 }
             }
-        
+
             /// backwards compatible i128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned
             /// https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8
             #[derive(
@@ -572,14 +574,14 @@ fn generate_idl_types(idl: &Idl) -> String {
             )]
             #[repr(C)]
             pub struct i128(pub [u8; 16]);
-        
+
             impl i128 {
                 /// convert self into the std `i128` type
                 pub fn as_i128(&self) -> core::primitive::i128 {
                     core::primitive::i128::from_le_bytes(self.0)
                 }
             }
-        
+
             impl From<core::primitive::i128> for i128 {
                 fn from(value: core::primitive::i128) -> Self {
                     Self(value.to_le_bytes())
@@ -688,18 +690,12 @@ fn format_rust_code(code: &str) -> String {
 
 /// Generate rust types from IDL json
 /// Output is emitted to `<NAME>_idl.rs`
-pub fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub fn generate_rust_types(idl_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     // Load the JSON file
-    let data = fs::read_to_string("drift.json")?;
+    let data = fs::read_to_string(idl_path)?;
     let idl: Idl = serde_json::from_str(&data)?;
 
     // Generate Rust structs organized into modules
     let rust_idl_types = format_rust_code(&generate_idl_types(&idl));
-
-    // Write the generated Rust code to the file
-    let file_name = format!("{}_idl.rs", idl.name);
-    let mut file = File::create(&file_name)?;
-    file.write_all(rust_idl_types.as_bytes())?;
-
-    Ok(())
+    Ok(rust_idl_types)
 }

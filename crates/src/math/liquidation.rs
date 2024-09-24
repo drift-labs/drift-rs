@@ -341,8 +341,6 @@ fn calculate_collateral_inner(
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use anchor_lang::Discriminator;
     use bytes::BytesMut;
     use solana_sdk::{account::Account, pubkey::Pubkey};
@@ -356,7 +354,7 @@ mod tests {
             PRICE_PRECISION_I64, SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64,
             SPOT_CUMULATIVE_INTEREST_PRECISION,
         },
-        MarketId, Wallet,
+        MarketId,
     };
 
     const SOL_ORACLE: Pubkey = solana_sdk::pubkey!("J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix");
@@ -455,11 +453,11 @@ mod tests {
     async fn calculate_liq_price() {
         use solana_client::nonblocking::rpc_client::RpcClient;
 
-        use crate::utils::envs::mainnet_endpoint;
+        use crate::{utils::envs::mainnet_endpoint, Wallet};
 
-        let wallet = Wallet::read_only(
-            Pubkey::from_str("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2").unwrap(),
-        );
+        let wallet = Wallet::read_only(solana_sdk::pubkey!(
+            "DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"
+        ));
         let client = DriftClient::new(
             crate::Context::MainNet,
             RpcClient::new(mainnet_endpoint()),
@@ -481,11 +479,11 @@ mod tests {
     async fn calculate_margin_requirements_works() {
         use solana_client::nonblocking::rpc_client::RpcClient;
 
-        use crate::utils::envs::mainnet_endpoint;
+        use crate::{utils::envs::mainnet_endpoint, Wallet};
 
-        let wallet = Wallet::read_only(
-            Pubkey::from_str("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2").unwrap(),
-        );
+        let wallet = Wallet::read_only(solana_sdk::pubkey!(
+            "DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"
+        ));
         let client = DriftClient::new(
             crate::Context::MainNet,
             RpcClient::new(mainnet_endpoint()),

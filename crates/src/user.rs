@@ -6,8 +6,7 @@ use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{
     drift_idl::accounts::User, utils::get_ws_url,
-    websocket_account_subscriber::WebsocketAccountSubscriber,
-    websocket_program_account_subscriber::UnsubHandle, DataAndSlot, SdkResult,
+    websocket_account_subscriber::WebsocketAccountSubscriber, DataAndSlot, SdkResult, UnsubHandle,
 };
 
 /// Subscribes to a dynamic subset of User accounts

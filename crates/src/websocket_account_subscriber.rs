@@ -8,10 +8,7 @@ use solana_client::{
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use tokio::sync::oneshot;
 
-use crate::{utils::get_http_url, SdkError, SdkResult};
-
-/// Handle for unsubscribing from network updates
-pub type UnsubHandle = oneshot::Sender<()>;
+use crate::{utils::get_http_url, SdkError, SdkResult, UnsubHandle};
 
 #[derive(Clone, Debug)]
 pub struct AccountUpdate {
@@ -104,8 +101,26 @@ impl WebsocketAccountSubscriber {
 
             async move {
                 log::debug!("spawn account subscriber: {subscription_name}-{pubkey:?}");
-                loop {
-                    let pubsub = PubsubClient::new(&url).await?;
+                let exit_status = 'outer: loop {
+                    let pubsub = match PubsubClient::new(&url).await {
+                        Ok(client) => {
+                            attempt = 0;
+                            client
+                        }
+                        Err(err) => {
+                            warn!("Ws couldn't connect: {err:?}, retrying...");
+                            attempt += 1;
+                            if attempt >= max_reconnection_attempts {
+                                log::error!(
+                                    "{}: Max reconnection attempts reached",
+                                    subscription_name
+                                );
+                                break 'outer Err(crate::SdkError::MaxReconnectionAttemptsReached);
+                            }
+                            tokio::time::sleep(base_delay).await;
+                            continue;
+                        }
+                    };
 
                     match pubsub
                         .account_subscribe(&pubkey, Some(account_config.clone()))
@@ -143,7 +158,7 @@ impl WebsocketAccountSubscriber {
                                 _ = &mut unsub_rx => {
                                     log::debug!("{}: Unsubscribing from account stream", subscription_name);
                                     account_unsubscribe().await;
-                                    return Ok(());
+                                    break 'outer Ok(());
                                 }
                             }
                         },
@@ -155,14 +170,14 @@ impl WebsocketAccountSubscriber {
                             attempt += 1;
                             if attempt >= max_reconnection_attempts {
                                 log::error!("Max reconnection attempts reached.");
-                                return Err(crate::SdkError::MaxReconnectionAttemptsReached);
+                                break 'outer Err(crate::SdkError::MaxReconnectionAttemptsReached);
                             }
                         }
                     }
 
                     if attempt >= max_reconnection_attempts {
                         log::error!("{}: Max reconnection attempts reached", subscription_name);
-                        return Err(crate::SdkError::MaxReconnectionAttemptsReached);
+                        break 'outer Err(crate::SdkError::MaxReconnectionAttemptsReached);
                     }
 
                     let delay_duration = base_delay * 2_u32.pow(attempt);
@@ -173,8 +188,13 @@ impl WebsocketAccountSubscriber {
                     );
                     tokio::time::sleep(delay_duration).await;
                     attempt += 1;
+                };
+
+                if let Err(err) = exit_status {
+                    log::warn!(
+                        "account subscriber failed ({subscription_name}-{pubkey:?}): {err:?}"
+                    );
                 }
-                log::warn!("account subscriber ended: {subscription_name}-{pubkey:?}");
             }
         });
 

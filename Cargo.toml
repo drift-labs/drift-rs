@@ -52,3 +52,6 @@ futures = "0.3"
 hex = "*"
 hex-literal = "*"
 spl-associated-token-account = "4.0.0"
+
+[build-dependencies]
+drift-idl-gen = { "path" = "crates/drift-idl-gen"}

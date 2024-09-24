@@ -16,7 +16,7 @@ use solana_sdk::{
     transaction::TransactionError,
 };
 use thiserror::Error;
-use tokio::net::TcpStream;
+use tokio::{net::TcpStream, sync::oneshot};
 use tokio_tungstenite::{tungstenite, MaybeTlsStream, WebSocketStream};
 
 // re-export types in public API
@@ -28,6 +28,9 @@ pub use crate::drift_idl::{
     types::*,
 };
 use crate::{drift_idl::errors::ErrorCode, Wallet};
+
+/// Handle for unsubscribing from network updates
+pub type UnsubHandle = oneshot::Sender<()>;
 
 pub type SdkResult<T> = Result<T, SdkError>;
 

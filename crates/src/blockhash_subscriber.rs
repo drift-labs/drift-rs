@@ -9,12 +9,14 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::hash::Hash;
 use tokio::sync::oneshot;
 
+use crate::UnsubHandle;
+
 /// Subscribes to latest network blockhashes
 pub struct BlockhashSubscriber {
     refresh_frequency: Duration,
     last_twenty_hashes: Arc<RwLock<VecDeque<Hash>>>,
     rpc_client: Arc<RpcClient>,
-    unsub: Mutex<Option<oneshot::Sender<()>>>,
+    unsub: Mutex<Option<UnsubHandle>>,
 }
 
 impl BlockhashSubscriber {

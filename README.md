@@ -19,30 +19,14 @@ Experimental, high performance Rust SDK for building off chain clients for inter
 
 ### Mac (m-series)
 
-Install rosetta and configure build for x86
+Install rosetta and configure build for `x86_64`
 
 ```bash
 softwareupdate --install-rosetta
-rustup install 1.76.0-x86_64-apple-darwin
-rustup override set 1.76.0-x86_64-apple-darwin
+# replace `1.81.0` with preferred stable version
+rustup install 1.81.0-x86_64-apple-darwin
+rustup override set 1.81.0-x86_64-apple-darwin
 ```
 
 the native build is incompatible due to memory layout differences between solana program (BPF) and aarch64 and will fail at runtime with errors like `InvalidSize`.
 
-## Usage
-
-### Add `drift-rs` to your project's `Cargo.toml`
-
-```toml
-[dependencies]
-# pinned to match drift program version
-anchor-lang = "=0.29.0"
-drift-sdk = { git = "https://github.com/drift-labs/drift-rs", rev = "aedf04a" }
-```
-
-### Lock anchor version to 0.29.0
-
-Anchor 0.30.0 introduces changes incompatible with the Drift `protocol-v2` crate, to fix conflicts, when using `drift-rs`, fix this with:
-```bash
-cargo update anchor-lang@0.30.0 --precise 0.29.0
-```
