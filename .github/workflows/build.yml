@@ -25,7 +25,7 @@ env:
 
 jobs:
   format-build-test:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     steps:
       - name: Check out
         uses: actions/checkout@v2
@@ -39,7 +39,7 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
-        run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo check --verbose
+        run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo check --all-features
         env:
           RUSTFLAGS: "-Zcodegen-backend=cranelift"
       # - name: Clippy
