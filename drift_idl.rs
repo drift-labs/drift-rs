@@ -2765,9 +2765,9 @@ pub mod accounts {
         const DISCRIMINATOR: [u8; 8] = [3, 43, 58, 106, 131, 132, 199, 171];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for OpenbookV2FulfillmentConfig {}
+    impl anchor_lang::__private::bytemuck::Pod for OpenbookV2FulfillmentConfig {}
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for OpenbookV2FulfillmentConfig {}
+    impl anchor_lang::__private::bytemuck::Zeroable for OpenbookV2FulfillmentConfig {}
     #[automatically_derived]
     impl anchor_lang::ZeroCopy for OpenbookV2FulfillmentConfig {}
     #[automatically_derived]
@@ -2820,9 +2820,9 @@ pub mod accounts {
         const DISCRIMINATOR: [u8; 8] = [233, 45, 62, 40, 35, 129, 48, 72];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for PhoenixV1FulfillmentConfig {}
+    impl anchor_lang::__private::bytemuck::Pod for PhoenixV1FulfillmentConfig {}
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for PhoenixV1FulfillmentConfig {}
+    impl anchor_lang::__private::bytemuck::Zeroable for PhoenixV1FulfillmentConfig {}
     #[automatically_derived]
     impl anchor_lang::ZeroCopy for PhoenixV1FulfillmentConfig {}
     #[automatically_derived]
@@ -2880,9 +2880,9 @@ pub mod accounts {
         const DISCRIMINATOR: [u8; 8] = [65, 160, 197, 112, 239, 168, 103, 185];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for SerumV3FulfillmentConfig {}
+    impl anchor_lang::__private::bytemuck::Pod for SerumV3FulfillmentConfig {}
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for SerumV3FulfillmentConfig {}
+    impl anchor_lang::__private::bytemuck::Zeroable for SerumV3FulfillmentConfig {}
     #[automatically_derived]
     impl anchor_lang::ZeroCopy for SerumV3FulfillmentConfig {}
     #[automatically_derived]
@@ -2935,9 +2935,9 @@ pub mod accounts {
         const DISCRIMINATOR: [u8; 8] = [110, 202, 14, 42, 95, 73, 90, 95];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for InsuranceFundStake {}
+    impl anchor_lang::__private::bytemuck::Pod for InsuranceFundStake {}
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for InsuranceFundStake {}
+    impl anchor_lang::__private::bytemuck::Zeroable for InsuranceFundStake {}
     #[automatically_derived]
     impl anchor_lang::ZeroCopy for InsuranceFundStake {}
     #[automatically_derived]
@@ -2985,9 +2985,9 @@ pub mod accounts {
         const DISCRIMINATOR: [u8; 8] = [188, 1, 213, 98, 23, 148, 30, 1];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for ProtocolIfSharesTransferConfig {}
+    impl anchor_lang::__private::bytemuck::Pod for ProtocolIfSharesTransferConfig {}
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ProtocolIfSharesTransferConfig {}
+    impl anchor_lang::__private::bytemuck::Zeroable for ProtocolIfSharesTransferConfig {}
     #[automatically_derived]
     impl anchor_lang::ZeroCopy for ProtocolIfSharesTransferConfig {}
     #[automatically_derived]
@@ -3037,9 +3037,9 @@ pub mod accounts {
         const DISCRIMINATOR: [u8; 8] = [92, 14, 139, 234, 72, 244, 68, 26];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for PrelaunchOracle {}
+    impl anchor_lang::__private::bytemuck::Pod for PrelaunchOracle {}
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for PrelaunchOracle {}
+    impl anchor_lang::__private::bytemuck::Zeroable for PrelaunchOracle {}
     #[automatically_derived]
     impl anchor_lang::ZeroCopy for PrelaunchOracle {}
     #[automatically_derived]
@@ -3114,9 +3114,9 @@ pub mod accounts {
         const DISCRIMINATOR: [u8; 8] = [10, 223, 12, 44, 107, 245, 55, 247];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for PerpMarket {}
+    impl anchor_lang::__private::bytemuck::Pod for PerpMarket {}
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for PerpMarket {}
+    impl anchor_lang::__private::bytemuck::Zeroable for PerpMarket {}
     #[automatically_derived]
     impl anchor_lang::ZeroCopy for PerpMarket {}
     #[automatically_derived]
@@ -3222,9 +3222,9 @@ pub mod accounts {
         const DISCRIMINATOR: [u8; 8] = [100, 177, 8, 107, 168, 65, 65, 39];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for SpotMarket {}
+    impl anchor_lang::__private::bytemuck::Pod for SpotMarket {}
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for SpotMarket {}
+    impl anchor_lang::__private::bytemuck::Zeroable for SpotMarket {}
     #[automatically_derived]
     impl anchor_lang::ZeroCopy for SpotMarket {}
     #[automatically_derived]
@@ -3292,9 +3292,9 @@ pub mod accounts {
         const DISCRIMINATOR: [u8; 8] = [216, 146, 107, 94, 104, 75, 182, 177];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for State {}
+    impl anchor_lang::__private::bytemuck::Pod for State {}
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for State {}
+    impl anchor_lang::__private::bytemuck::Zeroable for State {}
     #[automatically_derived]
     impl anchor_lang::ZeroCopy for State {}
     #[automatically_derived]
@@ -3366,9 +3366,9 @@ pub mod accounts {
         const DISCRIMINATOR: [u8; 8] = [159, 117, 95, 227, 239, 151, 58, 236];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for User {}
+    impl anchor_lang::__private::bytemuck::Pod for User {}
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for User {}
+    impl anchor_lang::__private::bytemuck::Zeroable for User {}
     #[automatically_derived]
     impl anchor_lang::ZeroCopy for User {}
     #[automatically_derived]
@@ -3436,9 +3436,9 @@ pub mod accounts {
         const DISCRIMINATOR: [u8; 8] = [176, 223, 136, 27, 122, 79, 32, 227];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for UserStats {}
+    impl anchor_lang::__private::bytemuck::Pod for UserStats {}
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UserStats {}
+    impl anchor_lang::__private::bytemuck::Zeroable for UserStats {}
     #[automatically_derived]
     impl anchor_lang::ZeroCopy for UserStats {}
     #[automatically_derived]
@@ -3485,9 +3485,9 @@ pub mod accounts {
         const DISCRIMINATOR: [u8; 8] = [105, 133, 170, 110, 52, 42, 28, 182];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for ReferrerName {}
+    impl anchor_lang::__private::bytemuck::Pod for ReferrerName {}
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ReferrerName {}
+    impl anchor_lang::__private::bytemuck::Zeroable for ReferrerName {}
     #[automatically_derived]
     impl anchor_lang::ZeroCopy for ReferrerName {}
     #[automatically_derived]

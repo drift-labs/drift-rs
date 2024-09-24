@@ -10,16 +10,16 @@ use crate::{
 
 /// Drift program address
 pub const PROGRAM_ID: Pubkey = solana_sdk::pubkey!("dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH");
-
+/// JIT proxy program address
+pub const JIT_PROXY_ID: Pubkey =
+    solana_sdk::pubkey!("J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP");
+/// Empty pubkey
 pub const DEFAULT_PUBKEY: Pubkey = solana_sdk::pubkey!("11111111111111111111111111111111");
 
 static STATE_ACCOUNT: OnceLock<Pubkey> = OnceLock::new();
 
 pub const TOKEN_PROGRAM_ID: Pubkey =
     solana_sdk::pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
-
-pub const JIT_PROXY_ID: Pubkey =
-    solana_sdk::pubkey!("J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP");
 
 /// Return the market lookup table
 pub(crate) const fn market_lookup_table(context: Context) -> Pubkey {
