@@ -32,9 +32,9 @@ jobs:
       - name: Install ffi toolchain (1.76.0)
         run: rustup install 1.76.0-x86_64-unknown-linux-gnu
       - name: Install rust nightly
-        run: | 
+        run: |
           rustup install nightly
-          rustup component add --toolchain $CI_NIGHTLY_TOOLCHAIN rustc-codegen-cranelift-preview 
+          rustup component add --toolchain $CI_NIGHTLY_TOOLCHAIN rustc-codegen-cranelift-preview
           rustup component add --toolchain $CI_NIGHTLY_TOOLCHAIN rustfmt
       - name: Format
         run: cargo fmt --all -- --check
