@@ -46,7 +46,7 @@ jobs:
         run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo check
         env:
           RUSTFLAGS: "-Zcodegen-backend=cranelift"
-          CARGO_DRIFT_FFI_PATH: "${{ github.workspace }}/local_libs/libdrift_ffi_sys.so"
+          CARGO_DRIFT_FFI_PATH: "${{ github.workspace }}/local_libs"
       - name: Clippy
         uses: giraffate/clippy-action@v1
         with:
@@ -56,8 +56,10 @@ jobs:
           RUST_TOOLCHAIN: "${{ env.CI_NIGHTLY_TOOLCHAIN }}"
           RUSTFLAGS: "-Zcodegen-backend=cranelift"
       - name: Test
-        run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo test --all
+        run: |
+          ls -al $CARGO_DRIFT_FFI_PATH
+          rustup run $CI_NIGHTLY_TOOLCHAIN cargo test --all
         env:
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
           RUSTFLAGS: "-Zcodegen-backend=cranelift"
-          CARGO_DRIFT_FFI_PATH: "${{ github.workspace }}/local_libs/libdrift_ffi_sys.so"
+          CARGO_DRIFT_FFI_PATH: "${{ github.workspace }}/local_libs"
