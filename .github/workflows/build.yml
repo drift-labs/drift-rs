@@ -20,9 +20,6 @@ on:
       - "**.lock"
       - ".github/workflows/*.yml"
     
-env:
- CI_TOOLCHAIN: "nightly-x86_64-unknown-linux-gnu"
-
 jobs:
   format-build-test:
     runs-on: ubuntu-latest
@@ -40,12 +37,8 @@ jobs:
           curl -L https://github.com/user-attachments/files/17126152/libdrift_ffi_sys.so.zip > ffi.zip
           unzip ffi.zip
           ldd libdrift_ffi_sys.so
-          (ldconfig -p | grep linux-vdso && echo "found") || echo "not found" 
-          (ldconfig -p | grep libgcc_s && echo "found") || echo "not found" 
-          (ldconfig -p | grep libm && echo "found") || echo "not found" 
-          (ldconfig -p | grep libc && echo "found") || echo "not found" 
-          (ldconfig -p | grep ld-linux-x86-64 && echo "found") || echo "not found"
-          sudo cp libdrift_ffi_sys.so /lib/
+          sudo cp libdrift_ffi_sys.so /usr/lib
+          ldconfig -p
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
@@ -62,9 +55,6 @@ jobs:
       #     CARGO_DRIFT_FFI_PATH: "${{ github.workspace }}/local_libs"
       - name: Test
         run: |
-          echo $CARGO_DRIFT_FFI_PATH
-          ls -al $CARGO_DRIFT_FFI_PATH
-          sudo apt install -y libgcc1
           cargo test --no-fail-fast -- --nocapture
         env:
           RUST_LOG: info
