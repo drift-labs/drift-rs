@@ -32,7 +32,7 @@ jobs:
       - name: Install ffi toolchain (1.76.0)
         run: |
           rustup install 1.76.0-x86_64-unknown-linux-gnu
-          rustup component clippy rustfmt
+          rustup component add clippy rustfmt
       - name: install libdrift_ffi_sys
         run: |
           mkdir local_libs && cd local_libs
