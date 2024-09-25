@@ -39,6 +39,7 @@ jobs:
           mkdir local_libs && cd local_libs
           curl -L https://github.com/user-attachments/files/17126152/libdrift_ffi_sys.so.zip > ffi.zip
           unzip ffi.zip
+          ldd libdrift_ffi_sys.so
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
@@ -52,6 +53,7 @@ jobs:
       #    github_token: ${{ secrets.GITHUB_TOKEN }}
       #   env:
       #     RUST_TOOLCHAIN: stable-x86_64-linux-unknown-gnu # force clippy to build with same rust version
+      #     CARGO_DRIFT_FFI_PATH: "${{ github.workspace }}/local_libs"
       - name: Test
         run: |
           echo $CARGO_DRIFT_FFI_PATH
