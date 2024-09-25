@@ -30,15 +30,14 @@ jobs:
       - name: Check out
         uses: actions/checkout@v2
       - name: Install ffi toolchain (1.76.0)
-        run: rustup install 1.76.0-x86_64-unknown-linux-gnu
+        run: |
+          rustup install 1.76.0-x86_64-unknown-linux-gnu
+          rustup component clippy rustfmt
       - name: install libdrift_ffi_sys
         run: |
           mkdir local_libs && cd local_libs
           curl -L https://github.com/user-attachments/files/17126152/libdrift_ffi_sys.so.zip > ffi.zip
           unzip ffi.zip
-      - name:
-        run: |
-          rustup component clippy rustfmt
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
