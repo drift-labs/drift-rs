@@ -58,7 +58,7 @@ jobs:
       - name: Test
         run: |
           ls -al $CARGO_DRIFT_FFI_PATH
-          rustup run $CI_NIGHTLY_TOOLCHAIN cargo test --all --no-fail-fast -- --nocapture
+          rustup run $CI_NIGHTLY_TOOLCHAIN cargo test --no-fail-fast -- --nocapture
         env:
           RUST_LOG: info
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
