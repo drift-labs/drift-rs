@@ -34,6 +34,6 @@ the native build is incompatible due to memory layout differences between solana
 ```bash
 # Provide a prebuilt drift_ffi_sys lib 
 CARGO_DRIFT_FFI_PATH=/"path/to/libdrift_ffi_sys"
-# Build from source (default)
+# Build from source
 CARGO_DRIFT_FFI_STATIC=1
 ```

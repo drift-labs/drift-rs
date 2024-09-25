@@ -36,31 +36,26 @@ jobs:
           mkdir local_libs && cd local_libs
           curl -L https://github.com/user-attachments/files/17126152/libdrift_ffi_sys.so.zip > ffi.zip
           unzip ffi.zip
-      - name: Install rust nightly
+      - name:
         run: |
-          rustup install nightly
-          rustup component add rustc-codegen-cranelift-preview clippy rustfmt --toolchain $CI_NIGHTLY_TOOLCHAIN
+          rustup component clippy rustfmt
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
-        run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo check
+        run: cargo check
         env:
-          RUSTFLAGS: "-Zcodegen-backend=cranelift"
           CARGO_DRIFT_FFI_PATH: "${{ github.workspace }}/local_libs"
       - name: Clippy
         uses: giraffate/clippy-action@v1
         with:
          reporter: 'github-pr-review'
          github_token: ${{ secrets.GITHUB_TOKEN }}
-        env:
-          RUST_TOOLCHAIN: "${{ env.CI_NIGHTLY_TOOLCHAIN }}"
-          RUSTFLAGS: "-Zcodegen-backend=cranelift"
       - name: Test
         run: |
+          echo $CARGO_DRIFT_FFI_PATH
           ls -al $CARGO_DRIFT_FFI_PATH
-          rustup run $CI_NIGHTLY_TOOLCHAIN cargo test --no-fail-fast -- --nocapture
+          cargo test --no-fail-fast -- --nocapture
         env:
           RUST_LOG: info
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
-          RUSTFLAGS: "-Zcodegen-backend=cranelift"
           CARGO_DRIFT_FFI_PATH: "${{ github.workspace }}/local_libs"
