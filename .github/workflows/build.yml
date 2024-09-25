@@ -40,6 +40,11 @@ jobs:
           curl -L https://github.com/user-attachments/files/17126152/libdrift_ffi_sys.so.zip > ffi.zip
           unzip ffi.zip
           ldd libdrift_ffi_sys.so
+          ldconfig -p | grep linux-vdso
+          ldconfig -p | grep libgcc_s
+          ldconfig -p | grep libm
+          ldconfig -p | grep libc
+          ldconfig -p | grep ld-linux-x86-64
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
@@ -58,6 +63,7 @@ jobs:
         run: |
           echo $CARGO_DRIFT_FFI_PATH
           ls -al $CARGO_DRIFT_FFI_PATH
+          sudo apt install -y libgcc1
           cargo test --no-fail-fast -- --nocapture
         env:
           RUST_LOG: info
