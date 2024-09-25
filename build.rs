@@ -16,9 +16,9 @@ fn main() {
     file.write_all(idl_mod_rs.as_bytes())
         .expect("wrote IDL .rs");
 
-    if pkg_config::probe_library("libdrift_ffi_sys").is_err() {
+    if std::env::var("CARGO_DRIFT_FFI_STATIC").is_ok() {
         // Build + Link FFI crate from source
-        println!("libdrift_ffi_sys not found on system, compiling from source...");
+        println!("{LIB}: CARGO_DRIFT_FFI_STATIC set, compiling from source...");
         let drift_ffi_sys_crate = current_dir.join(Path::new("crates/drift-ffi-sys"));
 
         // the x86_64 target must exist
@@ -104,6 +104,7 @@ fn main() {
         }
     }
 
+    println!("cargo:rustc-link-search=native=/usr/local/lib");
     println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
 }
 

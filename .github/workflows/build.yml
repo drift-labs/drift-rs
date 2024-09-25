@@ -44,7 +44,7 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
-        run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo check -vv
+        run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo check
         env:
           RUSTFLAGS: "-Zcodegen-backend=cranelift -Lnative=local_libs"
       - name: Clippy
@@ -55,4 +55,5 @@ jobs:
       - name: Test
         env:
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
+          RUSTFLAGS: "-Zcodegen-backend=cranelift -Lnative=local_libs"
         run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo test --all
