@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fs::File, io::Write, path::Path};
 
+const LIB: &str = "libdrift_ffi_sys";
+
 fn main() {
     let current_dir = std::env::current_dir().unwrap().canonicalize().unwrap();
 
@@ -20,10 +22,10 @@ fn main() {
 
     // the x86_64 target must exist
     let host_target = std::env::var("TARGET").unwrap();
-    let lib_target = if host_target.contains("apple") {
-        "x86_64-apple-darwin"
+    let (lib_target, lib_ext) = if host_target.contains("apple") {
+        ("x86_64-apple-darwin", "dylib")
     } else if host_target.contains("linux") {
-        "x86_64-unknown-linux-gnu"
+        ("x86_64-unknown-linux-gnu", "so")
     } else {
         eprintln!("Unsupported host platform: {host_target}, please open an issue at: https://github.com/drift-labs/drift-rs/issues");
         fail_build();
@@ -84,9 +86,26 @@ fn main() {
         drift_ffi_sys_crate.to_string_lossy(),
     );
     println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
+
+    // install the dylib to system path
+    let output = std::process::Command::new("ln")
+        .args([
+            "-sf",
+            &format!("target/{profile}/{lib_target}/{LIB}.{lib_ext}"),
+            &format!("/usr/local/lib/{LIB}.{lib_ext}"),
+        ])
+        .output()
+        .expect("install ok");
+
+    if !output.status.success() {
+        eprintln!(
+            "{LIB} could not be installed: {}",
+            String::from_utf8_lossy(output.stderr.as_slice())
+        );
+    }
 }
 
 fn fail_build() -> ! {
-    eprintln!("libdrift_ffi_sys build failed");
+    eprintln!("{LIB} build failed");
     std::process::exit(1);
 }
