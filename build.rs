@@ -16,9 +16,11 @@ fn main() {
     file.write_all(idl_mod_rs.as_bytes())
         .expect("wrote IDL .rs");
 
-    if std::env::var("CARGO_DRIFT_FFI_STATIC").is_ok() {
+    if std::env::var("CARGO_DRIFT_FFI_STATIC").is_ok()
+        || std::env::var("CARGO_DRIFT_FFI_PATH").is_err()
+    {
         // Build + Link FFI crate from source
-        println!("{LIB}: CARGO_DRIFT_FFI_STATIC set, compiling from source...");
+        println!("{LIB}: building from source...");
         let drift_ffi_sys_crate = current_dir.join(Path::new("crates/drift-ffi-sys"));
 
         // the x86_64 target must exist
@@ -81,17 +83,14 @@ fn main() {
             fail_build();
         }
 
-        println!(
-            "cargo:rustc-link-search=native={}/target/{profile}",
-            drift_ffi_sys_crate.to_string_lossy(),
-        );
-
         // install the dylib to system path
+        let libffi_out_path =
+            drift_ffi_sys_crate.join(Path::new(&format!("target/{profile}/{LIB}.{lib_ext}")));
         let output = std::process::Command::new("ln")
             .args([
                 "-sf",
-                &format!("target/{profile}/{lib_target}/{LIB}.{lib_ext}"),
-                &format!("/usr/local/lib/{LIB}.{lib_ext}"),
+                libffi_out_path.to_str().expect("ffi build path"),
+                &format!("/usr/local/lib/"),
             ])
             .output()
             .expect("install ok");
@@ -104,7 +103,10 @@ fn main() {
         }
     }
 
-    println!("cargo:rustc-link-search=native=/usr/local/lib");
+    if let Ok(lib_path) = std::env::var("CARGO_DRIFT_FFI_PATH") {
+        println!("{LIB}: searching for lib at: {lib_path}");
+        println!("cargo:rustc-link-search=native={lib_path}");
+    }
     println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
 }
 

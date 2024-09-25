@@ -30,3 +30,10 @@ rustup override set 1.81.0-x86_64-apple-darwin
 
 the native build is incompatible due to memory layout differences between solana program (BPF) and aarch64 and will fail at runtime with errors like `InvalidSize`.
 
+## Build
+```bash
+# Provide a prebuilt drift_ffi_sys lib 
+CARGO_DRIFT_FFI_PATH=/"path/to/libdrift_ffi_sys"
+# Build from source (default)
+CARGO_DRIFT_FFI_STATIC=1
+```
