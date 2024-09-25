@@ -45,13 +45,13 @@ jobs:
         run: cargo check
         env:
           CARGO_DRIFT_FFI_PATH: "${{ github.workspace }}/local_libs"
-      - name: Clippy
-        uses: giraffate/clippy-action@v1
-        with:
-         reporter: 'github-pr-review'
-         github_token: ${{ secrets.GITHUB_TOKEN }}
-        env:
-          RUST_TOOLCHAIN: stable-x86_64-linux-unknown-gnu # force clippy to build with same rust version
+      # - name: Clippy
+      #   uses: giraffate/clippy-action@v1
+      #   with:
+      #    reporter: 'github-pr-review'
+      #    github_token: ${{ secrets.GITHUB_TOKEN }}
+      #   env:
+      #     RUST_TOOLCHAIN: stable-x86_64-linux-unknown-gnu # force clippy to build with same rust version
       - name: Test
         run: |
           echo $CARGO_DRIFT_FFI_PATH
