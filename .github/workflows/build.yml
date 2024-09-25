@@ -46,7 +46,7 @@ jobs:
       - name: Build
         run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo check -vv
         env:
-          RUSTFLAGS: "-Zcodegen-backend=cranelift,-Lnative=local_libs"
+          RUSTFLAGS: "-Zcodegen-backend=cranelift -Lnative=local_libs"
       - name: Clippy
         uses: giraffate/clippy-action@v1
         with:
