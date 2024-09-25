@@ -34,7 +34,7 @@ jobs:
       - name: install libdrift_ffi_sys
         run: |
           mkdir local_libs && cd local_libs
-          curl -L "https://github.com/user-attachments/files/17124868/libdrift_ffi_sys.so.zip" > ffi.zip
+          curl -L https://github.com/user-attachments/files/17126152/libdrift_ffi_sys.so.zip > ffi.zip
           unzip ffi.zip
       - name: Install rust nightly
         run: |
