@@ -1479,6 +1479,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "log",
+ "pkg-config",
  "rayon",
  "regex",
  "serde",

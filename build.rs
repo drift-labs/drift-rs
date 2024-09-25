@@ -25,7 +25,8 @@ fn main() {
     } else if host_target.contains("linux") {
         "x86_64-unknown-linux-gnu"
     } else {
-        panic!("Unsupported host platform: {host_target}, please open an issue at: https://github.com/drift-labs/drift-rs/issues");
+        eprintln!("Unsupported host platform: {host_target}, please open an issue at: https://github.com/drift-labs/drift-rs/issues");
+        fail_build();
     };
 
     // "RUSTC" is set as the cargo version of the main SDK build, it must be unset for the ffi build
@@ -49,7 +50,8 @@ fn main() {
     }
     let installed_toolchains = String::from_utf8_lossy(&installed_toolchains_query.stdout);
     if !installed_toolchains.contains(&ffi_toolchain) {
-        panic!("Required toolchain: {ffi_toolchain} is missing. Run: 'rustup install {ffi_toolchain}' to install and retry the build");
+        eprintln!("Required toolchain: {ffi_toolchain} is missing. Run: 'rustup install {ffi_toolchain}' to install and retry the build");
+        fail_build();
     }
 
     // Build ffi crate and link
@@ -73,10 +75,8 @@ fn main() {
     let output = ffi_build.output().expect("drift-ffi-sys built");
 
     if !output.status.success() {
-        panic!(
-            "cannot build libdrift-ffi-sys: {}",
-            String::from_utf8_lossy(output.stderr.as_slice())
-        );
+        eprintln!(" {}", String::from_utf8_lossy(output.stderr.as_slice()));
+        fail_build();
     }
 
     println!(
@@ -84,4 +84,9 @@ fn main() {
         drift_ffi_sys_crate.to_string_lossy(),
     );
     println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
+}
+
+fn fail_build() -> ! {
+    eprintln!("libdrift_ffi_sys build failed");
+    std::process::exit(1);
 }
