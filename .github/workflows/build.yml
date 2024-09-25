@@ -21,7 +21,7 @@ on:
       - ".github/workflows/*.yml"
     
 env:
- CI_NIGHTLY_TOOLCHAIN: "nightly-x86_64-unknown-linux-gnu"
+ CI_TOOLCHAIN: "nightly-x86_64-unknown-linux-gnu"
 
 jobs:
   format-build-test:
@@ -31,6 +31,7 @@ jobs:
         uses: actions/checkout@v2
       - name: Install ffi toolchain (1.76.0)
         run: |
+          rustup show active-toolchain
           rustup install 1.76.0-x86_64-unknown-linux-gnu
           rustup component add clippy rustfmt
       - name: install libdrift_ffi_sys
@@ -49,6 +50,8 @@ jobs:
         with:
          reporter: 'github-pr-review'
          github_token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          RUST_TOOLCHAIN: stable-x86_64-linux-unknown-gnu # force clippy to build with same rust version
       - name: Test
         run: |
           echo $CARGO_DRIFT_FFI_PATH
