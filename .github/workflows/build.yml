@@ -46,7 +46,7 @@ jobs:
       - name: Build
         run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo check
         env:
-          RUSTFLAGS: "-Zcodegen-backend=cranelift -Lnative=local_libs"
+          RUSTFLAGS: "-Zcodegen-backend=cranelift -Lnative=local_libs -ldylib=libdrift_ffi_sys"
       - name: Clippy
         uses: giraffate/clippy-action@v1
         with:
@@ -55,5 +55,5 @@ jobs:
       - name: Test
         env:
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
-          RUSTFLAGS: "-Zcodegen-backend=cranelift -Lnative=local_libs"
+          RUSTFLAGS: "-Zcodegen-backend=cranelift -Lnative=local_libs -ldylib=libdrift_ffi_sys"
         run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo test --all

@@ -7,7 +7,7 @@ fn main() {
 
     // Generate rust types from anchor IDL
     let idl_source_path = &current_dir.join(Path::new("res/drift.json"));
-    let idl_mod_rs = match drift_idl_gen::generate_rust_types(&idl_source_path) {
+    let idl_mod_rs = match drift_idl_gen::generate_rust_types(idl_source_path) {
         Ok(idl_mod_rs) => idl_mod_rs,
         Err(err) => panic!("generating IDL failed: {err:?}"),
     };
@@ -71,7 +71,7 @@ fn main() {
                 ffi_build.arg("--release");
             }
             custom => {
-                ffi_build.arg(&format!("--profile={custom}"));
+                ffi_build.arg(format!("--profile={custom}"));
             }
         }
 

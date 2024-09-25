@@ -100,11 +100,7 @@ impl OracleMap {
         }
 
         let futs_iter = pending_subscriptions.iter().map(|s| {
-            let source = self
-                .oracle_infos
-                .get(&s.pubkey)
-                .expect("oracle source")
-                .clone();
+            let source = *self.oracle_infos.get(&s.pubkey).expect("oracle source");
             s.subscribe(Self::SUBSCRIPTION_ID, {
                 let oracle_map = Arc::clone(&self.oraclemap);
                 move |update| handler_fn(&oracle_map, source, update)
@@ -248,11 +244,7 @@ impl OracleMap {
             oracle,
             self.rpc.commitment(),
         );
-        let oracle_source = self
-            .oracle_infos
-            .get(&oracle)
-            .expect("oracle source")
-            .clone();
+        let oracle_source = *self.oracle_infos.get(&oracle).expect("oracle source");
 
         let unsub = new_oracle_subscriber
             .subscribe(Self::SUBSCRIPTION_ID, {

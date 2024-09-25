@@ -444,7 +444,8 @@ impl DriftClient {
     /// Unsubscribe from updates for `subaccount`
     /// The latest value may be retreived with `get_user_account(..)`
     pub fn unsubscribe_user(&self, subaccount: &Pubkey) -> SdkResult<()> {
-        Ok(self.backend.user_map.unsubscribe_user(subaccount))
+        self.backend.user_map.unsubscribe_user(subaccount);
+        Ok(())
     }
 }
 
