@@ -44,7 +44,8 @@ jobs:
           (ldconfig -p | grep libgcc_s && echo "found") || echo "not found" 
           (ldconfig -p | grep libm && echo "found") || echo "not found" 
           (ldconfig -p | grep libc && echo "found") || echo "not found" 
-          (ldconfig -p | grep ld-linux-x86-64 && echo "found") || echo "not found" 
+          (ldconfig -p | grep ld-linux-x86-64 && echo "found") || echo "not found"
+          sudo cp libdrift_ffi_sys.so /lib/
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
