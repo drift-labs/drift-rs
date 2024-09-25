@@ -33,9 +33,9 @@ jobs:
         run: rustup install 1.76.0-x86_64-unknown-linux-gnu
       - name: install libdrift_ffi_sys
         run: |
-          curl -L "https://github.com/user-attachments/files/17124868/libdrift_ffi_sys.so.zip" > lib.zip
-          unzip lib.zip
-          ln -sf libdrift_ffi_sys.so /usr/local/lib/libdrift_ffi_sys.so
+          mkdir local_libs && cd local_libs
+          curl -L "https://github.com/user-attachments/files/17124868/libdrift_ffi_sys.so.zip" > ffi.zip
+          unzip ffi.zip
       - name: Install rust nightly
         run: |
           rustup install nightly
@@ -46,12 +46,12 @@ jobs:
       - name: Build
         run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo check -vv
         env:
-          RUSTFLAGS: "-Zcodegen-backend=cranelift"
-      # - name: Clippy
-      #   uses: giraffate/clippy-action@v1
-      #   with:
-      #    reporter: 'github-pr-review'
-      #    github_token: ${{ secrets.GITHUB_TOKEN }}       
+          RUSTFLAGS: "-Zcodegen-backend=cranelift,-L native=local_libs"
+      - name: Clippy
+        uses: giraffate/clippy-action@v1
+        with:
+         reporter: 'github-pr-review'
+         github_token: ${{ secrets.GITHUB_TOKEN }}       
       - name: Test
         env:
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
