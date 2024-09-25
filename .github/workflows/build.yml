@@ -39,23 +39,25 @@ jobs:
       - name: Install rust nightly
         run: |
           rustup install nightly
-          rustup component add rustc-codegen-cranelift-preview --toolchain $CI_NIGHTLY_TOOLCHAIN
-          rustup component add rustfmt --toolchain $CI_NIGHTLY_TOOLCHAIN
+          rustup component add rustc-codegen-cranelift-preview clippy rustfmt --toolchain $CI_NIGHTLY_TOOLCHAIN
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
         run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo check
         env:
-          CARGO_DRIFT_FFI_PATH: "${{ github.workspace }}/local_libs/libdrift_ffi_sys.so"
           RUSTFLAGS: "-Zcodegen-backend=cranelift"
+          CARGO_DRIFT_FFI_PATH: "${{ github.workspace }}/local_libs/libdrift_ffi_sys.so"
       - name: Clippy
         uses: giraffate/clippy-action@v1
         with:
          reporter: 'github-pr-review'
-         github_token: ${{ secrets.GITHUB_TOKEN }}       
+         github_token: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          RUST_TOOLCHAIN: "${{ env.CI_NIGHTLY_TOOLCHAIN }}"
+          RUSTFLAGS: "-Zcodegen-backend=cranelift"
       - name: Test
+        run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo test --all
         env:
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
           RUSTFLAGS: "-Zcodegen-backend=cranelift"
           CARGO_DRIFT_FFI_PATH: "${{ github.workspace }}/local_libs/libdrift_ffi_sys.so"
-        run: rustup run $CI_NIGHTLY_TOOLCHAIN cargo test --all
