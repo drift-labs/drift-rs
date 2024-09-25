@@ -50,11 +50,16 @@ impl BlockhashSubscriber {
             async move {
                 loop {
                     let _ = refresh.tick().await;
-                    if let Ok(blockhash) = rpc_client.get_latest_blockhash().await {
-                        let mut hashes = last_twenty_hashes.write().expect("acquired");
-                        hashes.push_back(blockhash);
-                        if hashes.len() > 20 {
-                            let _ = hashes.pop_front();
+                    match rpc_client.get_latest_blockhash().await {
+                        Ok(blockhash) => {
+                            let mut hashes = last_twenty_hashes.write().expect("acquired");
+                            hashes.push_back(blockhash);
+                            if hashes.len() > 20 {
+                                let _ = hashes.pop_front();
+                            }
+                        }
+                        Err(err) => {
+                            warn!("blockhash subscriber missed update: {err:?}");
                         }
                     }
 
@@ -99,11 +104,23 @@ mod tests {
 
     #[tokio::test]
     async fn blockhash_subscriber_updates() {
+        let _ = env_logger::try_init();
         let mut response_mocks = Mocks::default();
         let latest_block_hash = Hash::new_unique();
         let oldest_block_hash = Hash::new_unique();
 
-        response_mocks.insert(RpcRequest::GetLatestBlockhash, json!(latest_block_hash));
+        response_mocks.insert(
+            RpcRequest::GetLatestBlockhash,
+            json!({
+                "context": {
+                    "slot": 12345,
+                },
+                "value": {
+                    "blockhash": latest_block_hash.to_string(),
+                    "lastValidBlockHeight": 1,
+                }
+            }),
+        );
 
         let mock_rpc = RpcClient::new_mock_with_mocks(
             "https://api.mainnet-beta.solana.com".into(),
@@ -112,25 +129,31 @@ mod tests {
 
         let blockhash_subscriber = BlockhashSubscriber {
             last_twenty_hashes: Arc::new(RwLock::new(VecDeque::from_iter(
-                std::iter::repeat(Hash::new_unique())
-                    .take(19)
-                    .chain([oldest_block_hash, oldest_block_hash]),
+                [oldest_block_hash]
+                    .into_iter()
+                    .chain(std::iter::repeat(Hash::new_unique()).take(20)),
             ))),
             unsub: Mutex::default(),
             rpc_client: Arc::new(mock_rpc),
-            refresh_frequency: Duration::from_secs(2),
+            refresh_frequency: Duration::from_secs(4),
         };
 
-        assert!(blockhash_subscriber.get_latest_blockhash().is_none());
-        blockhash_subscriber.subscribe();
-
+        // valid hash is oldest (most finalized)
         assert_eq!(
             blockhash_subscriber.get_valid_blockhash().unwrap(),
             oldest_block_hash
         );
+        assert!(blockhash_subscriber.get_latest_blockhash().unwrap() != latest_block_hash);
+
+        // after subscribe blockhashes, next update is observable
+        blockhash_subscriber.subscribe();
+        tokio::time::sleep(Duration::from_secs(2)).await;
         assert_eq!(
             blockhash_subscriber.get_latest_blockhash().unwrap(),
             latest_block_hash
         );
+
+        // oldest hash updated as buffer updates
+        assert!(blockhash_subscriber.get_valid_blockhash().unwrap() != oldest_block_hash);
     }
 }

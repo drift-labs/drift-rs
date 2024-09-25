@@ -159,12 +159,15 @@ mod tests {
     use solana_sdk::pubkey;
 
     use super::*;
-    use crate::{constants::DEFAULT_PUBKEY, utils::envs::mainnet_endpoint, Wallet};
+    use crate::{constants::DEFAULT_PUBKEY, Wallet};
 
     #[tokio::test]
     async fn test_user_subscribe() {
         let _ = env_logger::try_init();
-        let user_map = UserMap::new(mainnet_endpoint(), CommitmentConfig::confirmed());
+        let user_map = UserMap::new(
+            "https://api.mainnet-beta.solana.com".into(),
+            CommitmentConfig::confirmed(),
+        );
         let user_1 = Wallet::derive_user_account(
             &pubkey!("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"),
             0,
@@ -181,7 +184,7 @@ mod tests {
         assert!(res1.and(res2).is_ok());
 
         let handle = tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_secs(2)).await;
+            tokio::time::sleep(Duration::from_secs(5)).await;
             let user_account_data = user_map.user_account_data(&user_1);
             assert!(user_account_data.is_some_and(|x| x.authority != DEFAULT_PUBKEY));
             user_map.unsubscribe_user(&user_1);
