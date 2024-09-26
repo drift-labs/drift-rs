@@ -69,7 +69,7 @@ impl AuctionSubscriber {
 #[cfg(feature = "rpc_tests")]
 mod tests {
     use super::*;
-    use crate::utils::envs::mainnet_endpoint;
+    use crate::utils::test_envs::mainnet_endpoint;
 
     #[tokio::test]
     async fn test_auction_subscriber() {

@@ -313,7 +313,7 @@ mod tests {
     use crate::{
         drift_idl::accounts::{PerpMarket, SpotMarket},
         marketmap::MarketMap,
-        utils::envs::mainnet_endpoint,
+        utils::test_envs::mainnet_endpoint,
     };
 
     #[tokio::test]

@@ -219,7 +219,7 @@ mod tests {
     use solana_sdk::commitment_config::CommitmentLevel;
 
     use super::*;
-    use crate::utils::envs::mainnet_endpoint;
+    use crate::utils::test_envs::mainnet_endpoint;
 
     #[tokio::test]
     async fn test_marketmap_perp() {

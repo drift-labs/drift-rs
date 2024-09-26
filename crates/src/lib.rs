@@ -1670,7 +1670,7 @@ mod tests {
     #[tokio::test]
     #[cfg(feature = "rpc_tests")]
     async fn test_marketmap_subscribe() {
-        use utils::envs::mainnet_endpoint;
+        use utils::test_envs::mainnet_endpoint;
 
         let client = DriftClient::new(
             Context::MainNet,

@@ -50,4 +50,3 @@ hex-literal = "*"
 
 [build-dependencies]
 drift-idl-gen = { "path" = "crates/drift-idl-gen"}
-pkg-config = "*"

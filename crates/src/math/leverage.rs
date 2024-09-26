@@ -79,7 +79,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        utils::envs::{mainnet_endpoint, test_keypair},
+        utils::test_envs::{mainnet_endpoint, test_keypair},
         Context, RpcAccountProvider, Wallet,
     };
 

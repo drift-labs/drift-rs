@@ -129,14 +129,18 @@ pub(crate) fn zero_account_to_bytes<T: bytemuck::Pod + anchor_lang::Discriminato
     account_data
 }
 
-#[cfg(any(test, feature = "rpc_tests"))]
-pub mod envs {
+pub mod test_envs {
     //! test env vars
     use solana_sdk::signature::Keypair;
 
     /// solana mainnet endpoint
     pub fn mainnet_endpoint() -> String {
-        std::env::var("TEST_MAINNET_ENDPOINT").expect("TEST_MAINNET_ENDPOINT set")
+        std::env::var("MAINNET_RPC_ENDPOINT").expect("TEST_MAINNET_ENDPOINT set")
+    }
+    /// solana devnet endpoint
+    pub fn devnet_endpoint() -> String {
+        std::env::var("DEVNET_RPC_ENDPOINT")
+            .unwrap_or_else(|_| "https://api.devnet.solana.com".to_string())
     }
     /// keypair for integration tests
     pub fn test_keypair() -> Keypair {

@@ -121,7 +121,7 @@ mod tests {
     use std::str::FromStr;
 
     use super::*;
-    use crate::utils::envs::mainnet_endpoint;
+    use crate::utils::test_envs::mainnet_endpoint;
 
     #[tokio::test]
     async fn test_subscribe() {

@@ -453,7 +453,7 @@ mod tests {
     async fn calculate_liq_price() {
         use solana_client::nonblocking::rpc_client::RpcClient;
 
-        use crate::{utils::envs::mainnet_endpoint, Wallet};
+        use crate::{utils::test_envs::mainnet_endpoint, Wallet};
 
         let wallet = Wallet::read_only(solana_sdk::pubkey!(
             "DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"
@@ -479,7 +479,7 @@ mod tests {
     async fn calculate_margin_requirements_works() {
         use solana_client::nonblocking::rpc_client::RpcClient;
 
-        use crate::{utils::envs::mainnet_endpoint, Wallet};
+        use crate::{utils::test_envs::mainnet_endpoint, Wallet};
 
         let wallet = Wallet::read_only(solana_sdk::pubkey!(
             "DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"

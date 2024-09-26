@@ -1,26 +1,18 @@
 use drift_sdk::{
     event_subscriber::RpcClient,
     get_market_accounts,
-    math::constants::{BASE_PRECISION_I64, PRICE_PRECISION_U64},
+    math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
     types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam},
+    utils::test_envs::{devnet_endpoint, test_keypair},
     DriftClient, TransactionBuilder, Wallet,
 };
 use solana_sdk::signature::Keypair;
 
-const LAMPORTS_PER_SOL_I64: i64 = 1_000_000_000;
-
-/// keypair for integration tests
-fn test_keypair() -> Keypair {
-    let private_key = std::env::var("TEST_PRIVATE_KEY").expect("TEST_PRIVATE_KEY set");
-    Keypair::from_base58_string(private_key.as_str())
-}
-
-#[ignore]
 #[tokio::test]
 async fn get_oracle_prices() {
     let client = DriftClient::new(
         Context::DevNet,
-        RpcClient::new("https://api.devnet.solana.com".into()),
+        RpcClient::new(devnet_endpoint()),
         Keypair::new().into(),
     )
     .await
@@ -37,7 +29,7 @@ async fn get_oracle_prices() {
 async fn get_market_accounts_works() {
     let client = DriftClient::new(
         Context::DevNet,
-        RpcClient::new("https://api.devnet.solana.com".into()),
+        RpcClient::new(devnet_endpoint()),
         Keypair::new().into(),
     )
     .await
@@ -53,7 +45,7 @@ async fn place_and_cancel_orders() {
     let wallet: Wallet = test_keypair().into();
     let client = DriftClient::new(
         Context::DevNet,
-        RpcClient::new("https://api.devnet.solana.com".into()),
+        RpcClient::new(devnet_endpoint()),
         wallet.clone(),
     )
     .await
@@ -101,7 +93,7 @@ async fn place_and_take() {
     let wallet: Wallet = test_keypair().into();
     let client = DriftClient::new(
         Context::DevNet,
-        RpcClient::new("https://api.devnet.solana.com".into()),
+        RpcClient::new(devnet_endpoint()),
         wallet.clone(),
     )
     .await

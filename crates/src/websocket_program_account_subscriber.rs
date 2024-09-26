@@ -163,7 +163,7 @@ mod tests {
     use crate::{
         drift_idl::accounts::User,
         memcmp::{get_non_idle_user_filter, get_user_filter},
-        utils::envs::mainnet_endpoint,
+        utils::test_envs::mainnet_endpoint,
     };
 
     #[tokio::test]
