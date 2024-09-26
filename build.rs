@@ -90,7 +90,7 @@ fn main() {
             .args([
                 "-sf",
                 libffi_out_path.to_str().expect("ffi build path"),
-                &format!("/usr/local/lib/"),
+                "/usr/local/lib/",
             ])
             .output()
             .expect("install ok");

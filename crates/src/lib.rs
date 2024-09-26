@@ -37,7 +37,7 @@ use crate::{
     marketmap::MarketMap,
     oraclemap::{Oracle, OracleMap},
     types::{
-        accounts::{PerpMarket, SpotMarket, State, User, UserStats},
+        accounts::{PerpMarket, SpotMarket, User, UserStats},
         *,
     },
     user::UserMap,
@@ -1431,50 +1431,6 @@ pub fn build_accounts(
     let mut account_metas = base_accounts.to_account_metas();
     account_metas.extend(accounts.into_iter().map(Into::into));
     account_metas
-}
-
-/// Fetch all market accounts from drift program (does not require `getProgramAccounts` RPC which is often unavailable)
-pub async fn get_market_accounts(
-    client: &RpcClient,
-) -> SdkResult<(Vec<SpotMarket>, Vec<PerpMarket>)> {
-    let state_data = client
-        .get_account_data(state_account())
-        .await
-        .expect("state account fetch");
-
-    let state =
-        State::try_deserialize_unchecked(&mut state_data.as_slice()).expect("state deserializes");
-
-    let spot_market_pdas: Vec<Pubkey> = (0..state.number_of_spot_markets)
-        .map(derive_spot_market_account)
-        .collect();
-
-    let perp_market_pdas: Vec<Pubkey> = (0..state.number_of_markets)
-        .map(derive_perp_market_account)
-        .collect();
-
-    let (spot_markets, perp_markets) = tokio::join!(
-        client.get_multiple_accounts(spot_market_pdas.as_slice()),
-        client.get_multiple_accounts(perp_market_pdas.as_slice())
-    );
-
-    let spot_markets = spot_markets?
-        .into_iter()
-        .map(|x| {
-            let account = x.unwrap();
-            SpotMarket::try_deserialize(&mut account.data.as_slice()).expect("market deserializes")
-        })
-        .collect();
-
-    let perp_markets = perp_markets?
-        .into_iter()
-        .map(|x| {
-            let account = x.unwrap();
-            PerpMarket::try_deserialize(&mut account.data.as_slice()).expect("market deserializes")
-        })
-        .collect();
-
-    Ok((spot_markets, perp_markets))
 }
 
 /// Drift wallet

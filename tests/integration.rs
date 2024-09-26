@@ -1,6 +1,5 @@
 use drift_sdk::{
     event_subscriber::RpcClient,
-    get_market_accounts,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
     types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam},
     utils::test_envs::{devnet_endpoint, test_keypair},
@@ -26,22 +25,8 @@ async fn get_oracle_prices() {
 }
 
 #[tokio::test]
-async fn get_market_accounts_works() {
-    let client = DriftClient::new(
-        Context::DevNet,
-        RpcClient::new(devnet_endpoint()),
-        Keypair::new().into(),
-    )
-    .await
-    .expect("connects");
-
-    let (spot, perp) = get_market_accounts(client.inner()).await.unwrap();
-    assert!(spot.len() > 1);
-    assert!(perp.len() > 1);
-}
-
-#[tokio::test]
 async fn place_and_cancel_orders() {
+    let _ = env_logger::try_init();
     let wallet: Wallet = test_keypair().into();
     let client = DriftClient::new(
         Context::DevNet,
@@ -50,9 +35,10 @@ async fn place_and_cancel_orders() {
     )
     .await
     .expect("connects");
+    client.subscribe().await.unwrap();
 
-    let sol_perp = client.market_lookup("eth-perp").expect("exists");
-    let sol_spot = client.market_lookup("eth").expect("exists");
+    let btc_perp = client.market_lookup("btc-perp").expect("exists");
+    let sol_spot = client.market_lookup("sol").expect("exists");
 
     let user: User = client
         .get_user_account(&wallet.default_sub_account())
@@ -66,7 +52,7 @@ async fn place_and_cancel_orders() {
     )
     .cancel_all_orders()
     .place_orders(vec![
-        NewOrder::limit(sol_perp)
+        NewOrder::limit(btc_perp)
             .amount(1 * BASE_PRECISION_I64)
             .price(40 * PRICE_PRECISION_U64)
             .post_only(PostOnlyParam::MustPostOnly)
@@ -85,6 +71,7 @@ async fn place_and_cancel_orders() {
     let result = client.sign_and_send(tx).await;
     dbg!(&result);
     assert!(result.is_ok());
+    client.unsubscribe().await.unwrap();
 }
 
 #[ignore]

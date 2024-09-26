@@ -703,11 +703,12 @@ mod test {
     use tokio::sync::Mutex;
 
     use super::*;
-    use crate::{async_utils::retry_policy, SdkError};
+    use crate::SdkError;
 
     #[cfg(feature = "rpc_tests")]
     #[tokio::test]
     async fn event_streaming_logs() {
+        use crate::async_utils::retry_policy;
         let mut event_stream = EventSubscriber::subscribe(
             "wss://api.devnet.solana.com",
             Pubkey::from_str("9JtczxrJjPM4J1xooxr2rFXmRivarb4BwjNiBgXDwe2p").unwrap(),

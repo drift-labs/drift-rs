@@ -3,8 +3,9 @@ use std::sync::{
     Arc, Mutex,
 };
 
-use anchor_lang::AnchorDeserialize;
+use anchor_lang::{AccountDeserialize, AnchorDeserialize};
 use dashmap::DashMap;
+use futures_util::{stream::FuturesUnordered, StreamExt};
 use serde_json::json;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
@@ -13,18 +14,21 @@ use solana_client::{
     rpc_request::RpcRequest,
     rpc_response::{OptionalContext, RpcKeyedAccount},
 };
-use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
+use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{
-    constants,
+    accounts::State,
+    constants::{self, derive_perp_market_account, derive_spot_market_account, state_account},
     drift_idl::types::{MarketType, OracleSource},
     memcmp::get_market_filter,
     utils::get_ws_url,
     websocket_program_account_subscriber::{
         ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
     },
-    DataAndSlot, PerpMarket, SdkResult, SpotMarket, UnsubHandle,
+    DataAndSlot, PerpMarket, SdkError, SdkResult, SpotMarket, UnsubHandle,
 };
+
+const LOG_TARGET: &str = "marketmap";
 
 pub trait Market {
     const MARKET_TYPE: MarketType;
@@ -61,7 +65,6 @@ pub struct MarketMap<T: AnchorDeserialize + Send> {
     marketmap: Arc<DashMap<u16, DataAndSlot<T>>>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
-    commitment: CommitmentConfig,
     rpc: RpcClient,
     unsub: Mutex<Option<UnsubHandle>>,
 }
@@ -91,13 +94,13 @@ where
             marketmap,
             sync_lock,
             latest_slot: Arc::new(AtomicU64::new(0)),
-            commitment,
             rpc,
             unsub: Mutex::default(),
         }
     }
 
     pub async fn subscribe(&self) -> SdkResult<()> {
+        log::debug!(target: LOG_TARGET, "subscribing: {:?}", T::MARKET_TYPE);
         if self.sync_lock.is_some() {
             self.sync().await?;
         }
@@ -117,11 +120,13 @@ where
         });
         let mut guard = self.unsub.lock().unwrap();
         *guard = Some(unsub);
+        log::debug!(target: LOG_TARGET, "subscribed: {:?}", T::MARKET_TYPE);
 
         Ok(())
     }
 
     pub fn unsubscribe(&self) -> SdkResult<()> {
+        log::debug!(target: LOG_TARGET, "unsubscribing: {:?}", T::MARKET_TYPE);
         let mut guard = self.unsub.lock().expect("uncontested");
         if let Some(unsub) = guard.take() {
             if unsub.send(()).is_err() {
@@ -130,6 +135,7 @@ where
             self.marketmap.clear();
             self.latest_slot.store(0, Ordering::Relaxed);
         }
+        log::debug!(target: LOG_TARGET, "unsubscribed: {:?}", T::MARKET_TYPE);
 
         Ok(())
     }
@@ -169,43 +175,21 @@ where
             Err(_) => return Ok(()),
         };
 
-        let options = self.subscription.options.clone();
-        let account_config = RpcAccountInfoConfig {
-            commitment: Some(self.commitment),
-            encoding: Some(options.encoding),
-            ..RpcAccountInfoConfig::default()
-        };
-
-        let gpa_config = RpcProgramAccountsConfig {
-            filters: Some(options.filters),
-            account_config,
-            with_context: Some(true),
-            sort_results: None,
-        };
-
-        let response: OptionalContext<Vec<RpcKeyedAccount>> = self
-            .rpc
-            .send(
-                RpcRequest::GetProgramAccounts,
-                json!([constants::PROGRAM_ID.to_string(), gpa_config]),
-            )
-            .await?;
-
-        if let OptionalContext::Context(accounts) = response {
-            for account in accounts.value {
-                let slot = accounts.context.slot;
-                let market_data = account.account.data.decode().expect("Market data");
-                let data: T = AnchorDeserialize::deserialize(&mut &market_data[8..])
-                    .expect("deserializes Market");
-                self.marketmap
-                    .insert(data.market_index(), DataAndSlot { data, slot });
-            }
-
-            self.latest_slot
-                .store(accounts.context.slot, Ordering::Relaxed);
+        log::debug!(target: LOG_TARGET, "syncing marketmap: {:?}", T::MARKET_TYPE);
+        let (markets, latest_slot) = get_market_accounts_with_fallback::<T>(&self.rpc).await?;
+        for market in markets {
+            self.marketmap.insert(
+                market.market_index(),
+                DataAndSlot {
+                    data: market,
+                    slot: latest_slot,
+                },
+            );
         }
+        self.latest_slot.store(latest_slot, Ordering::Relaxed);
 
         drop(lock);
+        log::debug!(target: LOG_TARGET, "synced marketmap: {:?}", T::MARKET_TYPE);
         Ok(())
     }
 
@@ -214,8 +198,128 @@ where
     }
 }
 
-#[cfg(feature = "rpc_tests")]
+/// Fetch all market (program) accounts with multiple fallbacks
+///
+/// Tries progressively less intensive RPC methods for wider compatiblity with RPC providers:
+///     getProgramAccounts, getMultipleAccounts, latstly multiple getAccountInfo
+///
+/// Returns deserialized accounts and retreived slot
+async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
+    rpc: &RpcClient,
+) -> SdkResult<(Vec<T>, Slot)> {
+    let mut markets = Vec::<T>::default();
+
+    let account_config = RpcAccountInfoConfig {
+        commitment: Some(rpc.commitment()),
+        encoding: Some(UiAccountEncoding::Base64Zstd),
+        ..RpcAccountInfoConfig::default()
+    };
+
+    let gpa_config = RpcProgramAccountsConfig {
+        filters: Some(vec![get_market_filter(T::MARKET_TYPE)]),
+        account_config: account_config.clone(),
+        with_context: Some(true),
+        sort_results: None,
+    };
+
+    // try 'getProgramAccounts'
+    let response: Result<OptionalContext<Vec<RpcKeyedAccount>>, _> = rpc
+        .send(
+            RpcRequest::GetProgramAccounts,
+            json!([constants::PROGRAM_ID.to_string(), gpa_config]),
+        )
+        .await;
+
+    if let Ok(OptionalContext::Context(accounts)) = response {
+        for account in accounts.value {
+            let market_data = account.account.data.decode().expect("Market data");
+            let data = T::deserialize(&mut &market_data[8..]).expect("deserializes Market");
+            markets.push(data);
+        }
+        return Ok((markets, accounts.context.slot));
+    }
+    log::debug!(target: LOG_TARGET, "syncing with getProgramAccounts failed: {:?}", T::MARKET_TYPE);
+
+    let state_response = rpc
+        .get_account_with_config(state_account(), account_config)
+        .await
+        .expect("state account fetch");
+
+    let state_data = state_response.value.expect("state has data").data;
+    let state =
+        State::try_deserialize_unchecked(&mut state_data.as_slice()).expect("state deserializes");
+
+    let market_pdas: Vec<Pubkey> = match T::MARKET_TYPE {
+        MarketType::Spot => (0..state.number_of_spot_markets)
+            .map(derive_spot_market_account)
+            .collect(),
+        MarketType::Perp => (0..state.number_of_markets)
+            .map(derive_perp_market_account)
+            .collect(),
+    };
+
+    // try 'getMultipleAccounts'
+    let market_respones = rpc
+        .get_multiple_accounts_with_commitment(market_pdas.as_slice(), rpc.commitment())
+        .await;
+    if let Ok(response) = market_respones {
+        for account in response.value {
+            match account {
+                Some(account) => {
+                    markets.push(
+                        T::deserialize(&mut &account.data.as_slice()[8..])
+                            .expect("market deserializes"),
+                    );
+                }
+                None => {
+                    log::warn!("failed to fetch market account");
+                    return Err(SdkError::InvalidAccount)?;
+                }
+            }
+        }
+        return Ok((markets, response.context.slot));
+    }
+    log::debug!(target: LOG_TARGET, "syncing with getMultipleAccounts failed: {:?}", T::MARKET_TYPE);
+
+    // try multiple 'getAccount's
+    let mut market_requests =
+        FuturesUnordered::from_iter(market_pdas.iter().map(|acc| rpc.get_account_data(acc)));
+
+    while let Some(market_repsonse) = market_requests.next().await {
+        match market_repsonse {
+            Ok(data) => {
+                markets
+                    .push(T::deserialize(&mut &data.as_slice()[8..]).expect("market deserializes"));
+            }
+            Err(err) => {
+                log::warn!("failed to fetch market account: {err:?}");
+                return Err(err)?;
+            }
+        }
+    }
+
+    Ok((markets, state_response.context.slot))
+}
+
+#[cfg(test)]
 mod tests {
+    use solana_client::nonblocking::rpc_client::RpcClient;
+
+    use super::get_market_accounts_with_fallback;
+    use crate::{accounts::PerpMarket, utils::test_envs::devnet_endpoint};
+
+    #[tokio::test]
+    async fn get_market_accounts_with_fallback_works() {
+        let result =
+            get_market_accounts_with_fallback::<PerpMarket>(&RpcClient::new(devnet_endpoint()))
+                .await;
+
+        assert!(result.is_ok_and(|r| r.0.len() > 0 && r.1 > 0));
+    }
+}
+
+#[cfg(feature = "rpc_tests")]
+mod rpc_tests {
     use solana_sdk::commitment_config::CommitmentLevel;
 
     use super::*;

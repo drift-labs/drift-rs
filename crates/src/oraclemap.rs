@@ -5,8 +5,11 @@ use std::sync::{
 
 use dashmap::DashMap;
 use futures_util::{stream::FuturesUnordered, StreamExt};
-use solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcAccountInfoConfig};
-use solana_sdk::{account::Account, commitment_config::CommitmentConfig, pubkey::Pubkey};
+use log::warn;
+use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_sdk::{
+    account::Account, clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey,
+};
 use tokio::sync::RwLock;
 
 use crate::{
@@ -14,8 +17,10 @@ use crate::{
     ffi::{get_oracle_price, OraclePriceData},
     utils::get_ws_url,
     websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber},
-    SdkResult, UnsubHandle,
+    SdkError, SdkResult, UnsubHandle,
 };
+
+const LOG_TARGET: &str = "oraclemap";
 
 #[derive(Clone, Debug)]
 pub struct Oracle {
@@ -139,63 +144,49 @@ impl OracleMap {
             Err(_) => return Ok(()),
         };
 
-        let account_config = RpcAccountInfoConfig {
-            commitment: Some(self.rpc.commitment()),
-            encoding: None,
-            ..RpcAccountInfoConfig::default()
-        };
-
-        let mut pubkeys = self
+        let oralce_pubkeys = self
             .oracle_infos
             .iter()
             .map(|oracle_info_ref| *oracle_info_ref.key())
             .collect::<Vec<Pubkey>>();
-        pubkeys.sort();
 
-        let mut oracle_infos = self
-            .oracle_infos
-            .iter()
-            .map(|oracle_info_ref| (*oracle_info_ref.key(), *oracle_info_ref.value()))
-            .collect::<Vec<(Pubkey, OracleSource)>>();
-        oracle_infos.sort_by_key(|key| key.0);
+        let (synced_oracles, latest_slot) =
+            match get_multi_account_data_with_fallback(&self.rpc, &oralce_pubkeys).await {
+                Ok(result) => result,
+                Err(err) => {
+                    warn!(target: LOG_TARGET, "failed to sync oracle accounts");
+                    return Err(err);
+                }
+            };
 
-        let response = self
-            .rpc
-            .get_multiple_accounts_with_config(&pubkeys, account_config)
-            .await?;
-
-        if response.value.len() != pubkeys.len() {
-            return Err(crate::SdkError::Generic(format!(
-                "failed to get all oracle accounts, expected: {}, got: {}",
-                pubkeys.len(),
-                response.value.len()
-            )));
+        if synced_oracles.len() != oralce_pubkeys.len() {
+            warn!(target: LOG_TARGET, "failed to sync oracle all accounts");
+            return Err(SdkError::InvalidOracle);
         }
 
-        let slot = response.context.slot;
-
-        for (account, oracle_info) in response.value.iter().zip(oracle_infos.iter()) {
-            if let Some(oracle_account) = account {
-                let oracle_pubkey = oracle_info.0;
-                let price_data = get_oracle_price(
-                    oracle_info.1,
-                    &mut (oracle_pubkey, oracle_account.clone()),
-                    slot,
-                )?;
-                self.oraclemap.insert(
-                    oracle_pubkey,
-                    Oracle {
-                        pubkey: oracle_pubkey,
-                        data: price_data,
-                        source: oracle_info.1,
-                        slot,
-                        raw: account.as_ref().expect("account").data.clone(),
-                    },
-                );
-            }
+        for (oracle_pubkey, oracle_account) in synced_oracles.iter() {
+            let oracle_source = self
+                .oracle_infos
+                .get(oracle_pubkey)
+                .expect("oracle info exists");
+            let price_data = get_oracle_price(
+                *oracle_source,
+                &mut (*oracle_pubkey, oracle_account.clone()),
+                latest_slot,
+            )?;
+            self.oraclemap.insert(
+                *oracle_pubkey,
+                Oracle {
+                    pubkey: *oracle_pubkey,
+                    data: price_data,
+                    source: *oracle_source,
+                    slot: latest_slot,
+                    raw: oracle_account.data.clone(),
+                },
+            );
         }
 
-        self.latest_slot.store(slot, Ordering::Relaxed);
+        self.latest_slot.store(latest_slot, Ordering::Relaxed);
 
         Ok(())
     }
@@ -305,6 +296,60 @@ fn handler_fn(
             log::error!("Failed to get oracle price: {err:?}")
         }
     }
+}
+
+/// Fetch all accounts with multiple fallbacks
+///
+/// Tries progressively less intensive RPC methods for wider compatiblity with RPC providers:
+///    getMultipleAccounts, latstly multiple getAccountInfo
+///
+/// Returns deserialized accounts and retreived slot
+async fn get_multi_account_data_with_fallback(
+    rpc: &RpcClient,
+    pubkeys: &[Pubkey],
+) -> SdkResult<(Vec<(Pubkey, Account)>, Slot)> {
+    let mut account_data = Vec::default();
+
+    // try 'getMultipleAccounts'
+    let accounts_response = rpc
+        .get_multiple_accounts_with_commitment(pubkeys, rpc.commitment())
+        .await;
+    if let Ok(response) = accounts_response {
+        for (pubkey, account) in pubkeys.iter().zip(response.value) {
+            let account = account.expect("market account exists");
+            account_data.push((*pubkey, account));
+        }
+        return Ok((account_data, response.context.slot));
+    }
+    log::debug!(target: LOG_TARGET, "syncing with getMultipleAccounts failed");
+
+    // try multiple 'getAccount's
+    let mut account_requests = FuturesUnordered::from_iter(pubkeys.iter().map(|p| async move {
+        (
+            p,
+            rpc.get_account_with_commitment(p, rpc.commitment()).await,
+        )
+    }));
+
+    let mut latest_slot = 0;
+    while let Some((pubkey, response)) = account_requests.next().await {
+        match response {
+            Ok(response) => {
+                let account = response.value.ok_or({
+                    log::warn!("failed to fetch oracle account");
+                    SdkError::InvalidOracle
+                })?;
+                latest_slot = latest_slot.max(response.context.slot);
+                account_data.push((*pubkey, account));
+            }
+            Err(err) => {
+                log::warn!("failed to fetch oracle account: {err:?}");
+                return Err(err)?;
+            }
+        }
+    }
+
+    Ok((account_data, latest_slot))
 }
 
 #[cfg(feature = "rpc_tests")]
