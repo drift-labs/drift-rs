@@ -129,6 +129,9 @@ impl MarketId {
     pub fn kind(&self) -> MarketType {
         self.kind
     }
+    pub fn to_parts(self) -> (u16, MarketType) {
+        (self.index, self.kind)
+    }
 }
 
 impl From<(u16, MarketType)> for MarketId {

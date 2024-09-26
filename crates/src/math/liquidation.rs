@@ -516,7 +516,7 @@ mod tests {
             ..Default::default()
         };
         user.spot_positions[0] = SpotPosition {
-            market_index: MarketId::QUOTE_SPOT.index,
+            market_index: MarketId::QUOTE_SPOT.index(),
             scaled_balance: 1_000 * SPOT_BALANCE_PRECISION_U64,
             ..Default::default()
         };
@@ -570,7 +570,7 @@ mod tests {
             ..Default::default()
         };
         user.spot_positions[0] = SpotPosition {
-            market_index: MarketId::QUOTE_SPOT.index,
+            market_index: MarketId::QUOTE_SPOT.index(),
             scaled_balance: 250_u64 * SPOT_BALANCE_PRECISION_U64,
             ..Default::default()
         };
@@ -621,7 +621,7 @@ mod tests {
             ..Default::default()
         };
         user.spot_positions[0] = SpotPosition {
-            market_index: MarketId::QUOTE_SPOT.index,
+            market_index: MarketId::QUOTE_SPOT.index(),
             scaled_balance: 250_u64 * SPOT_BALANCE_PRECISION_U64,
             ..Default::default()
         };

@@ -2,16 +2,9 @@
 
 use std::{borrow::Cow, sync::Arc, time::Duration};
 
-use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
-use constants::PROGRAM_ID;
+use anchor_lang::{AccountDeserialize, InstructionData};
 use futures_util::TryFutureExt;
-use solana_account_decoder::UiAccountEncoding;
-use solana_client::{
-    nonblocking::rpc_client::RpcClient,
-    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
-    rpc_filter::{Memcmp, RpcFilterType},
-    rpc_response::Response,
-};
+use solana_client::{nonblocking::rpc_client::RpcClient, rpc_response::Response};
 use solana_sdk::{
     account::Account,
     clock::Slot,
@@ -24,13 +17,12 @@ use solana_sdk::{
     transaction::VersionedTransaction,
 };
 pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
-use utils::get_http_url;
 
 use crate::{
     blockhash_subscriber::BlockhashSubscriber,
     constants::{
         derive_perp_market_account, derive_spot_market_account, state_account, MarketExt,
-        ProgramData,
+        ProgramData, PROGRAM_ID,
     },
     drift_idl::traits::ToAccountMetas,
     ffi::IntoFfi,
@@ -41,6 +33,7 @@ use crate::{
         *,
     },
     user::UserMap,
+    utils::get_http_url,
 };
 
 // utils
@@ -689,38 +682,6 @@ impl DriftClientBackend {
             .collect();
 
         Ok(fees)
-    }
-
-    /// Get all drift program accounts by Anchor type
-    #[allow(dead_code)]
-    async fn get_program_accounts<U: AccountDeserialize + Discriminator>(
-        &self,
-    ) -> SdkResult<Vec<U>> {
-        let accounts = self
-            .rpc_client
-            .get_program_accounts_with_config(
-                &constants::PROGRAM_ID,
-                RpcProgramAccountsConfig {
-                    filters: Some(vec![RpcFilterType::Memcmp(Memcmp::new_raw_bytes(
-                        0,
-                        U::DISCRIMINATOR.to_vec(),
-                    ))]),
-                    account_config: RpcAccountInfoConfig {
-                        encoding: Some(UiAccountEncoding::Base64Zstd),
-                        ..Default::default()
-                    },
-                    ..Default::default()
-                },
-            )
-            .await?;
-
-        accounts
-            .iter()
-            .map(|(_, account_data)| {
-                U::try_deserialize_unchecked(&mut account_data.data.as_ref())
-                    .map_err(|err| SdkError::Anchor(Box::new(err)))
-            })
-            .collect()
     }
 
     /// Fetch an `account` as an Anchor account type
@@ -1717,30 +1678,6 @@ mod tests {
             let slot = spot_market.unwrap().slot;
             dbg!(slot);
         }
-    }
-
-    #[tokio::test]
-    async fn get_market_accounts() {
-        let client = DriftClient::new(
-            Context::DevNet,
-            RpcClient::new(DEVNET_ENDPOINT.into()),
-            Keypair::new().into(),
-        )
-        .await
-        .unwrap();
-        let accounts: Vec<SpotMarket> = client
-            .backend
-            .get_program_accounts()
-            .await
-            .expect("found accounts");
-        assert!(accounts.len() > 1);
-
-        let accounts: Vec<PerpMarket> = client
-            .backend
-            .get_program_accounts()
-            .await
-            .expect("found accounts");
-        assert!(accounts.len() > 1);
     }
 
     #[tokio::test]

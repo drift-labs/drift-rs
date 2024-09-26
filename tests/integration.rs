@@ -67,8 +67,8 @@ async fn place_and_cancel_orders() {
             .post_only(PostOnlyParam::MustPostOnly)
             .build(),
     ])
-    .cancel_orders((btc_perp.index, btc_perp.kind), None)
-    .cancel_orders((sol_spot.index, sol_spot.kind), None)
+    .cancel_orders(btc_perp.to_parts(), None)
+    .cancel_orders(sol_spot.to_parts(), None)
     .build();
 
     dbg!(tx.clone());
