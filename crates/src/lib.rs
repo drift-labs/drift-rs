@@ -1581,7 +1581,7 @@ mod tests {
     use std::str::FromStr;
 
     use serde_json::json;
-    use solana_account_decoder::{UiAccount, UiAccountData};
+    use solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding};
     use solana_client::{
         rpc_client::Mocks,
         rpc_request::RpcRequest,

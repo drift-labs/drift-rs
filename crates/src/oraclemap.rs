@@ -85,6 +85,7 @@ impl OracleMap {
     }
 
     pub async fn subscribe(&self) -> SdkResult<()> {
+        log::debug!(target: LOG_TARGET, "subscribing");
         if self.sync_lock.is_some() {
             self.sync().await?;
         }
@@ -118,6 +119,7 @@ impl OracleMap {
             oracle_subscriptions.push(unsub.expect("oracle subscribed"));
         }
 
+        log::debug!(target: LOG_TARGET, "subscribed");
         Ok(())
     }
 
@@ -137,6 +139,7 @@ impl OracleMap {
 
     #[allow(clippy::await_holding_lock)]
     async fn sync(&self) -> SdkResult<()> {
+        log::debug!(target: LOG_TARGET, "start sync");
         let sync_lock = self.sync_lock.as_ref().expect("expected sync lock");
 
         let _lock = match sync_lock.try_lock() {
@@ -187,6 +190,7 @@ impl OracleMap {
         }
 
         self.latest_slot.store(latest_slot, Ordering::Relaxed);
+        log::debug!(target: LOG_TARGET, "synced");
 
         Ok(())
     }
