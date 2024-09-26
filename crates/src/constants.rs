@@ -5,7 +5,7 @@ use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey
 use crate::{
     drift_idl::accounts::{PerpMarket, SpotMarket},
     types::Context,
-    MarketId, MarketType,
+    MarketId, MarketType, OracleSource,
 };
 
 /// Drift program address
@@ -21,17 +21,10 @@ static STATE_ACCOUNT: OnceLock<Pubkey> = OnceLock::new();
 pub const TOKEN_PROGRAM_ID: Pubkey =
     solana_sdk::pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
-/// Return the market lookup table
-pub(crate) const fn market_lookup_table(context: Context) -> Pubkey {
-    match context {
-        Context::DevNet => {
-            solana_sdk::pubkey!("FaMS3U4uBojvGn5FSDEPimddcXsCfwkKsFgMVVnDdxGb")
-        }
-        Context::MainNet => {
-            solana_sdk::pubkey!("D9cnvzswDikQDf53k4HpQ3KJ9y1Fv3HGGDFYMXnK5T6c")
-        }
-    }
-}
+/// Drift market lookup table (DevNet)
+pub const LUT_DEVNET: Pubkey = solana_sdk::pubkey!("FaMS3U4uBojvGn5FSDEPimddcXsCfwkKsFgMVVnDdxGb");
+/// Drift market lookup table (MainNet)
+pub const LUT_MAINNET: Pubkey = solana_sdk::pubkey!("D9cnvzswDikQDf53k4HpQ3KJ9y1Fv3HGGDFYMXnK5T6c");
 
 /// Drift state account
 pub fn state_account() -> &'static Pubkey {
@@ -172,9 +165,13 @@ impl ProgramData {
     pub fn markets_to_accounts(&self, markets: &[MarketId]) -> Vec<Pubkey> {
         let accounts: Vec<Pubkey> = markets
             .iter()
-            .filter_map(|x| match x.kind {
-                MarketType::Spot => self.spot_market_config_by_index(x.index).map(|x| x.pubkey),
-                MarketType::Perp => self.perp_market_config_by_index(x.index).map(|x| x.pubkey),
+            .filter_map(|x| match x.kind() {
+                MarketType::Spot => self
+                    .spot_market_config_by_index(x.index())
+                    .map(|x| x.pubkey),
+                MarketType::Perp => self
+                    .perp_market_config_by_index(x.index())
+                    .map(|x| x.pubkey),
             })
             .collect();
 
@@ -182,10 +179,30 @@ impl ProgramData {
     }
 }
 
+/// Map oracle `source` to its owner pubkey (network depdendent)
+pub fn oracle_source_to_owner(context: Context, source: OracleSource) -> Pubkey {
+    match source {
+        OracleSource::Pyth
+        | OracleSource::Pyth1K
+        | OracleSource::Pyth1M
+        | OracleSource::PythStableCoin => context.pyth(),
+        OracleSource::PythPull
+        | OracleSource::Pyth1KPull
+        | OracleSource::Pyth1MPull
+        | OracleSource::PythStableCoinPull => ids::drift_oracle_receiver_program::ID,
+        OracleSource::Switchboard => ids::switchboard_program::ID,
+        OracleSource::SwitchboardOnDemand => ids::switchboard_on_demand::ID,
+        OracleSource::QuoteAsset => DEFAULT_PUBKEY,
+        OracleSource::Prelaunch => PROGRAM_ID,
+    }
+}
+
 pub mod ids {
     pub mod pyth_program {
         use solana_sdk::pubkey::Pubkey;
         pub const ID: Pubkey = solana_sdk::pubkey!("FsJ3A3u2vn5cTVofAjvy6y5kwABJAqYWpe4975bi2epH");
+        pub const ID_DEVNET: Pubkey =
+            solana_sdk::pubkey!("gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s");
     }
 
     pub mod wormhole_program {

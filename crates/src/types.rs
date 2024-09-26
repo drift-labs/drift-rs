@@ -25,7 +25,11 @@ pub use crate::drift_idl::{
     instructions::{self},
     types::*,
 };
-use crate::{drift_idl::errors::ErrorCode, Wallet};
+use crate::{
+    constants::{ids, LUT_DEVNET, LUT_MAINNET},
+    drift_idl::errors::ErrorCode,
+    Wallet,
+};
 
 /// Handle for unsubscribing from network updates
 pub type UnsubHandle = oneshot::Sender<()>;
@@ -37,13 +41,48 @@ pub fn is_one_of_variant<T: PartialEq>(value: &T, variants: &[T]) -> bool {
 }
 
 /// Drift program context
-#[derive(Debug, Copy, Clone)]
-#[repr(u8)]
-pub enum Context {
-    /// Target DevNet
-    DevNet,
-    /// Target MaiNnet
-    MainNet,
+///
+/// Contains network specific variables necessary for interacting with drift program
+/// on different networks
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct Context {
+    name: &'static str,
+    /// market lookup table
+    lut: Pubkey,
+    /// pyth program ID
+    pyth: Pubkey,
+}
+
+impl Context {
+    /// Target MainNet context
+    #[allow(non_upper_case_globals)]
+    pub const MainNet: Context = Self {
+        name: "mainnet",
+        lut: LUT_MAINNET,
+        pyth: ids::pyth_program::ID,
+    };
+    /// Target DevNet context
+    #[allow(non_upper_case_globals)]
+    pub const DevNet: Context = Self {
+        name: "devnet",
+        lut: LUT_DEVNET,
+        pyth: ids::pyth_program::ID_DEVNET,
+    };
+
+    /// Return drift lookup table address
+    pub fn lut(&self) -> Pubkey {
+        self.lut
+    }
+
+    /// Return pyth owner address
+    pub fn pyth(&self) -> Pubkey {
+        self.pyth
+    }
+
+    /// Return name
+    pub fn name(&self) -> &'static str {
+        self.name
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -58,11 +97,16 @@ where
 /// Id of a Drift market
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct MarketId {
-    pub(crate) index: u16,
-    pub(crate) kind: MarketType,
+    index: u16,
+    kind: MarketType,
 }
 
 impl MarketId {
+    /// `MarketId` for the USDC Spot Market
+    pub const QUOTE_SPOT: Self = Self {
+        index: 0,
+        kind: MarketType::Spot,
+    };
     /// Id of a perp market
     pub const fn perp(index: u16) -> Self {
         Self {
@@ -77,12 +121,14 @@ impl MarketId {
             kind: MarketType::Spot,
         }
     }
-
-    /// `MarketId` for the USDC Spot Market
-    pub const QUOTE_SPOT: Self = Self {
-        index: 0,
-        kind: MarketType::Spot,
-    };
+    /// uint index of the market
+    pub fn index(&self) -> u16 {
+        self.index
+    }
+    /// type of the market
+    pub fn kind(&self) -> MarketType {
+        self.kind
+    }
 }
 
 impl From<(u16, MarketType)> for MarketId {

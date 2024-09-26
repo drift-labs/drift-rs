@@ -29,8 +29,8 @@ use utils::get_http_url;
 use crate::{
     blockhash_subscriber::BlockhashSubscriber,
     constants::{
-        derive_perp_market_account, derive_spot_market_account, market_lookup_table, state_account,
-        MarketExt, ProgramData,
+        derive_perp_market_account, derive_spot_market_account, state_account, MarketExt,
+        ProgramData,
     },
     drift_idl::traits::ToAccountMetas,
     ffi::IntoFfi,
@@ -79,6 +79,30 @@ pub mod user;
 #[cfg(feature = "dlob")]
 pub mod dlob;
 
+#[derive(Default)]
+/// Confgured markets
+pub enum ConfiguredMarkets {
+    #[default]
+    All,
+    Minimal {
+        perp: Vec<MarketId>,
+        spot: Vec<MarketId>,
+    },
+}
+
+impl ConfiguredMarkets {
+    /// Returns whether this config wants `market`
+    pub fn wants(&self, market: MarketId) -> bool {
+        match self {
+            Self::All => true,
+            Self::Minimal { perp, spot } => match market.kind() {
+                MarketType::Spot => spot.contains(&market),
+                MarketType::Perp => perp.contains(&market),
+            },
+        }
+    }
+}
+
 /// Drift Client API
 ///
 /// It is cheaply clone-able and consumers are encouraged to do so
@@ -87,6 +111,7 @@ pub mod dlob;
 #[derive(Clone)]
 #[must_use]
 pub struct DriftClient {
+    pub context: Context,
     backend: &'static DriftClientBackend,
     wallet: Wallet,
 }
@@ -102,7 +127,33 @@ impl DriftClient {
         let _ = get_http_url(&rpc_client.url())?;
         Ok(Self {
             backend: Box::leak(Box::new(
-                DriftClientBackend::new(context, Arc::new(rpc_client)).await?,
+                DriftClientBackend::new(context, Arc::new(rpc_client), ConfiguredMarkets::All)
+                    .await?,
+            )),
+            context,
+            wallet,
+        })
+    }
+
+    /// Create a new `DriftClient` instance configured for use with a subset of markets
+    /// Useful to reduce the quantity of network subscriptions/requests
+    ///
+    /// `context` devnet or mainnet
+    /// `rpc_client` an RpcClient instance
+    /// `wallet` wallet to use for tx signing convenience
+    /// `markets`
+    pub async fn with_markets(
+        context: Context,
+        rpc_client: RpcClient,
+        wallet: Wallet,
+        markets: ConfiguredMarkets,
+    ) -> SdkResult<Self> {
+        // check URL format here to fail early, otherwise happens at request time.
+        let _ = get_http_url(&rpc_client.url())?;
+        Ok(Self {
+            context,
+            backend: Box::leak(Box::new(
+                DriftClientBackend::new(context, Arc::new(rpc_client), markets).await?,
             )),
             wallet,
         })
@@ -463,13 +514,17 @@ pub struct DriftClientBackend {
 
 impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
-    async fn new(context: Context, rpc_client: Arc<RpcClient>) -> SdkResult<Self> {
+    async fn new(
+        context: Context,
+        rpc_client: Arc<RpcClient>,
+        configured_markets: ConfiguredMarkets,
+    ) -> SdkResult<Self> {
         let perp_market_map =
             MarketMap::<PerpMarket>::new(rpc_client.commitment(), rpc_client.url(), true);
         let spot_market_map =
             MarketMap::<SpotMarket>::new(rpc_client.commitment(), rpc_client.url(), true);
 
-        let lookup_table_address = market_lookup_table(context);
+        let lookup_table_address = context.lut();
 
         let (_, _, lut) = tokio::try_join!(
             perp_market_map.sync(),
@@ -480,8 +535,16 @@ impl DriftClientBackend {
         )?;
         let lookup_table = utils::deserialize_alt(lookup_table_address, &lut)?;
 
-        let perp_oracles = perp_market_map.oracles();
-        let spot_oracles = spot_market_map.oracles();
+        let perp_oracles = perp_market_map
+            .oracles()
+            .into_iter()
+            .filter(|(idx, _, _)| configured_markets.wants(MarketId::perp(*idx)))
+            .collect();
+        let spot_oracles = spot_market_map
+            .oracles()
+            .into_iter()
+            .filter(|(idx, _, _)| configured_markets.wants(MarketId::spot(*idx)))
+            .collect();
 
         let oracle_map = OracleMap::new(
             rpc_client.commitment(),
@@ -602,14 +665,14 @@ impl DriftClientBackend {
     ) -> SdkResult<Vec<u64>> {
         let addresses: Vec<Pubkey> = writable_markets
             .iter()
-            .filter_map(|x| match x.kind {
+            .filter_map(|x| match x.kind() {
                 MarketType::Spot => self
                     .program_data
-                    .spot_market_config_by_index(x.index)
+                    .spot_market_config_by_index(x.index())
                     .map(|x| x.pubkey),
                 MarketType::Perp => self
                     .program_data
-                    .perp_market_config_by_index(x.index)
+                    .perp_market_config_by_index(x.index())
                     .map(|x| x.pubkey),
             })
             .collect();
@@ -729,18 +792,18 @@ impl DriftClientBackend {
     /// Fetch the live oracle price for `market`
     /// Uses latest local value from an `OracleMap` if subscribed, fallsback to network query
     pub async fn oracle_price(&self, market: MarketId) -> SdkResult<i64> {
-        let (oracle, oracle_source) = match market.kind {
+        let (oracle, oracle_source) = match market.kind() {
             MarketType::Perp => {
                 let market = self
                     .program_data
-                    .perp_market_config_by_index(market.index)
+                    .perp_market_config_by_index(market.index())
                     .ok_or(SdkError::InvalidOracle)?;
                 (market.amm.oracle, market.amm.oracle_source)
             }
             MarketType::Spot => {
                 let market = self
                     .program_data
-                    .spot_market_config_by_index(market.index)
+                    .spot_market_config_by_index(market.index())
                     .ok_or(SdkError::InvalidOracle)?;
                 (market.oracle, market.oracle_source)
             }
@@ -1399,12 +1462,12 @@ pub fn build_accounts(
         }
     };
 
-    for MarketId { index, kind } in markets_writable {
-        include_market(*index, *kind, true);
+    for market in markets_writable {
+        include_market(market.index(), market.kind(), true);
     }
 
-    for MarketId { index, kind } in markets_readable {
-        include_market(*index, *kind, false);
+    for market in markets_readable {
+        include_market(market.index(), market.kind(), false);
     }
 
     for user in users {
@@ -1426,7 +1489,7 @@ pub fn build_accounts(
     }
     // always manually try to include the quote (USDC) market
     // TODO: this is not exactly the same semantics as the TS sdk
-    include_market(MarketId::QUOTE_SPOT.index, MarketType::Spot, false);
+    include_market(MarketId::QUOTE_SPOT.index(), MarketType::Spot, false);
 
     let mut account_metas = base_accounts.to_account_metas();
     account_metas.extend(accounts.into_iter().map(Into::into));
@@ -1608,6 +1671,7 @@ mod tests {
         };
 
         DriftClient {
+            context: Context::DevNet,
             backend: Box::leak(Box::new(backend)),
             wallet: Wallet::new(keypair),
         }

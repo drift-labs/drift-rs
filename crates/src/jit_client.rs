@@ -170,7 +170,7 @@ impl JitProxyClient {
                 .vault;
             let quote_spot_market_vault = self
                 .drift_client
-                .get_spot_market_account_and_slot(MarketId::QUOTE_SPOT.index)
+                .get_spot_market_account_and_slot(MarketId::QUOTE_SPOT.index())
                 .expect("quote market exists")
                 .data
                 .vault;

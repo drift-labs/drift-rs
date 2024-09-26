@@ -3,7 +3,7 @@ use drift_sdk::{
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
     types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam},
     utils::test_envs::{devnet_endpoint, test_keypair},
-    DriftClient, TransactionBuilder, Wallet,
+    ConfiguredMarkets, DriftClient, TransactionBuilder, Wallet,
 };
 use solana_sdk::signature::Keypair;
 
@@ -27,18 +27,22 @@ async fn get_oracle_prices() {
 #[tokio::test]
 async fn place_and_cancel_orders() {
     let _ = env_logger::try_init();
+    let btc_perp = MarketId::perp(1);
+    let sol_spot = MarketId::spot(1);
+
     let wallet: Wallet = test_keypair().into();
-    let client = DriftClient::new(
+    let client = DriftClient::with_markets(
         Context::DevNet,
         RpcClient::new(devnet_endpoint()),
         wallet.clone(),
+        ConfiguredMarkets::Minimal {
+            perp: vec![btc_perp],
+            spot: vec![sol_spot],
+        },
     )
     .await
     .expect("connects");
     client.subscribe().await.unwrap();
-
-    let btc_perp = client.market_lookup("btc-perp").expect("exists");
-    let sol_spot = client.market_lookup("sol").expect("exists");
 
     let user: User = client
         .get_user_account(&wallet.default_sub_account())
@@ -63,7 +67,8 @@ async fn place_and_cancel_orders() {
             .post_only(PostOnlyParam::MustPostOnly)
             .build(),
     ])
-    .cancel_all_orders()
+    .cancel_orders((btc_perp.index, btc_perp.kind), None)
+    .cancel_orders((sol_spot.index, sol_spot.kind), None)
     .build();
 
     dbg!(tx.clone());

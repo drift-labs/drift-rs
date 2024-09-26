@@ -2,12 +2,9 @@ use fnv::FnvHashSet;
 use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::{
-    constants::{self, ids, PROGRAM_ID},
+    constants::{self, oracle_source_to_owner},
     ffi::{AccountWithKey, AccountsList, IntoFfi},
-    types::{
-        accounts::{PerpMarket, SpotMarket, User},
-        OracleSource,
-    },
+    types::accounts::{PerpMarket, SpotMarket, User},
     utils::zero_account_to_bytes,
     DriftClient, MarketId, SdkResult,
 };
@@ -42,7 +39,7 @@ impl AccountsListBuilder {
         }
 
         let quote_market = client
-            .get_spot_market_account(MarketId::QUOTE_SPOT.index)
+            .get_spot_market_account(MarketId::QUOTE_SPOT.index())
             .expect("spot market");
         if oracles.insert(quote_market.oracle) {
             spot_markets.push(quote_market);
@@ -92,26 +89,14 @@ impl AccountsListBuilder {
             let oracle = client
                 .get_oracle_price_data_and_slot(oracle_key)
                 .expect("oracle exists");
-            let owner = match oracle.source {
-                OracleSource::Pyth
-                | OracleSource::Pyth1K
-                | OracleSource::Pyth1M
-                | OracleSource::PythStableCoin => &ids::pyth_program::ID,
-                OracleSource::PythPull
-                | OracleSource::Pyth1KPull
-                | OracleSource::Pyth1MPull
-                | OracleSource::PythStableCoinPull => &ids::drift_oracle_receiver_program::ID,
-                OracleSource::Switchboard => &ids::switchboard_program::ID,
-                OracleSource::SwitchboardOnDemand => &ids::switchboard_on_demand::ID,
-                OracleSource::QuoteAsset => &constants::DEFAULT_PUBKEY,
-                OracleSource::Prelaunch => &PROGRAM_ID,
-            };
+
+            let oracle_owner = oracle_source_to_owner(client.context, oracle.source);
             self.oracle_accounts.push(
                 (
                     *oracle_key,
                     Account {
                         data: oracle.raw,
-                        owner: *owner,
+                        owner: oracle_owner,
                         ..Default::default()
                     },
                 )
