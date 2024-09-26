@@ -24,7 +24,7 @@ use crate::{
 extern "C" {
     #[allow(improper_ctypes)]
     pub fn math_calculate_auction_price(
-        order: &Order,
+        order: &types::Order,
         slot: Slot,
         tick_size: u64,
         oracle_price: ROption<i64>,
@@ -127,7 +127,7 @@ pub fn get_oracle_price(
 }
 
 pub fn calculate_auction_price(
-    order: &Order,
+    order: &types::Order,
     slot: Slot,
     tick_size: u64,
     oracle_price: Option<i64>,
@@ -158,44 +158,27 @@ pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
     to_sdk_result(res)
 }
 
-pub struct SpotPosition(types::SpotPosition);
-
-impl SpotPosition {
+impl types::SpotPosition {
     pub fn is_available(&self) -> bool {
-        unsafe { spot_position_is_available(&self.0) }
+        unsafe { spot_position_is_available(&self) }
     }
     pub fn get_signed_token_amount(&self, market: &accounts::SpotMarket) -> SdkResult<i128> {
-        to_sdk_result(unsafe { spot_position_get_signed_token_amount(&self.0, market) })
+        to_sdk_result(unsafe { spot_position_get_signed_token_amount(&self, market) })
     }
     pub fn get_token_amount(&self, market: &accounts::SpotMarket) -> SdkResult<u128> {
-        to_sdk_result(unsafe { spot_position_get_token_amount(&self.0, market) })
+        to_sdk_result(unsafe { spot_position_get_token_amount(&self, market) })
     }
 }
 
-impl IntoFfi for types::SpotPosition {
-    type Output = SpotPosition;
-    fn ffi(&self) -> Self::Output {
-        SpotPosition(*self)
-    }
-}
-
-impl From<SpotPosition> for types::SpotPosition {
-    fn from(value: SpotPosition) -> Self {
-        value.0
-    }
-}
-
-pub struct PerpPosition(types::PerpPosition);
-
-impl PerpPosition {
+impl types::PerpPosition {
     pub fn get_unrealized_pnl(&self, oracle_price: i64) -> SdkResult<i128> {
-        to_sdk_result(unsafe { perp_position_get_unrealized_pnl(&self.0, oracle_price) })
+        to_sdk_result(unsafe { perp_position_get_unrealized_pnl(&self, oracle_price) })
     }
     pub fn is_available(&self) -> bool {
-        unsafe { perp_position_is_available(&self.0) }
+        unsafe { perp_position_is_available(&self) }
     }
     pub fn is_open_position(&self) -> bool {
-        unsafe { perp_position_is_open_position(&self.0) }
+        unsafe { perp_position_is_open_position(&self) }
     }
     pub fn worst_case_base_asset_amount(
         &self,
@@ -203,7 +186,7 @@ impl PerpPosition {
         contract_type: ContractType,
     ) -> SdkResult<i128> {
         to_sdk_result(unsafe {
-            perp_position_worst_case_base_asset_amount(&self.0, oracle_price, contract_type)
+            perp_position_worst_case_base_asset_amount(&self, oracle_price, contract_type)
         })
     }
     pub fn simulate_settled_lp_position(
@@ -212,72 +195,31 @@ impl PerpPosition {
         oracle_price: i64,
     ) -> SdkResult<types::PerpPosition> {
         to_sdk_result(unsafe {
-            perp_position_simulate_settled_lp_position(&self.0, market, oracle_price)
+            perp_position_simulate_settled_lp_position(&self, market, oracle_price)
         })
     }
 }
 
-impl IntoFfi for types::PerpPosition {
-    type Output = PerpPosition;
-    fn ffi(&self) -> Self::Output {
-        PerpPosition(*self)
-    }
-}
-
-impl From<PerpPosition> for types::PerpPosition {
-    fn from(value: PerpPosition) -> Self {
-        value.0
-    }
-}
-
-pub struct User(accounts::User);
-
-impl User {
-    pub fn get_spot_position(&self, market_index: u16) -> SdkResult<SpotPosition> {
+impl accounts::User {
+    pub fn get_spot_position(&self, market_index: u16) -> SdkResult<types::SpotPosition> {
         // TODO: no clone
-        to_sdk_result(unsafe { user_get_spot_position(&self.0, market_index) })
-            .map(|p| SpotPosition(*p))
+        to_sdk_result(unsafe { user_get_spot_position(&self, market_index) }).map(|p| *p)
     }
-    pub fn get_perp_position(&self, market_index: u16) -> SdkResult<PerpPosition> {
-        to_sdk_result(unsafe { user_get_perp_position(&self.0, market_index) })
-            .map(|p| PerpPosition(*p))
+    pub fn get_perp_position(&self, market_index: u16) -> SdkResult<types::PerpPosition> {
+        to_sdk_result(unsafe { user_get_perp_position(&self, market_index) }).map(|p| *p)
     }
 }
 
-impl IntoFfi for accounts::User {
-    type Output = User;
-    fn ffi(&self) -> Self::Output {
-        User(*self)
-    }
-}
-
-impl From<User> for accounts::User {
-    fn from(value: User) -> Self {
-        value.0
-    }
-}
-
-pub struct Order(types::Order);
-
-impl Order {
+impl types::Order {
     pub fn is_limit_order(&self) -> bool {
-        unsafe { order_is_limit_order(&self.0) }
+        unsafe { order_is_limit_order(&self) }
     }
     pub fn is_resting_limit_order(&self, slot: Slot) -> SdkResult<bool> {
-        to_sdk_result(unsafe { order_is_resting_limit_order(&self.0, slot) })
+        to_sdk_result(unsafe { order_is_resting_limit_order(&self, slot) })
     }
 }
 
-impl IntoFfi for types::Order {
-    type Output = Order;
-    fn ffi(&self) -> Self::Output {
-        Order(*self)
-    }
-}
-
-pub struct SpotMarket(accounts::SpotMarket);
-
-impl SpotMarket {
+impl accounts::SpotMarket {
     pub fn get_asset_weight(
         &self,
         size: u128,
@@ -285,7 +227,7 @@ impl SpotMarket {
         margin_requirement_type: MarginRequirementType,
     ) -> SdkResult<u32> {
         to_sdk_result(unsafe {
-            spot_market_get_asset_weight(&self.0, size, oracle_price, margin_requirement_type)
+            spot_market_get_asset_weight(&self, size, oracle_price, margin_requirement_type)
         })
     }
     pub fn get_liability_weight(
@@ -294,51 +236,21 @@ impl SpotMarket {
         margin_requirement_type: MarginRequirementType,
     ) -> SdkResult<u32> {
         to_sdk_result(unsafe {
-            spot_market_get_liability_weight(&self.0, size, margin_requirement_type)
+            spot_market_get_liability_weight(&self, size, margin_requirement_type)
         })
     }
 }
 
-impl IntoFfi for accounts::SpotMarket {
-    type Output = SpotMarket;
-    fn ffi(&self) -> Self::Output {
-        SpotMarket(*self)
-    }
-}
-
-impl From<SpotMarket> for accounts::SpotMarket {
-    fn from(value: SpotMarket) -> Self {
-        value.0
-    }
-}
-
-pub struct PerpMarket(accounts::PerpMarket);
-
-impl PerpMarket {
+impl accounts::PerpMarket {
     pub fn get_margin_ratio(
         &self,
         size: u128,
         margin_requirement_type: MarginRequirementType,
     ) -> SdkResult<u32> {
-        to_sdk_result(unsafe {
-            perp_market_get_margin_ratio(&self.0, size, margin_requirement_type)
-        })
+        to_sdk_result(unsafe { perp_market_get_margin_ratio(&self, size, margin_requirement_type) })
     }
     pub fn get_open_interest(&self) -> u128 {
-        unsafe { perp_market_get_open_interest(&self.0) }
-    }
-}
-
-impl IntoFfi for accounts::PerpMarket {
-    type Output = PerpMarket;
-    fn ffi(&self) -> Self::Output {
-        PerpMarket(*self)
-    }
-}
-
-impl From<PerpMarket> for accounts::PerpMarket {
-    fn from(value: PerpMarket) -> Self {
-        value.0
+        unsafe { perp_market_get_open_interest(&self) }
     }
 }
 
@@ -462,19 +374,14 @@ mod tests {
     use solana_sdk::{account::Account, pubkey::Pubkey};
     use type_layout::TypeLayout;
 
-    use super::{
-        AccountWithKey, AccountsList, IntoFfi, MarginCalculation, MarginContextMode, SpotPosition,
-    };
+    use super::{AccountWithKey, AccountsList, MarginCalculation, MarginContextMode};
     use crate::{
         constants::{self},
         drift_idl::{
-            accounts::{
-                PerpMarket as DriftPerpMarket, SpotMarket as DriftSpotMarket, User as DriftUser,
-            },
+            accounts::{PerpMarket, SpotMarket, User},
             types::{
-                ContractType, MarginRequirementType, OracleSource, Order as DriftOrder, OrderType,
-                PerpPosition as DriftPerpPosition, SpotBalanceType,
-                SpotPosition as DriftSpotPosition,
+                ContractType, MarginRequirementType, OracleSource, Order, OrderType, PerpPosition,
+                SpotBalanceType, SpotPosition,
             },
         },
         ffi::{
@@ -492,8 +399,8 @@ mod tests {
     const SOL_PYTH_PRICE: std::cell::LazyCell<Vec<u8>> =
         std::cell::LazyCell::new(|| hex::decode(_SOL_PYTH_PRICE_STR).unwrap());
 
-    fn sol_spot_market() -> DriftSpotMarket {
-        DriftSpotMarket {
+    fn sol_spot_market() -> SpotMarket {
+        SpotMarket {
             market_index: 1,
             oracle_source: OracleSource::Pyth,
             oracle: solana_sdk::pubkey!("J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix"),
@@ -514,37 +421,33 @@ mod tests {
     fn ffi_deser_1_76_0_spot_market() {
         // smoke test for deserializing program data (where u128/i128 alignment is 8)
         let buf = hex_literal::hex!("64b1086ba84141270000000000000000000000000000000000000000000000000000000000000000fe650f0367d4a7ef9815a593ea15d36593f0643aaaf0149bb04be67ab851decd0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010a5d4e800000000000000000000000000000000000000000000000000000000e40b5402000000000000000000000000e40b54020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000401f000028230000e02e0000f82a000000000000e803000000000000000000000000000000000000090000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
-        let actual: &DriftSpotMarket = bytemuck::from_bytes::<DriftSpotMarket>(&buf.as_ref()[8..]); // ignore dscriminator
+        let actual: &SpotMarket = bytemuck::from_bytes::<SpotMarket>(&buf.as_ref()[8..]); // ignore dscriminator
 
         assert_eq!(actual, &sol_spot_market());
     }
 
     #[test]
     fn ffi_spot_position_is_available() {
-        let default_position = DriftSpotPosition::default();
-        let spot_position = SpotPosition(default_position);
-
+        let spot_position = SpotPosition::default();
         assert!(spot_position.is_available());
     }
 
     #[test]
     fn ffi_spot_position_get_signed_token_amount() {
-        let spot_position = DriftSpotPosition {
+        let spot_position = SpotPosition {
             scaled_balance: (123 * SPOT_BALANCE_PRECISION) as u64,
             market_index: 1,
             balance_type: SpotBalanceType::Deposit,
             ..Default::default()
         };
 
-        let result = spot_position
-            .ffi()
-            .get_signed_token_amount(&sol_spot_market());
+        let result = spot_position.get_signed_token_amount(&sol_spot_market());
         assert_eq!(result.unwrap(), 123 * SPOT_BALANCE_PRECISION as i128);
     }
 
     #[test]
     fn ffi_spot_market_get_asset_weight() {
-        let spot_market = DriftSpotMarket {
+        let spot_market = SpotMarket {
             initial_asset_weight: 9_000,
             initial_liability_weight: 11_000,
             decimals: 6,
@@ -554,7 +457,6 @@ mod tests {
         let size = 1_000 * QUOTE_PRECISION;
         let price = QUOTE_PRECISION as i64;
         let asset_weight = spot_market
-            .ffi()
             .get_asset_weight(size, price, MarginRequirementType::Initial)
             .unwrap();
         assert_eq!(asset_weight, 9_000);
@@ -562,7 +464,7 @@ mod tests {
 
     #[test]
     fn ffi_spot_market_get_liability_weight() {
-        let spot_market = DriftSpotMarket {
+        let spot_market = SpotMarket {
             initial_asset_weight: 9_000,
             initial_liability_weight: 11_000,
             decimals: 6,
@@ -572,7 +474,6 @@ mod tests {
 
         let size = 1_000 * QUOTE_PRECISION;
         let liability_weight = spot_market
-            .ffi()
             .get_liability_weight(size, MarginRequirementType::Initial)
             .unwrap();
         assert_eq!(liability_weight, 11_000);
@@ -580,33 +481,33 @@ mod tests {
 
     #[test]
     fn ffi_user_get_spot_position() {
-        let mut user = DriftUser::default();
-        user.spot_positions[1] = DriftSpotPosition {
+        let mut user = User::default();
+        user.spot_positions[1] = SpotPosition {
             market_index: 1,
             scaled_balance: 1_000 * SPOT_BALANCE_PRECISION_U64,
             balance_type: SpotBalanceType::Deposit,
             ..Default::default()
         };
 
-        let result = user.ffi().get_spot_position(1);
+        let result = user.get_spot_position(1);
         assert!(result.is_ok());
         let spot_position = result.unwrap();
-        assert_eq!(spot_position.0.market_index, 1);
+        assert_eq!(spot_position.market_index, 1);
         assert_eq!(
-            spot_position.0.scaled_balance,
+            spot_position.scaled_balance,
             1_000 * SPOT_BALANCE_PRECISION_U64
         );
-        assert_eq!(spot_position.0.balance_type, SpotBalanceType::Deposit);
+        assert_eq!(spot_position.balance_type, SpotBalanceType::Deposit);
 
         // Test for non-existent market index
-        let result = user.ffi().get_spot_position(5);
+        let result = user.get_spot_position(5);
         assert!(result.is_err());
     }
 
     #[test]
     fn ffi_user_get_perp_position() {
-        let mut user = DriftUser::default();
-        user.perp_positions[2] = DriftPerpPosition {
+        let mut user = User::default();
+        user.perp_positions[2] = PerpPosition {
             market_index: 2,
             base_asset_amount: 500,
             quote_asset_amount: 1_000,
@@ -614,45 +515,45 @@ mod tests {
             ..Default::default()
         };
 
-        let result = user.ffi().get_perp_position(2);
+        let result = user.get_perp_position(2);
         assert!(result.is_ok());
         let perp_position = result.unwrap();
-        assert_eq!(perp_position.0.market_index, 2);
-        assert_eq!(perp_position.0.base_asset_amount, 500);
-        assert_eq!(perp_position.0.quote_asset_amount, 1_000);
+        assert_eq!(perp_position.market_index, 2);
+        assert_eq!(perp_position.base_asset_amount, 500);
+        assert_eq!(perp_position.quote_asset_amount, 1_000);
 
         // Test for non-existent market index
-        let result = user.ffi().get_perp_position(5);
+        let result = user.get_perp_position(5);
         assert!(result.is_err());
     }
 
     #[test]
     fn ffi_perp_position_is_available() {
-        let position = DriftPerpPosition::default();
-        assert!(position.ffi().is_available());
+        let position = PerpPosition::default();
+        assert!(position.is_available());
 
-        let position = DriftPerpPosition {
+        let position = PerpPosition {
             base_asset_amount: 100,
             ..Default::default()
         };
-        assert!(!position.ffi().is_available());
+        assert!(!position.is_available());
     }
 
     #[test]
     fn ffi_perp_position_is_open_position() {
-        let position = DriftPerpPosition::default();
-        assert!(!position.ffi().is_open_position());
+        let position = PerpPosition::default();
+        assert!(!position.is_open_position());
 
-        let position = DriftPerpPosition {
+        let position = PerpPosition {
             base_asset_amount: 100,
             ..Default::default()
         };
-        assert!(position.ffi().is_open_position());
+        assert!(position.is_open_position());
     }
 
     #[test]
     fn ffi_perp_position_worst_case_base_asset_amount() {
-        let position = DriftPerpPosition {
+        let position = PerpPosition {
             base_asset_amount: 1_000 * BASE_PRECISION_I64,
             quote_asset_amount: 5_000 * QUOTE_PRECISION_I64,
             market_index: 1,
@@ -661,9 +562,7 @@ mod tests {
         let oracle_price = 10 * QUOTE_PRECISION_I64;
         let contract_type = ContractType::Perpetual;
 
-        let result = position
-            .ffi()
-            .worst_case_base_asset_amount(oracle_price, contract_type);
+        let result = position.worst_case_base_asset_amount(oracle_price, contract_type);
         assert!(result.is_ok());
         let worst_case_amount = result.unwrap();
         assert!(worst_case_amount >= 1000); // The worst case should be at least the current base asset amount
@@ -671,13 +570,13 @@ mod tests {
 
     #[test]
     fn ffi_perp_position_simulate_settled_lp_position() {
-        let position = DriftPerpPosition {
+        let position = PerpPosition {
             base_asset_amount: 1_000 * BASE_PRECISION_I64,
             quote_asset_amount: 5_000 * QUOTE_PRECISION_I64,
             last_cumulative_funding_rate: 100.into(),
             ..Default::default()
         };
-        let market = DriftPerpMarket {
+        let market = PerpMarket {
             amm: crate::drift_idl::types::AMM {
                 cumulative_funding_rate_long: 120.into(),
                 cumulative_funding_rate_short: 80.into(),
@@ -687,9 +586,7 @@ mod tests {
         };
         let oracle_price = 10 * QUOTE_PRECISION_I64;
 
-        let result = position
-            .ffi()
-            .simulate_settled_lp_position(&market, oracle_price);
+        let result = position.simulate_settled_lp_position(&market, oracle_price);
         assert!(result.is_ok());
         let simulated_position = result.unwrap();
         assert!(simulated_position.quote_asset_amount > 1_000);
@@ -729,12 +626,12 @@ mod tests {
         ]
         .into_iter()
         {
-            let limit_order = DriftOrder {
+            let limit_order = Order {
                 order_type,
                 slot: 100,
                 ..Default::default()
             };
-            let ffi_limit_order = limit_order.ffi();
+            let ffi_limit_order = limit_order;
             assert_eq!(ffi_limit_order.is_limit_order(), is_limit);
             assert_eq!(
                 ffi_limit_order.is_resting_limit_order(100).unwrap(),
@@ -745,7 +642,7 @@ mod tests {
 
     #[test]
     fn ffi_perp_market_get_margin_ratio() {
-        let perp_market = DriftPerpMarket {
+        let perp_market = PerpMarket {
             margin_ratio_initial: 1_000 * MARGIN_PRECISION, // 10%
             margin_ratio_maintenance: 500,                  // 5%
             imf_factor: 0,                                  // No impact for simplicity
@@ -755,17 +652,13 @@ mod tests {
         let size = 1_000 * MARGIN_PRECISION as u128; // Assuming MARGIN_PRECISION is defined
 
         // Test initial margin ratio
-        let result = perp_market
-            .ffi()
-            .get_margin_ratio(size, MarginRequirementType::Initial);
+        let result = perp_market.get_margin_ratio(size, MarginRequirementType::Initial);
         assert!(result.is_ok());
         let initial_margin_ratio = result.unwrap();
         assert_eq!(initial_margin_ratio, 1_000 * MARGIN_PRECISION); // 10%
 
         // Test maintenance margin ratio
-        let result = perp_market
-            .ffi()
-            .get_margin_ratio(size, MarginRequirementType::Maintenance);
+        let result = perp_market.get_margin_ratio(size, MarginRequirementType::Maintenance);
         assert!(result.is_ok());
         let maintenance_margin_ratio = result.unwrap();
         assert_eq!(maintenance_margin_ratio, 500); // 5%
@@ -775,14 +668,14 @@ mod tests {
     fn ffi_test_calculate_margin_requirement_and_total_collateral_and_liability_info() {
         // smoke test for ffi compatability, logic tested in `math::` module
         let btc_perp_index = 1_u16;
-        let mut user = DriftUser::default();
-        user.spot_positions[1] = DriftSpotPosition {
+        let mut user = User::default();
+        user.spot_positions[1] = SpotPosition {
             market_index: 1,
             scaled_balance: (1_000 * SPOT_BALANCE_PRECISION) as u64,
             balance_type: SpotBalanceType::Deposit,
             ..Default::default()
         };
-        user.perp_positions[0] = DriftPerpPosition {
+        user.perp_positions[0] = PerpPosition {
             market_index: btc_perp_index,
             base_asset_amount: 100 * BASE_PRECISION_I64 as i64,
             quote_asset_amount: -5_000 * QUOTE_PRECISION as i64,
@@ -795,8 +688,8 @@ mod tests {
             account: Account {
                 owner: crate::constants::PROGRAM_ID,
                 data: [
-                    DriftPerpMarket::DISCRIMINATOR.as_slice(),
-                    bytemuck::bytes_of(&DriftPerpMarket {
+                    PerpMarket::DISCRIMINATOR.as_slice(),
+                    bytemuck::bytes_of(&PerpMarket {
                         market_index: btc_perp_index,
                         ..Default::default()
                     }),
@@ -812,7 +705,7 @@ mod tests {
             account: Account {
                 owner: crate::constants::PROGRAM_ID,
                 data: [
-                    DriftSpotMarket::DISCRIMINATOR.as_slice(),
+                    SpotMarket::DISCRIMINATOR.as_slice(),
                     bytemuck::bytes_of(&spot_market),
                 ]
                 .concat()

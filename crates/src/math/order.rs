@@ -1,6 +1,6 @@
 use crate::{
     drift_idl::types::{Order, OrderType, PositionDirection},
-    ffi::{IntoFfi, OraclePriceData},
+    ffi::OraclePriceData,
     math::auction::{get_auction_price, is_auction_complete},
 };
 
@@ -37,7 +37,7 @@ fn has_auction_price(order: &Order, slot: u64) -> bool {
 }
 
 pub fn is_resting_limit_order(order: &Order, slot: u64) -> bool {
-    if !order.ffi().is_limit_order() {
+    if !order.is_limit_order() {
         return false;
     }
 

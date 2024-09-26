@@ -25,7 +25,6 @@ use crate::{
         ProgramData, PROGRAM_ID,
     },
     drift_idl::traits::ToAccountMetas,
-    ffi::IntoFfi,
     marketmap::MarketMap,
     oraclemap::{Oracle, OracleMap},
     types::{
@@ -237,12 +236,12 @@ impl DriftClient {
         Ok((
             user.spot_positions
                 .iter()
-                .filter(|s| !s.ffi().is_available())
+                .filter(|s| !s.is_available())
                 .copied()
                 .collect(),
             user.perp_positions
                 .iter()
-                .filter(|p| p.ffi().is_open_position())
+                .filter(|p| p.is_open_position())
                 .copied()
                 .collect(),
         ))
@@ -263,7 +262,7 @@ impl DriftClient {
         Ok(user
             .perp_positions
             .iter()
-            .find(|p| p.market_index == market_index && !p.ffi().is_available())
+            .find(|p| p.market_index == market_index && !p.is_available())
             .copied())
     }
 
@@ -282,7 +281,7 @@ impl DriftClient {
         Ok(user
             .spot_positions
             .iter()
-            .find(|p| p.market_index == market_index && !p.ffi().is_available())
+            .find(|p| p.market_index == market_index && !p.is_available())
             .copied())
     }
 
@@ -1433,18 +1432,10 @@ pub fn build_accounts(
 
     for user in users {
         // Drift program performs margin checks which requires reading user positions
-        for p in user
-            .spot_positions
-            .iter()
-            .filter(|p| !p.ffi().is_available())
-        {
+        for p in user.spot_positions.iter().filter(|p| !p.is_available()) {
             include_market(p.market_index, MarketType::Spot, false);
         }
-        for p in user
-            .perp_positions
-            .iter()
-            .filter(|p| !p.ffi().is_available())
-        {
+        for p in user.perp_positions.iter().filter(|p| !p.is_available()) {
             include_market(p.market_index, MarketType::Perp, false);
         }
     }

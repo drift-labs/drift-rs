@@ -5,8 +5,8 @@ use std::ops::Neg;
 
 use crate::{
     ffi::{
-        self, calculate_margin_requirement_and_total_collateral_and_liability_info, AccountsList,
-        IntoFfi, MarginContextMode,
+        calculate_margin_requirement_and_total_collateral_and_liability_info, AccountsList,
+        MarginContextMode,
     },
     math::{
         account_map_builder::AccountsListBuilder,
@@ -19,7 +19,7 @@ use crate::{
         accounts::{PerpMarket, SpotMarket, User},
         MarginRequirementType, PerpPosition,
     },
-    DriftClient, SdkError, SdkResult,
+    DriftClient, SdkError, SdkResult, SpotPosition,
 };
 
 /// Info on a positions liquidation price and unrealized PnL
@@ -44,7 +44,6 @@ pub fn calculate_liquidation_price_and_unrealized_pnl(
         .get_oracle_price_data_and_slot(&perp_market.amm.oracle)
         .ok_or(SdkError::InvalidAccount)?;
     let position = user
-        .ffi()
         .get_perp_position(market_index)
         .map_err(|_| SdkError::NoPosiiton(market_index))?;
 
@@ -78,7 +77,7 @@ pub fn calculate_unrealized_pnl(
     user: &User,
     market_index: u16,
 ) -> SdkResult<i128> {
-    if let Ok(position) = user.ffi().get_perp_position(market_index) {
+    if let Ok(position) = user.get_perp_position(market_index) {
         let oracle_price = client
             .get_oracle_price_data_and_slot_for_perp_market(market_index)
             .map(|x| x.data.price)
@@ -153,7 +152,6 @@ pub fn calculate_liquidation_price_inner(
 
     // calculate perp free collateral delta
     let perp_position = user
-        .ffi()
         .get_perp_position(perp_market.market_index)
         .map_err(|_| SdkError::NoPosiiton(perp_market.market_index))?;
 
@@ -166,7 +164,7 @@ pub fn calculate_liquidation_price_inner(
     // user holding spot asset case
     let mut spot_free_collateral_delta = 0;
     if let Some(spot_market) = spot_market {
-        if let Ok(spot_position) = user.ffi().get_spot_position(spot_market.market_index) {
+        if let Ok(spot_position) = user.get_spot_position(spot_market.market_index) {
             if !spot_position.is_available() {
                 spot_free_collateral_delta =
                     calculate_spot_free_collateral_delta(&spot_position, spot_market);
@@ -196,11 +194,9 @@ fn calculate_perp_free_collateral_delta(
     let current_base_asset_amount = position.base_asset_amount;
 
     let worst_case_base_amount = position
-        .ffi()
         .worst_case_base_asset_amount(oracle_price, market.contract_type)
         .unwrap();
     let margin_ratio = market
-        .ffi()
         .get_margin_ratio(
             worst_case_base_amount.unsigned_abs(),
             MarginRequirementType::Maintenance,
@@ -229,12 +225,11 @@ fn calculate_perp_free_collateral_delta(
     fcd
 }
 
-fn calculate_spot_free_collateral_delta(position: &ffi::SpotPosition, market: &SpotMarket) -> i64 {
+fn calculate_spot_free_collateral_delta(position: &SpotPosition, market: &SpotMarket) -> i64 {
     let market_precision = 10_i128.pow(market.decimals);
     let signed_token_amount = position.get_signed_token_amount(market).unwrap();
     let delta = if signed_token_amount > 0 {
         let weight = market
-            .ffi()
             .get_asset_weight(
                 signed_token_amount.unsigned_abs(),
                 0, // unused by Maintenance margin type, hence 0
@@ -245,7 +240,6 @@ fn calculate_spot_free_collateral_delta(position: &ffi::SpotPosition, market: &S
             / market_precision
     } else {
         let weight = market
-            .ffi()
             .get_liability_weight(
                 signed_token_amount.unsigned_abs(),
                 MarginRequirementType::Maintenance,

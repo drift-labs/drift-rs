@@ -3,7 +3,7 @@ use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::{
     constants::{self, oracle_source_to_owner},
-    ffi::{AccountWithKey, AccountsList, IntoFfi},
+    ffi::{AccountWithKey, AccountsList},
     types::accounts::{PerpMarket, SpotMarket, User},
     utils::zero_account_to_bytes,
     DriftClient, MarketId, SdkResult,
@@ -25,11 +25,7 @@ impl AccountsListBuilder {
         let mut spot_markets = Vec::<SpotMarket>::with_capacity(user.spot_positions.len());
         let mut perp_markets = Vec::<PerpMarket>::with_capacity(user.perp_positions.len());
 
-        for p in user
-            .spot_positions
-            .iter()
-            .filter(|p| !p.ffi().is_available())
-        {
+        for p in user.spot_positions.iter().filter(|p| !p.is_available()) {
             let market = client
                 .get_spot_market_account(p.market_index)
                 .expect("spot market");
@@ -45,11 +41,7 @@ impl AccountsListBuilder {
             spot_markets.push(quote_market);
         }
 
-        for p in user
-            .perp_positions
-            .iter()
-            .filter(|p| !p.ffi().is_available())
-        {
+        for p in user.perp_positions.iter().filter(|p| !p.is_available()) {
             let market = client
                 .get_perp_market_account(p.market_index)
                 .expect("perp market");
