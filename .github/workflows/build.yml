@@ -53,8 +53,8 @@ jobs:
       #     CARGO_DRIFT_FFI_PATH: "/usr/lib"
       - name: Test
         run: |
-          cargo test --no-fail-fast --test lib -- --nocapture
-          cargo test --no-fail-fast --test integration --test-threads 1 -- --nocapture
+          cargo test --no-fail-fast --lib -- --nocapture
+          cargo test --no-fail-fast --test integration -- --nocapture --test-threads 1
         env:
           RUST_LOG: info
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
