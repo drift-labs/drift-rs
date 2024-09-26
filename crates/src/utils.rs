@@ -135,11 +135,11 @@ pub mod test_envs {
 
     /// solana mainnet endpoint
     pub fn mainnet_endpoint() -> String {
-        std::env::var("MAINNET_RPC_ENDPOINT").expect("TEST_MAINNET_ENDPOINT set")
+        std::env::var("TEST_MAINNET_RPC_ENDPOINT").expect("TEST_MAINNET_ENDPOINT set")
     }
     /// solana devnet endpoint
     pub fn devnet_endpoint() -> String {
-        std::env::var("DEVNET_RPC_ENDPOINT")
+        std::env::var("TEST_DEVNET_RPC_ENDPOINT")
             .unwrap_or_else(|_| "https://api.devnet.solana.com".to_string())
     }
     /// keypair for integration tests

@@ -53,9 +53,9 @@ jobs:
       #     CARGO_DRIFT_FFI_PATH: "/usr/lib"
       - name: Test
         run: |
-          cargo test --no-fail-fast -- --nocapture
+          cargo test --no-fail-fast --test lib -- --nocapture
+          cargo test --no-fail-fast --test integration --test-threads 1 -- --nocapture
         env:
           RUST_LOG: info
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
           CARGO_DRIFT_FFI_PATH: "/usr/lib"
-          DEVNET_RPC_ENDPOINT: ${{ vars.DEVNET_RPC_ENDPOINT }}
