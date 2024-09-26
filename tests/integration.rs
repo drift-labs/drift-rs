@@ -59,8 +59,8 @@ async fn place_and_cancel_orders() {
     .await
     .expect("connects");
 
-    let sol_perp = client.market_lookup("sol-perp").expect("exists");
-    let sol_spot = client.market_lookup("sol").expect("exists");
+    let sol_perp = client.market_lookup("eth-perp").expect("exists");
+    let sol_spot = client.market_lookup("eth").expect("exists");
 
     let user: User = client
         .get_user_account(&wallet.default_sub_account())

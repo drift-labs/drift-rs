@@ -22,14 +22,13 @@ on:
     
 jobs:
   format-build-test:
-    runs-on: ubuntu-latest
+    runs-on: ubicloud
     steps:
       - name: Check out
         uses: actions/checkout@v2
-      - name: Install ffi toolchain (1.76.0)
+      - name: Config rust toolchain
         run: |
           rustup show active-toolchain
-          rustup install 1.76.0-x86_64-unknown-linux-gnu
           rustup component add clippy rustfmt
       - name: install libdrift_ffi_sys
         run: |
