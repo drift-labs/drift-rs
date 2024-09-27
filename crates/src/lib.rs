@@ -2,6 +2,7 @@
 
 use std::{borrow::Cow, sync::Arc, time::Duration};
 
+use accounts::State;
 use anchor_lang::{AccountDeserialize, InstructionData};
 use futures_util::TryFutureExt;
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_response::Response};
@@ -19,6 +20,7 @@ use solana_sdk::{
 pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
 
 use crate::{
+    account_map::AccountMap,
     blockhash_subscriber::BlockhashSubscriber,
     constants::{
         derive_perp_market_account, derive_spot_market_account, state_account, MarketExt,
@@ -31,7 +33,6 @@ use crate::{
         accounts::{PerpMarket, SpotMarket, User, UserStats},
         *,
     },
-    user::UserMap,
     utils::get_http_url,
 };
 
@@ -66,7 +67,7 @@ pub mod slot_subscriber;
 pub mod usermap;
 
 // wrappers
-pub mod user;
+pub mod account_map;
 
 #[cfg(feature = "dlob")]
 pub mod dlob;
@@ -313,6 +314,29 @@ impl DriftClient {
         self.backend.get_latest_blockhash().await
     }
 
+    /// Get some account value deserialized as T
+    /// Uses cached value if subscribed, fallsback to network query
+    ///
+    /// `account` any onchain account
+    ///
+    /// Returns the deserialized account data (`User`)
+    pub async fn get_account_value<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
+        self.backend.get_account(account).await
+    }
+
+    /// Try to get `account` as `T` using latest local value
+    /// requires account was previously subscribed too.
+    /// like `get_account_value` without async/network fallback
+    pub fn try_get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
+        self.backend.try_get_account(account)
+    }
+
+    /// Try get the Drift `State` config account
+    /// It contains various exchange level config parameters
+    pub fn state_config(&self) -> SdkResult<State> {
+        self.backend.try_get_account(state_account())
+    }
+
     /// Sign and send a tx to the network
     ///
     /// Returns the signature on success
@@ -480,14 +504,14 @@ impl DriftClient {
 
     /// Subscribe to updates for some `subaccount`
     /// The latest value may be retreived with `get_user_account(..)`
-    pub async fn subscribe_user(&self, subaccount: &Pubkey) -> SdkResult<()> {
-        self.backend.user_map.subscribe_user(subaccount).await
+    pub async fn subscribe_account(&self, subaccount: &Pubkey) -> SdkResult<()> {
+        self.backend.account_map.subscribe_account(subaccount).await
     }
 
     /// Unsubscribe from updates for `subaccount`
     /// The latest value may be retreived with `get_user_account(..)`
-    pub fn unsubscribe_user(&self, subaccount: &Pubkey) -> SdkResult<()> {
-        self.backend.user_map.unsubscribe_user(subaccount);
+    pub fn unsubscribe_account(&self, subaccount: &Pubkey) -> SdkResult<()> {
+        self.backend.account_map.unsubscribe_account(subaccount);
         Ok(())
     }
 }
@@ -498,7 +522,7 @@ pub struct DriftClientBackend {
     rpc_client: Arc<RpcClient>,
     program_data: ProgramData,
     blockhash_subscriber: BlockhashSubscriber,
-    user_map: user::UserMap,
+    account_map: AccountMap,
     perp_market_map: MarketMap<PerpMarket>,
     spot_market_map: MarketMap<SpotMarket>,
     oracle_map: OracleMap,
@@ -557,7 +581,7 @@ impl DriftClientBackend {
                 perp_market_map.values(),
                 lookup_table,
             ),
-            user_map: UserMap::new(rpc_client.url(), rpc_client.commitment()),
+            account_map: AccountMap::new(rpc_client.url(), rpc_client.commitment()),
             perp_market_map,
             spot_market_map,
             oracle_map,
@@ -571,6 +595,7 @@ impl DriftClientBackend {
             self.perp_market_map.subscribe(),
             self.spot_market_map.subscribe(),
             self.oracle_map.subscribe(),
+            self.account_map.subscribe_account(&state_account()),
         )?;
 
         Ok(())
@@ -581,6 +606,7 @@ impl DriftClientBackend {
         self.blockhash_subscriber.unsubscribe();
         self.perp_market_map.unsubscribe()?;
         self.spot_market_map.unsubscribe()?;
+        self.account_map.unsubscribe_account(&state_account());
         self.oracle_map.unsubscribe().await
     }
 
@@ -683,22 +709,30 @@ impl DriftClientBackend {
         Ok(fees)
     }
 
-    /// Fetch an `account` as an Anchor account type
-    async fn get_account<U: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<U> {
-        let account_data = self.rpc_client.get_account_data(account).await?;
-        U::try_deserialize(&mut account_data.as_ref())
-            .map_err(|err| SdkError::Anchor(Box::new(err)))
+    /// Fetch `account` as an Anchor account type `T`
+    async fn get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
+        if let Some(value) = self.account_map.account_data(account) {
+            Ok(value)
+        } else {
+            let account_data = self.rpc_client.get_account_data(account).await?;
+            T::try_deserialize(&mut account_data.as_slice())
+                .map_err(|err| SdkError::Anchor(Box::new(err)))
+        }
     }
 
-    /// Fetch `User` data of `account`
+    /// Fetch `account` as a drift User account
     ///
     /// uses cache if possible, otherwise fallback to network query
     async fn get_user_account(&self, account: &Pubkey) -> SdkResult<User> {
-        if let Some(user) = self.user_map.user_account_data(account) {
-            Ok(user)
-        } else {
-            self.get_account(account).await
-        }
+        self.get_account(account).await
+    }
+
+    /// Try to fetch `account` as `T` using latest local value
+    /// requires account was previously subscribed too.
+    fn try_get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
+        self.account_map
+            .account_data(account)
+            .ok_or(SdkError::NoData)
     }
 
     /// Returns latest blockhash
@@ -1619,7 +1653,10 @@ mod tests {
                 Duration::from_secs(2),
                 Arc::clone(&rpc_client),
             ),
-            user_map: UserMap::new(DEVNET_ENDPOINT.to_string(), CommitmentConfig::processed()),
+            account_map: AccountMap::new(
+                DEVNET_ENDPOINT.to_string(),
+                CommitmentConfig::processed(),
+            ),
         };
 
         DriftClient {

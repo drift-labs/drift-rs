@@ -24,6 +24,7 @@ impl AccountsListBuilder {
         let mut oracles = FnvHashSet::<Pubkey>::default();
         let mut spot_markets = Vec::<SpotMarket>::with_capacity(user.spot_positions.len());
         let mut perp_markets = Vec::<PerpMarket>::with_capacity(user.perp_positions.len());
+        let drift_state = client.state_config()?;
 
         for p in user.spot_positions.iter().filter(|p| !p.is_available()) {
             let market = client
@@ -102,6 +103,7 @@ impl AccountsListBuilder {
             perp_markets: self.perp_accounts.as_mut_slice(),
             spot_markets: self.spot_accounts.as_mut_slice(),
             oracles: self.oracle_accounts.as_mut_slice(),
+            oracle_guard_rails: Some(drift_state.oracle_guard_rails),
             latest_slot: oracle_slot,
         })
     }

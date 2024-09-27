@@ -10,7 +10,6 @@ use crate::{
 pub fn get_leverage(client: &DriftClient, user: &User) -> SdkResult<u128> {
     let mut builder = AccountsListBuilder::default();
     let mut accounts = builder.build(client, user)?;
-
     let margin_calculation = calculate_margin_requirement_and_total_collateral_and_liability_info(
         user,
         &mut accounts,

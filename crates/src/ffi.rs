@@ -272,7 +272,7 @@ pub mod abi_types {
     use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
     use type_layout::TypeLayout;
 
-    use crate::drift_idl::types::MarginRequirementType;
+    use crate::{drift_idl::types::MarginRequirementType, OracleGuardRails};
 
     /// FFI safe version of (pubkey, account)
     #[repr(C)]
@@ -291,11 +291,13 @@ pub mod abi_types {
     }
 
     /// FFI equivalent of an `AccountMap`
+    /// Its used as input for drift program math functions
     #[repr(C)]
     pub struct AccountsList<'a> {
         pub perp_markets: &'a mut [AccountWithKey],
         pub spot_markets: &'a mut [AccountWithKey],
         pub oracles: &'a mut [AccountWithKey],
+        pub oracle_guard_rails: Option<OracleGuardRails>,
         pub latest_slot: Slot,
     }
 
@@ -310,6 +312,7 @@ pub mod abi_types {
                 perp_markets,
                 spot_markets,
                 oracles,
+                oracle_guard_rails: None,
                 latest_slot: 0,
             }
         }
@@ -385,13 +388,15 @@ mod tests {
             },
         },
         ffi::{
+            calculate_auction_price,
             calculate_margin_requirement_and_total_collateral_and_liability_info, get_oracle_price,
         },
         math::constants::{
-            BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, MARGIN_PRECISION, QUOTE_PRECISION,
-            QUOTE_PRECISION_I64, SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64,
-            SPOT_CUMULATIVE_INTEREST_PRECISION, SPOT_WEIGHT_PRECISION,
+            BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, MARGIN_PRECISION, PRICE_PRECISION_I64,
+            QUOTE_PRECISION, QUOTE_PRECISION_I64, SPOT_BALANCE_PRECISION,
+            SPOT_BALANCE_PRECISION_U64, SPOT_CUMULATIVE_INTEREST_PRECISION, SPOT_WEIGHT_PRECISION,
         },
+        PositionDirection,
     };
 
     const _SOL_PYTH_PRICE_STR: &str = include_str!("../../res/sol-oracle-pyth.hex");
@@ -741,6 +746,42 @@ mod tests {
         }
     }
 
+    #[test]
+    fn ffi_calculate_auction_price() {
+        let price = calculate_auction_price(
+            &Order {
+                price: 123_456,
+                order_type: OrderType::Limit,
+                direction: PositionDirection::Long,
+                ..Default::default()
+            },
+            0,
+            1_000,
+            None,
+            false,
+        );
+        assert_eq!(price.unwrap(), 0,);
+
+        let price = calculate_auction_price(
+            &Order {
+                slot: 1,
+                auction_duration: 10,
+                auction_start_price: 90 * PRICE_PRECISION_I64,
+                auction_end_price: 100 * PRICE_PRECISION_I64,
+                oracle_price_offset: 555,
+                order_type: OrderType::Oracle,
+                direction: PositionDirection::Long,
+                ..Default::default()
+            },
+            5,
+            3,
+            Some(100 * PRICE_PRECISION_I64),
+            false,
+        );
+        assert!(price.is_ok_and(|p| p > 0));
+    }
+
+    #[ignore]
     #[test]
     fn layouts() {
         dbg!(MarginCalculation::type_layout());

@@ -2,21 +2,32 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use anchor_lang::AccountDeserialize;
 use fnv::FnvHashMap;
-use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
+use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{
-    drift_idl::accounts::User, utils::get_ws_url,
-    websocket_account_subscriber::WebsocketAccountSubscriber, DataAndSlot, SdkResult, UnsubHandle,
+    utils::get_ws_url, websocket_account_subscriber::WebsocketAccountSubscriber, SdkResult,
+    UnsubHandle,
 };
 
-/// Subscribes to a dynamic subset of User accounts
-pub struct UserMap {
-    endpoint: String,
-    commitment: CommitmentConfig,
-    inner: RwLock<FnvHashMap<Pubkey, DriftUser<Subscribed>>>,
+#[derive(Clone, Default)]
+pub struct AccountSlot {
+    raw: Vec<u8>,
+    slot: Slot,
 }
 
-impl UserMap {
+pub struct DataAndSlot<T> {
+    pub data: T,
+    pub slot: Slot,
+}
+
+/// Set of subscriptions to a dynamic subset of network accounts
+pub struct AccountMap {
+    endpoint: String,
+    commitment: CommitmentConfig,
+    inner: RwLock<FnvHashMap<Pubkey, AccountSub<Subscribed>>>,
+}
+
+impl AccountMap {
     pub fn new(endpoint: String, commitment: CommitmentConfig) -> Self {
         Self {
             endpoint,
@@ -25,7 +36,7 @@ impl UserMap {
         }
     }
     /// Subscribe user account
-    pub async fn subscribe_user(&self, account: &Pubkey) -> SdkResult<()> {
+    pub async fn subscribe_account(&self, account: &Pubkey) -> SdkResult<()> {
         {
             let map = self.inner.read().expect("acquired");
             if map.contains_key(account) {
@@ -33,7 +44,7 @@ impl UserMap {
             }
         }
 
-        let user = DriftUser::new(&self.endpoint, self.commitment, *account);
+        let user = AccountSub::new(&self.endpoint, self.commitment, *account);
         let user = user.subscribe().await?;
 
         let mut map = self.inner.write().expect("acquired");
@@ -42,40 +53,44 @@ impl UserMap {
         Ok(())
     }
     /// Unsubscribe user account
-    pub fn unsubscribe_user(&self, account: &Pubkey) {
+    pub fn unsubscribe_account(&self, account: &Pubkey) {
         let mut map = self.inner.write().expect("acquired");
         if let Some(u) = map.remove(account) {
             let _ = u.unsubscribe();
         }
     }
-    /// Return `User` data of the given `account`, if it exists
-    pub fn user_account_data(&self, account: &Pubkey) -> Option<User> {
-        let usermap = self.inner.read().expect("read");
-        usermap.get(account).map(|u| u.get_user_account())
+    /// Return data of the given `account` as T, if it exists
+    pub fn account_data<T: AccountDeserialize>(&self, account: &Pubkey) -> Option<T> {
+        self.account_data_and_slot(account).map(|x| x.data)
     }
-    /// Return `User` data of the given `account` and slot, if it exists
-    pub fn user_account_data_and_slot(&self, account: &Pubkey) -> Option<DataAndSlot<User>> {
-        let usermap = self.inner.read().expect("read");
-        usermap.get(account).map(|u| u.get_user_account_and_slot())
+    /// Return data of the given `account` as T and slot, if it exists
+    pub fn account_data_and_slot<T: AccountDeserialize>(
+        &self,
+        account: &Pubkey,
+    ) -> Option<DataAndSlot<T>> {
+        let accounts = self.inner.read().expect("read");
+        accounts.get(account).map(|u| u.get_account_data_and_slot())
     }
 }
 
 struct Subscribed {
-    data_and_slot: Arc<RwLock<DataAndSlot<User>>>,
+    data_and_slot: Arc<RwLock<AccountSlot>>,
     unsub: Mutex<Option<UnsubHandle>>,
 }
 struct Unsubscribed;
 
-/// A subscription to a drift User account
-pub struct DriftUser<S> {
+/// A subscription to a solana account
+pub struct AccountSub<S> {
+    /// account pubkey
     pub pubkey: Pubkey,
     /// underlying Ws subscription
     subscription: WebsocketAccountSubscriber,
+    /// subscription state
     state: S,
 }
 
-impl DriftUser<Unsubscribed> {
-    pub const SUBSCRIPTION_ID: &'static str = "user";
+impl AccountSub<Unsubscribed> {
+    pub const SUBSCRIPTION_ID: &'static str = "account";
 
     pub fn new(endpoint: &str, commitment: CommitmentConfig, pubkey: Pubkey) -> Self {
         let subscription = WebsocketAccountSubscriber::new(
@@ -92,27 +107,21 @@ impl DriftUser<Unsubscribed> {
     }
 
     /// Start the subscriber task
-    pub async fn subscribe(self) -> SdkResult<DriftUser<Subscribed>> {
-        let data_and_slot = Arc::new(RwLock::new(DataAndSlot {
-            slot: 0,
-            data: Default::default(),
-        }));
+    pub async fn subscribe(self) -> SdkResult<AccountSub<Subscribed>> {
+        let data_and_slot = Arc::new(RwLock::new(AccountSlot::default()));
         let unsub = self
             .subscription
             .subscribe(Self::SUBSCRIPTION_ID, {
-                let current_data_and_slot = Arc::clone(&data_and_slot);
+                let data_and_slot = Arc::clone(&data_and_slot);
                 move |update| {
-                    let mut data_and_slot = current_data_and_slot.write().expect("acquired");
-                    *data_and_slot = DataAndSlot {
-                        data: User::try_deserialize(&mut update.data.as_slice())
-                            .expect("valid user data"),
-                        slot: update.slot,
-                    };
+                    let mut guard = data_and_slot.write().expect("acquired");
+                    guard.raw.clone_from(&update.data);
+                    guard.slot = update.slot;
                 }
             })
             .await?;
 
-        Ok(DriftUser {
+        Ok(AccountSub {
             pubkey: self.pubkey,
             subscription: self.subscription,
             state: Subscribed {
@@ -123,20 +132,20 @@ impl DriftUser<Unsubscribed> {
     }
 }
 
-impl DriftUser<Subscribed> {
-    /// Return the latest value of the `User` account along with last updated slot
-    pub fn get_user_account_and_slot(&self) -> DataAndSlot<User> {
-        let reader = self.state.data_and_slot.read().expect("reader");
-        reader.clone()
-    }
-
-    /// Return the latest value of the `User` account
-    pub fn get_user_account(&self) -> User {
-        self.get_user_account_and_slot().data
+impl AccountSub<Subscribed> {
+    /// Return the latest value of the account data along with last updated slot
+    /// # Panics
+    /// Panics if account data cannot be deserialized as `T`
+    pub fn get_account_data_and_slot<T: AccountDeserialize>(&self) -> DataAndSlot<T> {
+        let guard = self.state.data_and_slot.read().expect("acquired");
+        DataAndSlot {
+            slot: guard.slot,
+            data: T::try_deserialize_unchecked(&mut guard.raw.as_slice()).expect("desrializes"),
+        }
     }
 
     /// Stop the user subscriber task, if it exists
-    pub fn unsubscribe(self) -> DriftUser<Unsubscribed> {
+    pub fn unsubscribe(self) -> AccountSub<Unsubscribed> {
         let mut guard = self.state.unsub.lock().expect("acquire");
         if let Some(unsub) = guard.take() {
             if unsub.send(()).is_err() {
@@ -144,7 +153,7 @@ impl DriftUser<Subscribed> {
             }
         }
 
-        DriftUser {
+        AccountSub {
             pubkey: self.pubkey,
             subscription: self.subscription,
             state: Unsubscribed,
@@ -159,12 +168,12 @@ mod tests {
     use solana_sdk::pubkey;
 
     use super::*;
-    use crate::{constants::DEFAULT_PUBKEY, Wallet};
+    use crate::{accounts::User, constants::DEFAULT_PUBKEY, Wallet};
 
     #[tokio::test]
     async fn test_user_subscribe() {
         let _ = env_logger::try_init();
-        let user_map = UserMap::new(
+        let account_map = AccountMap::new(
             "https://api.mainnet-beta.solana.com".into(),
             CommitmentConfig::confirmed(),
         );
@@ -178,22 +187,22 @@ mod tests {
         );
 
         let (res1, res2) = tokio::join!(
-            user_map.subscribe_user(&user_1),
-            user_map.subscribe_user(&user_2),
+            account_map.subscribe_account(&user_1),
+            account_map.subscribe_account(&user_2),
         );
         assert!(res1.and(res2).is_ok());
 
         let handle = tokio::spawn(async move {
             tokio::time::sleep(Duration::from_secs(5)).await;
-            let user_account_data = user_map.user_account_data(&user_1);
-            assert!(user_account_data.is_some_and(|x| x.authority != DEFAULT_PUBKEY));
-            user_map.unsubscribe_user(&user_1);
+            let account_data = account_map.account_data::<User>(&user_1);
+            assert!(account_data.is_some_and(|x| x.authority != DEFAULT_PUBKEY));
+            account_map.unsubscribe_account(&user_1);
 
-            let user_account_data = user_map.user_account_data(&user_2);
-            assert!(user_account_data.is_some_and(|x| x.authority != DEFAULT_PUBKEY));
+            let account_data = account_map.account_data::<User>(&user_2);
+            assert!(account_data.is_some_and(|x| x.authority != DEFAULT_PUBKEY));
 
-            let user_account_data = user_map.user_account_data(&user_1);
-            assert!(user_account_data.is_none());
+            let account_data = account_map.account_data::<User>(&user_1);
+            assert!(account_data.is_none());
         });
 
         assert!(handle.await.is_ok());
