@@ -72,35 +72,31 @@ pub mod account_map;
 #[cfg(feature = "dlob")]
 pub mod dlob;
 
-#[derive(Default)]
-/// Confgured markets
-pub enum ConfiguredMarkets {
-    #[default]
-    All,
-    Minimal {
-        perp: Vec<MarketId>,
-        spot: Vec<MarketId>,
-    },
-}
-
-impl ConfiguredMarkets {
-    /// Returns whether this config wants `market`
-    pub fn wants(&self, market: MarketId) -> bool {
-        match self {
-            Self::All => true,
-            Self::Minimal { perp, spot } => match market.kind() {
-                MarketType::Spot => spot.contains(&market),
-                MarketType::Perp => perp.contains(&market),
-            },
-        }
-    }
-}
-
-/// Drift Client API
+/// DriftClient
 ///
-/// It is cheaply clone-able and consumers are encouraged to do so
+/// It is cheaply clone-able and consumers are encouraged to do so.
 /// It is not recommended to create multiple instances with `::new()` as this will not re-use underlying resources such
 /// as network connections or memory allocations
+///
+/// The client can be used as is to fetch data ad-hoc over RPC or subscribed to receive live data changes
+/// ```example(no_run)
+/// let client = DriftClient::new(
+///     Context::MainNet,
+///     RpcClient::new("https://"),
+///     key_pair.into()
+/// ).await.expect("initializes");
+///
+/// // queries over RPC
+/// let sol_perp_price = client.oracle_price(MarketId::perp(0)).await;
+///
+/// // Subscribe to live program changes e.g oracle prices, spot/perp market changes, user accounts
+/// client.subscribe().await.expect("subscribes");
+///
+/// // after subscribing, uses Ws-backed local storage
+/// let sol_perp_price = client.oracle_price(MarketId::perp(0)).await;
+///
+/// client.unsubscribe();
+/// ```
 #[derive(Clone)]
 #[must_use]
 pub struct DriftClient {
@@ -134,7 +130,7 @@ impl DriftClient {
     /// `context` devnet or mainnet
     /// `rpc_client` an RpcClient instance
     /// `wallet` wallet to use for tx signing convenience
-    /// `markets`
+    /// `markets` subset of markets to use for program lifetime
     pub async fn with_markets(
         context: Context,
         rpc_client: RpcClient,
@@ -310,6 +306,7 @@ impl DriftClient {
     }
 
     /// Get the latest recent_block_hash
+    /// uses latest cached if subscribed, otherwise fallsback to network query
     pub async fn get_latest_blockhash(&self) -> SdkResult<Hash> {
         self.backend.get_latest_blockhash().await
     }
@@ -371,12 +368,14 @@ impl DriftClient {
     }
 
     /// Get live info of a spot market
+    /// uses latest cached if subscribed, otherwise fallsback to network query
     pub async fn get_spot_market_info(&self, market_index: u16) -> SdkResult<SpotMarket> {
         let market = derive_spot_market_account(market_index);
         self.backend.get_account(&market).await
     }
 
     /// Get live info of a perp market
+    /// uses latest cached if subscribed, otherwise fallsback to network query
     pub async fn get_perp_market_info(&self, market_index: u16) -> SdkResult<PerpMarket> {
         let market = derive_perp_market_account(market_index);
         self.backend.get_account(&market).await
@@ -410,6 +409,7 @@ impl DriftClient {
     }
 
     /// Get live oracle price for `market`
+    /// uses latest cached if subscribed, otherwise fallsback to network query
     pub async fn oracle_price(&self, market: MarketId) -> SdkResult<i64> {
         self.backend.oracle_price(market).await
     }
@@ -502,16 +502,19 @@ impl DriftClient {
             .get_oracle_price_data_and_slot_for_spot_market(market_index)
     }
 
-    /// Subscribe to updates for some `subaccount`
-    /// The latest value may be retreived with `get_user_account(..)`
-    pub async fn subscribe_account(&self, subaccount: &Pubkey) -> SdkResult<()> {
-        self.backend.account_map.subscribe_account(subaccount).await
+    /// Subscribe to live updates for some `account`
+    /// The latest value may be retreived with `get_account(..)`
+    /// ```example(no_run)
+    /// client.subscribe_account(Wallet::derive_subaccount(..)).await;
+    /// let subaccount = client.get_account::<User>();
+    /// ```
+    pub async fn subscribe_account(&self, account: &Pubkey) -> SdkResult<()> {
+        self.backend.account_map.subscribe_account(account).await
     }
 
-    /// Unsubscribe from updates for `subaccount`
-    /// The latest value may be retreived with `get_user_account(..)`
-    pub fn unsubscribe_account(&self, subaccount: &Pubkey) -> SdkResult<()> {
-        self.backend.account_map.unsubscribe_account(subaccount);
+    /// Unsubscribe from updates for `account`
+    pub fn unsubscribe_account(&self, account: &Pubkey) -> SdkResult<()> {
+        self.backend.account_map.unsubscribe_account(account);
         Ok(())
     }
 }
@@ -601,7 +604,7 @@ impl DriftClientBackend {
         Ok(())
     }
 
-    /// End subscriptions for for live program data
+    /// End subscriptions to live program data
     async fn unsubscribe(&self) -> SdkResult<()> {
         self.blockhash_subscriber.unsubscribe();
         self.perp_market_map.unsubscribe()?;
@@ -722,7 +725,7 @@ impl DriftClientBackend {
 
     /// Fetch `account` as a drift User account
     ///
-    /// uses cache if possible, otherwise fallback to network query
+    /// uses latest cached if subscribed, otherwise fallsback to network query
     async fn get_user_account(&self, account: &Pubkey) -> SdkResult<User> {
         self.get_account(account).await
     }
@@ -737,7 +740,7 @@ impl DriftClientBackend {
 
     /// Returns latest blockhash
     ///
-    /// Uses latest cached value if available, fallsback to network fetch
+    /// uses latest cached if subscribed, otherwise fallsback to network query
     pub async fn get_latest_blockhash(&self) -> SdkResult<Hash> {
         match self.blockhash_subscriber.get_latest_blockhash() {
             Some(hash) => Ok(hash),

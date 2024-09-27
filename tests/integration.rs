@@ -1,9 +1,9 @@
 use drift_sdk::{
     event_subscriber::RpcClient,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
-    types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam},
+    types::{accounts::User, ConfiguredMarkets, Context, MarketId, NewOrder, PostOnlyParam},
     utils::test_envs::{devnet_endpoint, test_keypair},
-    ConfiguredMarkets, DriftClient, TransactionBuilder, Wallet,
+    DriftClient, TransactionBuilder, Wallet,
 };
 use solana_sdk::signature::Keypair;
 
