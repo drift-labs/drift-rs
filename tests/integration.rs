@@ -1,4 +1,4 @@
-use drift_sdk::{
+use drift_rs::{
     event_subscriber::RpcClient,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
     types::{accounts::User, ConfiguredMarkets, Context, MarketId, NewOrder, PostOnlyParam},
