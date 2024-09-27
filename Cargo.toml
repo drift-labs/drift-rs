@@ -49,4 +49,4 @@ hex = "*"
 hex-literal = "*"
 
 [build-dependencies]
-drift-idl-gen = { "path" = "crates/drift-idl-gen"}
+drift-idl-gen = { version = "0.1.0", path = "crates/drift-idl-gen"}
