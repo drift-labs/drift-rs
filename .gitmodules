@@ -1,0 +1,3 @@
+[submodule "crates/drift-ffi-sys"]
+	path = crates/drift-ffi-sys
+	url = https://github.com/drift-labs/drift-ffi-sys

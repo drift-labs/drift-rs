@@ -1,0 +1,14 @@
+[package]
+name = "drift-idl-gen"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+
+[dependencies]
+proc-macro2 = "*"
+quote = "*"
+syn = "*"
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"
+sha2 = "*"

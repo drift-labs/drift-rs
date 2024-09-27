@@ -1,88 +1,82 @@
-use drift::math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64};
-use drift_sdk::{
-    get_market_accounts,
-    types::{Context, MarketId, NewOrder},
-    DriftClient, RpcAccountProvider, Wallet,
+use drift_rs::{
+    event_subscriber::RpcClient,
+    math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
+    types::{accounts::User, ConfiguredMarkets, Context, MarketId, NewOrder, PostOnlyParam},
+    utils::test_envs::{devnet_endpoint, test_keypair},
+    DriftClient, TransactionBuilder, Wallet,
 };
 use solana_sdk::signature::Keypair;
-
-/// keypair for integration tests
-fn test_keypair() -> Keypair {
-    let private_key = std::env::var("TEST_PRIVATE_KEY").expect("TEST_PRIVATE_KEY set");
-    Keypair::from_base58_string(private_key.as_str())
-}
 
 #[tokio::test]
 async fn get_oracle_prices() {
     let client = DriftClient::new(
         Context::DevNet,
-        RpcAccountProvider::new("https://api.devnet.solana.com"),
+        RpcClient::new(devnet_endpoint()),
         Keypair::new().into(),
     )
     .await
     .expect("connects");
-    let price = client.oracle_price(MarketId::perp(0)).await.expect("ok");
+    let price = client.oracle_price(MarketId::perp(1)).await.expect("ok");
     assert!(price > 0);
     dbg!(price);
-    let price = client.oracle_price(MarketId::spot(1)).await.expect("ok");
+    let price = client.oracle_price(MarketId::spot(2)).await.expect("ok");
     assert!(price > 0);
     dbg!(price);
 }
 
-#[tokio::test]
-async fn get_market_accounts_works() {
-    let client = DriftClient::new(
-        Context::DevNet,
-        RpcAccountProvider::new("https://api.devnet.solana.com"),
-        Keypair::new().into(),
-    )
-    .await
-    .expect("connects");
-
-    let (spot, perp) = get_market_accounts(client.inner()).await.unwrap();
-    assert!(spot.len() > 1);
-    assert!(perp.len() > 1);
-}
-
-#[ignore]
 #[tokio::test]
 async fn place_and_cancel_orders() {
+    let _ = env_logger::try_init();
+    let btc_perp = MarketId::perp(1);
+    let sol_spot = MarketId::spot(1);
+
     let wallet: Wallet = test_keypair().into();
-    let client = DriftClient::new(
+    let client = DriftClient::with_markets(
         Context::DevNet,
-        RpcAccountProvider::new("https://api.devnet.solana.com"),
+        RpcClient::new(devnet_endpoint()),
         wallet.clone(),
+        ConfiguredMarkets::Minimal {
+            perp: vec![btc_perp],
+            spot: vec![sol_spot],
+        },
     )
     .await
     .expect("connects");
+    client.subscribe().await.unwrap();
 
-    let sol_perp = client.market_lookup("sol-perp").expect("exists");
-    let sol_spot = client.market_lookup("sol").expect("exists");
-
-    let tx = client
-        .init_tx(&wallet.default_sub_account(), false)
-        .unwrap()
-        .cancel_all_orders()
-        .place_orders(vec![
-            NewOrder::limit(sol_perp)
-                .amount(1 * BASE_PRECISION_I64)
-                .price(40 * PRICE_PRECISION_U64)
-                .post_only(drift_sdk::types::PostOnlyParam::MustPostOnly)
-                .build(),
-            NewOrder::limit(sol_spot)
-                .amount(-1 * LAMPORTS_PER_SOL_I64)
-                .price(400 * PRICE_PRECISION_U64)
-                .post_only(drift_sdk::types::PostOnlyParam::MustPostOnly)
-                .build(),
-        ])
-        .cancel_all_orders()
-        .build();
+    let user: User = client
+        .get_user_account(&wallet.default_sub_account())
+        .await
+        .expect("exists");
+    let tx = TransactionBuilder::new(
+        client.program_data(),
+        wallet.default_sub_account(),
+        std::borrow::Cow::Borrowed(&user),
+        false,
+    )
+    .cancel_all_orders()
+    .place_orders(vec![
+        NewOrder::limit(btc_perp)
+            .amount(1 * BASE_PRECISION_I64)
+            .price(40 * PRICE_PRECISION_U64)
+            .post_only(PostOnlyParam::MustPostOnly)
+            .build(),
+        NewOrder::limit(sol_spot)
+            .amount(-1 * LAMPORTS_PER_SOL_I64)
+            .price(400 * PRICE_PRECISION_U64)
+            .post_only(PostOnlyParam::MustPostOnly)
+            .build(),
+    ])
+    .cancel_orders(btc_perp.to_parts(), None)
+    .cancel_orders(sol_spot.to_parts(), None)
+    .build();
 
     dbg!(tx.clone());
 
     let result = client.sign_and_send(tx).await;
     dbg!(&result);
     assert!(result.is_ok());
+    client.unsubscribe().await.unwrap();
 }
 
 #[ignore]
@@ -91,7 +85,7 @@ async fn place_and_take() {
     let wallet: Wallet = test_keypair().into();
     let client = DriftClient::new(
         Context::DevNet,
-        RpcAccountProvider::new("https://api.devnet.solana.com"),
+        RpcClient::new(devnet_endpoint()),
         wallet.clone(),
     )
     .await
@@ -105,6 +99,7 @@ async fn place_and_take() {
         .build();
     let tx = client
         .init_tx(&wallet.default_sub_account(), false)
+        .await
         .unwrap()
         .place_and_take(order, None, None, None)
         .build();

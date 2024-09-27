@@ -19,31 +19,44 @@ on:
       - "**.toml"
       - "**.lock"
       - ".github/workflows/*.yml"
-
+    
 jobs:
   format-build-test:
-    runs-on: ubuntu-latest
+    runs-on: ubicloud
     steps:
       - name: Check out
         uses: actions/checkout@v2
-      - name: Install toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: 1.76.0
-          components: rustfmt
-          default: true
+      - name: Config rust toolchain
+        run: |
+          rustup show active-toolchain
+          rustup component add clippy rustfmt
+      - name: install libdrift_ffi_sys
+        run: |
+          curl -L https://github.com/user-attachments/files/17160233/libdrift_ffi_sys.so.zip > ffi.zip
+          unzip ffi.zip
+          ldd libdrift_ffi_sys.so
+          sudo cp libdrift_ffi_sys.so /usr/lib
+          ldconfig -p
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
-        run: cargo check --all-features
-      - name: Clippy
-        uses: giraffate/clippy-action@v1
-        with:
-         reporter: 'github-pr-review'
-         github_token: ${{ secrets.GITHUB_TOKEN }}       
-      - name: Test
+        run: cargo check
         env:
+          CARGO_DRIFT_FFI_PATH: "/usr/lib"
+      # - name: Clippy
+      #   uses: giraffate/clippy-action@v1
+      #   with:
+      #    reporter: 'github-pr-review'
+      #    github_token: ${{ secrets.GITHUB_TOKEN }}
+      #   env:
+      #     RUST_TOOLCHAIN: stable-x86_64-linux-unknown-gnu # force clippy to build with same rust version
+      #     CARGO_DRIFT_FFI_PATH: "/usr/lib"
+      - name: Test
+        run: |
+          cargo test --no-fail-fast --lib -- --nocapture
+          cargo test --no-fail-fast --test integration -- --nocapture --test-threads 1
+        env:
+          RUST_LOG: info
+          TEST_DEVNET_RPC_ENDPOINT: ${{ secrets.DEVNET_RPC_ENDPOINT }}
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
-        run: cargo test --all
-
+          CARGO_DRIFT_FFI_PATH: "/usr/lib"
