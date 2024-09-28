@@ -9,9 +9,9 @@ description = "Generates Drift v2 structs/types from anchor IDL"
 [lib]
 
 [dependencies]
-proc-macro2 = "*"
-quote = "*"
-syn = "*"
-serde = { version = "*", features = ["derive"] }
-serde_json = "*"
-sha2 = "*"
+proc-macro2 = "1"
+quote = "1"
+syn = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"

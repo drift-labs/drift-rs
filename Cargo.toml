@@ -23,30 +23,30 @@ rpc_tests = []
 
 [dependencies]
 abi_stable = "0.11"
-anchor-lang = { version = "*", features = ["derive"] }
-base64 = "0.21"
-bytemuck = "1.17.0"
-dashmap = "5"
-env_logger = "*"
+anchor-lang = { version = "0.30", features = ["derive"] }
+base64 = "0.22"
+bytemuck = "1.17"
+dashmap = "6"
+env_logger = "0.11"
 fnv = "1"
 futures-util = "0.3"
-log = "*"
+log = "0.4"
 rayon = { version = "1.9.0", optional = true }
 regex = "1.10"
-serde = { version = "*", features = ["derive"] }
-serde_json = "*"
-solana-account-decoder = "2.0.8"
-solana-client = "2.0.8"
-solana-sdk = "2.0.8"
-solana-transaction-status = "2.0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+solana-account-decoder = "2"
+solana-client = "2"
+solana-sdk = "2"
+solana-transaction-status = "2"
 thiserror = "1"
-tokio = { version = "*", features = ["full"] }
-type-layout = "*"
+tokio = { version = "1.40", features = ["full"] }
+type-layout = "0.2.0"
 
 [dev-dependencies]
-bytes = "*"
-hex = "*"
-hex-literal = "*"
+bytes = "1"
+hex = "0.4"
+hex-literal = "0.4"
 
 [build-dependencies]
 drift-idl-gen = { version = "0.1.0", path = "crates/drift-idl-gen"}
