@@ -95,11 +95,13 @@ fn main() {
             .output()
             .expect("install ok");
 
+        // try to copy into system libs, fallback to 'rpath'
         if !output.status.success() {
             eprintln!(
                 "{LIB} could not be installed: {}",
                 String::from_utf8_lossy(output.stderr.as_slice())
             );
+            println!("cargo:rustc-link-arg=-Wl,-rpath,{}", libffi_out_path.to_string_lossy());
         }
     }
 
