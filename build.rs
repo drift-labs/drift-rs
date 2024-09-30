@@ -85,41 +85,51 @@ fn main() {
         }
 
         // install the dylib to system path
-        let libffi_out_path =
-            drift_ffi_sys_crate.join(Path::new(&format!("target/{profile}/{LIB}.{lib_ext}")));
+        // let libffi_out_path =
+        //     drift_ffi_sys_crate.join(Path::new(&format!("target/{profile}/{LIB}.{lib_ext}")));
         let libffi_out_dir = drift_ffi_sys_crate.join(Path::new(&format!("target/{profile}")));
-        let output = std::process::Command::new("ln")
-            .args([
-                "-sf",
-                libffi_out_path.to_str().expect("ffi build path"),
-                "/usr/local/lib/",
-            ])
-            .output()
-            .expect("install ok");
+        // let output = std::process::Command::new("ln")
+        //     .args([
+        //         "-sf",
+        //         libffi_out_path.to_str().expect("ffi build path"),
+        //         "/usr/local/lib/",
+        //     ])
+        //     .output()
+        //     .expect("install ok");
 
-        // try to copy into system libs, fallback to 'rpath'
-        if !output.status.success() {
-            eprintln!(
-                "{LIB} could not be installed: {}",
-                String::from_utf8_lossy(output.stderr.as_slice())
-            );
-            println!(
-                "cargo:rustc-link-arg=-Wl,-rpath,{}",
-                libffi_out_dir.to_string_lossy()
-            );
-        }
+        // // try to copy into system libs, fallback to 'rpath'
+        // if !output.status.success() {
+        //     eprintln!(
+        //         "{LIB} could not be installed: {}",
+        //         String::from_utf8_lossy(output.stderr.as_slice())
+        //     );
+        //     println!(
+        //         "cargo:rustc-link-arg=-Wl,-rpath,{}",
+        //         libffi_out_dir.to_string_lossy()
+        //     );
+
+        //     let cargo_libs = std::env::home_dir().unwrap().join(".cargo/lib").canonicalize().unwrap();
+        //     let _ = std::process::Command::new("ln")
+        //     .args([
+        //         "-sf",
+        //         libffi_out_path.to_str().expect("ffi build path"),
+        //         &cargo_libs.to_string_lossy(),
+        //     ])
+        //     .output()
+        //     .expect("install ok");
+        //}
         println!(
             "cargo:rustc-link-search=native={}",
             libffi_out_dir.to_string_lossy()
         );
+        println!("cargo:rustc-link-lib=static=drift_ffi_sys");
     } else if let Ok(lib_path) = std::env::var("CARGO_DRIFT_FFI_PATH") {
         // try link drift_ffi_sys from given path
         println!("{LIB}: searching for lib at: {lib_path}");
         println!("cargo:rustc-link-search=native={lib_path}");
+        // try link drift_ffi_sys from default paths
+        println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
     }
-
-    // try link drift_ffi_sys from default paths
-    println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
 }
 
 fn fail_build() -> ! {
