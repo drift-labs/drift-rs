@@ -111,8 +111,8 @@ fn main() {
             println!("rpath dir 2: {}", current_dir.to_string_lossy());
             let output = std::process::Command::new("cp")
                 .args([
-                    libffi_out_path.to_string_lossy(),
-                    current_dir.to_string_lossy(),
+                    libffi_out_path.to_str().unwrap(),
+                    current_dir.to_str().unwrap(),
                 ])
                 .output()
                 .expect("install ok");
