@@ -1,4 +1,9 @@
-use std::{collections::HashMap, fs::File, io::Write, path::Path};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::Write,
+    path::{Path, PathBuf},
+};
 
 const LIB: &str = "libdrift_ffi_sys";
 
@@ -100,6 +105,29 @@ fn main() {
             .output()
             .expect("install ok");
 
+        if let Ok(cargo_path) = std::env::var("CARGO") {
+            let cargo_path = PathBuf::from(&cargo_path);
+            let toolchain_lib_path = cargo_path
+                .parent()
+                .expect("has parent")
+                .parent()
+                .expect("has parent")
+                .join(PathBuf::from("/lib"));
+            println!(
+                "{LIB}: linking drift-ffi into toolchain lib path: {}",
+                toolchain_lib_path.to_string_lossy()
+            );
+
+            std::process::Command::new("ln")
+                .args([
+                    "-sf",
+                    libffi_out_path.to_str().expect("ffi build path"),
+                    toolchain_lib_path.to_str().expect("toolchain lib path"),
+                ])
+                .output()
+                .expect("install ok");
+        }
+
         if !output.status.success() {
             eprintln!(
                 "{LIB} could not be symlinked to /usr/local/lib: {}",
@@ -107,7 +135,7 @@ fn main() {
             );
         }
         println!(
-            "cargo:rustc-link-args=-Wl -rpath {}",
+            "cargo:rustc-link-arg=-Wl,-rpath,{}",
             libffi_out_dir.to_string_lossy()
         );
         println!(
