@@ -91,26 +91,36 @@ fn main() {
         let libffi_out_path =
             drift_ffi_sys_crate.join(Path::new(&format!("target/{profile}/{LIB}.{lib_ext}")));
         let libffi_out_dir = drift_ffi_sys_crate.join(Path::new(&format!("target/{profile}")));
-        // let output = std::process::Command::new("ln")
-        //     .args([
-        //         "-sf",
-        //         libffi_out_path.to_str().expect("ffi build path"),
-        //         "/usr/local/lib/",
-        //     ])
-        //     .output()
-        //     .expect("install ok");
+        let output = std::process::Command::new("ln")
+            .args([
+                "-sf",
+                libffi_out_path.to_str().expect("ffi build path"),
+                "/usr/local/lib/",
+            ])
+            .output()
+            .expect("install ok");
 
-        // // try to copy into system libs, fallback to 'rpath'
-        // if !output.status.success() {
-        //     eprintln!(
-        //         "{LIB} could not be installed: {}",
-        //         String::from_utf8_lossy(output.stderr.as_slice())
-        //     );
-        // }
-        println!(
-            "cargo:rustc-link-arg=-Wl,-rpath,{}",
-            libffi_out_dir.to_string_lossy()
-        );
+        // try to copy into system libs, fallback to 'rpath'
+        if !output.status.success() {
+            eprintln!(
+                "{LIB} could not be installed: {}",
+                String::from_utf8_lossy(output.stderr.as_slice())
+            );
+        } else {
+            println!("rpath dir 1: {}", libffi_out_dir.to_string_lossy());
+            println!("rpath dir 2: {}", current_dir.to_string_lossy());
+            let output = std::process::Command::new("cp")
+                .args([
+                    libffi_out_path.to_string_lossy(),
+                    current_dir.to_string_lossy(),
+                ])
+                .output()
+                .expect("install ok");
+            println!(
+                "cargo:rustc-link-arg=-Wl,-rpath,{}",
+                libffi_out_path.to_string_lossy()
+            );
+        }
         println!(
             "cargo:rustc-link-search=native={}",
             libffi_out_dir.to_string_lossy()
