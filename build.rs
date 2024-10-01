@@ -107,6 +107,10 @@ fn main() {
             );
         }
         println!(
+            "cargo:rustc-link-args=-Wl -rpath {}",
+            libffi_out_dir.to_string_lossy()
+        );
+        println!(
             "cargo:rustc-link-search=native={}",
             libffi_out_dir.to_string_lossy()
         );
