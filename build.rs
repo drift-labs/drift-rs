@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::File, io::Write, path::Path};
+use std::{collections::HashMap, env, fs::File, io::Write, path::Path};
 
 const LIB: &str = "libdrift_ffi_sys";
 
@@ -69,7 +69,7 @@ fn main() {
             .args(["run", &ffi_toolchain, "cargo", "build"]);
 
         match profile.as_str() {
-            "debug" => (),
+            "debug" | "test" => (),
             "release" => {
                 ffi_build.arg("--release");
             }
@@ -108,6 +108,21 @@ fn main() {
             );
             println!("rpath dir 1: {}", libffi_out_dir.to_string_lossy());
             println!("rpath dir 2: {}", current_dir.to_string_lossy());
+            println!("built for profile: {}", profile);
+            println!(
+                "{LIB}: CARGO_MANIFEST_DIR: {}",
+                std::env::var("CARGO_MANIFEST_DIR").unwrap_or("no manifest dir".into())
+            );
+            println!(
+                "{LIB}: OUT_DIR: {}",
+                std::env::var("OUT_DIR").unwrap_or("no out dir".into())
+            );
+
+            if let Ok(mut ld_path) = std::env::var("LD_LIBRARY_PATH") {
+                ld_path.push_str(libffi_out_dir.to_str().unwrap());
+                std::env::set_var("LD_LIBRARY_PATH", ld_path);
+            }
+
             let output = std::process::Command::new("cp")
                 .args([
                     libffi_out_path.to_str().unwrap(),
