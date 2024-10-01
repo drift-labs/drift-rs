@@ -598,7 +598,7 @@ impl DriftClientBackend {
             self.perp_market_map.subscribe(),
             self.spot_market_map.subscribe(),
             self.oracle_map.subscribe(),
-            self.account_map.subscribe_account(&state_account()),
+            self.account_map.subscribe_account(state_account()),
         )?;
 
         Ok(())
@@ -609,7 +609,7 @@ impl DriftClientBackend {
         self.blockhash_subscriber.unsubscribe();
         self.perp_market_map.unsubscribe()?;
         self.spot_market_map.unsubscribe()?;
-        self.account_map.unsubscribe_account(&state_account());
+        self.account_map.unsubscribe_account(state_account());
         self.oracle_map.unsubscribe().await
     }
 

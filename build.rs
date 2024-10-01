@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, fs::File, io::Write, path::Path};
+use std::{collections::HashMap, fs::File, io::Write, path::Path};
 
 const LIB: &str = "libdrift_ffi_sys";
 
@@ -87,63 +87,44 @@ fn main() {
             fail_build();
         }
 
-        // install the dylib to system path
+        // try install the dylib to system path
         let libffi_out_path =
             drift_ffi_sys_crate.join(Path::new(&format!("target/{profile}/{LIB}.{lib_ext}")));
         let libffi_out_dir = drift_ffi_sys_crate.join(Path::new(&format!("target/{profile}")));
-        // let output = std::process::Command::new("ln")
-        //     .args([
-        //         "-sf",
-        //         libffi_out_path.to_str().expect("ffi build path"),
-        //         "/usr/local/lib/",
-        //     ])
-        //     .output()
-        //     .expect("install ok");
+        let output = std::process::Command::new("ln")
+            .args([
+                "-sf",
+                libffi_out_path.to_str().expect("ffi build path"),
+                "/usr/local/lib/",
+            ])
+            .output()
+            .expect("install ok");
 
-        // try to copy into system libs, fallback to 'rpath'
-        //if !output.status.success() {
+        if !output.status.success() {
             eprintln!(
-                "{LIB} could not be installed: {}",
+                "{LIB} could not be symlinked to /usr/local/lib: {}",
                 String::from_utf8_lossy(output.stderr.as_slice())
             );
-            println!("rpath dir 1: {}", libffi_out_dir.to_string_lossy());
-
-            // let output = std::process::Command::new("cp")
-            //     .args([
-            //         libffi_out_path.to_str().unwrap(),
-            //         current_dir.to_str().unwrap(),
-            //     ])
-            //     .output()
-            //     .expect("install ok");
-            // println!("rpath dir 2: {}", current_dir.to_string_lossy());
-            // if let Ok(mut ld_path) = std::env::var("LD_LIBRARY_PATH") {
-            //     ld_path.push_str(libffi_out_dir.to_str().unwrap());
-            //     std::env::set_var("LD_LIBRARY_PATH", ld_path);
-            // }
-            // println!(
-            //    "cargo:rustc-link-search=native={}",
-            //    current_dir.to_string_lossy()
-            //);
-
-            println!("{LIB}: built for profile: {}", profile);
-            println!(
-                "{LIB}: CARGO_MANIFEST_DIR: {}",
-                std::env::var("CARGO_MANIFEST_DIR").unwrap_or("no manifest dir".into())
-            );
-            println!(
-                "{LIB}: OUT_DIR: {}",
-                std::env::var("OUT_DIR").unwrap_or("no out dir".into())
-            );
-            println!(
-                "cargo:rustc-link-arg=-Wl,-rpath,{},--allow-multiple-definition",
-                libffi_out_path.to_string_lossy()
-            );
-        //}
+        }
         println!(
             "cargo:rustc-link-search=native={}",
             libffi_out_dir.to_string_lossy()
         );
-        println!("cargo:rustc-link-lib=static:-bundle=drift_ffi_sys");
+        println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
+
+        // make 'cargo run' / 'cargo test' link properly
+        // https://github.com/rust-lang/cargo/issues/4895
+        if let Ok(existing) = std::env::var("LD_LIBRARY_PATH") {
+            println!(
+                "cargo:rustc-env=LD_LIBRARY_PATH={}:{existing}",
+                libffi_out_dir.to_string_lossy()
+            );
+        } else {
+            println!(
+                "cargo:rustc-env=LD_LIBRARY_PATH={}",
+                libffi_out_dir.to_string_lossy()
+            );
+        }
     } else if let Ok(lib_path) = std::env::var("CARGO_DRIFT_FFI_PATH") {
         // try link drift_ffi_sys from given path
         println!("{LIB}: searching for lib at: {lib_path}");

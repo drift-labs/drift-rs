@@ -47,7 +47,7 @@ pub fn calculate_liquidation_price_and_unrealized_pnl(
         .get_perp_position(market_index)
         .map_err(|_| SdkError::NoPosiiton(market_index))?;
 
-    let unrealized_pnl = calculate_unrealized_pnl_inner(&position.into(), oracle.data.price)?;
+    let unrealized_pnl = calculate_unrealized_pnl_inner(&position, oracle.data.price)?;
 
     // matching spot market e.g. sol-perp => SOL spot
     let mut builder = AccountsListBuilder::default();
@@ -82,7 +82,7 @@ pub fn calculate_unrealized_pnl(
             .get_oracle_price_data_and_slot_for_perp_market(market_index)
             .map(|x| x.data.price)
             .unwrap_or(0);
-        calculate_unrealized_pnl_inner(&position.into(), oracle_price)
+        calculate_unrealized_pnl_inner(&position, oracle_price)
     } else {
         Err(SdkError::NoPosiiton(market_index))
     }
