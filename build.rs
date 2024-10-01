@@ -107,8 +107,25 @@ fn main() {
                 String::from_utf8_lossy(output.stderr.as_slice())
             );
             println!("rpath dir 1: {}", libffi_out_dir.to_string_lossy());
-            println!("rpath dir 2: {}", current_dir.to_string_lossy());
-            println!("built for profile: {}", profile);
+
+            // let output = std::process::Command::new("cp")
+            //     .args([
+            //         libffi_out_path.to_str().unwrap(),
+            //         current_dir.to_str().unwrap(),
+            //     ])
+            //     .output()
+            //     .expect("install ok");
+            // println!("rpath dir 2: {}", current_dir.to_string_lossy());
+            // if let Ok(mut ld_path) = std::env::var("LD_LIBRARY_PATH") {
+            //     ld_path.push_str(libffi_out_dir.to_str().unwrap());
+            //     std::env::set_var("LD_LIBRARY_PATH", ld_path);
+            // }
+            // println!(
+            //    "cargo:rustc-link-search=native={}",
+            //    current_dir.to_string_lossy()
+            //);
+
+            println!("{LIB}: built for profile: {}", profile);
             println!(
                 "{LIB}: CARGO_MANIFEST_DIR: {}",
                 std::env::var("CARGO_MANIFEST_DIR").unwrap_or("no manifest dir".into())
@@ -117,19 +134,6 @@ fn main() {
                 "{LIB}: OUT_DIR: {}",
                 std::env::var("OUT_DIR").unwrap_or("no out dir".into())
             );
-
-            if let Ok(mut ld_path) = std::env::var("LD_LIBRARY_PATH") {
-                ld_path.push_str(libffi_out_dir.to_str().unwrap());
-                std::env::set_var("LD_LIBRARY_PATH", ld_path);
-            }
-
-            let output = std::process::Command::new("cp")
-                .args([
-                    libffi_out_path.to_str().unwrap(),
-                    current_dir.to_str().unwrap(),
-                ])
-                .output()
-                .expect("install ok");
             println!(
                 "cargo:rustc-link-arg=-Wl,-rpath,{}",
                 libffi_out_path.to_string_lossy()
@@ -137,21 +141,19 @@ fn main() {
         }
         println!(
             "cargo:rustc-link-search=native={}",
-            current_dir.to_string_lossy()
-        );
-        println!(
-            "cargo:rustc-link-search=native={}",
             libffi_out_dir.to_string_lossy()
         );
-        println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
+        println!("cargo:rustc-link-lib=static:-bundle=drift_ffi_sys");
     } else if let Ok(lib_path) = std::env::var("CARGO_DRIFT_FFI_PATH") {
         // try link drift_ffi_sys from given path
         println!("{LIB}: searching for lib at: {lib_path}");
         println!("cargo:rustc-link-search=native={lib_path}");
         // try link drift_ffi_sys from default paths
         println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
+    } else {
+        println!("{LIB}: try link from default paths");
+        println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
     }
-    println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
 }
 
 fn fail_build() -> ! {

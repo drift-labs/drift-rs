@@ -42,8 +42,6 @@ solana-transaction-status = "2.0.8"
 thiserror = "1"
 tokio = { version = "*", features = ["full"] }
 type-layout = "*"
-# yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc", tag = "v1.16.3+solana.2.0.10" }
-# yellowstone-grpc-proto = { git = "https://github.com/rpcpool/yellowstone-grpc", tag = "v1.16.3+solana.2.0.10" }
 
 [dev-dependencies]
 bytes = "*"
