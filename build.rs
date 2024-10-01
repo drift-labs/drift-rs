@@ -106,7 +106,6 @@ fn main() {
                 "{LIB} could not be installed: {}",
                 String::from_utf8_lossy(output.stderr.as_slice())
             );
-        } else {
             println!("rpath dir 1: {}", libffi_out_dir.to_string_lossy());
             println!("rpath dir 2: {}", current_dir.to_string_lossy());
             let output = std::process::Command::new("cp")
@@ -121,6 +120,10 @@ fn main() {
                 libffi_out_path.to_string_lossy()
             );
         }
+        println!(
+            "cargo:rustc-link-search=native={}",
+            current_dir.to_string_lossy()
+        );
         println!(
             "cargo:rustc-link-search=native={}",
             libffi_out_dir.to_string_lossy()
