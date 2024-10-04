@@ -1396,14 +1396,14 @@ dependencies = [
 
 [[package]]
 name = "drift-idl-gen"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "proc-macro2",
  "quote",
  "serde",
  "serde_json",
- "sha2 0.10.8",
- "syn 2.0.77",
+ "sha2 0.9.9",
+ "syn 1.0.109",
 ]
 
 [[package]]

@@ -1304,6 +1304,7 @@ impl<'a> TransactionBuilder<'a> {
         maker_info: Option<(Pubkey, User)>,
         referrer: Option<Pubkey>,
         fulfillment_type: Option<SpotFulfillmentType>,
+        success_condition: Option<u32>,
     ) -> Self {
         let mut user_accounts = vec![self.account_data.as_ref()];
         if let Some((ref _maker_pubkey, ref maker)) = maker_info {
@@ -1346,7 +1347,7 @@ impl<'a> TransactionBuilder<'a> {
                 accounts,
                 data: InstructionData::data(&drift_idl::instructions::PlaceAndTakePerpOrder {
                     params: order,
-                    maker_order_id: None,
+                    success_condition,
                 }),
             }
         } else {

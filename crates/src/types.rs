@@ -1,6 +1,7 @@
 use std::{
     cell::{BorrowError, BorrowMutError},
     cmp::Ordering,
+    str::FromStr,
 };
 
 use anchor_lang::AnchorDeserialize;
@@ -480,8 +481,32 @@ impl ConfiguredMarkets {
     }
 }
 
+impl ToString for MarketType {
+    fn to_string(&self) -> String {
+        match self {
+            MarketType::Perp => "perp".into(),
+            MarketType::Spot => "spot".into(),
+        }
+    }
+}
+
+impl FromStr for MarketType {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.eq_ignore_ascii_case("perp") {
+            Ok(Self::Perp)
+        } else if s.eq_ignore_ascii_case("spot") {
+            Ok(Self::Spot)
+        } else {
+            Err(())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use solana_client::{
         client_error::{ClientError, ClientErrorKind},
         rpc_request::{RpcError, RpcRequest},
@@ -492,7 +517,15 @@ mod tests {
     };
 
     use super::{RemainingAccount, SdkError};
-    use crate::drift_idl::errors::ErrorCode;
+    use crate::{drift_idl::errors::ErrorCode, MarketType};
+
+    #[test]
+    fn market_type_str() {
+        assert_eq!(MarketType::from_str("PERP").unwrap(), MarketType::Perp,);
+        assert_eq!(MarketType::from_str("spot").unwrap(), MarketType::Spot,);
+        assert_eq!("perp", &MarketType::Perp.to_string(),);
+        assert_eq!("spot", &MarketType::Spot.to_string(),);
+    }
 
     #[test]
     fn extract_anchor_error() {
