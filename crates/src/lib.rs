@@ -598,7 +598,7 @@ impl DriftClientBackend {
             self.perp_market_map.subscribe(),
             self.spot_market_map.subscribe(),
             self.oracle_map.subscribe(),
-            self.account_map.subscribe_account(&state_account()),
+            self.account_map.subscribe_account(state_account()),
         )?;
 
         Ok(())
@@ -609,7 +609,7 @@ impl DriftClientBackend {
         self.blockhash_subscriber.unsubscribe();
         self.perp_market_map.unsubscribe()?;
         self.spot_market_map.unsubscribe()?;
-        self.account_map.unsubscribe_account(&state_account());
+        self.account_map.unsubscribe_account(state_account());
         self.oracle_map.unsubscribe().await
     }
 
@@ -838,21 +838,28 @@ impl DriftClientBackend {
     }
 }
 
-/// Markets forced to include by `TransactionBuilder`
+/// Configure markets as forced for inclusion by `TransactionBuilder`
+///
+/// In contrast, without this Transactions are built using the latest known state of
+/// users's open positions and orders, which can result in race conditions when executed onchain.
 #[derive(Default)]
 struct ForceMarkets {
+    /// markets must include as readable
     readable: Vec<MarketId>,
+    /// markets must include as writeable
     writeable: Vec<MarketId>,
 }
 
 impl ForceMarkets {
-    /// Add a market to the forced markets in r/w mode
-    pub fn add_markets(&mut self, markets: &[MarketId], write: bool) {
-        if write {
-            self.writeable = markets.to_vec();
-        } else {
-            self.readable = markets.to_vec();
-        }
+    /// Set given `markets` as readable, enforcing there inclusion in a final Tx
+    pub fn with_readable(&mut self, markets: &[MarketId]) -> &mut Self {
+        self.readable = markets.to_vec();
+        self
+    }
+    /// Set given `markets` as writeable, enforcing there inclusion in a final Tx
+    pub fn with_writeable(&mut self, markets: &[MarketId]) -> &mut Self {
+        self.writeable = markets.to_vec();
+        self
     }
 }
 
@@ -861,7 +868,7 @@ impl ForceMarkets {
 /// Prefer `DriftClient::init_tx`
 ///
 /// ```ignore
-/// use drift_sdk::{types::Context, TransactionBuilder, Wallet};
+/// use drift_rs::{types::Context, TransactionBuilder, Wallet};
 ///
 /// let wallet = Wallet::from_seed_bs58(Context::Dev, "seed");
 /// let client = DriftClient::new("api.example.com").await.unwrap();
@@ -931,8 +938,8 @@ impl<'a> TransactionBuilder<'a> {
     }
     /// force given `markets` to be included in the final tx accounts list (ensure to call before building ixs)
     pub fn force_include_markets(&mut self, readable: &[MarketId], writeable: &[MarketId]) {
-        self.force_markets.add_markets(readable, false);
-        self.force_markets.add_markets(writeable, true);
+        self.force_markets.with_readable(readable);
+        self.force_markets.with_writeable(writeable);
     }
     /// Use legacy tx mode
     pub fn legacy(mut self) -> Self {
@@ -981,8 +988,8 @@ impl<'a> TransactionBuilder<'a> {
                 token_program: constants::TOKEN_PROGRAM_ID,
             },
             &[self.account_data.as_ref()],
-            &[],
-            &[MarketId::spot(spot_market_index)],
+            self.force_markets.readable.iter(),
+            [MarketId::spot(spot_market_index)].iter(),
         );
 
         let ix = Instruction {
@@ -1020,8 +1027,10 @@ impl<'a> TransactionBuilder<'a> {
                 token_program: constants::TOKEN_PROGRAM_ID,
             },
             &[self.account_data.as_ref()],
-            &[],
-            &[MarketId::spot(spot_market_index)],
+            self.force_markets.readable.iter(),
+            [MarketId::spot(spot_market_index)]
+                .iter()
+                .chain(self.force_markets.writeable.iter()),
         );
 
         let ix = Instruction {
@@ -1055,8 +1064,8 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
             },
             &[self.account_data.as_ref()],
-            readable_accounts.as_ref(),
-            &[],
+            readable_accounts.iter(),
+            self.force_markets.writeable.iter(),
         );
 
         let ix = Instruction {
@@ -1080,8 +1089,8 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
             },
             &[self.account_data.as_ref()],
-            &[],
-            &[],
+            self.force_markets.readable.iter(),
+            self.force_markets.writeable.iter(),
         );
 
         let ix = Instruction {
@@ -1117,8 +1126,10 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
             },
             &[self.account_data.as_ref()],
-            &[(idx, kind).into()],
-            &[],
+            [(idx, kind).into()]
+                .iter()
+                .chain(self.force_markets.readable.iter()),
+            self.force_markets.writeable.iter(),
         );
 
         let ix = Instruction {
@@ -1145,8 +1156,8 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
             },
             &[self.account_data.as_ref()],
-            &[],
-            &[],
+            self.force_markets.readable.iter(),
+            self.force_markets.writeable.iter(),
         );
 
         let ix = Instruction {
@@ -1169,8 +1180,8 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
             },
             &[self.account_data.as_ref()],
-            &[],
-            &[],
+            self.force_markets.readable.iter(),
+            self.force_markets.writeable.iter(),
         );
 
         for user_order_id in user_order_ids {
@@ -1197,8 +1208,8 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
             },
             &[self.account_data.as_ref()],
-            self.force_markets.readable.as_slice(),
-            &[],
+            self.force_markets.readable.iter(),
+            self.force_markets.writeable.iter(),
         );
 
         for (order_id, params) in orders {
@@ -1226,8 +1237,8 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
             },
             &[self.account_data.as_ref()],
-            self.force_markets.readable.as_slice(),
-            &[],
+            self.force_markets.readable.iter(),
+            self.force_markets.writeable.iter(),
         );
 
         for (user_order_id, params) in orders {
@@ -1274,13 +1285,14 @@ impl<'a> TransactionBuilder<'a> {
                 taker: *taker,
                 taker_stats: Wallet::derive_stats_account(taker),
             },
-            &[self.account_data.as_ref(), &taker_account],
-            &self.force_markets.readable,
+            &[self.account_data.as_ref(), taker_account],
+            self.force_markets.readable.iter(),
             if is_perp {
-                &perp_writable
+                perp_writable.iter()
             } else {
-                &spot_writable
-            },
+                spot_writable.iter()
+            }
+            .chain(self.force_markets.writeable.iter()),
         );
 
         if let Some(referrer) = referrer {
@@ -1350,12 +1362,13 @@ impl<'a> TransactionBuilder<'a> {
                 user_stats: Wallet::derive_stats_account(&self.authority),
             },
             user_accounts.as_slice(),
-            &self.force_markets.readable,
+            self.force_markets.readable.iter(),
             if is_perp {
-                &perp_writable
+                perp_writable.iter()
             } else {
-                &spot_writable
-            },
+                spot_writable.iter()
+            }
+            .chain(self.force_markets.writeable.iter()),
         );
 
         if referrer.is_some_and(|r| !maker_info.is_some_and(|(m, _)| m == r)) {
@@ -1430,12 +1443,12 @@ impl<'a> TransactionBuilder<'a> {
 ///
 /// # Panics
 ///  if the user has positions in an unknown market (i.e unsupported by the SDK)
-pub fn build_accounts(
+pub fn build_accounts<'a>(
     program_data: &ProgramData,
     base_accounts: impl ToAccountMetas,
     users: &[&User],
-    markets_readable: &[MarketId],
-    markets_writable: &[MarketId],
+    markets_readable: impl Iterator<Item = &'a MarketId>,
+    markets_writable: impl Iterator<Item = &'a MarketId>,
 ) -> Vec<AccountMeta> {
     // the order of accounts returned must be instruction, oracles, spot, perps see (https://github.com/drift-labs/protocol-v2/blob/master/programs/drift/src/instructions/optional_accounts.rs#L28)
     let mut seen = [0_u64; 2]; // [spot, perp]
