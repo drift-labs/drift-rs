@@ -152,8 +152,8 @@ impl JitProxyClient {
                 drift_program: constants::PROGRAM_ID,
             },
             &[&params.taker, account_data],
-            &[],
-            writable_markets.as_slice(),
+            [].iter(),
+            writable_markets.iter(),
         );
 
         if let Some(referrer_info) = params.referrer_info {

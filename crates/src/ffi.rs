@@ -160,25 +160,25 @@ pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
 
 impl types::SpotPosition {
     pub fn is_available(&self) -> bool {
-        unsafe { spot_position_is_available(&self) }
+        unsafe { spot_position_is_available(self) }
     }
     pub fn get_signed_token_amount(&self, market: &accounts::SpotMarket) -> SdkResult<i128> {
-        to_sdk_result(unsafe { spot_position_get_signed_token_amount(&self, market) })
+        to_sdk_result(unsafe { spot_position_get_signed_token_amount(self, market) })
     }
     pub fn get_token_amount(&self, market: &accounts::SpotMarket) -> SdkResult<u128> {
-        to_sdk_result(unsafe { spot_position_get_token_amount(&self, market) })
+        to_sdk_result(unsafe { spot_position_get_token_amount(self, market) })
     }
 }
 
 impl types::PerpPosition {
     pub fn get_unrealized_pnl(&self, oracle_price: i64) -> SdkResult<i128> {
-        to_sdk_result(unsafe { perp_position_get_unrealized_pnl(&self, oracle_price) })
+        to_sdk_result(unsafe { perp_position_get_unrealized_pnl(self, oracle_price) })
     }
     pub fn is_available(&self) -> bool {
-        unsafe { perp_position_is_available(&self) }
+        unsafe { perp_position_is_available(self) }
     }
     pub fn is_open_position(&self) -> bool {
-        unsafe { perp_position_is_open_position(&self) }
+        unsafe { perp_position_is_open_position(self) }
     }
     pub fn worst_case_base_asset_amount(
         &self,
@@ -186,7 +186,7 @@ impl types::PerpPosition {
         contract_type: ContractType,
     ) -> SdkResult<i128> {
         to_sdk_result(unsafe {
-            perp_position_worst_case_base_asset_amount(&self, oracle_price, contract_type)
+            perp_position_worst_case_base_asset_amount(self, oracle_price, contract_type)
         })
     }
     pub fn simulate_settled_lp_position(
@@ -195,7 +195,7 @@ impl types::PerpPosition {
         oracle_price: i64,
     ) -> SdkResult<types::PerpPosition> {
         to_sdk_result(unsafe {
-            perp_position_simulate_settled_lp_position(&self, market, oracle_price)
+            perp_position_simulate_settled_lp_position(self, market, oracle_price)
         })
     }
 }
@@ -203,19 +203,19 @@ impl types::PerpPosition {
 impl accounts::User {
     pub fn get_spot_position(&self, market_index: u16) -> SdkResult<types::SpotPosition> {
         // TODO: no clone
-        to_sdk_result(unsafe { user_get_spot_position(&self, market_index) }).map(|p| *p)
+        to_sdk_result(unsafe { user_get_spot_position(self, market_index) }).copied()
     }
     pub fn get_perp_position(&self, market_index: u16) -> SdkResult<types::PerpPosition> {
-        to_sdk_result(unsafe { user_get_perp_position(&self, market_index) }).map(|p| *p)
+        to_sdk_result(unsafe { user_get_perp_position(self, market_index) }).copied()
     }
 }
 
 impl types::Order {
     pub fn is_limit_order(&self) -> bool {
-        unsafe { order_is_limit_order(&self) }
+        unsafe { order_is_limit_order(self) }
     }
     pub fn is_resting_limit_order(&self, slot: Slot) -> SdkResult<bool> {
-        to_sdk_result(unsafe { order_is_resting_limit_order(&self, slot) })
+        to_sdk_result(unsafe { order_is_resting_limit_order(self, slot) })
     }
 }
 
@@ -227,7 +227,7 @@ impl accounts::SpotMarket {
         margin_requirement_type: MarginRequirementType,
     ) -> SdkResult<u32> {
         to_sdk_result(unsafe {
-            spot_market_get_asset_weight(&self, size, oracle_price, margin_requirement_type)
+            spot_market_get_asset_weight(self, size, oracle_price, margin_requirement_type)
         })
     }
     pub fn get_liability_weight(
@@ -236,7 +236,7 @@ impl accounts::SpotMarket {
         margin_requirement_type: MarginRequirementType,
     ) -> SdkResult<u32> {
         to_sdk_result(unsafe {
-            spot_market_get_liability_weight(&self, size, margin_requirement_type)
+            spot_market_get_liability_weight(self, size, margin_requirement_type)
         })
     }
 }
@@ -247,10 +247,10 @@ impl accounts::PerpMarket {
         size: u128,
         margin_requirement_type: MarginRequirementType,
     ) -> SdkResult<u32> {
-        to_sdk_result(unsafe { perp_market_get_margin_ratio(&self, size, margin_requirement_type) })
+        to_sdk_result(unsafe { perp_market_get_margin_ratio(self, size, margin_requirement_type) })
     }
     pub fn get_open_interest(&self) -> u128 {
-        unsafe { perp_market_get_open_interest(&self) }
+        unsafe { perp_market_get_open_interest(self) }
     }
 }
 
