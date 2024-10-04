@@ -1577,6 +1577,12 @@ impl Wallet {
         VersionedTransaction::try_new(message, &[signer]).map_err(Into::into)
     }
 
+    /// Sign message with the wallet's signer
+    pub fn sign_message(&self, message: &[u8]) -> SdkResult<Signature> {
+        let signer: &dyn Signer = self.signer.as_ref();
+        Ok(signer.sign_message(message))
+    }
+
     /// Return the wallet authority address
     pub fn authority(&self) -> &Pubkey {
         &self.authority
