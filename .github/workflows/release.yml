@@ -36,7 +36,7 @@ jobs:
           # add libdrift_ffi_sys
           curl -L https://github.com/user-attachments/files/17160233/libdrift_ffi_sys.so.zip > ffi.zip
           unzip ffi.zip
-          sudo mv libdrift_ffi_sys.so $CARGO_DRIFT_FFI_SYS
+          sudo mv libdrift_ffi_sys.so $CARGO_DRIFT_FFI_PATH
           rm ffi.zip # clean up for git
           # publish to crates.io
           cargo publish --dry-run
