@@ -21,6 +21,9 @@ jobs:
           fetch-depth: 0
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: install 1.76.0 toolchain
+        run: |
+          rustup install 1.76.0-x86_64-unknown-linux-gnu
       - name: Cargo login
         run: |
           cargo login ${{ secrets.CARGO_REGISTRY_TOKEN }}
@@ -38,4 +41,4 @@ jobs:
           # publish to crates.io
           cargo publish --dry-run
         env:
-          CARGO_DRIFT_FFI_SYS: '/usr/lib'
+          CARGO_DRIFT_FFI_PATH: "/usr/lib"
