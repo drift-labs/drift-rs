@@ -11,7 +11,7 @@ description = """
 Rust SDK for Drift V2 Protocol on the Solana blockchain.
 """
 categories = ["solana", "trading", "defi", "dex"]
-keywords = ["solana", "trading", "defi", "dex", "drift", "protocol", "sdk"]
+keywords = ["solana", "dex", "drift", "sdk"]
 
 [lib]
 path = "crates/src/lib.rs"
