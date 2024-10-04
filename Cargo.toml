@@ -10,7 +10,7 @@ homepage = "https://drift.trade"
 description = """
 Rust SDK for Drift V2 Protocol on the Solana blockchain.
 """
-categories = ["solana", "trading", "defi", "dex"]
+categories = ["cryptography::cryptocurrencies", "api-bindings"]
 keywords = ["solana", "dex", "drift", "sdk"]
 
 [lib]
