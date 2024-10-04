@@ -1,6 +1,6 @@
 [package]
 name = "drift-rs"
-version = "1.0.0"
+version = "1.0.0-alpha.0"
 edition = "2021"
 build = "build.rs"
 license = "Apache-2.0"
