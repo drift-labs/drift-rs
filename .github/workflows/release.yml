@@ -39,6 +39,6 @@ jobs:
           sudo mv libdrift_ffi_sys.so $CARGO_DRIFT_FFI_PATH
           rm ffi.zip # clean up for git
           # publish to crates.io
-          cargo publish --dry-run
+          cargo publish
         env:
           CARGO_DRIFT_FFI_PATH: "/usr/lib"
