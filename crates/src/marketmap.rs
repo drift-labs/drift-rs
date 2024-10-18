@@ -19,13 +19,13 @@ use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubke
 use crate::{
     accounts::State,
     constants::{self, derive_perp_market_account, derive_spot_market_account, state_account},
-    drift_idl::types::{MarketType, OracleSource},
+    drift_idl::types::OracleSource,
     memcmp::get_market_filter,
     utils::get_ws_url,
     websocket_program_account_subscriber::{
         ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
     },
-    DataAndSlot, PerpMarket, SdkError, SdkResult, SpotMarket, UnsubHandle,
+    DataAndSlot, MarketId, MarketType, PerpMarket, SdkError, SdkResult, SpotMarket, UnsubHandle,
 };
 
 const LOG_TARGET: &str = "marketmap";
@@ -33,7 +33,7 @@ const LOG_TARGET: &str = "marketmap";
 pub trait Market {
     const MARKET_TYPE: MarketType;
     fn market_index(&self) -> u16;
-    fn oracle_info(&self) -> (u16, Pubkey, OracleSource);
+    fn oracle_info(&self) -> (MarketId, Pubkey, OracleSource);
 }
 
 impl Market for PerpMarket {
@@ -43,8 +43,12 @@ impl Market for PerpMarket {
         self.market_index
     }
 
-    fn oracle_info(&self) -> (u16, Pubkey, OracleSource) {
-        (self.market_index(), self.amm.oracle, self.amm.oracle_source)
+    fn oracle_info(&self) -> (MarketId, Pubkey, OracleSource) {
+        (
+            MarketId::perp(self.market_index),
+            self.amm.oracle,
+            self.amm.oracle_source,
+        )
     }
 }
 
@@ -55,14 +59,18 @@ impl Market for SpotMarket {
         self.market_index
     }
 
-    fn oracle_info(&self) -> (u16, Pubkey, OracleSource) {
-        (self.market_index(), self.oracle, self.oracle_source)
+    fn oracle_info(&self) -> (MarketId, Pubkey, OracleSource) {
+        (
+            MarketId::spot(self.market_index),
+            self.oracle,
+            self.oracle_source,
+        )
     }
 }
 
 pub struct MarketMap<T: AnchorDeserialize + Send> {
     subscription: WebsocketProgramAccountSubscriber,
-    marketmap: Arc<DashMap<u16, DataAndSlot<T>>>,
+    marketmap: Arc<DashMap<u16, DataAndSlot<T>, ahash::RandomState>>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
     rpc: RpcClient,
@@ -85,13 +93,12 @@ where
 
         let url = get_ws_url(&endpoint.clone()).unwrap();
         let subscription = WebsocketProgramAccountSubscriber::new(url, options);
-        let marketmap = Arc::new(DashMap::new());
         let rpc = RpcClient::new_with_commitment(endpoint.clone(), commitment);
         let sync_lock = if sync { Some(Mutex::new(())) } else { None };
 
         Self {
             subscription,
-            marketmap,
+            marketmap: Arc::default(),
             sync_lock,
             latest_slot: Arc::new(AtomicU64::new(0)),
             rpc,
@@ -112,10 +119,13 @@ where
                 if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
                     latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
                 }
-                marketmap.insert(
-                    update.data_and_slot.data.market_index(),
-                    update.data_and_slot.clone(),
-                );
+                marketmap
+                    .entry(update.data_and_slot.data.market_index())
+                    .and_modify(|x| {
+                        x.data.clone_from(&update.data_and_slot.data);
+                        x.slot = update.data_and_slot.slot;
+                    })
+                    .or_insert(update.data_and_slot.clone());
             }
         });
         let mut guard = self.unsub.lock().unwrap();
@@ -144,7 +154,8 @@ where
         self.marketmap.iter().map(|x| x.data.clone()).collect()
     }
 
-    pub fn oracles(&self) -> Vec<(u16, Pubkey, OracleSource)> {
+    /// Returns a list of oracle info for each market
+    pub fn oracles(&self) -> Vec<(MarketId, Pubkey, OracleSource)> {
         self.values().iter().map(|x| x.oracle_info()).collect()
     }
 

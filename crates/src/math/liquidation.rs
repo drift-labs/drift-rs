@@ -19,7 +19,7 @@ use crate::{
         accounts::{PerpMarket, SpotMarket, User},
         MarginRequirementType, PerpPosition,
     },
-    DriftClient, SdkError, SdkResult, SpotPosition,
+    DriftClient, MarketId, SdkError, SdkResult, SpotPosition,
 };
 
 /// Info on a positions liquidation price and unrealized PnL
@@ -37,12 +37,11 @@ pub fn calculate_liquidation_price_and_unrealized_pnl(
     user: &User,
     market_index: u16,
 ) -> SdkResult<LiquidationAndPnlInfo> {
-    let perp_market = client
-        .get_perp_market_account(market_index)
-        .ok_or(SdkError::InvalidAccount)?;
+    let perp_market = client.try_get_perp_market_account(market_index)?;
     let oracle = client
-        .get_oracle_price_data_and_slot(&perp_market.amm.oracle)
-        .ok_or(SdkError::InvalidAccount)?;
+        .try_get_oracle_price_data_and_slot(MarketId::perp(market_index))
+        .ok_or(SdkError::NoData)?;
+
     let position = user
         .get_perp_position(market_index)
         .map_err(|_| SdkError::NoPosiiton(market_index))?;
@@ -79,9 +78,10 @@ pub fn calculate_unrealized_pnl(
 ) -> SdkResult<i128> {
     if let Ok(position) = user.get_perp_position(market_index) {
         let oracle_price = client
-            .get_oracle_price_data_and_slot_for_perp_market(market_index)
+            .try_get_oracle_price_data_and_slot(MarketId::perp(market_index))
             .map(|x| x.data.price)
-            .unwrap_or(0);
+            .ok_or(SdkError::NoData)?;
+
         calculate_unrealized_pnl_inner(&position, oracle_price)
     } else {
         Err(SdkError::NoPosiiton(market_index))
@@ -108,12 +108,12 @@ pub fn calculate_liquidation_price(
 ) -> SdkResult<i64> {
     let mut accounts_builder = AccountsListBuilder::default();
     let mut account_maps = accounts_builder.build(client, user)?;
-    let perp_market = client
-        .get_perp_market_account(market_index)
-        .ok_or(SdkError::InvalidAccount)?;
+    let perp_market = client.try_get_perp_market_account(market_index)?;
+
     let oracle = client
-        .get_oracle_price_data_and_slot(&perp_market.amm.oracle)
-        .ok_or(SdkError::InvalidAccount)?;
+        .try_get_oracle_price_data_and_slot(MarketId::perp(market_index))
+        .ok_or(SdkError::NoData)?;
+
     // matching spot market e.g. sol-perp => SOL spot
     let spot_market = client
         .program_data()

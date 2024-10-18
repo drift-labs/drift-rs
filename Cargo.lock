@@ -1480,6 +1480,7 @@ name = "drift-rs"
 version = "1.0.0-alpha.1"
 dependencies = [
  "abi_stable",
+ "ahash 0.8.11",
  "anchor-lang",
  "base64 0.22.1",
  "bytemuck",

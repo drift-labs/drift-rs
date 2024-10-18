@@ -20,7 +20,7 @@ use crate::{
     accounts::User,
     build_accounts,
     constants::{self, state_account, JIT_PROXY_ID},
-    DriftClient, MarketId, MarketType, PostOnlyParam, ReferrerInfo, SdkError, SdkResult,
+    drift_idl, DriftClient, MarketId, MarketType, PostOnlyParam, ReferrerInfo, SdkError, SdkResult,
     TransactionBuilder, Wallet,
 };
 
@@ -131,7 +131,7 @@ impl JitProxyClient {
         let program_data = tx_builder.program_data();
         let account_data = tx_builder.account_data();
 
-        let writable_markets = match order.market_type {
+        let writable_markets = match order.market_type.into() {
             MarketType::Perp => {
                 vec![MarketId::perp(order.market_index)]
             }
@@ -161,18 +161,14 @@ impl JitProxyClient {
             accounts.push(AccountMeta::new(referrer_info.referrer_stats(), false));
         }
 
-        if order.market_type == MarketType::Spot {
+        if order.market_type == drift_idl::types::MarketType::Spot {
             let spot_market_vault = self
                 .drift_client
-                .get_spot_market_account_and_slot(order.market_index)
-                .expect("spot market exists")
-                .data
+                .try_get_spot_market_account(order.market_index)?
                 .vault;
             let quote_spot_market_vault = self
                 .drift_client
-                .get_spot_market_account_and_slot(MarketId::QUOTE_SPOT.index())
-                .expect("quote market exists")
-                .data
+                .try_get_spot_market_account(MarketId::QUOTE_SPOT.index())?
                 .vault;
             accounts.push(AccountMeta::new_readonly(spot_market_vault, false));
             accounts.push(AccountMeta::new_readonly(quote_spot_market_vault, false));

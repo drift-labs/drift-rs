@@ -27,7 +27,7 @@ pub use crate::drift_idl::{
 };
 use crate::{
     constants::{ids, LUT_DEVNET, LUT_MAINNET},
-    drift_idl::errors::ErrorCode,
+    drift_idl::{self, errors::ErrorCode},
     Wallet,
 };
 
@@ -95,7 +95,7 @@ where
 }
 
 /// Id of a Drift market
-#[derive(Copy, Clone, Debug, Default, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct MarketId {
     index: u16,
     kind: MarketType,
@@ -144,6 +144,26 @@ impl From<(u16, MarketType)> for MarketId {
             index: value.0,
             kind: value.1,
         }
+    }
+}
+
+/// Shadow the IDL market type to add some extra traits e.g. Eq + Hash
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub enum MarketType {
+    #[default]
+    Spot,
+    Perp,
+}
+
+impl From<drift_idl::types::MarketType> for MarketType {
+    fn from(value: drift_idl::types::MarketType) -> Self {
+        unsafe { std::mem::transmute(value) }
+    }
+}
+
+impl From<MarketType> for drift_idl::types::MarketType {
+    fn from(value: MarketType) -> Self {
+        unsafe { std::mem::transmute(value) }
     }
 }
 
@@ -221,7 +241,7 @@ impl NewOrder {
         OrderParams {
             order_type: self.order_type,
             market_index: self.market_id.index,
-            market_type: self.market_id.kind,
+            market_type: self.market_id.kind.into(),
             price: self.price,
             base_asset_amount: self.amount,
             reduce_only: self.reduce_only,
@@ -282,7 +302,7 @@ pub enum SdkError {
     MaxReconnectionAttemptsReached,
     #[error("jit taker order not found")]
     JitOrderNotFound,
-    #[error("not data, client may be unsubsribed")]
+    #[error("no data, client may be unsubsribed")]
     NoData,
     #[error("component is already subscribed")]
     AlreadySubscribed,

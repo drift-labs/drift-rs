@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc, Mutex,
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
 
 use dashmap::DashMap;
@@ -10,20 +13,20 @@ use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
     account::Account, clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey,
 };
-use tokio::sync::RwLock;
 
 use crate::{
     drift_idl::types::OracleSource,
     ffi::{get_oracle_price, OraclePriceData},
     utils::get_ws_url,
     websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber},
-    SdkError, SdkResult, UnsubHandle,
+    MarketId, SdkError, SdkResult, UnsubHandle,
 };
 
 const LOG_TARGET: &str = "oraclemap";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct Oracle {
+    pub market: MarketId,
     pub pubkey: Pubkey,
     pub data: OraclePriceData,
     pub source: OracleSource,
@@ -31,130 +34,142 @@ pub struct Oracle {
     pub raw: Vec<u8>,
 }
 
-pub(crate) struct OracleMap {
-    pub(crate) oraclemap: Arc<DashMap<Pubkey, Oracle>>,
-    oracle_infos: DashMap<Pubkey, OracleSource>,
-    sync_lock: Option<Mutex<()>>,
+/// Dynamic map of Drift market oracle data
+///
+/// Caller can subscribe to some subset or markets for Ws backed updates
+/// Alternatively, the caller may drive the map by by calling `sync` periodically
+pub struct OracleMap {
+    /// Oracle info keyed by market
+    oraclemap: Arc<DashMap<MarketId, Oracle, ahash::RandomState>>,
+    /// Oracle subscription handles keyed by market
+    oracle_subscriptions: DashMap<MarketId, UnsubHandle, ahash::RandomState>,
     latest_slot: Arc<AtomicU64>,
     rpc: RpcClient,
-    oracle_subscribers: RwLock<Vec<UnsubHandle>>,
-    perp_oracles: DashMap<u16, Pubkey>,
-    spot_oracles: DashMap<u16, Pubkey>,
 }
 
 impl OracleMap {
-    pub const SUBSCRIPTION_ID: &'static str = "oraclemap";
+    pub const SUBSCRIPTION_ID: &str = "oraclemap";
 
+    /// Create a new `OracleMap`
+    ///
+    /// `all_oracles` Exhaustive list of all Drift oracle pubkeys and source by market
     pub fn new(
         commitment: CommitmentConfig,
         endpoint: String,
-        sync: bool,
-        perp_oracles: Vec<(u16, Pubkey, OracleSource)>,
-        spot_oracles: Vec<(u16, Pubkey, OracleSource)>,
+        all_oracles: &[(MarketId, Pubkey, OracleSource)],
     ) -> Self {
-        let oraclemap = Arc::new(DashMap::new());
         let rpc = RpcClient::new_with_commitment(endpoint.clone(), commitment);
-        let sync_lock = if sync { Some(Mutex::new(())) } else { None };
-
-        let oracle_infos_map: DashMap<_, _> = perp_oracles
+        let oraclemap = all_oracles
             .iter()
-            .chain(spot_oracles.iter())
-            .map(|(_, pubkey, oracle_source)| (*pubkey, *oracle_source))
-            .collect();
-
-        let perp_oracles_map: DashMap<_, _> = perp_oracles
-            .iter()
-            .map(|(market_index, pubkey, _)| (*market_index, *pubkey))
-            .collect();
-
-        let spot_oracles_map: DashMap<_, _> = spot_oracles
-            .iter()
-            .map(|(market_index, pubkey, _)| (*market_index, *pubkey))
+            .copied()
+            .map(|(market, pubkey, source)| {
+                (
+                    market,
+                    Oracle {
+                        pubkey,
+                        source,
+                        ..Default::default()
+                    },
+                )
+            })
             .collect();
 
         Self {
-            oraclemap,
-            oracle_infos: oracle_infos_map,
-            sync_lock,
+            oraclemap: Arc::new(oraclemap),
+            oracle_subscriptions: Default::default(),
             latest_slot: Arc::new(AtomicU64::new(0)),
             rpc,
-            oracle_subscribers: Default::default(),
-            perp_oracles: perp_oracles_map,
-            spot_oracles: spot_oracles_map,
         }
     }
 
-    pub async fn subscribe(&self) -> SdkResult<()> {
-        log::debug!(target: LOG_TARGET, "subscribing");
-        if self.sync_lock.is_some() {
-            self.sync().await?;
-        }
-
-        if self.is_subscribed().await {
-            return Ok(());
-        }
+    /// Subscribe to oracle updates for given `markets`
+    /// Can be called multiple times to subscribe to additional markets
+    ///
+    /// Panics
+    ///
+    /// If the `market` oracle pubkey is not loaded
+    pub async fn subscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
+        log::debug!(target: LOG_TARGET, "subscribe market oracles: {markets:?}");
+        self.sync(markets).await;
 
         let url = get_ws_url(&self.rpc.url()).expect("valid url");
 
         let mut pending_subscriptions =
-            Vec::<WebsocketAccountSubscriber>::with_capacity(self.oracle_infos.len());
-        for oracle_info in self.oracle_infos.iter() {
-            let oracle_pubkey = oracle_info.key();
-            let oracle_subscriber =
-                WebsocketAccountSubscriber::new(url.clone(), *oracle_pubkey, self.rpc.commitment());
-            pending_subscriptions.push(oracle_subscriber);
+            Vec::<(WebsocketAccountSubscriber, Oracle)>::with_capacity(markets.len());
+
+        for market in markets {
+            let oracle_info = self.oraclemap.get(market).expect("oracle exists"); // caller did not supply in `OracleMap::new()``
+            let oracle_subscriber = WebsocketAccountSubscriber::new(
+                url.clone(),
+                oracle_info.pubkey,
+                self.rpc.commitment(),
+            );
+
+            pending_subscriptions.push((oracle_subscriber, oracle_info.clone()));
         }
 
-        let futs_iter = pending_subscriptions.iter().map(|s| {
-            let source = *self.oracle_infos.get(&s.pubkey).expect("oracle source");
-            s.subscribe(Self::SUBSCRIPTION_ID, {
-                let oracle_map = Arc::clone(&self.oraclemap);
-                move |update| handler_fn(&oracle_map, source, update)
-            })
+        let futs_iter = pending_subscriptions.into_iter().map(|(sub_fut, info)| {
+            let oraclemap = Arc::clone(&self.oraclemap);
+            async move {
+                let unsub = sub_fut
+                    .subscribe(Self::SUBSCRIPTION_ID, {
+                        move |update| update_handler(update, info.market, info.source, &oraclemap)
+                    })
+                    .await;
+                (info.market, unsub)
+            }
         });
+
         let mut subscription_futs = FuturesUnordered::from_iter(futs_iter);
 
-        let mut oracle_subscriptions = self.oracle_subscribers.write().await;
-        while let Some(unsub) = subscription_futs.next().await {
-            oracle_subscriptions.push(unsub.expect("oracle subscribed"));
+        while let Some((market, unsub)) = subscription_futs.next().await {
+            self.oracle_subscriptions.insert(market, unsub?);
         }
 
         log::debug!(target: LOG_TARGET, "subscribed");
         Ok(())
     }
 
-    pub async fn unsubscribe(&self) -> SdkResult<()> {
-        {
-            let mut oracle_subscribers = self.oracle_subscribers.write().await;
-            for unsub in oracle_subscribers.drain(..) {
+    /// Unsubscribe from oracle updates for the given `markets`
+    pub fn unsubscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
+        for market in markets {
+            if let Some((market, unsub)) = self.oracle_subscriptions.remove(market) {
                 let _ = unsub.send(());
+                self.oraclemap.remove(&market);
             }
         }
-
-        self.oraclemap.clear();
-        self.latest_slot.store(0, Ordering::Relaxed);
+        log::debug!(target: LOG_TARGET, "unsubscribed markets: {markets:?}");
 
         Ok(())
     }
 
-    #[allow(clippy::await_holding_lock)]
-    async fn sync(&self) -> SdkResult<()> {
-        log::debug!(target: LOG_TARGET, "start sync");
-        let sync_lock = self.sync_lock.as_ref().expect("expected sync lock");
-
-        let _lock = match sync_lock.try_lock() {
-            Ok(lock) => lock,
-            Err(_) => return Ok(()),
-        };
-
-        let oralce_pubkeys = self
-            .oracle_infos
+    /// Unsubscribe from all oracle updates
+    pub fn unsubscribe_all(&self) -> SdkResult<()> {
+        let all_markets: Vec<MarketId> = self
+            .oracle_subscriptions
             .iter()
-            .map(|oracle_info_ref| *oracle_info_ref.key())
-            .collect::<Vec<Pubkey>>();
+            .map(|x| x.key().clone())
+            .collect();
+        self.unsubscribe(&all_markets)
+    }
+
+    /// Fetches account data for each market oracle set by `markets`
+    ///
+    /// This may be invoked manually to resync oracle data for some set of markets
+    pub async fn sync(&self, markets: &[MarketId]) -> SdkResult<()> {
+        log::debug!(target: LOG_TARGET, "sync oracles for: {markets:?}");
+
+        let mut market_by_oracle_key = HashMap::<Pubkey, MarketId>::with_capacity(markets.len());
+        for market in markets {
+            if let Some(oracle) = self.oraclemap.get(market) {
+                market_by_oracle_key.insert(oracle.value().pubkey, *market);
+            }
+        }
+
+        let oracle_pubkeys: Vec<Pubkey> = market_by_oracle_key.keys().copied().collect();
 
         let (synced_oracles, latest_slot) =
-            match get_multi_account_data_with_fallback(&self.rpc, &oralce_pubkeys).await {
+            match get_multi_account_data_with_fallback(&self.rpc, &oracle_pubkeys).await {
                 Ok(result) => result,
                 Err(err) => {
                     warn!(target: LOG_TARGET, "failed to sync oracle accounts");
@@ -162,31 +177,27 @@ impl OracleMap {
                 }
             };
 
-        if synced_oracles.len() != oralce_pubkeys.len() {
-            warn!(target: LOG_TARGET, "failed to sync oracle all accounts");
+        if synced_oracles.len() != oracle_pubkeys.len() {
+            warn!(target: LOG_TARGET, "failed to sync all oracle accounts");
             return Err(SdkError::InvalidOracle);
         }
 
         for (oracle_pubkey, oracle_account) in synced_oracles.iter() {
-            let oracle_source = self
-                .oracle_infos
+            let market = market_by_oracle_key
                 .get(oracle_pubkey)
-                .expect("oracle info exists");
-            let price_data = get_oracle_price(
-                *oracle_source,
-                &mut (*oracle_pubkey, oracle_account.clone()),
-                latest_slot,
-            )?;
-            self.oraclemap.insert(
-                *oracle_pubkey,
-                Oracle {
-                    pubkey: *oracle_pubkey,
-                    data: price_data,
-                    source: *oracle_source,
-                    slot: latest_slot,
-                    raw: oracle_account.data.clone(),
-                },
-            );
+                .expect("market oracle syncd");
+            self.oraclemap.entry(*market).and_modify(|o| {
+                let price_data = get_oracle_price(
+                    o.source,
+                    &mut (*oracle_pubkey, oracle_account.clone()),
+                    latest_slot,
+                )
+                .expect("valid oracle data");
+
+                o.raw.clone_from(&oracle_account.data);
+                o.data = price_data;
+                o.slot = latest_slot;
+            });
         }
 
         self.latest_slot.store(latest_slot, Ordering::Relaxed);
@@ -195,63 +206,57 @@ impl OracleMap {
         Ok(())
     }
 
-    /// Return whether the `OracleMap`` is subscribed to network changes
-    pub async fn is_subscribed(&self) -> bool {
-        let subscribers = self.oracle_subscribers.read().await;
-        !subscribers.is_empty()
-    }
-
+    /// Number of oracles known to the `OracleMap`
     #[allow(dead_code)]
-    pub fn size(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.oraclemap.len()
     }
 
-    pub fn contains(&self, key: &Pubkey) -> bool {
-        self.oracle_infos.contains_key(key)
+    /// Returns true if the oraclemap has a subscription for `market`
+    pub fn is_subscribed(&self, market: &MarketId) -> bool {
+        self.oracle_subscriptions.contains_key(market)
     }
 
+    /// Get the address of a perp market oracle
     pub fn current_perp_oracle(&self, market_index: u16) -> Option<Pubkey> {
-        self.perp_oracles.get(&market_index).map(|x| *x)
+        self.oraclemap
+            .get(&MarketId::perp(market_index))
+            .map(|x| x.pubkey)
     }
 
+    /// Get the address of a spot market oracle
     pub fn current_spot_oracle(&self, market_index: u16) -> Option<Pubkey> {
-        self.spot_oracles.get(&market_index).map(|x| *x)
+        self.oraclemap
+            .get(&MarketId::spot(market_index))
+            .map(|x| x.pubkey)
     }
 
+    /// Return Oracle data by pubkey, if known
+    /// deprecated, see `get_by_key` instead
+    #[deprecated]
     pub fn get(&self, key: &Pubkey) -> Option<Oracle> {
-        self.oraclemap.get(key).map(|x| x.clone())
+        self.oraclemap
+            .iter()
+            .find(|o| &o.pubkey == key)
+            .map(|o| o.value().clone())
+    }
+
+    /// Return Oracle data by pubkey, if known
+    pub fn get_by_key(&self, key: &Pubkey) -> Option<Oracle> {
+        self.oraclemap
+            .iter()
+            .find(|o| &o.pubkey == key)
+            .map(|o| o.value().clone())
+    }
+
+    /// Return Oracle data by market, if known
+    pub fn get_by_market(&self, market: MarketId) -> Option<Oracle> {
+        self.oraclemap.get(&market).map(|o| o.clone())
     }
 
     #[allow(dead_code)]
     pub fn values(&self) -> Vec<Oracle> {
         self.oraclemap.iter().map(|x| x.clone()).collect()
-    }
-
-    pub async fn add_oracle(&self, oracle: Pubkey, source: OracleSource) -> SdkResult<()> {
-        if self.contains(&oracle) {
-            return Ok(()); // don't add a duplicate
-        }
-
-        self.oracle_infos.insert(oracle, source);
-
-        let new_oracle_subscriber = WebsocketAccountSubscriber::new(
-            get_ws_url(&self.rpc.url()).expect("valid url"),
-            oracle,
-            self.rpc.commitment(),
-        );
-        let oracle_source = *self.oracle_infos.get(&oracle).expect("oracle source");
-
-        let unsub = new_oracle_subscriber
-            .subscribe(Self::SUBSCRIPTION_ID, {
-                let oracle_map = Arc::clone(&self.oraclemap);
-                move |update| handler_fn(&oracle_map, oracle_source, update)
-            })
-            .await?;
-
-        let mut oracle_subscribers = self.oracle_subscribers.write().await;
-        oracle_subscribers.push(unsub);
-
-        Ok(())
     }
 
     pub fn get_latest_slot(&self) -> u64 {
@@ -260,10 +265,11 @@ impl OracleMap {
 }
 
 /// Handler fn for new oracle account data
-fn handler_fn(
-    oracle_map: &Arc<DashMap<Pubkey, Oracle>>,
-    oracle_source: OracleSource,
+fn update_handler(
     update: &AccountUpdate,
+    oracle_market: MarketId,
+    oracle_source: OracleSource,
+    oracle_map: &DashMap<MarketId, Oracle, ahash::RandomState>,
 ) {
     let oracle_pubkey = update.pubkey;
     let lamports = update.lamports;
@@ -282,13 +288,14 @@ fn handler_fn(
     ) {
         Ok(price_data) => {
             oracle_map
-                .entry(oracle_pubkey)
+                .entry(oracle_market)
                 .and_modify(|o| {
                     o.data = price_data;
                     o.slot = update.slot;
                     o.raw.clone_from(&update.data);
                 })
                 .or_insert(Oracle {
+                    market: oracle_market,
                     pubkey: oracle_pubkey,
                     data: price_data,
                     source: oracle_source,

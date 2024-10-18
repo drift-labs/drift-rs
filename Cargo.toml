@@ -23,6 +23,7 @@ rpc_tests = []
 
 [dependencies]
 abi_stable = "0.11"
+ahash = "0.8.11"
 anchor-lang = { version = "0.30", features = ["derive"] }
 base64 = "0.22"
 bytemuck = "1.17"
