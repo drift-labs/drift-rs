@@ -1,7 +1,7 @@
 use drift_rs::{
     event_subscriber::RpcClient,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
-    types::{accounts::User, ConfiguredMarkets, Context, MarketId, NewOrder, PostOnlyParam},
+    types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam},
     utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
     DriftClient, TransactionBuilder, Wallet,
 };
@@ -51,14 +51,10 @@ async fn place_and_cancel_orders() {
     let sol_spot = MarketId::spot(1);
 
     let wallet: Wallet = test_keypair().into();
-    let client = DriftClient::with_markets(
+    let client = DriftClient::new(
         Context::DevNet,
         RpcClient::new(devnet_endpoint()),
         wallet.clone(),
-        ConfiguredMarkets::Minimal {
-            perp: vec![btc_perp],
-            spot: vec![sol_spot],
-        },
     )
     .await
     .expect("connects");

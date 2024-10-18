@@ -22,9 +22,7 @@ use crate::{
     drift_idl::types::OracleSource,
     memcmp::get_market_filter,
     utils::get_ws_url,
-    websocket_program_account_subscriber::{
-        ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
-    },
+    websocket_account_subscriber::WebsocketAccountSubscriber,
     DataAndSlot, MarketId, MarketType, PerpMarket, SdkError, SdkResult, SpotMarket, UnsubHandle,
 };
 
@@ -69,8 +67,8 @@ impl Market for SpotMarket {
 }
 
 pub struct MarketMap<T: AnchorDeserialize + Send> {
-    subscription: WebsocketProgramAccountSubscriber,
     marketmap: Arc<DashMap<u16, DataAndSlot<T>, ahash::RandomState>>,
+    subscriptions: DashMap<u16, UnsubHandle, ahash::RandomState>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
     rpc: RpcClient,
@@ -84,20 +82,11 @@ where
     pub const SUBSCRIPTION_ID: &'static str = "marketmap";
 
     pub fn new(commitment: CommitmentConfig, endpoint: String, sync: bool) -> Self {
-        let filters = vec![get_market_filter(T::MARKET_TYPE)];
-        let options = WebsocketProgramAccountOptions {
-            filters,
-            commitment,
-            encoding: UiAccountEncoding::Base64Zstd,
-        };
-
-        let url = get_ws_url(&endpoint.clone()).unwrap();
-        let subscription = WebsocketProgramAccountSubscriber::new(url, options);
         let rpc = RpcClient::new_with_commitment(endpoint.clone(), commitment);
         let sync_lock = if sync { Some(Mutex::new(())) } else { None };
 
         Self {
-            subscription,
+            subscriptions: Default::default(),
             marketmap: Arc::default(),
             sync_lock,
             latest_slot: Arc::new(AtomicU64::new(0)),
@@ -106,48 +95,86 @@ where
         }
     }
 
-    pub async fn subscribe(&self) -> SdkResult<()> {
+    /// Subscribe to market account updates
+    pub async fn subscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
         log::debug!(target: LOG_TARGET, "subscribing: {:?}", T::MARKET_TYPE);
         if self.sync_lock.is_some() {
             self.sync().await?;
         }
 
-        let unsub = self.subscription.subscribe(Self::SUBSCRIPTION_ID, {
+        let url = get_ws_url(&self.rpc.url()).expect("valid url");
+
+        let mut pending_subscriptions =
+            Vec::<(u16, WebsocketAccountSubscriber)>::with_capacity(markets.len());
+
+        for market in markets {
+            let market_pubkey = match T::MARKET_TYPE {
+                MarketType::Perp => derive_perp_market_account(market.index()),
+                MarketType::Spot => derive_spot_market_account(market.index()),
+            };
+
+            let market_subscriber =
+                WebsocketAccountSubscriber::new(url.clone(), market_pubkey, self.rpc.commitment());
+
+            pending_subscriptions.push((market.index(), market_subscriber));
+        }
+
+        let futs_iter = pending_subscriptions.into_iter().map(|(idx, fut)| {
             let marketmap = Arc::clone(&self.marketmap);
             let latest_slot = self.latest_slot.clone();
-            move |update: &ProgramAccountUpdate<T>| {
-                if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
-                    latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
-                }
-                marketmap
-                    .entry(update.data_and_slot.data.market_index())
-                    .and_modify(|x| {
-                        x.data.clone_from(&update.data_and_slot.data);
-                        x.slot = update.data_and_slot.slot;
+            async move {
+                let unsub = fut
+                    .subscribe(Self::SUBSCRIPTION_ID, {
+                        move |update| {
+                            if update.slot > latest_slot.load(Ordering::Relaxed) {
+                                latest_slot.store(update.slot, Ordering::Relaxed);
+                            }
+                            marketmap.insert(
+                                idx,
+                                DataAndSlot {
+                                    slot: update.slot,
+                                    data: T::deserialize(&mut update.data.as_slice())
+                                        .expect("valid market"),
+                                },
+                            );
+                        }
                     })
-                    .or_insert(update.data_and_slot.clone());
+                    .await;
+                (idx, unsub)
             }
         });
-        let mut guard = self.unsub.lock().unwrap();
-        *guard = Some(unsub);
+
+        let mut subscription_futs = FuturesUnordered::from_iter(futs_iter);
+        while let Some((market, unsub)) = subscription_futs.next().await {
+            self.subscriptions.insert(market, unsub?);
+        }
+
         log::debug!(target: LOG_TARGET, "subscribed: {:?}", T::MARKET_TYPE);
 
         Ok(())
     }
 
-    pub fn unsubscribe(&self) -> SdkResult<()> {
-        log::debug!(target: LOG_TARGET, "unsubscribing: {:?}", T::MARKET_TYPE);
-        let mut guard = self.unsub.lock().expect("uncontested");
-        if let Some(unsub) = guard.take() {
-            if unsub.send(()).is_err() {
-                log::error!("couldn't unsubscribe");
+    /// Unsubscribe from updates for the given `markets`
+    pub fn unsubscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
+        for market in markets {
+            if let Some((market, unsub)) = self.subscriptions.remove(&market.index()) {
+                let _ = unsub.send(());
+                self.marketmap.remove(&market);
             }
-            self.marketmap.clear();
-            self.latest_slot.store(0, Ordering::Relaxed);
         }
-        log::debug!(target: LOG_TARGET, "unsubscribed: {:?}", T::MARKET_TYPE);
+        log::debug!(target: LOG_TARGET, "unsubscribed markets: {markets:?}");
 
         Ok(())
+    }
+
+    /// Unsubscribe from all market updates
+    pub fn unsubscribe_all(&self) -> SdkResult<()> {
+        let all_markets: Vec<MarketId> = self
+            .subscriptions
+            .iter()
+            .map(|x| (x.key().clone(), T::MARKET_TYPE).into())
+            .collect();
+        self.unsubscribe(&all_markets)
     }
 
     pub fn values(&self) -> Vec<T> {
@@ -173,6 +200,7 @@ where
             .map(|market| market.clone())
     }
 
+    /// Sync all market accounts
     #[allow(clippy::await_holding_lock)]
     pub(crate) async fn sync(&self) -> SdkResult<()> {
         if self.unsub.lock().unwrap().is_some() {

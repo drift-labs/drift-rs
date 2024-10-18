@@ -480,30 +480,6 @@ impl ReferrerInfo {
     }
 }
 
-#[derive(Default)]
-/// Confgured markets for DriftClient setup
-pub enum ConfiguredMarkets {
-    #[default]
-    All,
-    Minimal {
-        perp: Vec<MarketId>,
-        spot: Vec<MarketId>,
-    },
-}
-
-impl ConfiguredMarkets {
-    /// Returns whether this config wants `market`
-    pub fn wants(&self, market: MarketId) -> bool {
-        match self {
-            Self::All => true,
-            Self::Minimal { perp, spot } => match market.kind() {
-                MarketType::Spot => spot.contains(&market),
-                MarketType::Perp => perp.contains(&market),
-            },
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use solana_client::{

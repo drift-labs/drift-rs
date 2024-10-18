@@ -129,21 +129,28 @@ impl DriftClient {
     ///
     /// This is a no-op if already subscribed
     pub async fn subscribe(&self) -> SdkResult<()> {
-        self.backend.subscribe().await
+        panic!("TODO");
+    }
+
+    /// Starts background subscriptions for live blockhashes
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_block_hashes(&self) -> SdkResult<()> {
+        self.backend.subscribe_block_hashes().await
     }
 
     /// Starts background subscriptions for live market account updates
     ///
     /// This is a no-op if already subscribed
     pub async fn subscribe_markets(&self, markets: &[MarketId]) -> SdkResult<()> {
-        self.backend.subscribe().await
+        self.backend.subscribe_markets(markets).await
     }
 
-    /// Starts background subscriptions for live oracle account update by market
+    /// Starts background subscriptions for live oracle account updates by market
     ///
     /// This is a no-op if already subscribed
     pub async fn subscribe_oracles(&self, markets: &[MarketId]) -> SdkResult<()> {
-        self.backend.subscribe().await
+        self.backend.subscribe_oracles(markets).await
     }
 
     /// Unsubscribe from network resources
@@ -536,6 +543,8 @@ impl DriftClientBackend {
             rpc_client.url(),
             all_oracles.as_slice(),
         );
+        let account_map = AccountMap::new(rpc_client.url(), rpc_client.commitment());
+        account_map.subscribe_account(state_account()).await?;
 
         Ok(Self {
             rpc_client: Arc::clone(&rpc_client),
@@ -548,26 +557,33 @@ impl DriftClientBackend {
                 perp_market_map.values(),
                 lookup_table,
             ),
-            account_map: AccountMap::new(rpc_client.url(), rpc_client.commitment()),
+            account_map,
             perp_market_map,
             spot_market_map,
             oracle_map,
         })
     }
 
-    /// Start subscription workers for live program data
-    async fn subscribe(&self) -> SdkResult<()> {
+    /// Start subscription for latest block hashes
+    async fn subscribe_block_hashes(&self) -> SdkResult<()> {
         self.blockhash_subscriber.subscribe();
+        Ok(())
+    }
+
+    /// Start subscriptions for market accounts
+    async fn subscribe_markets(&self, markets: &[MarketId]) -> SdkResult<()> {
+        let (perps, spot) = markets
+            .iter()
+            .partition::<Vec<MarketId>, _>(|x| x.is_perp());
         let _ = tokio::try_join!(
-            self.perp_market_map.subscribe(),
-            self.spot_market_map.subscribe(),
-            self.account_map.subscribe_account(state_account()),
+            self.perp_market_map.subscribe(perps.as_slice()),
+            self.spot_market_map.subscribe(spot.as_slice()),
         )?;
 
         Ok(())
     }
 
-    /// Start subscriptions for market oracles
+    /// Start subscriptions for market oracle accounts
     async fn subscribe_oracles(&self, markets: &[MarketId]) -> SdkResult<()> {
         self.oracle_map.subscribe(markets).await
     }
@@ -575,8 +591,8 @@ impl DriftClientBackend {
     /// End subscriptions to live program data
     async fn unsubscribe(&self) -> SdkResult<()> {
         self.blockhash_subscriber.unsubscribe();
-        self.perp_market_map.unsubscribe()?;
-        self.spot_market_map.unsubscribe()?;
+        self.perp_market_map.unsubscribe_all()?;
+        self.spot_market_map.unsubscribe_all()?;
         self.account_map.unsubscribe_account(state_account());
         self.oracle_map.unsubscribe_all()
     }
@@ -593,14 +609,6 @@ impl DriftClientBackend {
         market_index: u16,
     ) -> Option<DataAndSlot<SpotMarket>> {
         self.spot_market_map.get(&market_index)
-    }
-
-    fn num_perp_markets(&self) -> usize {
-        self.perp_market_map.size()
-    }
-
-    fn num_spot_markets(&self) -> usize {
-        self.spot_market_map.size()
     }
 
     fn try_get_oracle_price_data_and_slot(&self, market: MarketId) -> Option<Oracle> {

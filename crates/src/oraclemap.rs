@@ -90,7 +90,7 @@ impl OracleMap {
     /// If the `market` oracle pubkey is not loaded
     pub async fn subscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
         log::debug!(target: LOG_TARGET, "subscribe market oracles: {markets:?}");
-        self.sync(markets).await;
+        self.sync(markets).await?;
 
         let url = get_ws_url(&self.rpc.url()).expect("valid url");
 
