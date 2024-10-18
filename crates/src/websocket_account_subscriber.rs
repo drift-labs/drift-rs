@@ -1,14 +1,13 @@
+use std::str::FromStr;
+
 use futures_util::StreamExt;
 use log::warn;
 use solana_account_decoder::UiAccountEncoding;
-use solana_client::{
-    nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient},
-    rpc_config::RpcAccountInfoConfig,
-};
+use solana_client::{nonblocking::pubsub_client::PubsubClient, rpc_config::RpcAccountInfoConfig};
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use tokio::sync::oneshot;
 
-use crate::{utils::get_http_url, SdkError, SdkResult, UnsubHandle};
+use crate::{SdkResult, UnsubHandle};
 
 #[derive(Clone, Debug)]
 pub struct AccountUpdate {
@@ -53,35 +52,6 @@ impl WebsocketAccountSubscriber {
     where
         F: 'static + Send + Fn(&AccountUpdate),
     {
-        // seed initial account state
-        log::debug!("seeding account: {subscription_name}-{:?}", self.pubkey);
-        let owner: Pubkey;
-        let rpc = RpcClient::new(get_http_url(&self.url)?);
-        match rpc
-            .get_account_with_commitment(&self.pubkey, self.commitment)
-            .await
-        {
-            Ok(response) => {
-                if let Some(account) = response.value {
-                    owner = account.owner;
-                    handler_fn(&AccountUpdate {
-                        owner,
-                        lamports: account.lamports,
-                        pubkey: self.pubkey,
-                        data: account.data,
-                        slot: response.context.slot,
-                    });
-                } else {
-                    return Err(SdkError::InvalidAccount);
-                }
-            }
-            Err(err) => {
-                warn!("seeding account failed: {err:?}");
-                return Err(err.into());
-            }
-        }
-        drop(rpc);
-
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.commitment),
             encoding: Some(UiAccountEncoding::Base64Zstd),
@@ -138,7 +108,7 @@ impl WebsocketAccountSubscriber {
                                                 latest_slot = slot;
                                                 if let Some(data) = message.value.data.decode() {
                                                     let account_update = AccountUpdate {
-                                                        owner,
+                                                        owner: Pubkey::from_str(&message.value.owner).unwrap(),
                                                         lamports: message.value.lamports,
                                                         pubkey,
                                                         data,

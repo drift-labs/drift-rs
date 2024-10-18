@@ -2,13 +2,13 @@ use drift_rs::{
     event_subscriber::RpcClient,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
     types::{accounts::User, ConfiguredMarkets, Context, MarketId, NewOrder, PostOnlyParam},
-    utils::test_envs::{devnet_endpoint, test_keypair},
+    utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
     DriftClient, TransactionBuilder, Wallet,
 };
 use solana_sdk::signature::Keypair;
 
 #[tokio::test]
-async fn get_oracle_prices() {
+async fn client_sync_subscribe_devnet() {
     let client = DriftClient::new(
         Context::DevNet,
         RpcClient::new(devnet_endpoint()),
@@ -16,6 +16,26 @@ async fn get_oracle_prices() {
     )
     .await
     .expect("connects");
+    let price = client.oracle_price(MarketId::perp(1)).await.expect("ok");
+    assert!(price > 0);
+    dbg!(price);
+    let price = client.oracle_price(MarketId::spot(2)).await.expect("ok");
+    assert!(price > 0);
+    dbg!(price);
+}
+
+#[tokio::test]
+async fn client_sync_subscribe_mainnet() {
+    let _ = env_logger::try_init();
+    let client = DriftClient::new(
+        Context::MainNet,
+        RpcClient::new(mainnet_endpoint()),
+        Keypair::new().into(),
+    )
+    .await
+    .expect("connects");
+    client.subscribe().await.expect("subscribes");
+
     let price = client.oracle_price(MarketId::perp(1)).await.expect("ok");
     assert!(price > 0);
     dbg!(price);
