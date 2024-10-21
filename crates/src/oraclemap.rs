@@ -36,8 +36,8 @@ pub struct Oracle {
 
 /// Dynamic map of Drift market oracle data
 ///
-/// Caller can subscribe to some subset or markets for Ws backed updates
-/// Alternatively, the caller may drive the map by by calling `sync` periodically
+/// Caller can subscribe to some subset of markets for Ws backed updates
+/// Alternatively, the caller may drive the map by calling `sync` periodically
 pub struct OracleMap {
     /// Oracle info keyed by market
     oraclemap: Arc<DashMap<MarketId, Oracle, ahash::RandomState>>,
@@ -98,7 +98,7 @@ impl OracleMap {
             Vec::<(WebsocketAccountSubscriber, Oracle)>::with_capacity(markets.len());
 
         for market in markets {
-            let oracle_info = self.oraclemap.get(market).expect("oracle exists"); // caller did not supply in `OracleMap::new()``
+            let oracle_info = self.oraclemap.get(market).expect("oracle exists"); // caller did not supply in `OracleMap::new()`
             let oracle_subscriber = WebsocketAccountSubscriber::new(
                 url.clone(),
                 oracle_info.pubkey,
@@ -308,10 +308,10 @@ fn update_handler(
 
 /// Fetch all accounts with multiple fallbacks
 ///
-/// Tries progressively less intensive RPC methods for wider compatiblity with RPC providers:
-///    getMultipleAccounts, latstly multiple getAccountInfo
+/// Tries progressively less intensive RPC methods for wider compatibility with RPC providers:
+///    getMultipleAccounts, lastly multiple getAccountInfo
 ///
-/// Returns deserialized accounts and retreived slot
+/// Returns deserialized accounts and retrieved slot
 async fn get_multi_account_data_with_fallback(
     rpc: &RpcClient,
     pubkeys: &[Pubkey],

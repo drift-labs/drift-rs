@@ -128,8 +128,8 @@ impl DriftClient {
     /// Starts background subscriptions for live blockhashes
     ///
     /// This is a no-op if already subscribed
-    pub async fn subscribe_block_hashes(&self) -> SdkResult<()> {
-        self.backend.subscribe_block_hashes().await
+    pub async fn subscribe_blockhashes(&self) -> SdkResult<()> {
+        self.backend.subscribe_blockhashes().await
     }
 
     /// Starts background subscriptions for live market account updates
@@ -277,7 +277,7 @@ impl DriftClient {
     }
 
     /// Get the user account data
-    /// Uses cached value if subscribed, fallsback to network query
+    /// Uses cached value if subscribed, falls back to network query
     ///
     /// * `account` - the drift user PDA (subaccount)
     ///
@@ -295,13 +295,13 @@ impl DriftClient {
     }
 
     /// Get the latest recent_block_hash
-    /// uses latest cached if subscribed, otherwise fallsback to network query
+    /// uses latest cached if subscribed, otherwise falls back to network query
     pub async fn get_latest_blockhash(&self) -> SdkResult<Hash> {
         self.backend.get_latest_blockhash().await
     }
 
     /// Get some account value deserialized as T
-    /// Uses cached value if subscribed, fallsback to network query
+    /// Uses cached value if subscribed, falls back to network query
     ///
     /// * `account` - any onchain account
     ///
@@ -358,7 +358,7 @@ impl DriftClient {
     }
 
     /// Get spot market account
-    /// uses latest cached if subscribed, otherwise fallsback to network query
+    /// uses latest cached if subscribed, otherwise falls back to network query
     pub async fn get_spot_market_account(&self, market_index: u16) -> SdkResult<SpotMarket> {
         match self.backend.get_spot_market_account_and_slot(market_index) {
             Some(market) => Ok(market.data),
@@ -370,7 +370,7 @@ impl DriftClient {
     }
 
     /// Get perp market account
-    /// uses latest cached if subscribed, otherwise fallsback to network query
+    /// uses latest cached if subscribed, otherwise falls back to network query
     pub async fn get_perp_market_account(&self, market_index: u16) -> SdkResult<PerpMarket> {
         match self.backend.get_perp_market_account_and_slot(market_index) {
             Some(market) => Ok(market.data),
@@ -427,7 +427,7 @@ impl DriftClient {
     }
 
     /// Get live oracle price for `market`
-    /// uses latest cached if subscribed, otherwise fallsback to network query
+    /// uses latest cached if subscribed, otherwise falls back to network query
     pub async fn oracle_price(&self, market: MarketId) -> SdkResult<i64> {
         self.backend.oracle_price(market).await
     }
@@ -559,7 +559,7 @@ impl DriftClientBackend {
     }
 
     /// Start subscription for latest block hashes
-    async fn subscribe_block_hashes(&self) -> SdkResult<()> {
+    async fn subscribe_blockhashes(&self) -> SdkResult<()> {
         self.blockhash_subscriber.subscribe();
         Ok(())
     }
@@ -705,7 +705,7 @@ impl DriftClientBackend {
 
     /// Fetch `account` as a drift User account
     ///
-    /// uses latest cached if subscribed, otherwise fallsback to network query
+    /// uses latest cached if subscribed, otherwise falls back to network query
     async fn get_user_account(&self, account: &Pubkey) -> SdkResult<User> {
         self.get_account(account).await
     }
@@ -720,7 +720,7 @@ impl DriftClientBackend {
 
     /// Returns latest blockhash
     ///
-    /// uses latest cached if subscribed, otherwise fallsback to network query
+    /// uses latest cached if subscribed, otherwise falls back to network query
     pub async fn get_latest_blockhash(&self) -> SdkResult<Hash> {
         match self.blockhash_subscriber.get_latest_blockhash() {
             Some(hash) => Ok(hash),
@@ -768,7 +768,7 @@ impl DriftClientBackend {
 
     /// Fetch the live oracle price for `market`
     ///
-    /// Uses latest local value from an `OracleMap` if subscribed, fallsback to network query
+    /// Uses latest local value from an `OracleMap` if subscribed, falls back to network query
     pub async fn oracle_price(&self, market: MarketId) -> SdkResult<i64> {
         if self.oracle_map.is_subscribed(&market) {
             Ok(self
@@ -1241,7 +1241,7 @@ impl<'a> TransactionBuilder<'a> {
     /// * `taker_info` - taker account address and data
     /// * `taker_order_id` - the id of the taker's order to match with
     /// * `referrer` - pukey of the taker's referrer account, if any
-    /// * `fulfilment_type` - type of fill for spot orders, ignored for perp orders
+    /// * `fulfillment_type` - type of fill for spot orders, ignored for perp orders
     pub fn place_and_make(
         mut self,
         order: OrderParams,
@@ -1312,7 +1312,7 @@ impl<'a> TransactionBuilder<'a> {
     /// * `order` - the order to place
     /// * `maker_info` - pubkey of the maker/counterparty to take against and account data
     /// * `referrer` - pubkey of the maker's referrer account, if any
-    /// * `fulfilment_type` - type of fill for spot orders, ignored for perp orders
+    /// * `fulfillment_type` - type of fill for spot orders, ignored for perp orders
     pub fn place_and_take(
         mut self,
         order: OrderParams,
@@ -1534,12 +1534,12 @@ impl Wallet {
     /// # panics
     /// if the key is invalid
     pub fn from_seed_bs58(seed: &str) -> Self {
-        let authority: Keypair = Keypair::from_base58_string(seed);
+        let authority = Keypair::from_base58_string(seed);
         Self::new(authority)
     }
     /// Init wallet from seed bytes, uses default sub-account
     pub fn from_seed(seed: &[u8]) -> SdkResult<Self> {
-        let authority: Keypair = keypair_from_seed(seed).map_err(|_| SdkError::InvalidSeed)?;
+        let authority = keypair_from_seed(seed).map_err(|_| SdkError::InvalidSeed)?;
         Ok(Self::new(authority))
     }
     /// Init wallet with keypair

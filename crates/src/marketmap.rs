@@ -239,10 +239,10 @@ where
 
 /// Fetch all market (program) accounts with multiple fallbacks
 ///
-/// Tries progressively less intensive RPC methods for wider compatiblity with RPC providers:
-///     getProgramAccounts, getMultipleAccounts, latstly multiple getAccountInfo
+/// Tries progressively less intensive RPC methods for wider compatibility with RPC providers:
+///     getProgramAccounts, getMultipleAccounts, lastly multiple getAccountInfo
 ///
-/// Returns deserialized accounts and retreived slot
+/// Returns deserialized accounts and retrieved slot
 pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
     rpc: &RpcClient,
 ) -> SdkResult<(Vec<T>, Slot)> {
@@ -298,10 +298,10 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
     };
 
     // try 'getMultipleAccounts'
-    let market_respones = rpc
+    let market_responses = rpc
         .get_multiple_accounts_with_commitment(market_pdas.as_slice(), rpc.commitment())
         .await;
-    if let Ok(response) = market_respones {
+    if let Ok(response) = market_responses {
         for account in response.value {
             match account {
                 Some(account) => {
@@ -324,8 +324,8 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
     let mut market_requests =
         FuturesUnordered::from_iter(market_pdas.iter().map(|acc| rpc.get_account_data(acc)));
 
-    while let Some(market_repsonse) = market_requests.next().await {
-        match market_repsonse {
+    while let Some(market_response) = market_requests.next().await {
+        match market_response {
             Ok(data) => {
                 markets
                     .push(T::deserialize(&mut &data.as_slice()[8..]).expect("market deserializes"));
