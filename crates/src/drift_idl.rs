@@ -2,7 +2,6 @@
 #![doc = r""]
 #![doc = r" Auto-generated IDL types, manual edits do not persist (see `crates/drift-idl-gen`)"]
 #![doc = r""]
-use self::traits::ToAccountMetas;
 use anchor_lang::{
     prelude::{
         account,
@@ -12,6 +11,8 @@ use anchor_lang::{
     Discriminator,
 };
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
+
+use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
     #[doc = r" This is distinct from the anchor version of the trait"]
@@ -163,7 +164,7 @@ pub mod instructions {
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct PlaceAndTakePerpOrder {
         pub params: OrderParams,
-        pub maker_order_id: Option<u32>,
+        pub success_condition: Option<u32>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceAndTakePerpOrder {
@@ -182,6 +183,18 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PlaceAndMakePerpOrder {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct PlaceSwiftTakerOrder {
+        pub swift_message_bytes: Vec<u8>,
+        pub swift_order_params_message_bytes: Vec<u8>,
+        pub swift_message_signature: Signature,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for PlaceSwiftTakerOrder {
+        const DISCRIMINATOR: [u8; 8] = [50, 89, 120, 78, 254, 15, 104, 140];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for PlaceSwiftTakerOrder {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct PlaceSpotOrder {
         pub params: OrderParams,
@@ -1781,8 +1794,9 @@ pub mod instructions {
     impl anchor_lang::InstructionData for InitializePythPullOracle {}
 }
 pub mod types {
-    use super::*;
     use std::ops::Mul;
+
+    use super::*;
     #[doc = r" backwards compatible u128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
     #[doc = r" https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]
     #[derive(
@@ -1834,6 +1848,17 @@ pub mod types {
         fn from(value: core::primitive::i128) -> Self {
             Self(value.to_le_bytes())
         }
+    }
+    #[repr(transparent)]
+    #[derive(AnchorDeserialize, AnchorSerialize, Copy, Clone, PartialEq, Debug)]
+    pub struct Signature(pub [u8; 64]);
+    impl Default for Signature {
+        fn default() -> Self {
+            Self([0_u8; 64])
+        }
+    }
+    impl anchor_lang::Space for Signature {
+        const INIT_SPACE: usize = 8 * 64;
     }
     #[doc = r" wrapper around fixed array types used for padding with `Default` implementation"]
     #[repr(transparent)]
@@ -1998,6 +2023,33 @@ pub mod types {
         pub auction_duration: Option<u8>,
         pub auction_start_price: Option<i64>,
         pub auction_end_price: Option<i64>,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+    )]
+    pub struct SwiftServerMessage {
+        pub swift_order_signature: Signature,
+        pub slot: u64,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+    )]
+    pub struct SwiftOrderParamsMessage {
+        pub swift_order_params: OrderParams,
+        pub expected_order_id: i32,
+        pub sub_account_id: u16,
+        pub take_profit_order_params: Option<SwiftTriggerOrderParams>,
+        pub stop_loss_order_params: Option<SwiftTriggerOrderParams>,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+    )]
+    pub struct SwiftTriggerOrderParams {
+        pub trigger_price: u64,
+        pub base_asset_amount: u64,
     }
     #[repr(C)]
     #[derive(
@@ -2554,6 +2606,14 @@ pub mod types {
         #[default]
         TryModify,
         MustModify,
+    }
+    #[derive(
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+    )]
+    pub enum PlaceAndTakeOrderSuccessCondition {
+        #[default]
+        PartialFill,
+        FullFill,
     }
     #[derive(
         AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
@@ -4716,6 +4776,88 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for PlaceAndMakePerpOrder {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    pub struct PlaceSwiftTakerOrder {
+        pub state: Pubkey,
+        pub user: Pubkey,
+        pub user_stats: Pubkey,
+        pub authority: Pubkey,
+        pub ix_sysvar: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for PlaceSwiftTakerOrder {
+        const DISCRIMINATOR: [u8; 8] = [237, 23, 214, 85, 135, 68, 88, 236];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for PlaceSwiftTakerOrder {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for PlaceSwiftTakerOrder {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for PlaceSwiftTakerOrder {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for PlaceSwiftTakerOrder {}
+    #[automatically_derived]
+    impl ToAccountMetas for PlaceSwiftTakerOrder {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.user,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.ix_sysvar,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for PlaceSwiftTakerOrder {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for PlaceSwiftTakerOrder {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -6926,8 +7068,9 @@ pub mod accounts {
     #[repr(C)]
     #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct SettleExpiredMarket {
+        pub admin: Pubkey,
         pub state: Pubkey,
-        pub authority: Pubkey,
+        pub perp_market: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettleExpiredMarket {
@@ -6946,14 +7089,19 @@ pub mod accounts {
         fn to_account_metas(&self) -> Vec<AccountMeta> {
             vec![
                 AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
                     pubkey: self.state,
                     is_signer: false,
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: false,
+                    pubkey: self.perp_market,
+                    is_signer: false,
+                    is_writable: true,
                 },
             ]
         }
@@ -7432,6 +7580,7 @@ pub mod accounts {
     pub struct SetUserStatusToBeingLiquidated {
         pub state: Pubkey,
         pub user: Pubkey,
+        pub authority: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SetUserStatusToBeingLiquidated {
@@ -7458,6 +7607,11 @@ pub mod accounts {
                     pubkey: self.user,
                     is_signer: false,
                     is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
                 },
             ]
         }
@@ -16862,6 +17016,16 @@ pub mod errors {
         LiquidationOrderFailedToFill,
         #[msg("Invalid prediction market order")]
         InvalidPredictionMarketOrder,
+        #[msg("Ed25519 Ix must be before place and make swift order ix")]
+        InvalidVerificationIxIndex,
+        #[msg("Swift message verificaiton failed")]
+        SigVerificationFailed,
+        #[msg("Market index mismatched b/w taker and maker swift order params")]
+        MismatchedSwiftOrderParamsMarketIndex,
+        #[msg("Swift only available for market/oracle perp orders")]
+        InvalidSwiftOrderParam,
+        #[msg("Place and take order success condition failed")]
+        PlaceAndTakeOrderSuccessConditionFailed,
     }
 }
 pub mod events {

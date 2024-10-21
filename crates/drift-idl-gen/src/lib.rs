@@ -69,7 +69,16 @@ impl ArgType {
                 }
             }
             ArgType::Defined { defined } => defined.clone(),
-            ArgType::Array { array: (t, len) } => format!("[{}; {}]", t.to_rust_type(), len),
+            ArgType::Array { array: (t, len) } => {
+                let rust_type = t.to_rust_type();
+                // this is a common signature representation
+                if *len == 64_usize && rust_type == "u8" {
+                    // [u8; 64] does not have a Default impl
+                    "Signature".into()
+                } else {
+                    format!("[{}; {}]", t.to_rust_type(), len)
+                }
+            }
             ArgType::Option { option } => format!("Option<{}>", option.to_rust_type()),
             ArgType::Vec { vec } => format!("Vec<{}>", vec.to_rust_type()),
         }
@@ -586,6 +595,20 @@ fn generate_idl_types(idl: &Idl) -> String {
                 fn from(value: core::primitive::i128) -> Self {
                     Self(value.to_le_bytes())
                 }
+            }
+
+            #[repr(transparent)]
+            #[derive(AnchorDeserialize, AnchorSerialize, Copy, Clone, PartialEq, Debug)]
+            pub struct Signature(pub [u8; 64]);
+
+            impl Default for Signature {
+                fn default() -> Self {
+                    Self([0_u8; 64])
+                }
+            }
+
+            impl anchor_lang::Space for Signature {
+                const INIT_SPACE: usize = 8 * 64;
             }
 
             /// wrapper around fixed array types used for padding with `Default` implementation

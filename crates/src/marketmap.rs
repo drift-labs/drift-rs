@@ -204,7 +204,7 @@ where
 ///     getProgramAccounts, getMultipleAccounts, latstly multiple getAccountInfo
 ///
 /// Returns deserialized accounts and retreived slot
-async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
+pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
     rpc: &RpcClient,
 ) -> SdkResult<(Vec<T>, Slot)> {
     let mut markets = Vec::<T>::default();
