@@ -78,11 +78,11 @@ pub mod dlob;
 /// It is not recommended to create multiple instances with `::new()` as this will not re-use underlying resources such
 /// as network connections or memory allocations
 ///
-/// The client can be used as is to fetch data ad-hoc over RPC or subscribed to receive live data changes
+/// The client can be used as is to fetch data ad-hoc over RPC or subscribed to receive live updates
 /// ```example(no_run)
 /// let client = DriftClient::new(
 ///     Context::MainNet,
-///     RpcClient::new("https://"),
+///     RpcClient::new("https://rpc.example.com"),
 ///     key_pair.into()
 /// ).await.expect("initializes");
 ///
@@ -90,7 +90,9 @@ pub mod dlob;
 /// let sol_perp_price = client.oracle_price(MarketId::perp(0)).await;
 ///
 /// // Subscribe to live program changes e.g oracle prices, spot/perp market changes, user accounts
-/// client.subscribe().await.expect("subscribes");
+/// let markets = [MarketId::perp(0), MarketId::spot(2)];
+/// client.subscribe_markets(&markets).await.expect("subscribes");
+/// client.subscribe_oracles(&markets).await.expect("subscribes");
 ///
 /// // after subscribing, uses Ws-backed local storage
 /// let sol_perp_price = client.oracle_price(MarketId::perp(0)).await;
@@ -121,15 +123,6 @@ impl DriftClient {
             context,
             wallet,
         })
-    }
-
-    /// Starts background subscriptions for live Solana and Drift data e.g. latest blockhashes, oracle prices, markets, etc.
-    /// The client will subsequently use these values from memory where possible rather
-    /// than perform network queries.
-    ///
-    /// This is a no-op if already subscribed
-    pub async fn subscribe(&self) -> SdkResult<()> {
-        panic!("TODO");
     }
 
     /// Starts background subscriptions for live blockhashes

@@ -172,7 +172,7 @@ where
         let all_markets: Vec<MarketId> = self
             .subscriptions
             .iter()
-            .map(|x| (x.key().clone(), T::MARKET_TYPE).into())
+            .map(|x| (*x.key(), T::MARKET_TYPE).into())
             .collect();
         self.unsubscribe(&all_markets)
     }

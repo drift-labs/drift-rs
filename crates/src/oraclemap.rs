@@ -145,11 +145,8 @@ impl OracleMap {
 
     /// Unsubscribe from all oracle updates
     pub fn unsubscribe_all(&self) -> SdkResult<()> {
-        let all_markets: Vec<MarketId> = self
-            .oracle_subscriptions
-            .iter()
-            .map(|x| x.key().clone())
-            .collect();
+        let all_markets: Vec<MarketId> =
+            self.oracle_subscriptions.iter().map(|x| *x.key()).collect();
         self.unsubscribe(&all_markets)
     }
 
