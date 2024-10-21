@@ -58,5 +58,6 @@ jobs:
         env:
           RUST_LOG: info
           TEST_DEVNET_RPC_ENDPOINT: ${{ secrets.DEVNET_RPC_ENDPOINT }}
+          TEST_MAINNET_RPC_ENDPOINT: ${{ secrets.MAINNET_RPC_ENDPOINT }}
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
           CARGO_DRIFT_FFI_PATH: "/usr/lib"

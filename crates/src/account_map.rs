@@ -168,13 +168,13 @@ mod tests {
     use solana_sdk::pubkey;
 
     use super::*;
-    use crate::{accounts::User, constants::DEFAULT_PUBKEY, Wallet};
+    use crate::{accounts::User, constants::DEFAULT_PUBKEY, utils::test_envs::mainnet_endpoint, Wallet};
 
     #[tokio::test]
     async fn test_user_subscribe() {
         let _ = env_logger::try_init();
         let account_map = AccountMap::new(
-            "https://api.mainnet-beta.solana.com".into(),
+            mainnet_endpoint().into(),
             CommitmentConfig::confirmed(),
         );
         let user_1 = Wallet::derive_user_account(
