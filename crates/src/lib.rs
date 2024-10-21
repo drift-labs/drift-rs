@@ -1327,6 +1327,7 @@ impl<'a> TransactionBuilder<'a> {
         maker_info: Option<(Pubkey, User)>,
         referrer: Option<Pubkey>,
         fulfillment_type: Option<SpotFulfillmentType>,
+        success_condition: Option<u32>,
     ) -> Self {
         let mut user_accounts = vec![self.account_data.as_ref()];
         if let Some((ref _maker_pubkey, ref maker)) = maker_info {
@@ -1370,7 +1371,7 @@ impl<'a> TransactionBuilder<'a> {
                 accounts,
                 data: InstructionData::data(&drift_idl::instructions::PlaceAndTakePerpOrder {
                     params: order,
-                    maker_order_id: None,
+                    success_condition,
                 }),
             }
         } else {
@@ -1598,6 +1599,12 @@ impl Wallet {
         message.set_recent_blockhash(recent_block_hash);
         let signer: &dyn Signer = self.signer.as_ref();
         VersionedTransaction::try_new(message, &[signer]).map_err(Into::into)
+    }
+
+    /// Sign message with the wallet's signer
+    pub fn sign_message(&self, message: &[u8]) -> SdkResult<Signature> {
+        let signer: &dyn Signer = self.signer.as_ref();
+        Ok(signer.sign_message(message))
     }
 
     /// Return the wallet authority address
