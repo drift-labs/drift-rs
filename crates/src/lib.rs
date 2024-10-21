@@ -31,7 +31,7 @@ use crate::{
     oraclemap::{Oracle, OracleMap},
     types::{
         accounts::{PerpMarket, SpotMarket, User, UserStats},
-        *,
+        MarketType, *,
     },
     utils::get_http_url,
 };
@@ -78,11 +78,11 @@ pub mod dlob;
 /// It is not recommended to create multiple instances with `::new()` as this will not re-use underlying resources such
 /// as network connections or memory allocations
 ///
-/// The client can be used as is to fetch data ad-hoc over RPC or subscribed to receive live data changes
+/// The client can be used as is to fetch data ad-hoc over RPC or subscribed to receive live updates
 /// ```example(no_run)
 /// let client = DriftClient::new(
 ///     Context::MainNet,
-///     RpcClient::new("https://"),
+///     RpcClient::new("https://rpc.example.com"),
 ///     key_pair.into()
 /// ).await.expect("initializes");
 ///
@@ -90,7 +90,9 @@ pub mod dlob;
 /// let sol_perp_price = client.oracle_price(MarketId::perp(0)).await;
 ///
 /// // Subscribe to live program changes e.g oracle prices, spot/perp market changes, user accounts
-/// client.subscribe().await.expect("subscribes");
+/// let markets = [MarketId::perp(0), MarketId::spot(2)];
+/// client.subscribe_markets(&markets).await.expect("subscribes");
+/// client.subscribe_oracles(&markets).await.expect("subscribes");
 ///
 /// // after subscribing, uses Ws-backed local storage
 /// let sol_perp_price = client.oracle_price(MarketId::perp(0)).await;
@@ -108,53 +110,40 @@ pub struct DriftClient {
 impl DriftClient {
     /// Create a new `DriftClient` instance
     ///
-    /// `context` devnet or mainnet
-    /// `rpc_client` an RpcClient instance
-    /// `wallet` wallet to use for tx signing convenience
+    /// * `context` - devnet or mainnet
+    /// * `rpc_client` - an RpcClient instance
+    /// * `wallet` - wallet to use for tx signing convenience
     pub async fn new(context: Context, rpc_client: RpcClient, wallet: Wallet) -> SdkResult<Self> {
         // check URL format here to fail early, otherwise happens at request time.
         let _ = get_http_url(&rpc_client.url())?;
         Ok(Self {
             backend: Box::leak(Box::new(
-                DriftClientBackend::new(context, Arc::new(rpc_client), ConfiguredMarkets::All)
-                    .await?,
+                DriftClientBackend::new(context, Arc::new(rpc_client)).await?,
             )),
             context,
             wallet,
         })
     }
 
-    /// Create a new `DriftClient` instance configured for use with a subset of markets
-    /// Useful to reduce the quantity of network subscriptions/requests
-    ///
-    /// `context` devnet or mainnet
-    /// `rpc_client` an RpcClient instance
-    /// `wallet` wallet to use for tx signing convenience
-    /// `markets` subset of markets to use for program lifetime
-    pub async fn with_markets(
-        context: Context,
-        rpc_client: RpcClient,
-        wallet: Wallet,
-        markets: ConfiguredMarkets,
-    ) -> SdkResult<Self> {
-        // check URL format here to fail early, otherwise happens at request time.
-        let _ = get_http_url(&rpc_client.url())?;
-        Ok(Self {
-            context,
-            backend: Box::leak(Box::new(
-                DriftClientBackend::new(context, Arc::new(rpc_client), markets).await?,
-            )),
-            wallet,
-        })
-    }
-
-    /// Starts background subscriptions for live Solana and Drift data e.g. latest blockhashes, oracle prices, markets, etc.
-    /// The client will subsequently use these values from memory where possible rather
-    /// than perform network queries.
+    /// Starts background subscriptions for live blockhashes
     ///
     /// This is a no-op if already subscribed
-    pub async fn subscribe(&self) -> SdkResult<()> {
-        self.backend.subscribe().await
+    pub async fn subscribe_blockhashes(&self) -> SdkResult<()> {
+        self.backend.subscribe_blockhashes().await
+    }
+
+    /// Starts background subscriptions for live market account updates
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_markets(&self, markets: &[MarketId]) -> SdkResult<()> {
+        self.backend.subscribe_markets(markets).await
+    }
+
+    /// Starts background subscriptions for live oracle account updates by market
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_oracles(&self, markets: &[MarketId]) -> SdkResult<()> {
+        self.backend.subscribe_oracles(markets).await
     }
 
     /// Unsubscribe from network resources
@@ -179,7 +168,7 @@ impl DriftClient {
 
     /// Get an account's open order by id
     ///
-    /// `account` the drift user PDA
+    /// * `account` - the drift user PDA
     pub async fn get_order_by_id(
         &self,
         account: &Pubkey,
@@ -192,7 +181,7 @@ impl DriftClient {
 
     /// Get an account's open order by user assigned id
     ///
-    /// `account` the drift user PDA
+    /// * `account` - the drift user PDA
     pub async fn get_order_by_user_id(
         &self,
         account: &Pubkey,
@@ -209,7 +198,7 @@ impl DriftClient {
 
     /// Get all the account's open orders
     ///
-    /// `account` the drift user PDA
+    /// * `account` - the drift user PDA
     pub async fn all_orders(&self, account: &Pubkey) -> SdkResult<Vec<Order>> {
         let user = self.backend.get_user_account(account).await?;
 
@@ -223,7 +212,7 @@ impl DriftClient {
 
     /// Get all the account's active positions
     ///
-    /// `account` the drift user PDA
+    /// * `account` - the drift user PDA
     pub async fn all_positions(
         &self,
         account: &Pubkey,
@@ -246,7 +235,7 @@ impl DriftClient {
 
     /// Get a perp position by market
     ///
-    /// `account` the drift user PDA
+    /// * `account` - the drift user PDA
     ///
     /// Returns the position if it exists
     pub async fn perp_position(
@@ -265,7 +254,7 @@ impl DriftClient {
 
     /// Get a spot position by market
     ///
-    /// `account` the drift user PDA
+    /// * `account` - the drift user PDA
     ///
     /// Returns the position if it exists
     pub async fn spot_position(
@@ -288,9 +277,9 @@ impl DriftClient {
     }
 
     /// Get the user account data
-    /// Uses cached value if subscribed, fallsback to network query
+    /// Uses cached value if subscribed, falls back to network query
     ///
-    /// `account` the drift user PDA (subaccount)
+    /// * `account` - the drift user PDA (subaccount)
     ///
     /// Returns the deserialized account data (`User`)
     pub async fn get_user_account(&self, account: &Pubkey) -> SdkResult<User> {
@@ -306,15 +295,15 @@ impl DriftClient {
     }
 
     /// Get the latest recent_block_hash
-    /// uses latest cached if subscribed, otherwise fallsback to network query
+    /// uses latest cached if subscribed, otherwise falls back to network query
     pub async fn get_latest_blockhash(&self) -> SdkResult<Hash> {
         self.backend.get_latest_blockhash().await
     }
 
     /// Get some account value deserialized as T
-    /// Uses cached value if subscribed, fallsback to network query
+    /// Uses cached value if subscribed, falls back to network query
     ///
-    /// `account` any onchain account
+    /// * `account` - any onchain account
     ///
     /// Returns the deserialized account data (`User`)
     pub async fn get_account_value<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
@@ -322,6 +311,7 @@ impl DriftClient {
     }
 
     /// Try to get `account` as `T` using latest local value
+    ///
     /// requires account was previously subscribed too.
     /// like `get_account_value` without async/network fallback
     pub fn try_get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
@@ -347,8 +337,8 @@ impl DriftClient {
 
     /// Sign and send a tx to the network
     ///
-    ///  `recent_block_hash` some block hash to use for tx signing, if not provided it will be automatically set
-    ///  `config` custom RPC config to use when submitting the tx
+    ///  * `recent_block_hash` - some block hash to use for tx signing, if not provided it will be automatically set
+    ///  * `config` - custom RPC config to use when submitting the tx
     ///
     /// Returns the signature on success
     pub async fn sign_and_send_with_config(
@@ -367,18 +357,46 @@ impl DriftClient {
             .map_err(|err| err.to_out_of_sol_error().unwrap_or(err))
     }
 
-    /// Get live info of a spot market
-    /// uses latest cached if subscribed, otherwise fallsback to network query
-    pub async fn get_spot_market_info(&self, market_index: u16) -> SdkResult<SpotMarket> {
-        let market = derive_spot_market_account(market_index);
-        self.backend.get_account(&market).await
+    /// Get spot market account
+    /// uses latest cached if subscribed, otherwise falls back to network query
+    pub async fn get_spot_market_account(&self, market_index: u16) -> SdkResult<SpotMarket> {
+        match self.backend.get_spot_market_account_and_slot(market_index) {
+            Some(market) => Ok(market.data),
+            None => {
+                let market = derive_spot_market_account(market_index);
+                self.backend.get_account(&market).await
+            }
+        }
     }
 
-    /// Get live info of a perp market
-    /// uses latest cached if subscribed, otherwise fallsback to network query
-    pub async fn get_perp_market_info(&self, market_index: u16) -> SdkResult<PerpMarket> {
-        let market = derive_perp_market_account(market_index);
-        self.backend.get_account(&market).await
+    /// Get perp market account
+    /// uses latest cached if subscribed, otherwise falls back to network query
+    pub async fn get_perp_market_account(&self, market_index: u16) -> SdkResult<PerpMarket> {
+        match self.backend.get_perp_market_account_and_slot(market_index) {
+            Some(market) => Ok(market.data),
+            None => {
+                let market = derive_perp_market_account(market_index);
+                self.backend.get_account(&market).await
+            }
+        }
+    }
+
+    /// Try to spot market account from cache
+    pub fn try_get_spot_market_account(&self, market_index: u16) -> SdkResult<SpotMarket> {
+        if let Some(market) = self.backend.get_spot_market_account_and_slot(market_index) {
+            Ok(market.data)
+        } else {
+            Err(SdkError::NoData)
+        }
+    }
+
+    /// Try to get perp market account from cache
+    pub fn try_get_perp_market_account(&self, market_index: u16) -> SdkResult<PerpMarket> {
+        if let Some(market) = self.backend.get_perp_market_account_and_slot(market_index) {
+            Ok(market.data)
+        } else {
+            Err(SdkError::NoData)
+        }
     }
 
     /// Lookup a market by symbol
@@ -409,7 +427,7 @@ impl DriftClient {
     }
 
     /// Get live oracle price for `market`
-    /// uses latest cached if subscribed, otherwise fallsback to network query
+    /// uses latest cached if subscribed, otherwise falls back to network query
     pub async fn oracle_price(&self, market: MarketId) -> SdkResult<i64> {
         self.backend.oracle_price(market).await
     }
@@ -448,58 +466,11 @@ impl DriftClient {
             .await
     }
 
-    pub fn get_perp_market_account_and_slot(
-        &self,
-        market_index: u16,
-    ) -> Option<DataAndSlot<PerpMarket>> {
-        self.backend.get_perp_market_account_and_slot(market_index)
-    }
-
-    pub fn get_spot_market_account_and_slot(
-        &self,
-        market_index: u16,
-    ) -> Option<DataAndSlot<SpotMarket>> {
-        self.backend.get_spot_market_account_and_slot(market_index)
-    }
-
-    pub fn get_perp_market_account(&self, market_index: u16) -> Option<PerpMarket> {
-        self.backend
-            .get_perp_market_account_and_slot(market_index)
-            .map(|x| x.data)
-    }
-
-    pub fn get_spot_market_account(&self, market_index: u16) -> Option<SpotMarket> {
-        self.backend
-            .get_spot_market_account_and_slot(market_index)
-            .map(|x| x.data)
-    }
-
-    pub fn num_perp_markets(&self) -> usize {
-        self.backend.num_perp_markets()
-    }
-
-    pub fn num_spot_markets(&self) -> usize {
-        self.backend.num_spot_markets()
-    }
-
-    pub fn get_oracle_price_data_and_slot(&self, oracle_pubkey: &Pubkey) -> Option<Oracle> {
-        self.backend.get_oracle_price_data_and_slot(oracle_pubkey)
-    }
-
-    pub fn get_oracle_price_data_and_slot_for_perp_market(
-        &self,
-        market_index: u16,
-    ) -> Option<Oracle> {
-        self.backend
-            .get_oracle_price_data_and_slot_for_perp_market(market_index)
-    }
-
-    pub fn get_oracle_price_data_and_slot_for_spot_market(
-        &self,
-        market_index: u16,
-    ) -> Option<Oracle> {
-        self.backend
-            .get_oracle_price_data_and_slot_for_spot_market(market_index)
+    /// Try get the latest oracle data for `market`
+    ///
+    /// If only the price is required use `oracle_price` intstead
+    pub fn try_get_oracle_price_data_and_slot(&self, market: MarketId) -> Option<Oracle> {
+        self.backend.try_get_oracle_price_data_and_slot(market)
     }
 
     /// Subscribe to live updates for some `account`
@@ -533,11 +504,7 @@ pub struct DriftClientBackend {
 
 impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
-    async fn new(
-        context: Context,
-        rpc_client: Arc<RpcClient>,
-        configured_markets: ConfiguredMarkets,
-    ) -> SdkResult<Self> {
+    async fn new(context: Context, rpc_client: Arc<RpcClient>) -> SdkResult<Self> {
         let perp_market_map =
             MarketMap::<PerpMarket>::new(rpc_client.commitment(), rpc_client.url(), true);
         let spot_market_map =
@@ -554,24 +521,24 @@ impl DriftClientBackend {
         )?;
         let lookup_table = utils::deserialize_alt(lookup_table_address, &lut)?;
 
-        let perp_oracles = perp_market_map
+        let mut all_oracles = Vec::<(MarketId, Pubkey, OracleSource)>::with_capacity(
+            perp_market_map.size() + spot_market_map.size(),
+        );
+        for market_oracle_info in perp_market_map
             .oracles()
-            .into_iter()
-            .filter(|(idx, _, _)| configured_markets.wants(MarketId::perp(*idx)))
-            .collect();
-        let spot_oracles = spot_market_map
-            .oracles()
-            .into_iter()
-            .filter(|(idx, _, _)| configured_markets.wants(MarketId::spot(*idx)))
-            .collect();
+            .iter()
+            .chain(spot_market_map.oracles().iter())
+        {
+            all_oracles.push(*market_oracle_info);
+        }
 
         let oracle_map = OracleMap::new(
             rpc_client.commitment(),
             rpc_client.url(),
-            true,
-            perp_oracles,
-            spot_oracles,
+            all_oracles.as_slice(),
         );
+        let account_map = AccountMap::new(rpc_client.url(), rpc_client.commitment());
+        account_map.subscribe_account(state_account()).await?;
 
         Ok(Self {
             rpc_client: Arc::clone(&rpc_client),
@@ -584,33 +551,44 @@ impl DriftClientBackend {
                 perp_market_map.values(),
                 lookup_table,
             ),
-            account_map: AccountMap::new(rpc_client.url(), rpc_client.commitment()),
+            account_map,
             perp_market_map,
             spot_market_map,
             oracle_map,
         })
     }
 
-    /// Start subscription workers for live program data
-    async fn subscribe(&self) -> SdkResult<()> {
+    /// Start subscription for latest block hashes
+    async fn subscribe_blockhashes(&self) -> SdkResult<()> {
         self.blockhash_subscriber.subscribe();
+        Ok(())
+    }
+
+    /// Start subscriptions for market accounts
+    async fn subscribe_markets(&self, markets: &[MarketId]) -> SdkResult<()> {
+        let (perps, spot) = markets
+            .iter()
+            .partition::<Vec<MarketId>, _>(|x| x.is_perp());
         let _ = tokio::try_join!(
-            self.perp_market_map.subscribe(),
-            self.spot_market_map.subscribe(),
-            self.oracle_map.subscribe(),
-            self.account_map.subscribe_account(state_account()),
+            self.perp_market_map.subscribe(perps.as_slice()),
+            self.spot_market_map.subscribe(spot.as_slice()),
         )?;
 
         Ok(())
     }
 
+    /// Start subscriptions for market oracle accounts
+    async fn subscribe_oracles(&self, markets: &[MarketId]) -> SdkResult<()> {
+        self.oracle_map.subscribe(markets).await
+    }
+
     /// End subscriptions to live program data
     async fn unsubscribe(&self) -> SdkResult<()> {
         self.blockhash_subscriber.unsubscribe();
-        self.perp_market_map.unsubscribe()?;
-        self.spot_market_map.unsubscribe()?;
+        self.perp_market_map.unsubscribe_all()?;
+        self.spot_market_map.unsubscribe_all()?;
         self.account_map.unsubscribe_account(state_account());
-        self.oracle_map.unsubscribe().await
+        self.oracle_map.unsubscribe_all()
     }
 
     fn get_perp_market_account_and_slot(
@@ -627,48 +605,32 @@ impl DriftClientBackend {
         self.spot_market_map.get(&market_index)
     }
 
-    fn num_perp_markets(&self) -> usize {
-        self.perp_market_map.size()
+    fn try_get_oracle_price_data_and_slot(&self, market: MarketId) -> Option<Oracle> {
+        self.oracle_map.get_by_market(market)
     }
 
-    fn num_spot_markets(&self) -> usize {
-        self.spot_market_map.size()
-    }
-
-    fn get_oracle_price_data_and_slot(&self, oracle_pubkey: &Pubkey) -> Option<Oracle> {
-        self.oracle_map.get(oracle_pubkey)
-    }
-
-    fn get_oracle_price_data_and_slot_for_perp_market(&self, market_index: u16) -> Option<Oracle> {
-        let market = self.get_perp_market_account_and_slot(market_index)?;
-
-        let oracle = market.data.amm.oracle;
+    /// Same as `get_oracle_price_data_and_slot` but checks the oracle pubkey has not changed
+    /// this can be useful if the oracle address changes in the program
+    fn get_oracle_price_data_and_slot_checked(&self, market: MarketId) -> Option<Oracle> {
         let current_oracle = self
             .oracle_map
-            .current_perp_oracle(market_index)
-            .expect("oracle");
+            .get_by_market(market)
+            .expect("oracle")
+            .pubkey;
 
-        if oracle != current_oracle {
-            panic!("invalid perp oracle: {}", market_index);
+        let program_configured_oracle = if market.is_perp() {
+            let market = self.get_perp_market_account_and_slot(market.index())?;
+            market.data.amm.oracle
+        } else {
+            let market = self.get_spot_market_account_and_slot(market.index())?;
+            market.data.oracle
+        };
+
+        if program_configured_oracle != current_oracle {
+            panic!("invalid oracle: {}", market.index());
         }
 
-        self.get_oracle_price_data_and_slot(&current_oracle)
-    }
-
-    fn get_oracle_price_data_and_slot_for_spot_market(&self, market_index: u16) -> Option<Oracle> {
-        let market = self.get_spot_market_account_and_slot(market_index)?;
-
-        let oracle = market.data.oracle;
-        let current_oracle = self
-            .oracle_map
-            .current_spot_oracle(market_index)
-            .expect("oracle");
-
-        if oracle != current_oracle {
-            panic!("invalid spot oracle: {}", market_index);
-        }
-
-        self.get_oracle_price_data_and_slot(&market.data.oracle)
+        self.try_get_oracle_price_data_and_slot(market)
     }
 
     /// Return a handle to the inner RPC client
@@ -678,7 +640,8 @@ impl DriftClientBackend {
 
     /// Get recent tx priority fees
     ///
-    /// - `window` # of slots to include in the fee calculation
+    /// * `writable_markets` - markets to consider for write locks
+    /// * `window` - # of slots to include in the fee calculation
     async fn get_recent_priority_fees(
         &self,
         writable_markets: &[MarketId],
@@ -723,9 +686,26 @@ impl DriftClientBackend {
         }
     }
 
+    /// Fetch `account` as an Anchor account type `T` along with the slot
+    async fn get_account_with_slot<T: AccountDeserialize>(
+        &self,
+        account: &Pubkey,
+    ) -> SdkResult<account_map::DataAndSlot<T>> {
+        if let Some(value) = self.account_map.account_data_and_slot(account) {
+            Ok(value)
+        } else {
+            let (account, slot) = self.get_account_with_slot_raw(account).await?;
+            Ok(account_map::DataAndSlot {
+                slot,
+                data: T::try_deserialize(&mut account.data.as_slice())
+                    .map_err(|err| SdkError::Anchor(Box::new(err)))?,
+            })
+        }
+    }
+
     /// Fetch `account` as a drift User account
     ///
-    /// uses latest cached if subscribed, otherwise fallsback to network query
+    /// uses latest cached if subscribed, otherwise falls back to network query
     async fn get_user_account(&self, account: &Pubkey) -> SdkResult<User> {
         self.get_account(account).await
     }
@@ -740,7 +720,7 @@ impl DriftClientBackend {
 
     /// Returns latest blockhash
     ///
-    /// uses latest cached if subscribed, otherwise fallsback to network query
+    /// uses latest cached if subscribed, otherwise falls back to network query
     pub async fn get_latest_blockhash(&self) -> SdkResult<Hash> {
         match self.blockhash_subscriber.get_latest_blockhash() {
             Some(hash) => Ok(hash),
@@ -787,39 +767,39 @@ impl DriftClientBackend {
     }
 
     /// Fetch the live oracle price for `market`
-    /// Uses latest local value from an `OracleMap` if subscribed, fallsback to network query
+    ///
+    /// Uses latest local value from an `OracleMap` if subscribed, falls back to network query
     pub async fn oracle_price(&self, market: MarketId) -> SdkResult<i64> {
-        let (oracle, oracle_source) = match market.kind() {
-            MarketType::Perp => {
-                let market = self
-                    .program_data
-                    .perp_market_config_by_index(market.index())
-                    .ok_or(SdkError::InvalidOracle)?;
-                (market.amm.oracle, market.amm.oracle_source)
-            }
-            MarketType::Spot => {
-                let market = self
-                    .program_data
-                    .spot_market_config_by_index(market.index())
-                    .ok_or(SdkError::InvalidOracle)?;
-                (market.oracle, market.oracle_source)
-            }
-        };
-
-        if self.oracle_map.is_subscribed().await {
+        if self.oracle_map.is_subscribed(&market) {
             Ok(self
-                .get_oracle_price_data_and_slot(&oracle)
+                .try_get_oracle_price_data_and_slot(market)
                 .expect("oracle exists")
                 .data
                 .price)
         } else {
-            let (account_data, slot) = self.get_account_with_slot(&oracle).await?;
+            let (oracle, oracle_source) = match market.kind() {
+                MarketType::Perp => {
+                    let market = self
+                        .program_data
+                        .perp_market_config_by_index(market.index())
+                        .ok_or(SdkError::InvalidOracle)?;
+                    (market.amm.oracle, market.amm.oracle_source)
+                }
+                MarketType::Spot => {
+                    let market = self
+                        .program_data
+                        .spot_market_config_by_index(market.index())
+                        .ok_or(SdkError::InvalidOracle)?;
+                    (market.oracle, market.oracle_source)
+                }
+            };
+            let (account_data, slot) = self.get_account_with_slot_raw(&oracle).await?;
             ffi::get_oracle_price(oracle_source, &mut (oracle, account_data), slot).map(|o| o.price)
         }
     }
 
     /// Get account via rpc along with retrieved slot number
-    pub async fn get_account_with_slot(&self, pubkey: &Pubkey) -> SdkResult<(Account, Slot)> {
+    async fn get_account_with_slot_raw(&self, pubkey: &Pubkey) -> SdkResult<(Account, Slot)> {
         match self
             .rpc_client
             .get_account_with_commitment(pubkey, self.rpc_client.commitment())
@@ -908,10 +888,10 @@ pub struct TransactionBuilder<'a> {
 impl<'a> TransactionBuilder<'a> {
     /// Initialize a new `TransactionBuilder` for default signer
     ///
-    /// `program_data` program data from chain
-    /// `sub_account` drift sub-account address
-    /// `account_data` drift sub-account data
-    /// `delegated` set true to build tx for delegated signing
+    /// * `program_data` - program data from chain
+    /// * `sub_account` - drift sub-account address
+    /// * `user` - drift sub-account data
+    /// * `delegated` - set true to build tx for delegated signing
     pub fn new<'b>(
         program_data: &'b ProgramData,
         sub_account: Pubkey,
@@ -956,7 +936,7 @@ impl<'a> TransactionBuilder<'a> {
     }
     /// Set the priority fee of the tx
     ///
-    /// `microlamports_per_cu` the price per unit of compute in µ-lamports
+    /// * `microlamports_per_cu` - the price per unit of compute in µ-lamports
     pub fn with_priority_fee(mut self, microlamports_per_cu: u64, cu_limit: Option<u32>) -> Self {
         let cu_limit_ix = ComputeBudgetInstruction::set_compute_unit_price(microlamports_per_cu);
         self.ixs.insert(0, cu_limit_ix);
@@ -1052,7 +1032,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn place_orders(mut self, orders: Vec<OrderParams>) -> Self {
         let mut readable_accounts: Vec<MarketId> = orders
             .iter()
-            .map(|o| (o.market_index, o.market_type).into())
+            .map(|o| (o.market_index, o.market_type.into()).into())
             .collect();
         readable_accounts.extend(&self.force_markets.readable);
 
@@ -1109,9 +1089,8 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Cancel account's orders matching some criteria
     ///
-    /// `market` - tuple of market ID and type (spot or perp)
-    ///
-    /// `direction` - long or short
+    /// * `market` - tuple of market ID and type (spot or perp)
+    /// * `direction` - long or short
     pub fn cancel_orders(
         mut self,
         market: (u16, MarketType),
@@ -1137,7 +1116,7 @@ impl<'a> TransactionBuilder<'a> {
             accounts,
             data: InstructionData::data(&drift_idl::instructions::CancelOrders {
                 market_index: Some(idx),
-                market_type: Some(kind),
+                market_type: Some(kind.into()),
                 direction,
             }),
         };
@@ -1258,11 +1237,11 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Add a place and make instruction
     ///
-    /// `order` the order to place
-    /// `taker_info` taker account address and data
-    /// `taker_order_id` the id of the taker's order to match with
-    /// `referrer` pukey of the taker's referrer account, if any
-    /// `fulfilment_type` type of fill for spot orders, ignored for perp orders
+    /// * `order` - the order to place
+    /// * `taker_info` - taker account address and data
+    /// * `taker_order_id` - the id of the taker's order to match with
+    /// * `referrer` - pukey of the taker's referrer account, if any
+    /// * `fulfillment_type` - type of fill for spot orders, ignored for perp orders
     pub fn place_and_make(
         mut self,
         order: OrderParams,
@@ -1272,7 +1251,7 @@ impl<'a> TransactionBuilder<'a> {
         fulfillment_type: Option<SpotFulfillmentType>,
     ) -> Self {
         let (taker, taker_account) = taker_info;
-        let is_perp = order.market_type == MarketType::Perp;
+        let is_perp = order.market_type == MarketType::Perp.into();
         let perp_writable = [MarketId::perp(order.market_index)];
         let spot_writable = [MarketId::spot(order.market_index), MarketId::QUOTE_SPOT];
         let mut accounts = build_accounts(
@@ -1303,7 +1282,7 @@ impl<'a> TransactionBuilder<'a> {
             accounts.push(AccountMeta::new(referrer, false));
         }
 
-        let ix = if order.market_type == MarketType::Perp {
+        let ix = if order.market_type == MarketType::Perp.into() {
             Instruction {
                 program_id: constants::PROGRAM_ID,
                 accounts,
@@ -1330,13 +1309,10 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Add a place and take instruction
     ///
-    /// `order` the order to place
-    ///
-    /// `maker_info` pubkey of the maker/counterparty to take against and account data
-    ///
-    /// `referrer` pubkey of the maker's referrer account, if any
-    ///
-    /// `fulfilment_type` type of fill for spot orders, ignored for perp orders
+    /// * `order` - the order to place
+    /// * `maker_info` - pubkey of the maker/counterparty to take against and account data
+    /// * `referrer` - pubkey of the maker's referrer account, if any
+    /// * `fulfillment_type` - type of fill for spot orders, ignored for perp orders
     pub fn place_and_take(
         mut self,
         order: OrderParams,
@@ -1350,7 +1326,7 @@ impl<'a> TransactionBuilder<'a> {
             user_accounts.push(maker);
         }
 
-        let is_perp = order.market_type == MarketType::Perp;
+        let is_perp = order.market_type == MarketType::Perp.into();
         let perp_writable = [MarketId::perp(order.market_index)];
         let spot_writable = [MarketId::spot(order.market_index), MarketId::QUOTE_SPOT];
 
@@ -1434,13 +1410,10 @@ impl<'a> TransactionBuilder<'a> {
 
 /// Builds a set of required accounts from a user's open positions and additional given accounts
 ///
-/// `base_accounts` base anchor accounts
-///
-/// `user` Drift user account data
-///
-/// `markets_readable` IDs of markets to include as readable
-///
-/// `markets_writable` IDs of markets to include as writable (takes priority over readable)
+/// * `base_accounts` - base anchor accounts
+/// * `user` - Drift user account data
+/// * `markets_readable` - IDs of markets to include as readable
+/// * `markets_writable` - IDs of markets to include as writable (takes priority over readable)
 ///
 /// # Panics
 ///  if the user has positions in an unknown market (i.e unsupported by the SDK)
@@ -1561,17 +1534,17 @@ impl Wallet {
     /// # panics
     /// if the key is invalid
     pub fn from_seed_bs58(seed: &str) -> Self {
-        let authority: Keypair = Keypair::from_base58_string(seed);
+        let authority = Keypair::from_base58_string(seed);
         Self::new(authority)
     }
     /// Init wallet from seed bytes, uses default sub-account
     pub fn from_seed(seed: &[u8]) -> SdkResult<Self> {
-        let authority: Keypair = keypair_from_seed(seed).map_err(|_| SdkError::InvalidSeed)?;
+        let authority = keypair_from_seed(seed).map_err(|_| SdkError::InvalidSeed)?;
         Ok(Self::new(authority))
     }
     /// Init wallet with keypair
     ///
-    /// `authority` keypair for tx signing
+    /// * `authority` - keypair for tx signing
     pub fn new(authority: Keypair) -> Self {
         Self {
             stats: Wallet::derive_stats_account(&authority.pubkey()),
@@ -1622,7 +1595,6 @@ impl Wallet {
         let signer: &dyn Signer = self.signer.as_ref();
         Ok(signer.sign_message(message))
     }
-
     /// Return the wallet authority address
     pub fn authority(&self) -> &Pubkey {
         &self.authority
@@ -1695,9 +1667,7 @@ mod tests {
             oracle_map: OracleMap::new(
                 CommitmentConfig::processed(),
                 DEVNET_ENDPOINT.to_string(),
-                true,
-                vec![],
-                vec![],
+                &[],
             ),
             blockhash_subscriber: BlockhashSubscriber::new(
                 Duration::from_secs(2),

@@ -19,13 +19,11 @@ use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubke
 use crate::{
     accounts::State,
     constants::{self, derive_perp_market_account, derive_spot_market_account, state_account},
-    drift_idl::types::{MarketType, OracleSource},
+    drift_idl::types::OracleSource,
     memcmp::get_market_filter,
     utils::get_ws_url,
-    websocket_program_account_subscriber::{
-        ProgramAccountUpdate, WebsocketProgramAccountOptions, WebsocketProgramAccountSubscriber,
-    },
-    DataAndSlot, PerpMarket, SdkError, SdkResult, SpotMarket, UnsubHandle,
+    websocket_account_subscriber::WebsocketAccountSubscriber,
+    DataAndSlot, MarketId, MarketType, PerpMarket, SdkError, SdkResult, SpotMarket, UnsubHandle,
 };
 
 const LOG_TARGET: &str = "marketmap";
@@ -33,7 +31,7 @@ const LOG_TARGET: &str = "marketmap";
 pub trait Market {
     const MARKET_TYPE: MarketType;
     fn market_index(&self) -> u16;
-    fn oracle_info(&self) -> (u16, Pubkey, OracleSource);
+    fn oracle_info(&self) -> (MarketId, Pubkey, OracleSource);
 }
 
 impl Market for PerpMarket {
@@ -43,8 +41,12 @@ impl Market for PerpMarket {
         self.market_index
     }
 
-    fn oracle_info(&self) -> (u16, Pubkey, OracleSource) {
-        (self.market_index(), self.amm.oracle, self.amm.oracle_source)
+    fn oracle_info(&self) -> (MarketId, Pubkey, OracleSource) {
+        (
+            MarketId::perp(self.market_index),
+            self.amm.oracle,
+            self.amm.oracle_source,
+        )
     }
 }
 
@@ -55,14 +57,18 @@ impl Market for SpotMarket {
         self.market_index
     }
 
-    fn oracle_info(&self) -> (u16, Pubkey, OracleSource) {
-        (self.market_index(), self.oracle, self.oracle_source)
+    fn oracle_info(&self) -> (MarketId, Pubkey, OracleSource) {
+        (
+            MarketId::spot(self.market_index),
+            self.oracle,
+            self.oracle_source,
+        )
     }
 }
 
 pub struct MarketMap<T: AnchorDeserialize + Send> {
-    subscription: WebsocketProgramAccountSubscriber,
-    marketmap: Arc<DashMap<u16, DataAndSlot<T>>>,
+    marketmap: Arc<DashMap<u16, DataAndSlot<T>, ahash::RandomState>>,
+    subscriptions: DashMap<u16, UnsubHandle, ahash::RandomState>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
     rpc: RpcClient,
@@ -76,22 +82,12 @@ where
     pub const SUBSCRIPTION_ID: &'static str = "marketmap";
 
     pub fn new(commitment: CommitmentConfig, endpoint: String, sync: bool) -> Self {
-        let filters = vec![get_market_filter(T::MARKET_TYPE)];
-        let options = WebsocketProgramAccountOptions {
-            filters,
-            commitment,
-            encoding: UiAccountEncoding::Base64Zstd,
-        };
-
-        let url = get_ws_url(&endpoint.clone()).unwrap();
-        let subscription = WebsocketProgramAccountSubscriber::new(url, options);
-        let marketmap = Arc::new(DashMap::new());
         let rpc = RpcClient::new_with_commitment(endpoint.clone(), commitment);
         let sync_lock = if sync { Some(Mutex::new(())) } else { None };
 
         Self {
-            subscription,
-            marketmap,
+            subscriptions: Default::default(),
+            marketmap: Arc::default(),
             sync_lock,
             latest_slot: Arc::new(AtomicU64::new(0)),
             rpc,
@@ -99,52 +95,94 @@ where
         }
     }
 
-    pub async fn subscribe(&self) -> SdkResult<()> {
+    /// Subscribe to market account updates
+    pub async fn subscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
         log::debug!(target: LOG_TARGET, "subscribing: {:?}", T::MARKET_TYPE);
         if self.sync_lock.is_some() {
             self.sync().await?;
         }
 
-        let unsub = self.subscription.subscribe(Self::SUBSCRIPTION_ID, {
+        let url = get_ws_url(&self.rpc.url()).expect("valid url");
+
+        let mut pending_subscriptions =
+            Vec::<(u16, WebsocketAccountSubscriber)>::with_capacity(markets.len());
+
+        for market in markets {
+            let market_pubkey = match T::MARKET_TYPE {
+                MarketType::Perp => derive_perp_market_account(market.index()),
+                MarketType::Spot => derive_spot_market_account(market.index()),
+            };
+
+            let market_subscriber =
+                WebsocketAccountSubscriber::new(url.clone(), market_pubkey, self.rpc.commitment());
+
+            pending_subscriptions.push((market.index(), market_subscriber));
+        }
+
+        let futs_iter = pending_subscriptions.into_iter().map(|(idx, fut)| {
             let marketmap = Arc::clone(&self.marketmap);
             let latest_slot = self.latest_slot.clone();
-            move |update: &ProgramAccountUpdate<T>| {
-                if update.data_and_slot.slot > latest_slot.load(Ordering::Relaxed) {
-                    latest_slot.store(update.data_and_slot.slot, Ordering::Relaxed);
-                }
-                marketmap.insert(
-                    update.data_and_slot.data.market_index(),
-                    update.data_and_slot.clone(),
-                );
+            async move {
+                let unsub = fut
+                    .subscribe(Self::SUBSCRIPTION_ID, false, {
+                        move |update| {
+                            if update.slot > latest_slot.load(Ordering::Relaxed) {
+                                latest_slot.store(update.slot, Ordering::Relaxed);
+                            }
+                            marketmap.insert(
+                                idx,
+                                DataAndSlot {
+                                    slot: update.slot,
+                                    data: T::deserialize(&mut update.data.as_slice())
+                                        .expect("valid market"),
+                                },
+                            );
+                        }
+                    })
+                    .await;
+                (idx, unsub)
             }
         });
-        let mut guard = self.unsub.lock().unwrap();
-        *guard = Some(unsub);
+
+        let mut subscription_futs = FuturesUnordered::from_iter(futs_iter);
+        while let Some((market, unsub)) = subscription_futs.next().await {
+            self.subscriptions.insert(market, unsub?);
+        }
+
         log::debug!(target: LOG_TARGET, "subscribed: {:?}", T::MARKET_TYPE);
 
         Ok(())
     }
 
-    pub fn unsubscribe(&self) -> SdkResult<()> {
-        log::debug!(target: LOG_TARGET, "unsubscribing: {:?}", T::MARKET_TYPE);
-        let mut guard = self.unsub.lock().expect("uncontested");
-        if let Some(unsub) = guard.take() {
-            if unsub.send(()).is_err() {
-                log::error!("couldn't unsubscribe");
+    /// Unsubscribe from updates for the given `markets`
+    pub fn unsubscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
+        for market in markets {
+            if let Some((market, unsub)) = self.subscriptions.remove(&market.index()) {
+                let _ = unsub.send(());
+                self.marketmap.remove(&market);
             }
-            self.marketmap.clear();
-            self.latest_slot.store(0, Ordering::Relaxed);
         }
-        log::debug!(target: LOG_TARGET, "unsubscribed: {:?}", T::MARKET_TYPE);
+        log::debug!(target: LOG_TARGET, "unsubscribed markets: {markets:?}");
 
         Ok(())
+    }
+
+    /// Unsubscribe from all market updates
+    pub fn unsubscribe_all(&self) -> SdkResult<()> {
+        let all_markets: Vec<MarketId> = self
+            .subscriptions
+            .iter()
+            .map(|x| (*x.key(), T::MARKET_TYPE).into())
+            .collect();
+        self.unsubscribe(&all_markets)
     }
 
     pub fn values(&self) -> Vec<T> {
         self.marketmap.iter().map(|x| x.data.clone()).collect()
     }
 
-    pub fn oracles(&self) -> Vec<(u16, Pubkey, OracleSource)> {
+    /// Returns a list of oracle info for each market
+    pub fn oracles(&self) -> Vec<(MarketId, Pubkey, OracleSource)> {
         self.values().iter().map(|x| x.oracle_info()).collect()
     }
 
@@ -162,6 +200,7 @@ where
             .map(|market| market.clone())
     }
 
+    /// Sync all market accounts
     #[allow(clippy::await_holding_lock)]
     pub(crate) async fn sync(&self) -> SdkResult<()> {
         if self.unsub.lock().unwrap().is_some() {
@@ -200,10 +239,10 @@ where
 
 /// Fetch all market (program) accounts with multiple fallbacks
 ///
-/// Tries progressively less intensive RPC methods for wider compatiblity with RPC providers:
-///     getProgramAccounts, getMultipleAccounts, latstly multiple getAccountInfo
+/// Tries progressively less intensive RPC methods for wider compatibility with RPC providers:
+///     getProgramAccounts, getMultipleAccounts, lastly multiple getAccountInfo
 ///
-/// Returns deserialized accounts and retreived slot
+/// Returns deserialized accounts and retrieved slot
 pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
     rpc: &RpcClient,
 ) -> SdkResult<(Vec<T>, Slot)> {
@@ -259,10 +298,10 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
     };
 
     // try 'getMultipleAccounts'
-    let market_respones = rpc
+    let market_responses = rpc
         .get_multiple_accounts_with_commitment(market_pdas.as_slice(), rpc.commitment())
         .await;
-    if let Ok(response) = market_respones {
+    if let Ok(response) = market_responses {
         for account in response.value {
             match account {
                 Some(account) => {
@@ -285,8 +324,8 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
     let mut market_requests =
         FuturesUnordered::from_iter(market_pdas.iter().map(|acc| rpc.get_account_data(acc)));
 
-    while let Some(market_repsonse) = market_requests.next().await {
-        match market_repsonse {
+    while let Some(market_response) = market_requests.next().await {
+        match market_response {
             Ok(data) => {
                 markets
                     .push(T::deserialize(&mut &data.as_slice()[8..]).expect("market deserializes"));

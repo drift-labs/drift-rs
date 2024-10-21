@@ -1,13 +1,16 @@
 use std::sync::{Arc, Mutex, RwLock};
 
 use anchor_lang::AccountDeserialize;
-use fnv::FnvHashMap;
+use dashmap::DashMap;
+use log::debug;
 use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{
     utils::get_ws_url, websocket_account_subscriber::WebsocketAccountSubscriber, SdkResult,
     UnsubHandle,
 };
+
+const LOG_TARGET: &str = "accountmap";
 
 #[derive(Clone, Default)]
 pub struct AccountSlot {
@@ -24,7 +27,7 @@ pub struct DataAndSlot<T> {
 pub struct AccountMap {
     endpoint: String,
     commitment: CommitmentConfig,
-    inner: RwLock<FnvHashMap<Pubkey, AccountSub<Subscribed>>>,
+    inner: DashMap<Pubkey, AccountSub<Subscribed>, ahash::RandomState>,
 }
 
 impl AccountMap {
@@ -37,26 +40,23 @@ impl AccountMap {
     }
     /// Subscribe user account
     pub async fn subscribe_account(&self, account: &Pubkey) -> SdkResult<()> {
-        {
-            let map = self.inner.read().expect("acquired");
-            if map.contains_key(account) {
-                return Ok(());
-            }
+        if self.inner.contains_key(account) {
+            return Ok(());
         }
+        debug!(target: LOG_TARGET, "subscribing: {account:?}");
 
         let user = AccountSub::new(&self.endpoint, self.commitment, *account);
         let user = user.subscribe().await?;
 
-        let mut map = self.inner.write().expect("acquired");
-        map.insert(*account, user);
+        self.inner.insert(*account, user);
 
         Ok(())
     }
     /// Unsubscribe user account
     pub fn unsubscribe_account(&self, account: &Pubkey) {
-        let mut map = self.inner.write().expect("acquired");
-        if let Some(u) = map.remove(account) {
-            let _ = u.unsubscribe();
+        if let Some((acc, unsub)) = self.inner.remove(account) {
+            debug!(target: LOG_TARGET, "unsubscribing: {acc:?}");
+            let _ = unsub.unsubscribe();
         }
     }
     /// Return data of the given `account` as T, if it exists
@@ -68,8 +68,9 @@ impl AccountMap {
         &self,
         account: &Pubkey,
     ) -> Option<DataAndSlot<T>> {
-        let accounts = self.inner.read().expect("read");
-        accounts.get(account).map(|u| u.get_account_data_and_slot())
+        self.inner
+            .get(account)
+            .map(|u| u.get_account_data_and_slot())
     }
 }
 
@@ -111,7 +112,7 @@ impl AccountSub<Unsubscribed> {
         let data_and_slot = Arc::new(RwLock::new(AccountSlot::default()));
         let unsub = self
             .subscription
-            .subscribe(Self::SUBSCRIPTION_ID, {
+            .subscribe(Self::SUBSCRIPTION_ID, true, {
                 let data_and_slot = Arc::clone(&data_and_slot);
                 move |update| {
                     let mut guard = data_and_slot.write().expect("acquired");

@@ -6,9 +6,9 @@ use std::{
     time::Duration,
 };
 
+use ahash::HashSet;
 use anchor_lang::{AnchorDeserialize, Discriminator};
 use base64::Engine;
-use fnv::FnvHashSet;
 use futures_util::{future::BoxFuture, stream::FuturesOrdered, FutureExt, Stream, StreamExt};
 use log::{debug, info, warn};
 use regex::Regex;
@@ -656,7 +656,7 @@ impl DriftEvent {
 /// fixed capacity cache of tx signatures
 struct TxSignatureCache {
     capacity: usize,
-    entries: FnvHashSet<String>,
+    entries: HashSet<String>,
     age: VecDeque<String>,
 }
 
@@ -664,7 +664,7 @@ impl TxSignatureCache {
     fn new(capacity: usize) -> Self {
         Self {
             capacity,
-            entries: FnvHashSet::<String>::with_capacity_and_hasher(capacity, Default::default()),
+            entries: HashSet::<String>::with_capacity_and_hasher(capacity, Default::default()),
             age: VecDeque::with_capacity(capacity),
         }
     }
@@ -689,9 +689,9 @@ impl TxSignatureCache {
 
 #[cfg(test)]
 mod test {
+    use ahash::HashMap;
     use anchor_lang::prelude::*;
     use base64::Engine;
-    use fnv::FnvHashMap;
     use futures_util::future::ready;
     use solana_sdk::{
         hash::Hash,
@@ -852,7 +852,7 @@ mod test {
     async fn polled_event_stream_caching() {
         let _ = env_logger::try_init();
         struct MockRpcProvider {
-            tx_responses: FnvHashMap<String, EncodedTransactionWithStatusMeta>,
+            tx_responses: HashMap<String, EncodedTransactionWithStatusMeta>,
             signatures: tokio::sync::Mutex<Vec<String>>,
         }
 
@@ -952,7 +952,7 @@ mod test {
         let signatures: Vec<String> = (0..order_events.len())
             .map(|_| Signature::new_unique().to_string())
             .collect();
-        let mut tx_responses = FnvHashMap::<String, EncodedTransactionWithStatusMeta>::default();
+        let mut tx_responses = HashMap::<String, EncodedTransactionWithStatusMeta>::default();
         for s in signatures.iter() {
             let (oar, or) = order_events.pop().unwrap();
             tx_responses.insert(

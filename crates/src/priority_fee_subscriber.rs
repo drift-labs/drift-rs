@@ -129,13 +129,13 @@ impl PriorityFeeSubscriber {
         }
     }
 
-    /// Returns the median priority fee in micro-lamports over the lookback window
+    /// Returns the median priority fee in micro-lamports over the look-back window
     pub fn priority_fee(&self) -> u64 {
         self.priority_fee_nth(0.5)
     }
 
-    /// Returns the n-th percentile priority fee in micro-lamports over the lookback window
-    /// `precentile` given as decimal 0.0 < n <= 1.0
+    /// Returns the n-th percentile priority fee in micro-lamports over the look-back window
+    /// `percentile` given as decimal 0.0 < n <= 1.0
     pub fn priority_fee_nth(&self, percentile: f32) -> u64 {
         let percentile = percentile.min(1.0);
         let lock = self.latest_fees.read().expect("acquired");

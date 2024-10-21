@@ -1,14 +1,14 @@
 use drift_rs::{
     event_subscriber::RpcClient,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
-    types::{accounts::User, ConfiguredMarkets, Context, MarketId, NewOrder, PostOnlyParam},
-    utils::test_envs::{devnet_endpoint, test_keypair},
+    types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam},
+    utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
     DriftClient, TransactionBuilder, Wallet,
 };
 use solana_sdk::signature::Keypair;
 
 #[tokio::test]
-async fn get_oracle_prices() {
+async fn client_sync_subscribe_devnet() {
     let client = DriftClient::new(
         Context::DevNet,
         RpcClient::new(devnet_endpoint()),
@@ -16,6 +16,50 @@ async fn get_oracle_prices() {
     )
     .await
     .expect("connects");
+    let markets = [
+        MarketId::spot(1),
+        MarketId::spot(2),
+        MarketId::perp(0),
+        MarketId::perp(1),
+        MarketId::perp(2),
+    ];
+    tokio::try_join!(
+        client.subscribe_markets(&markets),
+        client.subscribe_oracles(&markets),
+    )
+    .expect("subscribes");
+
+    let price = client.oracle_price(MarketId::perp(1)).await.expect("ok");
+    assert!(price > 0);
+    dbg!(price);
+    let price = client.oracle_price(MarketId::spot(2)).await.expect("ok");
+    assert!(price > 0);
+    dbg!(price);
+}
+
+#[tokio::test]
+async fn client_sync_subscribe_mainnet() {
+    let _ = env_logger::try_init();
+    let client = DriftClient::new(
+        Context::MainNet,
+        RpcClient::new(mainnet_endpoint()),
+        Keypair::new().into(),
+    )
+    .await
+    .expect("connects");
+    let markets = [
+        MarketId::spot(1),
+        MarketId::spot(2),
+        MarketId::perp(0),
+        MarketId::perp(1),
+        MarketId::perp(2),
+    ];
+    tokio::try_join!(
+        client.subscribe_markets(&markets),
+        client.subscribe_oracles(&markets),
+    )
+    .expect("subscribes");
+
     let price = client.oracle_price(MarketId::perp(1)).await.expect("ok");
     assert!(price > 0);
     dbg!(price);
@@ -31,18 +75,13 @@ async fn place_and_cancel_orders() {
     let sol_spot = MarketId::spot(1);
 
     let wallet: Wallet = test_keypair().into();
-    let client = DriftClient::with_markets(
+    let client = DriftClient::new(
         Context::DevNet,
         RpcClient::new(devnet_endpoint()),
         wallet.clone(),
-        ConfiguredMarkets::Minimal {
-            perp: vec![btc_perp],
-            spot: vec![sol_spot],
-        },
     )
     .await
     .expect("connects");
-    client.subscribe().await.unwrap();
 
     let user: User = client
         .get_user_account(&wallet.default_sub_account())

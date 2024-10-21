@@ -1,4 +1,4 @@
-use fnv::FnvHashSet;
+use ahash::HashMap;
 use solana_sdk::{account::Account, pubkey::Pubkey};
 
 use crate::{
@@ -21,33 +21,38 @@ pub(crate) struct AccountsListBuilder {
 impl AccountsListBuilder {
     /// Constructs the account map + drift state account
     pub fn build(&mut self, client: &DriftClient, user: &User) -> SdkResult<AccountsList> {
-        let mut oracles = FnvHashSet::<Pubkey>::default();
+        let mut oracle_markets =
+            HashMap::<Pubkey, MarketId>::with_capacity_and_hasher(16, Default::default());
         let mut spot_markets = Vec::<SpotMarket>::with_capacity(user.spot_positions.len());
         let mut perp_markets = Vec::<PerpMarket>::with_capacity(user.perp_positions.len());
         let drift_state = client.state_config()?;
 
         for p in user.spot_positions.iter().filter(|p| !p.is_available()) {
-            let market = client
-                .get_spot_market_account(p.market_index)
-                .expect("spot market");
-            if oracles.insert(market.oracle) {
+            let market = client.try_get_spot_market_account(p.market_index)?;
+            if oracle_markets
+                .insert(market.oracle, MarketId::spot(market.market_index))
+                .is_none()
+            {
                 spot_markets.push(market);
             }
         }
 
-        let quote_market = client
-            .get_spot_market_account(MarketId::QUOTE_SPOT.index())
-            .expect("spot market");
-        if oracles.insert(quote_market.oracle) {
+        let quote_market = client.try_get_spot_market_account(MarketId::QUOTE_SPOT.index())?;
+        if oracle_markets
+            .insert(quote_market.oracle, MarketId::QUOTE_SPOT)
+            .is_none()
+        {
             spot_markets.push(quote_market);
         }
 
         for p in user.perp_positions.iter().filter(|p| !p.is_available()) {
-            let market = client
-                .get_perp_market_account(p.market_index)
-                .expect("perp market");
-            oracles.insert(market.amm.oracle);
-            perp_markets.push(market);
+            let market = client.try_get_perp_market_account(p.market_index)?;
+            if oracle_markets
+                .insert(market.amm.oracle, MarketId::perp(market.market_index))
+                .is_none()
+            {
+                perp_markets.push(market);
+            };
         }
 
         for market in spot_markets.iter() {
@@ -78,9 +83,9 @@ impl AccountsListBuilder {
             );
         }
 
-        for oracle_key in oracles.iter() {
+        for (oracle_key, market) in oracle_markets.iter() {
             let oracle = client
-                .get_oracle_price_data_and_slot(oracle_key)
+                .try_get_oracle_price_data_and_slot(*market)
                 .expect("oracle exists");
 
             let oracle_owner = oracle_source_to_owner(client.context, oracle.source);
