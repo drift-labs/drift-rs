@@ -3,11 +3,14 @@ use std::str::FromStr;
 use futures_util::StreamExt;
 use log::warn;
 use solana_account_decoder::UiAccountEncoding;
-use solana_client::{nonblocking::pubsub_client::PubsubClient, rpc_config::RpcAccountInfoConfig};
+use solana_client::{
+    nonblocking::{pubsub_client::PubsubClient, rpc_client::RpcClient},
+    rpc_config::RpcAccountInfoConfig,
+};
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use tokio::sync::oneshot;
 
-use crate::{SdkResult, UnsubHandle};
+use crate::{utils::get_http_url, SdkError, SdkResult, UnsubHandle};
 
 #[derive(Clone, Debug)]
 pub struct AccountUpdate {
@@ -40,18 +43,51 @@ impl WebsocketAccountSubscriber {
 
     /// Start a Ws account subscription task
     ///
-    /// `subscription_name` some user defined identifier for the subscription
-    /// `handler_fn` handles updates from the subscription task
+    /// * `subscription_name` - some user defined identifier for the subscription
+    /// * `sync` - true if subscription should fetch account data on start
+    /// * `handler_fn` - handles updates from the subscription task
     ///
     /// Fetches the account to set the initial value, then uses event based updates
     pub async fn subscribe<F>(
         &self,
         subscription_name: &'static str,
+        sync: bool,
         handler_fn: F,
     ) -> SdkResult<UnsubHandle>
     where
         F: 'static + Send + Fn(&AccountUpdate),
     {
+        if sync {
+            // seed initial account state
+            log::debug!("seeding account: {subscription_name}-{:?}", self.pubkey);
+            let owner: Pubkey;
+            let rpc = RpcClient::new(get_http_url(&self.url)?);
+            match rpc
+                .get_account_with_commitment(&self.pubkey, self.commitment)
+                .await
+            {
+                Ok(response) => {
+                    if let Some(account) = response.value {
+                        owner = account.owner;
+                        handler_fn(&AccountUpdate {
+                            owner,
+                            lamports: account.lamports,
+                            pubkey: self.pubkey,
+                            data: account.data,
+                            slot: response.context.slot,
+                        });
+                    } else {
+                        return Err(SdkError::InvalidAccount);
+                    }
+                }
+                Err(err) => {
+                    warn!("seeding account failed: {err:?}");
+                    return Err(err.into());
+                }
+            }
+            drop(rpc);
+        }
+
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.commitment),
             encoding: Some(UiAccountEncoding::Base64Zstd),

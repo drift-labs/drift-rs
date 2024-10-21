@@ -110,9 +110,9 @@ pub struct DriftClient {
 impl DriftClient {
     /// Create a new `DriftClient` instance
     ///
-    /// `context` devnet or mainnet
-    /// `rpc_client` an RpcClient instance
-    /// `wallet` wallet to use for tx signing convenience
+    /// * `context` - devnet or mainnet
+    /// * `rpc_client` - an RpcClient instance
+    /// * `wallet` - wallet to use for tx signing convenience
     pub async fn new(context: Context, rpc_client: RpcClient, wallet: Wallet) -> SdkResult<Self> {
         // check URL format here to fail early, otherwise happens at request time.
         let _ = get_http_url(&rpc_client.url())?;
@@ -168,7 +168,7 @@ impl DriftClient {
 
     /// Get an account's open order by id
     ///
-    /// `account` the drift user PDA
+    /// * `account` - the drift user PDA
     pub async fn get_order_by_id(
         &self,
         account: &Pubkey,
@@ -181,7 +181,7 @@ impl DriftClient {
 
     /// Get an account's open order by user assigned id
     ///
-    /// `account` the drift user PDA
+    /// * `account` - the drift user PDA
     pub async fn get_order_by_user_id(
         &self,
         account: &Pubkey,
@@ -198,7 +198,7 @@ impl DriftClient {
 
     /// Get all the account's open orders
     ///
-    /// `account` the drift user PDA
+    /// * `account` - the drift user PDA
     pub async fn all_orders(&self, account: &Pubkey) -> SdkResult<Vec<Order>> {
         let user = self.backend.get_user_account(account).await?;
 
@@ -212,7 +212,7 @@ impl DriftClient {
 
     /// Get all the account's active positions
     ///
-    /// `account` the drift user PDA
+    /// * `account` - the drift user PDA
     pub async fn all_positions(
         &self,
         account: &Pubkey,
@@ -235,7 +235,7 @@ impl DriftClient {
 
     /// Get a perp position by market
     ///
-    /// `account` the drift user PDA
+    /// * `account` - the drift user PDA
     ///
     /// Returns the position if it exists
     pub async fn perp_position(
@@ -254,7 +254,7 @@ impl DriftClient {
 
     /// Get a spot position by market
     ///
-    /// `account` the drift user PDA
+    /// * `account` - the drift user PDA
     ///
     /// Returns the position if it exists
     pub async fn spot_position(
@@ -279,7 +279,7 @@ impl DriftClient {
     /// Get the user account data
     /// Uses cached value if subscribed, fallsback to network query
     ///
-    /// `account` the drift user PDA (subaccount)
+    /// * `account` - the drift user PDA (subaccount)
     ///
     /// Returns the deserialized account data (`User`)
     pub async fn get_user_account(&self, account: &Pubkey) -> SdkResult<User> {
@@ -303,7 +303,7 @@ impl DriftClient {
     /// Get some account value deserialized as T
     /// Uses cached value if subscribed, fallsback to network query
     ///
-    /// `account` any onchain account
+    /// * `account` - any onchain account
     ///
     /// Returns the deserialized account data (`User`)
     pub async fn get_account_value<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
@@ -311,6 +311,7 @@ impl DriftClient {
     }
 
     /// Try to get `account` as `T` using latest local value
+    ///
     /// requires account was previously subscribed too.
     /// like `get_account_value` without async/network fallback
     pub fn try_get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
@@ -336,8 +337,8 @@ impl DriftClient {
 
     /// Sign and send a tx to the network
     ///
-    ///  `recent_block_hash` some block hash to use for tx signing, if not provided it will be automatically set
-    ///  `config` custom RPC config to use when submitting the tx
+    ///  * `recent_block_hash` - some block hash to use for tx signing, if not provided it will be automatically set
+    ///  * `config` - custom RPC config to use when submitting the tx
     ///
     /// Returns the signature on success
     pub async fn sign_and_send_with_config(
@@ -639,7 +640,8 @@ impl DriftClientBackend {
 
     /// Get recent tx priority fees
     ///
-    /// - `window` # of slots to include in the fee calculation
+    /// * `writable_markets` - markets to consider for write locks
+    /// * `window` - # of slots to include in the fee calculation
     async fn get_recent_priority_fees(
         &self,
         writable_markets: &[MarketId],
@@ -765,6 +767,7 @@ impl DriftClientBackend {
     }
 
     /// Fetch the live oracle price for `market`
+    ///
     /// Uses latest local value from an `OracleMap` if subscribed, fallsback to network query
     pub async fn oracle_price(&self, market: MarketId) -> SdkResult<i64> {
         if self.oracle_map.is_subscribed(&market) {
@@ -885,10 +888,10 @@ pub struct TransactionBuilder<'a> {
 impl<'a> TransactionBuilder<'a> {
     /// Initialize a new `TransactionBuilder` for default signer
     ///
-    /// `program_data` program data from chain
-    /// `sub_account` drift sub-account address
-    /// `account_data` drift sub-account data
-    /// `delegated` set true to build tx for delegated signing
+    /// * `program_data` - program data from chain
+    /// * `sub_account` - drift sub-account address
+    /// * `user` - drift sub-account data
+    /// * `delegated` - set true to build tx for delegated signing
     pub fn new<'b>(
         program_data: &'b ProgramData,
         sub_account: Pubkey,
@@ -933,7 +936,7 @@ impl<'a> TransactionBuilder<'a> {
     }
     /// Set the priority fee of the tx
     ///
-    /// `microlamports_per_cu` the price per unit of compute in µ-lamports
+    /// * `microlamports_per_cu` - the price per unit of compute in µ-lamports
     pub fn with_priority_fee(mut self, microlamports_per_cu: u64, cu_limit: Option<u32>) -> Self {
         let cu_limit_ix = ComputeBudgetInstruction::set_compute_unit_price(microlamports_per_cu);
         self.ixs.insert(0, cu_limit_ix);
@@ -1086,9 +1089,8 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Cancel account's orders matching some criteria
     ///
-    /// `market` - tuple of market ID and type (spot or perp)
-    ///
-    /// `direction` - long or short
+    /// * `market` - tuple of market ID and type (spot or perp)
+    /// * `direction` - long or short
     pub fn cancel_orders(
         mut self,
         market: (u16, MarketType),
@@ -1235,11 +1237,11 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Add a place and make instruction
     ///
-    /// `order` the order to place
-    /// `taker_info` taker account address and data
-    /// `taker_order_id` the id of the taker's order to match with
-    /// `referrer` pukey of the taker's referrer account, if any
-    /// `fulfilment_type` type of fill for spot orders, ignored for perp orders
+    /// * `order` - the order to place
+    /// * `taker_info` - taker account address and data
+    /// * `taker_order_id` - the id of the taker's order to match with
+    /// * `referrer` - pukey of the taker's referrer account, if any
+    /// * `fulfilment_type` - type of fill for spot orders, ignored for perp orders
     pub fn place_and_make(
         mut self,
         order: OrderParams,
@@ -1307,13 +1309,10 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Add a place and take instruction
     ///
-    /// `order` the order to place
-    ///
-    /// `maker_info` pubkey of the maker/counterparty to take against and account data
-    ///
-    /// `referrer` pubkey of the maker's referrer account, if any
-    ///
-    /// `fulfilment_type` type of fill for spot orders, ignored for perp orders
+    /// * `order` - the order to place
+    /// * `maker_info` - pubkey of the maker/counterparty to take against and account data
+    /// * `referrer` - pubkey of the maker's referrer account, if any
+    /// * `fulfilment_type` - type of fill for spot orders, ignored for perp orders
     pub fn place_and_take(
         mut self,
         order: OrderParams,
@@ -1411,13 +1410,10 @@ impl<'a> TransactionBuilder<'a> {
 
 /// Builds a set of required accounts from a user's open positions and additional given accounts
 ///
-/// `base_accounts` base anchor accounts
-///
-/// `user` Drift user account data
-///
-/// `markets_readable` IDs of markets to include as readable
-///
-/// `markets_writable` IDs of markets to include as writable (takes priority over readable)
+/// * `base_accounts` - base anchor accounts
+/// * `user` - Drift user account data
+/// * `markets_readable` - IDs of markets to include as readable
+/// * `markets_writable` - IDs of markets to include as writable (takes priority over readable)
 ///
 /// # Panics
 ///  if the user has positions in an unknown market (i.e unsupported by the SDK)
@@ -1548,7 +1544,7 @@ impl Wallet {
     }
     /// Init wallet with keypair
     ///
-    /// `authority` keypair for tx signing
+    /// * `authority` - keypair for tx signing
     pub fn new(authority: Keypair) -> Self {
         Self {
             stats: Wallet::derive_stats_account(&authority.pubkey()),
@@ -1599,7 +1595,6 @@ impl Wallet {
         let signer: &dyn Signer = self.signer.as_ref();
         Ok(signer.sign_message(message))
     }
-
     /// Return the wallet authority address
     pub fn authority(&self) -> &Pubkey {
         &self.authority

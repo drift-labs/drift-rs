@@ -124,7 +124,7 @@ where
             let latest_slot = self.latest_slot.clone();
             async move {
                 let unsub = fut
-                    .subscribe(Self::SUBSCRIPTION_ID, {
+                    .subscribe(Self::SUBSCRIPTION_ID, false, {
                         move |update| {
                             if update.slot > latest_slot.load(Ordering::Relaxed) {
                                 latest_slot.store(update.slot, Ordering::Relaxed);

@@ -16,6 +16,19 @@ async fn client_sync_subscribe_devnet() {
     )
     .await
     .expect("connects");
+    let markets = [
+        MarketId::spot(1),
+        MarketId::spot(2),
+        MarketId::perp(0),
+        MarketId::perp(1),
+        MarketId::perp(2),
+    ];
+    tokio::try_join!(
+        client.subscribe_markets(&markets),
+        client.subscribe_oracles(&markets),
+    )
+    .expect("subscribes");
+
     let price = client.oracle_price(MarketId::perp(1)).await.expect("ok");
     assert!(price > 0);
     dbg!(price);
@@ -34,7 +47,18 @@ async fn client_sync_subscribe_mainnet() {
     )
     .await
     .expect("connects");
-    client.subscribe().await.expect("subscribes");
+    let markets = [
+        MarketId::spot(1),
+        MarketId::spot(2),
+        MarketId::perp(0),
+        MarketId::perp(1),
+        MarketId::perp(2),
+    ];
+    tokio::try_join!(
+        client.subscribe_markets(&markets),
+        client.subscribe_oracles(&markets),
+    )
+    .expect("subscribes");
 
     let price = client.oracle_price(MarketId::perp(1)).await.expect("ok");
     assert!(price > 0);
@@ -58,7 +82,6 @@ async fn place_and_cancel_orders() {
     )
     .await
     .expect("connects");
-    client.subscribe().await.unwrap();
 
     let user: User = client
         .get_user_account(&wallet.default_sub_account())

@@ -29,7 +29,6 @@ base64 = "0.22"
 bytemuck = "1.17"
 dashmap = "6"
 env_logger = "0.11"
-fnv = "1"
 futures-util = "0.3"
 log = "0.4"
 rayon = { version = "1.9.0", optional = true }

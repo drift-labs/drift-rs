@@ -52,7 +52,7 @@ impl OracleMap {
 
     /// Create a new `OracleMap`
     ///
-    /// `all_oracles` Exhaustive list of all Drift oracle pubkeys and source by market
+    /// * `all_oracles` - Exhaustive list of all Drift oracle pubkeys and source by market
     pub fn new(
         commitment: CommitmentConfig,
         endpoint: String,
@@ -112,7 +112,7 @@ impl OracleMap {
             let oraclemap = Arc::clone(&self.oraclemap);
             async move {
                 let unsub = sub_fut
-                    .subscribe(Self::SUBSCRIPTION_ID, {
+                    .subscribe(Self::SUBSCRIPTION_ID, false, {
                         move |update| update_handler(update, info.market, info.source, &oraclemap)
                     })
                     .await;

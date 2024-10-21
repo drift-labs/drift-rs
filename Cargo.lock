@@ -1488,7 +1488,6 @@ dependencies = [
  "dashmap 6.1.0",
  "drift-idl-gen",
  "env_logger 0.11.5",
- "fnv",
  "futures-util",
  "hex",
  "hex-literal",
