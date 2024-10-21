@@ -21,13 +21,24 @@ jobs:
           fetch-depth: 0
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+      - name: install 1.76.0 toolchain
+        run: |
+          rustup install 1.76.0-x86_64-unknown-linux-gnu
       - name: Cargo login
         run: |
           cargo login ${{ secrets.CARGO_REGISTRY_TOKEN }}
       - name: Publish drift-idl-gen
         run: |
           cd crates/drift-idl-gen
-          cargo publish
+          cargo publish || true
       - name: Publish drift-rs
         run: |
+          # add libdrift_ffi_sys
+          curl -L https://github.com/user-attachments/files/17160233/libdrift_ffi_sys.so.zip > ffi.zip
+          unzip ffi.zip
+          sudo mv libdrift_ffi_sys.so $CARGO_DRIFT_FFI_PATH
+          rm ffi.zip # clean up for git
+          # publish to crates.io
           cargo publish
+        env:
+          CARGO_DRIFT_FFI_PATH: "/usr/lib"

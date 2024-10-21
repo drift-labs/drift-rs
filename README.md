@@ -15,6 +15,20 @@
 
 Experimental, high performance Rust SDK for building offchain clients for [Drift V2](https://github.com/drift-labs/protocol-v2) protocol.
 
+
+## Install
+```toml
+# crates.io*
+drift-rs = { version = "v1.0.0-alpha.1" }
+
+# build from source (also builds and links 'libdrift_ffi_sys'
+drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.1" }
+```
+
+_*_`drift-rs` uses drift program over ffi.
+ensure [libdrift_ffi_sys](https://github.com/drift-labs/drift-ffi-sys/blob/master/README.md#installation) is installed when using via crates.io.
+
+## Use
 ```rust
 use drift_rs::{DriftClient, Wallet};
 use solana_sdk::signature::KeyPair;

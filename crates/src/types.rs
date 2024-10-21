@@ -130,8 +130,12 @@ impl MarketId {
     pub fn kind(&self) -> MarketType {
         self.kind
     }
+    /// Convert self into its parts
     pub fn to_parts(self) -> (u16, MarketType) {
         (self.index, self.kind)
+    }
+    pub fn is_perp(self) -> bool {
+        self.kind == MarketType::Perp
     }
 }
 
