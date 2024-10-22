@@ -19,7 +19,7 @@ Experimental, high performance Rust SDK for building offchain clients for [Drift
 ## Install
 ```toml
 # crates.io*
-drift-rs = { version = "v1.0.0-alpha.1" }
+drift-rs = "1.0.0-alpha.2"
 
 # build from source (also builds and links 'libdrift_ffi_sys'
 drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.1" }
