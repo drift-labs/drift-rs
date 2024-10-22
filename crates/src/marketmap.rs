@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc, Mutex,
+use std::{
+    collections::HashSet,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
 };
 
 use anchor_lang::{AccountDeserialize, AnchorDeserialize};
@@ -14,7 +17,7 @@ use solana_client::{
     rpc_request::RpcRequest,
     rpc_response::{OptionalContext, RpcKeyedAccount},
 };
-use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
+use solana_sdk::{clock::Slot, pubkey::Pubkey};
 
 use crate::{
     accounts::State,
@@ -66,13 +69,15 @@ impl Market for SpotMarket {
     }
 }
 
+/// Dynamic map of Drift Spot or Perp market accounts
+///
+/// Caller can subscribe to updates via Ws with `.subscribe(..)`
+/// or drive the map by calling `.sync()` periodically
 pub struct MarketMap<T: AnchorDeserialize + Send> {
     marketmap: Arc<DashMap<u16, DataAndSlot<T>, ahash::RandomState>>,
     subscriptions: DashMap<u16, UnsubHandle, ahash::RandomState>,
-    sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
-    rpc: RpcClient,
-    unsub: Mutex<Option<UnsubHandle>>,
+    rpc: Arc<RpcClient>,
 }
 
 impl<T> MarketMap<T>
@@ -81,33 +86,28 @@ where
 {
     pub const SUBSCRIPTION_ID: &'static str = "marketmap";
 
-    pub fn new(commitment: CommitmentConfig, endpoint: String, sync: bool) -> Self {
-        let rpc = RpcClient::new_with_commitment(endpoint.clone(), commitment);
-        let sync_lock = if sync { Some(Mutex::new(())) } else { None };
-
+    pub fn new(rpc: Arc<RpcClient>) -> Self {
         Self {
             subscriptions: Default::default(),
             marketmap: Arc::default(),
-            sync_lock,
             latest_slot: Arc::new(AtomicU64::new(0)),
             rpc,
-            unsub: Mutex::default(),
         }
     }
 
     /// Subscribe to market account updates
     pub async fn subscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
         log::debug!(target: LOG_TARGET, "subscribing: {:?}", T::MARKET_TYPE);
-        if self.sync_lock.is_some() {
-            self.sync().await?;
-        }
-
         let url = get_ws_url(&self.rpc.url()).expect("valid url");
 
+        let markets = HashSet::<MarketId>::from_iter(markets.iter().copied());
         let mut pending_subscriptions =
             Vec::<(u16, WebsocketAccountSubscriber)>::with_capacity(markets.len());
-
         for market in markets {
+            if self.subscriptions.contains_key(&market.index()) {
+                continue;
+            }
+
             let market_pubkey = match T::MARKET_TYPE {
                 MarketType::Perp => derive_perp_market_account(market.index()),
                 MarketType::Spot => derive_spot_market_account(market.index()),
@@ -133,7 +133,7 @@ where
                                 idx,
                                 DataAndSlot {
                                     slot: update.slot,
-                                    data: T::deserialize(&mut update.data.as_slice())
+                                    data: T::deserialize(&mut &update.data.as_slice()[8..])
                                         .expect("valid market"),
                                 },
                             );
@@ -146,12 +146,18 @@ where
 
         let mut subscription_futs = FuturesUnordered::from_iter(futs_iter);
         while let Some((market, unsub)) = subscription_futs.next().await {
+            log::debug!(target: LOG_TARGET, "subscribed market: {market:?}");
             self.subscriptions.insert(market, unsub?);
         }
 
         log::debug!(target: LOG_TARGET, "subscribed: {:?}", T::MARKET_TYPE);
 
         Ok(())
+    }
+
+    /// Returns whether the market is subscribed to live updates or not
+    pub fn is_subscribed(&self, market_index: u16) -> bool {
+        self.subscriptions.contains_key(&market_index)
     }
 
     /// Unsubscribe from updates for the given `markets`
@@ -186,7 +192,7 @@ where
         self.values().iter().map(|x| x.oracle_info()).collect()
     }
 
-    pub fn size(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.marketmap.len()
     }
 
@@ -201,19 +207,7 @@ where
     }
 
     /// Sync all market accounts
-    #[allow(clippy::await_holding_lock)]
-    pub(crate) async fn sync(&self) -> SdkResult<()> {
-        if self.unsub.lock().unwrap().is_some() {
-            return Ok(());
-        }
-
-        let sync_lock = self.sync_lock.as_ref().expect("expected sync lock");
-
-        let lock = match sync_lock.try_lock() {
-            Ok(lock) => lock,
-            Err(_) => return Ok(()),
-        };
-
+    pub async fn sync(&self) -> SdkResult<()> {
         log::debug!(target: LOG_TARGET, "syncing marketmap: {:?}", T::MARKET_TYPE);
         let (markets, latest_slot) = get_market_accounts_with_fallback::<T>(&self.rpc).await?;
         for market in markets {
@@ -227,8 +221,7 @@ where
         }
         self.latest_slot.store(latest_slot, Ordering::Relaxed);
 
-        drop(lock);
-        log::debug!(target: LOG_TARGET, "synced marketmap: {:?}", T::MARKET_TYPE);
+        log::debug!(target: LOG_TARGET, "synced {:?} marketmap with {} markets", T::MARKET_TYPE, self.marketmap.len());
         Ok(())
     }
 
@@ -342,10 +335,30 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use solana_client::nonblocking::rpc_client::RpcClient;
 
-    use super::get_market_accounts_with_fallback;
-    use crate::{accounts::PerpMarket, utils::test_envs::devnet_endpoint};
+    use super::{get_market_accounts_with_fallback, MarketMap};
+    use crate::{accounts::PerpMarket, utils::test_envs::devnet_endpoint, MarketId};
+
+    #[tokio::test]
+    async fn marketmap_subscribe() {
+        let map = MarketMap::<PerpMarket>::new(Arc::new(RpcClient::new(devnet_endpoint())));
+
+        assert!(map
+            .subscribe(&[MarketId::perp(0), MarketId::perp(1), MarketId::perp(1)])
+            .await
+            .is_ok());
+        assert!(map.is_subscribed(0));
+        assert!(map.is_subscribed(1));
+        assert_eq!(map.subscriptions.len(), 2);
+
+        assert!(map.unsubscribe_all().is_ok());
+        assert_eq!(map.subscriptions.len(), 0);
+        assert!(!map.is_subscribed(0));
+        assert!(!map.is_subscribed(1));
+    }
 
     #[tokio::test]
     async fn get_market_accounts_with_fallback_works() {

@@ -4,7 +4,6 @@ use std::{
     str::FromStr,
 };
 
-use anchor_lang::AnchorDeserialize;
 pub use solana_client::rpc_config::RpcSendTransactionConfig;
 pub use solana_sdk::{
     commitment_config::CommitmentConfig, message::VersionedMessage,
@@ -86,17 +85,15 @@ impl Context {
     }
 }
 
+/// Some data from chain along with the retreived slot
 #[derive(Debug, Clone)]
-pub struct DataAndSlot<T>
-where
-    T: AnchorDeserialize,
-{
+pub struct DataAndSlot<T> {
     pub slot: u64,
     pub data: T,
 }
 
 /// Id of a Drift market
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Default, PartialEq, Eq, Hash)]
 pub struct MarketId {
     index: u16,
     kind: MarketType,
@@ -136,6 +133,19 @@ impl MarketId {
     }
     pub fn is_perp(self) -> bool {
         self.kind == MarketType::Perp
+    }
+}
+
+impl std::fmt::Debug for MarketId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self.kind {
+            MarketType::Perp => {
+                write!(f, "perp/{}", self.index)
+            }
+            MarketType::Spot => {
+                write!(f, "spot/{}", self.index)
+            }
+        }
     }
 }
 
@@ -303,7 +313,7 @@ pub enum SdkError {
     MaxReconnectionAttemptsReached,
     #[error("jit taker order not found")]
     JitOrderNotFound,
-    #[error("no data, client may be unsubsribed")]
+    #[error("no data. client may be unsubscribed")]
     NoData,
     #[error("component is already subscribed")]
     AlreadySubscribed,

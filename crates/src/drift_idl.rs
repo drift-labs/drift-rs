@@ -2,6 +2,7 @@
 #![doc = r""]
 #![doc = r" Auto-generated IDL types, manual edits do not persist (see `crates/drift-idl-gen`)"]
 #![doc = r""]
+use self::traits::ToAccountMetas;
 use anchor_lang::{
     prelude::{
         account,
@@ -11,8 +12,6 @@ use anchor_lang::{
     Discriminator,
 };
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-
-use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
     #[doc = r" This is distinct from the anchor version of the trait"]
@@ -436,6 +435,14 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserIdle {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateUserFuelBonus {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateUserFuelBonus {
+        const DISCRIMINATOR: [u8; 8] = [88, 175, 201, 190, 222, 100, 143, 57];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateUserFuelBonus {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdateUserOpenOrdersCount {}
     #[automatically_derived]
@@ -1794,9 +1801,8 @@ pub mod instructions {
     impl anchor_lang::InstructionData for InitializePythPullOracle {}
 }
 pub mod types {
-    use std::ops::Mul;
-
     use super::*;
+    use std::ops::Mul;
     #[doc = r" backwards compatible u128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
     #[doc = r" https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]
     #[derive(
@@ -6624,6 +6630,82 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for UpdateUserIdle {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    pub struct UpdateUserFuelBonus {
+        pub state: Pubkey,
+        pub authority: Pubkey,
+        pub user: Pubkey,
+        pub user_stats: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateUserFuelBonus {
+        const DISCRIMINATOR: [u8; 8] = [179, 14, 130, 214, 107, 254, 33, 235];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserFuelBonus {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateUserFuelBonus {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateUserFuelBonus {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateUserFuelBonus {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateUserFuelBonus {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.user,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateUserFuelBonus {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateUserFuelBonus {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {

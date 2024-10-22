@@ -50,7 +50,7 @@ pub fn calculate_liquidation_price_and_unrealized_pnl(
 
     // matching spot market e.g. sol-perp => SOL spot
     let mut builder = AccountsListBuilder::default();
-    let mut accounts = builder.build(client, user)?;
+    let mut accounts = builder.try_build(client, user)?;
     let spot_market = client
         .program_data()
         .spot_market_configs()
@@ -107,7 +107,7 @@ pub fn calculate_liquidation_price(
     market_index: u16,
 ) -> SdkResult<i64> {
     let mut accounts_builder = AccountsListBuilder::default();
-    let mut account_maps = accounts_builder.build(client, user)?;
+    let mut account_maps = accounts_builder.try_build(client, user)?;
     let perp_market = client.try_get_perp_market_account(market_index)?;
 
     let oracle = client
@@ -268,7 +268,7 @@ pub fn calculate_margin_requirements(
 ) -> SdkResult<MarginRequirementInfo> {
     calculate_margin_requirements_inner(
         user,
-        &mut AccountsListBuilder::default().build(client, user)?,
+        &mut AccountsListBuilder::default().try_build(client, user)?,
     )
 }
 
@@ -311,7 +311,7 @@ pub fn calculate_collateral(
     let mut accounts_builder = AccountsListBuilder::default();
     calculate_collateral_inner(
         user,
-        &mut accounts_builder.build(client, user)?,
+        &mut accounts_builder.try_build(client, user)?,
         margin_requirement_type,
     )
 }

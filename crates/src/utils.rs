@@ -91,6 +91,12 @@ pub fn get_ws_url(url: &str) -> SdkResult<String> {
     } else if url.starts_with("wss://") || url.starts_with("ws://") {
         Ok(url.to_string())
     } else {
+        #[cfg(test)]
+        {
+            if url.starts_with("MockSender") {
+                return Ok("ws://mock.sender.com".into());
+            }
+        }
         Err(SdkError::InvalidUrl)
     }
 }
