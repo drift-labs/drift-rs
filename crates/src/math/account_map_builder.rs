@@ -28,16 +28,14 @@ impl AccountsListBuilder {
         let drift_state = client.state_config()?;
 
         for p in user.spot_positions.iter().filter(|p| !p.is_available()) {
-            let market = client.try_get_spot_market_account(p.market_index)?;
-            if oracle_markets
-                .insert(market.oracle, MarketId::spot(market.market_index))
-                .is_none()
-            {
-                spot_markets.push(market);
-            }
+            let market = client.try_get_spot_market_account(p.market_index).unwrap();
+            oracle_markets.insert(market.oracle, MarketId::spot(market.market_index));
+            spot_markets.push(market);
         }
 
-        let quote_market = client.try_get_spot_market_account(MarketId::QUOTE_SPOT.index())?;
+        let quote_market = client
+            .try_get_spot_market_account(MarketId::QUOTE_SPOT.index())
+            .unwrap();
         if oracle_markets
             .insert(quote_market.oracle, MarketId::QUOTE_SPOT)
             .is_none()
@@ -46,13 +44,9 @@ impl AccountsListBuilder {
         }
 
         for p in user.perp_positions.iter().filter(|p| !p.is_available()) {
-            let market = client.try_get_perp_market_account(p.market_index)?;
-            if oracle_markets
-                .insert(market.amm.oracle, MarketId::perp(market.market_index))
-                .is_none()
-            {
-                perp_markets.push(market);
-            };
+            let market = client.try_get_perp_market_account(p.market_index).unwrap();
+            oracle_markets.insert(market.amm.oracle, MarketId::perp(market.market_index));
+            perp_markets.push(market);
         }
 
         for market in spot_markets.iter() {

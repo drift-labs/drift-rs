@@ -93,6 +93,11 @@ impl MarketExt for SpotMarket {
 }
 
 /// Static-ish metadata from onchain drift program
+///
+/// useful for market info suchas as pubkeys, decimal places, which rarely change.
+///
+/// it should not be relied upon for live values such as OI, total borrows, etc.
+/// instead subscribe to a marketmap
 #[derive(Clone)]
 pub struct ProgramData {
     spot_markets: &'static [SpotMarket],

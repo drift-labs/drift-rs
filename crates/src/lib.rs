@@ -358,9 +358,13 @@ impl DriftClient {
     }
 
     /// Get spot market account
-    /// uses latest cached if subscribed, otherwise falls back to network query
+    ///
+    /// uses latest cached value if subscribed, otherwise falls back to network query
     pub async fn get_spot_market_account(&self, market_index: u16) -> SdkResult<SpotMarket> {
-        match self.backend.get_spot_market_account_and_slot(market_index) {
+        match self
+            .backend
+            .try_get_spot_market_account_and_slot(market_index)
+        {
             Some(market) => Ok(market.data),
             None => {
                 let market = derive_spot_market_account(market_index);
@@ -370,9 +374,13 @@ impl DriftClient {
     }
 
     /// Get perp market account
-    /// uses latest cached if subscribed, otherwise falls back to network query
+    ///
+    /// uses latest cached value if subscribed, otherwise falls back to network query
     pub async fn get_perp_market_account(&self, market_index: u16) -> SdkResult<PerpMarket> {
-        match self.backend.get_perp_market_account_and_slot(market_index) {
+        match self
+            .backend
+            .try_get_perp_market_account_and_slot(market_index)
+        {
             Some(market) => Ok(market.data),
             None => {
                 let market = derive_perp_market_account(market_index);
@@ -382,8 +390,13 @@ impl DriftClient {
     }
 
     /// Try to spot market account from cache
+    ///
+    /// Returns error if not subscribed
     pub fn try_get_spot_market_account(&self, market_index: u16) -> SdkResult<SpotMarket> {
-        if let Some(market) = self.backend.get_spot_market_account_and_slot(market_index) {
+        if let Some(market) = self
+            .backend
+            .try_get_spot_market_account_and_slot(market_index)
+        {
             Ok(market.data)
         } else {
             Err(SdkError::NoData)
@@ -391,8 +404,13 @@ impl DriftClient {
     }
 
     /// Try to get perp market account from cache
+    ///
+    /// Returns error if not subscribed
     pub fn try_get_perp_market_account(&self, market_index: u16) -> SdkResult<PerpMarket> {
-        if let Some(market) = self.backend.get_perp_market_account_and_slot(market_index) {
+        if let Some(market) = self
+            .backend
+            .try_get_perp_market_account_and_slot(market_index)
+        {
             Ok(market.data)
         } else {
             Err(SdkError::NoData)
@@ -506,9 +524,9 @@ impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
     async fn new(context: Context, rpc_client: Arc<RpcClient>) -> SdkResult<Self> {
         let perp_market_map =
-            MarketMap::<PerpMarket>::new(rpc_client.commitment(), rpc_client.url(), true);
+            MarketMap::<PerpMarket>::new(rpc_client.commitment(), rpc_client.url());
         let spot_market_map =
-            MarketMap::<SpotMarket>::new(rpc_client.commitment(), rpc_client.url(), true);
+            MarketMap::<SpotMarket>::new(rpc_client.commitment(), rpc_client.url());
 
         let lookup_table_address = context.lut();
 
@@ -522,7 +540,7 @@ impl DriftClientBackend {
         let lookup_table = utils::deserialize_alt(lookup_table_address, &lut)?;
 
         let mut all_oracles = Vec::<(MarketId, Pubkey, OracleSource)>::with_capacity(
-            perp_market_map.size() + spot_market_map.size(),
+            perp_market_map.len() + spot_market_map.len(),
         );
         for market_oracle_info in perp_market_map
             .oracles()
@@ -591,18 +609,26 @@ impl DriftClientBackend {
         self.oracle_map.unsubscribe_all()
     }
 
-    fn get_perp_market_account_and_slot(
+    fn try_get_perp_market_account_and_slot(
         &self,
         market_index: u16,
     ) -> Option<DataAndSlot<PerpMarket>> {
-        self.perp_market_map.get(&market_index)
+        if self.perp_market_map.is_subscribed(market_index) {
+            self.perp_market_map.get(&market_index)
+        } else {
+            None
+        }
     }
 
-    fn get_spot_market_account_and_slot(
+    fn try_get_spot_market_account_and_slot(
         &self,
         market_index: u16,
     ) -> Option<DataAndSlot<SpotMarket>> {
-        self.spot_market_map.get(&market_index)
+        if self.spot_market_map.is_subscribed(market_index) {
+            self.spot_market_map.get(&market_index)
+        } else {
+            None
+        }
     }
 
     fn try_get_oracle_price_data_and_slot(&self, market: MarketId) -> Option<Oracle> {
@@ -619,10 +645,10 @@ impl DriftClientBackend {
             .pubkey;
 
         let program_configured_oracle = if market.is_perp() {
-            let market = self.get_perp_market_account_and_slot(market.index())?;
+            let market = self.try_get_perp_market_account_and_slot(market.index())?;
             market.data.amm.oracle
         } else {
-            let market = self.get_spot_market_account_and_slot(market.index())?;
+            let market = self.try_get_spot_market_account_and_slot(market.index())?;
             market.data.oracle
         };
 
@@ -1647,12 +1673,10 @@ mod tests {
         let perp_market_map = MarketMap::<PerpMarket>::new(
             CommitmentConfig::processed(),
             DEVNET_ENDPOINT.to_string(),
-            false,
         );
         let spot_market_map = MarketMap::<SpotMarket>::new(
             CommitmentConfig::processed(),
             DEVNET_ENDPOINT.to_string(),
-            false,
         );
 
         let rpc_client = Arc::new(RpcClient::new_mock_with_mocks(

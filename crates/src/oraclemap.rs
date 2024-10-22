@@ -98,6 +98,9 @@ impl OracleMap {
             Vec::<(WebsocketAccountSubscriber, Oracle)>::with_capacity(markets.len());
 
         for market in markets {
+            if self.oracle_subscriptions.contains_key(&market) {
+                continue;
+            }
             let oracle_info = self.oraclemap.get(market).expect("oracle exists"); // caller did not supply in `OracleMap::new()`
             let oracle_subscriber = WebsocketAccountSubscriber::new(
                 url.clone(),

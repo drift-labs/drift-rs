@@ -303,7 +303,7 @@ pub enum SdkError {
     MaxReconnectionAttemptsReached,
     #[error("jit taker order not found")]
     JitOrderNotFound,
-    #[error("no data, client may be unsubsribed")]
+    #[error("no data. client may be unsubscribed")]
     NoData,
     #[error("component is already subscribed")]
     AlreadySubscribed,
