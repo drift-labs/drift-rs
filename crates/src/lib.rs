@@ -2,9 +2,9 @@
 
 use std::{borrow::Cow, sync::Arc, time::Duration};
 
-use accounts::State;
 use anchor_lang::{AccountDeserialize, InstructionData};
 use futures_util::TryFutureExt;
+use log::debug;
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_response::Response};
 use solana_sdk::{
     account::Account,
@@ -30,8 +30,8 @@ use crate::{
     marketmap::MarketMap,
     oraclemap::{Oracle, OracleMap},
     types::{
-        accounts::{PerpMarket, SpotMarket, User, UserStats},
-        MarketType, *,
+        accounts::{PerpMarket, SpotMarket, State, User, UserStats},
+        DataAndSlot, MarketType, *,
     },
     utils::get_http_url,
 };
@@ -320,7 +320,7 @@ impl DriftClient {
 
     /// Try get the Drift `State` config account
     /// It contains various exchange level config parameters
-    pub fn state_config(&self) -> SdkResult<State> {
+    pub fn state_account(&self) -> SdkResult<State> {
         self.backend.try_get_account(state_account())
     }
 
@@ -367,6 +367,7 @@ impl DriftClient {
         {
             Some(market) => Ok(market.data),
             None => {
+                debug!(target: "rpc", "fetch spot market: {market_index}");
                 let market = derive_spot_market_account(market_index);
                 self.backend.get_account(&market).await
             }
@@ -383,6 +384,7 @@ impl DriftClient {
         {
             Some(market) => Ok(market.data),
             None => {
+                debug!(target: "rpc", "fetch perp market: {market_index}");
                 let market = derive_perp_market_account(market_index);
                 self.backend.get_account(&market).await
             }
@@ -491,6 +493,13 @@ impl DriftClient {
         self.backend.try_get_oracle_price_data_and_slot(market)
     }
 
+    /// Get the latest oracle data for `market`
+    ///
+    /// If only the price is required use `oracle_price` intstead
+    pub async fn get_oracle_price_data_and_slot(&self, market: MarketId) -> SdkResult<Oracle> {
+        self.backend.get_oracle(market).await
+    }
+
     /// Subscribe to live updates for some `account`
     /// The latest value may be retreived with `get_account(..)`
     /// ```example(no_run)
@@ -523,10 +532,8 @@ pub struct DriftClientBackend {
 impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
     async fn new(context: Context, rpc_client: Arc<RpcClient>) -> SdkResult<Self> {
-        let perp_market_map =
-            MarketMap::<PerpMarket>::new(rpc_client.commitment(), rpc_client.url());
-        let spot_market_map =
-            MarketMap::<SpotMarket>::new(rpc_client.commitment(), rpc_client.url());
+        let perp_market_map = MarketMap::<PerpMarket>::new(Arc::clone(&rpc_client));
+        let spot_market_map = MarketMap::<SpotMarket>::new(Arc::clone(&rpc_client));
 
         let lookup_table_address = context.lut();
 
@@ -550,11 +557,7 @@ impl DriftClientBackend {
             all_oracles.push(*market_oracle_info);
         }
 
-        let oracle_map = OracleMap::new(
-            rpc_client.commitment(),
-            rpc_client.url(),
-            all_oracles.as_slice(),
-        );
+        let oracle_map = OracleMap::new(Arc::clone(&rpc_client), all_oracles.as_slice());
         let account_map = AccountMap::new(rpc_client.url(), rpc_client.commitment());
         account_map.subscribe_account(state_account()).await?;
 
@@ -588,8 +591,8 @@ impl DriftClientBackend {
             .iter()
             .partition::<Vec<MarketId>, _>(|x| x.is_perp());
         let _ = tokio::try_join!(
-            self.perp_market_map.subscribe(perps.as_slice()),
-            self.spot_market_map.subscribe(spot.as_slice()),
+            self.perp_market_map.subscribe(&perps),
+            self.spot_market_map.subscribe(&spot),
         )?;
 
         Ok(())
@@ -632,15 +635,15 @@ impl DriftClientBackend {
     }
 
     fn try_get_oracle_price_data_and_slot(&self, market: MarketId) -> Option<Oracle> {
-        self.oracle_map.get_by_market(market)
+        self.oracle_map.get_by_market(&market)
     }
 
-    /// Same as `get_oracle_price_data_and_slot` but checks the oracle pubkey has not changed
+    /// Same as `try_get_oracle_price_data_and_slot` but checks the oracle pubkey has not changed
     /// this can be useful if the oracle address changes in the program
-    fn get_oracle_price_data_and_slot_checked(&self, market: MarketId) -> Option<Oracle> {
+    fn try_get_oracle_price_data_and_slot_checked(&self, market: MarketId) -> Option<Oracle> {
         let current_oracle = self
             .oracle_map
-            .get_by_market(market)
+            .get_by_market(&market)
             .expect("oracle")
             .pubkey;
 
@@ -716,12 +719,12 @@ impl DriftClientBackend {
     async fn get_account_with_slot<T: AccountDeserialize>(
         &self,
         account: &Pubkey,
-    ) -> SdkResult<account_map::DataAndSlot<T>> {
+    ) -> SdkResult<DataAndSlot<T>> {
         if let Some(value) = self.account_map.account_data_and_slot(account) {
             Ok(value)
         } else {
             let (account, slot) = self.get_account_with_slot_raw(account).await?;
-            Ok(account_map::DataAndSlot {
+            Ok(DataAndSlot {
                 slot,
                 data: T::try_deserialize(&mut account.data.as_slice())
                     .map_err(|err| SdkError::Anchor(Box::new(err)))?,
@@ -796,13 +799,19 @@ impl DriftClientBackend {
     ///
     /// Uses latest local value from an `OracleMap` if subscribed, falls back to network query
     pub async fn oracle_price(&self, market: MarketId) -> SdkResult<i64> {
+        self.get_oracle(market).await.map(|o| o.data.price)
+    }
+
+    /// Fetch live oracle data for `market`
+    ///
+    /// Uses latest local value from an `OracleMap` if subscribed, falls back to network query
+    pub async fn get_oracle(&self, market: MarketId) -> SdkResult<Oracle> {
         if self.oracle_map.is_subscribed(&market) {
             Ok(self
                 .try_get_oracle_price_data_and_slot(market)
-                .expect("oracle exists")
-                .data
-                .price)
+                .expect("oracle exists"))
         } else {
+            debug!(target: "rpc", "fetch oracle account: {market:?}");
             let (oracle, oracle_source) = match market.kind() {
                 MarketType::Perp => {
                     let market = self
@@ -820,7 +829,17 @@ impl DriftClientBackend {
                 }
             };
             let (account_data, slot) = self.get_account_with_slot_raw(&oracle).await?;
-            ffi::get_oracle_price(oracle_source, &mut (oracle, account_data), slot).map(|o| o.price)
+            let oracle_price_data =
+                ffi::get_oracle_price(oracle_source, &mut (oracle, account_data.clone()), slot)?;
+
+            Ok(Oracle {
+                market,
+                pubkey: oracle,
+                source: oracle_source,
+                slot,
+                data: oracle_price_data,
+                raw: account_data.data,
+            })
         }
     }
 
@@ -1670,29 +1689,20 @@ mod tests {
 
     /// Init a new `DriftClient` with provided mocked RPC responses
     async fn setup(rpc_mocks: Mocks, keypair: Keypair) -> DriftClient {
-        let perp_market_map = MarketMap::<PerpMarket>::new(
-            CommitmentConfig::processed(),
-            DEVNET_ENDPOINT.to_string(),
-        );
-        let spot_market_map = MarketMap::<SpotMarket>::new(
-            CommitmentConfig::processed(),
-            DEVNET_ENDPOINT.to_string(),
-        );
-
         let rpc_client = Arc::new(RpcClient::new_mock_with_mocks(
             DEVNET_ENDPOINT.to_string(),
             rpc_mocks,
         ));
+
+        let perp_market_map = MarketMap::<PerpMarket>::new(Arc::clone(&rpc_client));
+        let spot_market_map = MarketMap::<SpotMarket>::new(Arc::clone(&rpc_client));
+
         let backend = DriftClientBackend {
             rpc_client: Arc::clone(&rpc_client),
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map: OracleMap::new(
-                CommitmentConfig::processed(),
-                DEVNET_ENDPOINT.to_string(),
-                &[],
-            ),
+            oracle_map: OracleMap::new(Arc::clone(&rpc_client), &[]),
             blockhash_subscriber: BlockhashSubscriber::new(
                 Duration::from_secs(2),
                 Arc::clone(&rpc_client),

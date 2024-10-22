@@ -6,8 +6,8 @@ use log::debug;
 use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{
-    utils::get_ws_url, websocket_account_subscriber::WebsocketAccountSubscriber, SdkResult,
-    UnsubHandle,
+    types::DataAndSlot, utils::get_ws_url,
+    websocket_account_subscriber::WebsocketAccountSubscriber, SdkResult, UnsubHandle,
 };
 
 const LOG_TARGET: &str = "accountmap";
@@ -16,11 +16,6 @@ const LOG_TARGET: &str = "accountmap";
 pub struct AccountSlot {
     raw: Vec<u8>,
     slot: Slot,
-}
-
-pub struct DataAndSlot<T> {
-    pub data: T,
-    pub slot: Slot,
 }
 
 /// Set of subscriptions to a dynamic subset of network accounts

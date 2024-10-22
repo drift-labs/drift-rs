@@ -12,6 +12,8 @@ use tokio::sync::oneshot;
 
 use crate::{utils::get_http_url, SdkError, SdkResult, UnsubHandle};
 
+const LOG_TARGET: &str = "wsaccsub";
+
 #[derive(Clone, Debug)]
 pub struct AccountUpdate {
     /// Address of the account
@@ -59,7 +61,7 @@ impl WebsocketAccountSubscriber {
     {
         if sync {
             // seed initial account state
-            log::debug!("seeding account: {subscription_name}-{:?}", self.pubkey);
+            log::debug!(target: LOG_TARGET, "seeding account: {subscription_name}-{:?}", self.pubkey);
             let owner: Pubkey;
             let rpc = RpcClient::new(get_http_url(&self.url)?);
             match rpc
@@ -106,7 +108,7 @@ impl WebsocketAccountSubscriber {
             let pubkey = self.pubkey;
 
             async move {
-                log::debug!("spawn account subscriber: {subscription_name}-{pubkey:?}");
+                log::debug!(target: LOG_TARGET, "spawn account subscriber: {subscription_name}-{pubkey:?}");
                 let exit_status = 'outer: loop {
                     let pubsub = match PubsubClient::new(&url).await {
                         Ok(client) => {
@@ -114,7 +116,7 @@ impl WebsocketAccountSubscriber {
                             client
                         }
                         Err(err) => {
-                            warn!("Ws couldn't connect: {err:?}, retrying...");
+                            warn!(target: LOG_TARGET, "couldn't subscribe {pubkey:?}: {err:?}, retrying...");
                             attempt += 1;
                             if attempt >= max_reconnection_attempts {
                                 log::error!(
@@ -127,6 +129,8 @@ impl WebsocketAccountSubscriber {
                             continue;
                         }
                     };
+
+                    log::debug!(target: LOG_TARGET, "account subscribed: {subscription_name}-{pubkey:?}");
 
                     match pubsub
                         .account_subscribe(&pubkey, Some(account_config.clone()))
@@ -162,7 +166,7 @@ impl WebsocketAccountSubscriber {
                                     }
                                 }
                                 _ = &mut unsub_rx => {
-                                    log::debug!("{}: Unsubscribing from account stream", subscription_name);
+                                    log::debug!(target: LOG_TARGET, "{}: Unsubscribing from account stream: {pubkey:?}", subscription_name);
                                     account_unsubscribe().await;
                                     break 'outer Ok(());
                                 }
