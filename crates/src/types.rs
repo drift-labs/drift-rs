@@ -313,8 +313,10 @@ pub enum SdkError {
     MaxReconnectionAttemptsReached,
     #[error("jit taker order not found")]
     JitOrderNotFound,
-    #[error("no data. client may be unsubscribed")]
-    NoData,
+    #[error("market data unavailable. subscribe market: {0:?}")]
+    NoMarketData(MarketId),
+    #[error("account data unavailable. subscribe account: {0:?}")]
+    NoAccountData(Pubkey),
     #[error("component is already subscribed")]
     AlreadySubscribed,
     #[error("invalid URL")]
