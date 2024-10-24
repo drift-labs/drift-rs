@@ -32,15 +32,15 @@ pub struct LiquidationAndPnlInfo {
 }
 
 /// Calculate the liquidation price and unrealized PnL of a user's perp position (given by `market_index`)
-pub fn calculate_liquidation_price_and_unrealized_pnl(
+pub async fn calculate_liquidation_price_and_unrealized_pnl(
     client: &DriftClient,
     user: &User,
     market_index: u16,
 ) -> SdkResult<LiquidationAndPnlInfo> {
-    let perp_market = client.try_get_perp_market_account(market_index)?;
+    let perp_market = client.get_perp_market_account(market_index).await?;
     let oracle = client
-        .try_get_oracle_price_data_and_slot(MarketId::perp(market_index))
-        .ok_or(SdkError::NoData)?;
+        .get_oracle_price_data_and_slot(MarketId::perp(market_index))
+        .await?;
 
     let position = user
         .get_perp_position(market_index)
@@ -71,16 +71,16 @@ pub fn calculate_liquidation_price_and_unrealized_pnl(
 }
 
 /// Calculate the unrealized pnl for user perp position, given by `market_index`
-pub fn calculate_unrealized_pnl(
+pub async fn calculate_unrealized_pnl(
     client: &DriftClient,
     user: &User,
     market_index: u16,
 ) -> SdkResult<i128> {
     if let Ok(position) = user.get_perp_position(market_index) {
         let oracle_price = client
-            .try_get_oracle_price_data_and_slot(MarketId::perp(market_index))
-            .map(|x| x.data.price)
-            .ok_or(SdkError::NoData)?;
+            .get_oracle_price_data_and_slot(MarketId::perp(market_index))
+            .await
+            .map(|x| x.data.price)?;
 
         calculate_unrealized_pnl_inner(&position, oracle_price)
     } else {
@@ -100,19 +100,20 @@ pub fn calculate_unrealized_pnl_inner(
 }
 
 /// Calculate the liquidation price of a user's perp position (given by `market_index`)
+///
 /// Returns the liquidaton price (PRICE_PRECISION / 1e6)
-pub fn calculate_liquidation_price(
+pub async fn calculate_liquidation_price(
     client: &DriftClient,
     user: &User,
     market_index: u16,
 ) -> SdkResult<i64> {
     let mut accounts_builder = AccountsListBuilder::default();
-    let mut account_maps = accounts_builder.try_build(client, user)?;
-    let perp_market = client.try_get_perp_market_account(market_index)?;
+    let mut account_maps = accounts_builder.build(client, user).await?;
+    let perp_market = client.get_perp_market_account(market_index).await?;
 
     let oracle = client
-        .try_get_oracle_price_data_and_slot(MarketId::perp(market_index))
-        .ok_or(SdkError::NoData)?;
+        .get_oracle_price_data_and_slot(MarketId::perp(market_index))
+        .await?;
 
     // matching spot market e.g. sol-perp => SOL spot
     let spot_market = client

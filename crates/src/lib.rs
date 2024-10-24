@@ -401,7 +401,7 @@ impl DriftClient {
         {
             Ok(market.data)
         } else {
-            Err(SdkError::NoData)
+            Err(SdkError::NoMarketData(MarketId::spot(market_index)))
         }
     }
 
@@ -415,7 +415,7 @@ impl DriftClient {
         {
             Ok(market.data)
         } else {
-            Err(SdkError::NoData)
+            Err(SdkError::NoMarketData(MarketId::perp(market_index)))
         }
     }
 
@@ -744,7 +744,7 @@ impl DriftClientBackend {
     fn try_get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
         self.account_map
             .account_data(account)
-            .ok_or(SdkError::NoData)
+            .ok_or_else(|| SdkError::NoAccountData(account.clone()))
     }
 
     /// Returns latest blockhash
