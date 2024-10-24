@@ -313,7 +313,7 @@ pub enum SdkError {
     MaxReconnectionAttemptsReached,
     #[error("jit taker order not found")]
     JitOrderNotFound,
-    #[error("market/oracle data unavailable. subscribe market: {0:?}")]
+    #[error("market data unavailable. subscribe market: {0:?}")]
     NoMarketData(MarketId),
     #[error("account data unavailable. subscribe account: {0:?}")]
     NoAccountData(Pubkey),

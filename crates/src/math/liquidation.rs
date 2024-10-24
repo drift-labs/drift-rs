@@ -5,7 +5,7 @@ use std::ops::Neg;
 
 use crate::{
     ffi::{
-        calculate_margin_requirement_and_total_collateral_and_liability_info, AccountsList,
+        self, calculate_margin_requirement_and_total_collateral_and_liability_info, AccountsList,
         MarginContextMode,
     },
     math::{
@@ -37,36 +37,48 @@ pub async fn calculate_liquidation_price_and_unrealized_pnl(
     user: &User,
     market_index: u16,
 ) -> SdkResult<LiquidationAndPnlInfo> {
-    let perp_market = client.get_perp_market_account(market_index).await?;
-    let oracle = client
-        .get_oracle_price_data_and_slot(MarketId::perp(market_index))
-        .await?;
+    let perp_market = client
+        .program_data()
+        .perp_market_config_by_index(market_index)
+        .expect("market exists");
 
     let position = user
         .get_perp_position(market_index)
         .map_err(|_| SdkError::NoPosiiton(market_index))?;
 
-    let unrealized_pnl = calculate_unrealized_pnl_inner(&position, oracle.data.price)?;
+    // build a list of all user positions for margin calculations
+    let mut builder = AccountsListBuilder::default();
+    let mut accounts_list = builder.build(client, user).await?;
+
+    let oracle = accounts_list
+        .oracles
+        .iter()
+        .find(|o| o.key == perp_market.amm.oracle)
+        .expect("oracle loaded");
+    let oracle_source = perp_market.amm.oracle_source;
+    let oracle_price = ffi::get_oracle_price(
+        oracle_source,
+        &mut (oracle.key, oracle.account.clone()),
+        accounts_list.latest_slot,
+    )?
+    .price;
 
     // matching spot market e.g. sol-perp => SOL spot
-    let mut builder = AccountsListBuilder::default();
-    let mut accounts = builder.try_build(client, user)?;
     let spot_market = client
         .program_data()
         .spot_market_configs()
         .iter()
         .find(|x| x.oracle == perp_market.amm.oracle);
-    let liquidation_price = calculate_liquidation_price_inner(
-        user,
-        &perp_market,
-        spot_market,
-        oracle.data.price,
-        &mut accounts,
-    )?;
 
     Ok(LiquidationAndPnlInfo {
-        unrealized_pnl,
-        liquidation_price,
+        unrealized_pnl: calculate_unrealized_pnl_inner(&position, oracle_price)?,
+        liquidation_price: calculate_liquidation_price_inner(
+            user,
+            &perp_market,
+            spot_market,
+            oracle_price,
+            &mut accounts_list,
+        )?,
     })
 }
 
@@ -109,7 +121,10 @@ pub async fn calculate_liquidation_price(
 ) -> SdkResult<i64> {
     let mut accounts_builder = AccountsListBuilder::default();
     let mut account_maps = accounts_builder.build(client, user).await?;
-    let perp_market = client.get_perp_market_account(market_index).await?;
+    let perp_market = client
+        .program_data()
+        .perp_market_config_by_index(market_index)
+        .expect("market exists");
 
     let oracle = client
         .get_oracle_price_data_and_slot(MarketId::perp(market_index))

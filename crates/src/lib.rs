@@ -367,7 +367,7 @@ impl DriftClient {
         {
             Some(market) => Ok(market.data),
             None => {
-                debug!(target: "rpc", "fetch spot market: {market_index}");
+                debug!(target: "rpc", "fetch market: spot/{market_index}");
                 let market = derive_spot_market_account(market_index);
                 self.backend.get_account(&market).await
             }
@@ -384,7 +384,7 @@ impl DriftClient {
         {
             Some(market) => Ok(market.data),
             None => {
-                debug!(target: "rpc", "fetch perp market: {market_index}");
+                debug!(target: "rpc", "fetch market: perp/{market_index}");
                 let market = derive_perp_market_account(market_index);
                 self.backend.get_account(&market).await
             }
