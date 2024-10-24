@@ -110,7 +110,8 @@ impl AccountsListBuilder {
 
     /// Constructs an account map from `user` positions
     ///
-    /// It relies on the `client` being subscribed to all the necessary markets and oracles
+    /// like `try_build` but will fall back to network queries to fetch market/oracle accounts as required
+    /// if the client is already subscribed to necessary market/oracles then no network requests are made.
     pub async fn build(&mut self, client: &DriftClient, user: &User) -> SdkResult<AccountsList> {
         let mut oracle_markets =
             HashMap::<Pubkey, MarketId>::with_capacity_and_hasher(16, Default::default());

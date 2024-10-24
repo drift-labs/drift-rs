@@ -22,13 +22,16 @@ use crate::{
     DriftClient, MarketId, SdkError, SdkResult, SpotPosition,
 };
 
-/// Info on a positions liquidation price and unrealized PnL
+/// Info on a position's liquidation price and unrealized PnL
 #[derive(Debug)]
 pub struct LiquidationAndPnlInfo {
     // PRICE_PRECISION
     pub liquidation_price: i64,
     // PRICE_PRECISION
     pub unrealized_pnl: i128,
+    // The oracle price used in calculations
+    // BASE_PRECISION
+    pub oracle_price: i64,
 }
 
 /// Calculate the liquidation price and unrealized PnL of a user's perp position (given by `market_index`)
@@ -79,6 +82,7 @@ pub async fn calculate_liquidation_price_and_unrealized_pnl(
             oracle_price,
             &mut accounts_list,
         )?,
+        oracle_price,
     })
 }
 
