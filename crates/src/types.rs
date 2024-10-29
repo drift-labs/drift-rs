@@ -114,6 +114,10 @@ impl core::hash::Hash for MarketType {
 }
 
 impl MarketId {
+    /// Create a new `MarketId` from parts
+    pub fn new(index: u16, kind: MarketType) -> Self {
+        Self { index, kind }
+    }
     /// `MarketId` for the USDC Spot Market
     pub const QUOTE_SPOT: Self = Self {
         index: 0,
@@ -147,6 +151,9 @@ impl MarketId {
     }
     pub fn is_perp(self) -> bool {
         self.kind == MarketType::Perp
+    }
+    pub fn is_spot(self) -> bool {
+        self.kind == MarketType::Spot
     }
 }
 
