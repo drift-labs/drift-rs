@@ -77,7 +77,7 @@ pub async fn calculate_liquidation_price_and_unrealized_pnl(
         unrealized_pnl: calculate_unrealized_pnl_inner(&position, oracle_price)?,
         liquidation_price: calculate_liquidation_price_inner(
             user,
-            &perp_market,
+            perp_market,
             spot_market,
             oracle_price,
             &mut accounts_list,
@@ -143,7 +143,7 @@ pub async fn calculate_liquidation_price(
 
     calculate_liquidation_price_inner(
         user,
-        &perp_market,
+        perp_market,
         spot_market,
         oracle.data.price,
         &mut account_maps,

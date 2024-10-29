@@ -744,7 +744,7 @@ impl DriftClientBackend {
     fn try_get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
         self.account_map
             .account_data(account)
-            .ok_or_else(|| SdkError::NoAccountData(account.clone()))
+            .ok_or_else(|| SdkError::NoAccountData(*account))
     }
 
     /// Returns latest blockhash
@@ -1077,7 +1077,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn place_orders(mut self, orders: Vec<OrderParams>) -> Self {
         let mut readable_accounts: Vec<MarketId> = orders
             .iter()
-            .map(|o| (o.market_index, o.market_type.into()).into())
+            .map(|o| (o.market_index, o.market_type).into())
             .collect();
         readable_accounts.extend(&self.force_markets.readable);
 
@@ -1141,7 +1141,7 @@ impl<'a> TransactionBuilder<'a> {
         market: (u16, MarketType),
         direction: Option<PositionDirection>,
     ) -> Self {
-        let (idx, kind) = market;
+        let (idx, r#type) = market;
         let accounts = build_accounts(
             self.program_data,
             types::accounts::CancelOrder {
@@ -1150,7 +1150,7 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
             },
             &[self.account_data.as_ref()],
-            [(idx, kind).into()]
+            [(idx, r#type).into()]
                 .iter()
                 .chain(self.force_markets.readable.iter()),
             self.force_markets.writeable.iter(),
@@ -1161,7 +1161,7 @@ impl<'a> TransactionBuilder<'a> {
             accounts,
             data: InstructionData::data(&drift_idl::instructions::CancelOrders {
                 market_index: Some(idx),
-                market_type: Some(kind.into()),
+                market_type: Some(r#type),
                 direction,
             }),
         };
@@ -1296,7 +1296,7 @@ impl<'a> TransactionBuilder<'a> {
         fulfillment_type: Option<SpotFulfillmentType>,
     ) -> Self {
         let (taker, taker_account) = taker_info;
-        let is_perp = order.market_type == MarketType::Perp.into();
+        let is_perp = order.market_type == MarketType::Perp;
         let perp_writable = [MarketId::perp(order.market_index)];
         let spot_writable = [MarketId::spot(order.market_index), MarketId::QUOTE_SPOT];
         let mut accounts = build_accounts(
@@ -1327,7 +1327,7 @@ impl<'a> TransactionBuilder<'a> {
             accounts.push(AccountMeta::new(referrer, false));
         }
 
-        let ix = if order.market_type == MarketType::Perp.into() {
+        let ix = if order.market_type == MarketType::Perp {
             Instruction {
                 program_id: constants::PROGRAM_ID,
                 accounts,
@@ -1371,7 +1371,7 @@ impl<'a> TransactionBuilder<'a> {
             user_accounts.push(maker);
         }
 
-        let is_perp = order.market_type == MarketType::Perp.into();
+        let is_perp = order.market_type == MarketType::Perp;
         let perp_writable = [MarketId::perp(order.market_index)];
         let spot_writable = [MarketId::spot(order.market_index), MarketId::QUOTE_SPOT];
 

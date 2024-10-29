@@ -86,7 +86,7 @@ impl<'de> serde::Deserialize<'de> for Signature {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
         let s = <&[u8]>::deserialize(d)?;
         s.try_into()
-            .map(|s| Signature(s))
+            .map(Signature)
             .map_err(serde::de::Error::custom)
     }
 }

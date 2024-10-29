@@ -2,6 +2,7 @@
 #![doc = r""]
 #![doc = r" Auto-generated IDL types, manual edits do not persist (see `crates/drift-idl-gen`)"]
 #![doc = r""]
+use self::traits::ToAccountMetas;
 use anchor_lang::{
     prelude::{
         account,
@@ -12,8 +13,6 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-
-use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
     #[doc = r" This is distinct from the anchor_lang version of the trait"]
@@ -23,6 +22,7 @@ pub mod traits {
     }
 }
 pub mod instructions {
+    #![doc = r" IDL instruction types"]
     use super::{types::*, *};
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct InitializeUser {
@@ -1803,9 +1803,9 @@ pub mod instructions {
     impl anchor_lang::InstructionData for InitializePythPullOracle {}
 }
 pub mod types {
-    use std::ops::Mul;
-
+    #![doc = r" IDL types"]
     use super::*;
+    use std::ops::Mul;
     #[doc = ""]
     #[doc = " backwards compatible u128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
     #[doc = " https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]
@@ -1883,7 +1883,7 @@ pub mod types {
         fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
             let s = <&[u8]>::deserialize(d)?;
             s.try_into()
-                .map(|s| Signature(s))
+                .map(Signature)
                 .map_err(serde::de::Error::custom)
         }
     }
@@ -3506,6 +3506,7 @@ pub mod types {
     }
 }
 pub mod accounts {
+    #![doc = r" IDL Account types"]
     use super::{types::*, *};
     #[repr(C)]
     #[derive(
@@ -17343,6 +17344,7 @@ pub mod accounts {
     }
 }
 pub mod errors {
+    #![doc = r" IDL error types"]
     use super::{types::*, *};
     #[derive(PartialEq)]
     #[error_code]
@@ -17930,6 +17932,7 @@ pub mod errors {
     }
 }
 pub mod events {
+    #![doc = r" IDL event types"]
     use super::{types::*, *};
     #[event]
     pub struct NewUserRecord {

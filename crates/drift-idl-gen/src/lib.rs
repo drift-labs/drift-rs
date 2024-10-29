@@ -523,11 +523,11 @@ fn generate_idl_types(idl: &Idl) -> String {
         //!
         //! Auto-generated IDL types, manual edits do not persist (see `crates/drift-idl-gen`)
         //!
+        use self::traits::ToAccountMetas;
         use anchor_lang::{prelude::{account, AnchorSerialize, AnchorDeserialize, InitSpace, event, error_code, msg, borsh::{self}}, Discriminator};
         // use solana-sdk Pubkey, the vendored anchor-lang Pubkey maybe behind
         use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
         use serde::{Serialize, Deserialize};
-        use self::traits::ToAccountMetas;
 
         pub mod traits {
             use solana_sdk::instruction::AccountMeta;
@@ -540,15 +540,16 @@ fn generate_idl_types(idl: &Idl) -> String {
         }
 
         pub mod instructions {
+            //! IDL instruction types
             use super::{*, types::*};
 
             #instructions_tokens
         }
 
         pub mod types {
-            use std::ops::Mul;
-
+            //! IDL types
             use super::*;
+            use std::ops::Mul;
 
             #custom_types
 
@@ -556,18 +557,21 @@ fn generate_idl_types(idl: &Idl) -> String {
         }
 
         pub mod accounts {
+            //! IDL Account types
             use super::{*, types::*};
 
             #accounts_tokens
         }
 
         pub mod errors {
+            //! IDL error types
             use super::{*, types::*};
 
             #errors_tokens
         }
 
         pub mod events {
+            //! IDL event types
             use super::{*, types::*};
             #events_tokens
         }
