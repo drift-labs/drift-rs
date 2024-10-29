@@ -2,7 +2,6 @@
 #![doc = r""]
 #![doc = r" Auto-generated IDL types, manual edits do not persist (see `crates/drift-idl-gen`)"]
 #![doc = r""]
-use self::traits::ToAccountMetas;
 use anchor_lang::{
     prelude::{
         account,
@@ -11,11 +10,14 @@ use anchor_lang::{
     },
     Discriminator,
 };
+use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
+
+use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
-    #[doc = r" This is distinct from the anchor version of the trait"]
-    #[doc = r" reimplemented to ensure the types used are from solana crates _not_ the anchor vendored versions which may be lagging behind"]
+    #[doc = r" This is distinct from the anchor_lang version of the trait"]
+    #[doc = r" reimplemented to ensure the types used are from `solana`` crates _not_ the anchor_lang vendored versions which may be lagging behind"]
     pub trait ToAccountMetas {
         fn to_account_metas(&self) -> Vec<AccountMeta>;
     }
@@ -1801,15 +1803,19 @@ pub mod instructions {
     impl anchor_lang::InstructionData for InitializePythPullOracle {}
 }
 pub mod types {
-    use super::*;
     use std::ops::Mul;
-    #[doc = r" backwards compatible u128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
-    #[doc = r" https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]
+
+    use super::*;
+    #[doc = ""]
+    #[doc = " backwards compatible u128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
+    #[doc = " https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]
     #[derive(
         Default,
         PartialEq,
         AnchorSerialize,
         AnchorDeserialize,
+        Serialize,
+        Deserialize,
         Copy,
         Clone,
         bytemuck :: Zeroable,
@@ -1819,7 +1825,7 @@ pub mod types {
     #[repr(C)]
     pub struct u128(pub [u8; 16]);
     impl u128 {
-        #[doc = r" convert self into the std `u128` type"]
+        #[doc = " convert self into the std `u128` type"]
         pub fn as_u128(&self) -> std::primitive::u128 {
             std::primitive::u128::from_le_bytes(self.0)
         }
@@ -1829,13 +1835,15 @@ pub mod types {
             Self(value.to_le_bytes())
         }
     }
-    #[doc = r" backwards compatible i128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
-    #[doc = r" https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]
+    #[doc = " backwards compatible i128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
+    #[doc = " https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]
     #[derive(
         Default,
         PartialEq,
         AnchorSerialize,
         AnchorDeserialize,
+        Serialize,
+        Deserialize,
         Copy,
         Clone,
         bytemuck :: Zeroable,
@@ -1845,7 +1853,7 @@ pub mod types {
     #[repr(C)]
     pub struct i128(pub [u8; 16]);
     impl i128 {
-        #[doc = r" convert self into the std `i128` type"]
+        #[doc = " convert self into the std `i128` type"]
         pub fn as_i128(&self) -> core::primitive::i128 {
             core::primitive::i128::from_le_bytes(self.0)
         }
@@ -1863,10 +1871,26 @@ pub mod types {
             Self([0_u8; 64])
         }
     }
+    impl serde::Serialize for Signature {
+        fn serialize<S: serde::Serializer>(
+            &self,
+            serializer: S,
+        ) -> std::result::Result<S::Ok, S::Error> {
+            serializer.serialize_bytes(&self.0)
+        }
+    }
+    impl<'de> serde::Deserialize<'de> for Signature {
+        fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
+            let s = <&[u8]>::deserialize(d)?;
+            s.try_into()
+                .map(|s| Signature(s))
+                .map_err(serde::de::Error::custom)
+        }
+    }
     impl anchor_lang::Space for Signature {
         const INIT_SPACE: usize = 8 * 64;
     }
-    #[doc = r" wrapper around fixed array types used for padding with `Default` implementation"]
+    #[doc = " wrapper around fixed array types used for padding with `Default` implementation"]
     #[repr(transparent)]
     #[derive(AnchorDeserialize, AnchorSerialize, Copy, Clone, PartialEq)]
     pub struct Padding<const N: usize>([u8; N]);
@@ -1885,7 +1909,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct UpdatePerpMarketSummaryStatsParams {
         pub quote_asset_amount_with_unsettled_lp: Option<i64>,
@@ -1894,7 +1927,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct LiquidatePerpRecord {
         pub market_index: u16,
@@ -1910,7 +1952,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct LiquidateSpotRecord {
         pub asset_market_index: u16,
@@ -1923,7 +1974,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct LiquidateBorrowForPerpPnlRecord {
         pub perp_market_index: u16,
@@ -1935,7 +1995,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct LiquidatePerpPnlForDepositRecord {
         pub perp_market_index: u16,
@@ -1947,7 +2016,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct PerpBankruptcyRecord {
         pub market_index: u16,
@@ -1959,7 +2037,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct SpotBankruptcyRecord {
         pub market_index: u16,
@@ -1969,7 +2056,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct MarketIdentifier {
         pub market_type: MarketType,
@@ -1977,7 +2073,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct HistoricalOracleData {
         pub last_oracle_price: i64,
@@ -1989,7 +2094,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct HistoricalIndexData {
         pub last_index_bid_price: u64,
@@ -2000,7 +2114,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct PrelaunchOracleParams {
         pub perp_market_index: u16,
@@ -2009,7 +2132,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct OrderParams {
         pub order_type: OrderType,
@@ -2032,7 +2164,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct SwiftServerMessage {
         pub swift_order_signature: Signature,
@@ -2040,7 +2181,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct SwiftOrderParamsMessage {
         pub swift_order_params: OrderParams,
@@ -2051,7 +2201,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct SwiftTriggerOrderParams {
         pub trigger_price: u64,
@@ -2059,7 +2218,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct ModifyOrderParams {
         pub direction: Option<PositionDirection>,
@@ -2079,7 +2247,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct InsuranceClaim {
         pub revenue_withdraw_since_last_settle: i64,
@@ -2090,7 +2267,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct PoolBalance {
         pub scaled_balance: u128,
@@ -2099,7 +2285,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct AMM {
         pub oracle: Pubkey,
@@ -2189,7 +2384,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct InsuranceFund {
         pub vault: Pubkey,
@@ -2204,7 +2408,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct OracleGuardRails {
         pub price_divergence: PriceDivergenceGuardRails,
@@ -2212,7 +2425,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct PriceDivergenceGuardRails {
         pub mark_oracle_percent_divergence: u64,
@@ -2220,7 +2442,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct ValidityGuardRails {
         pub slots_before_stale_for_amm: i64,
@@ -2230,7 +2461,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct FeeStructure {
         pub fee_tiers: [FeeTier; 10],
@@ -2240,7 +2480,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct FeeTier {
         pub fee_numerator: u32,
@@ -2254,7 +2503,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct OrderFillerRewardStructure {
         pub reward_numerator: u32,
@@ -2263,7 +2521,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct UserFees {
         pub total_fee_paid: u64,
@@ -2275,7 +2542,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct SpotPosition {
         pub scaled_balance: u64,
@@ -2289,7 +2565,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct PerpPosition {
         pub last_cumulative_funding_rate: i64,
@@ -2310,7 +2595,16 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct Order {
         pub slot: u64,
@@ -2339,7 +2633,16 @@ pub mod types {
         pub padding: [u8; 3],
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum SwapDirection {
         #[default]
@@ -2347,7 +2650,16 @@ pub mod types {
         Remove,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum ModifyOrderId {
         #[default]
@@ -2355,7 +2667,16 @@ pub mod types {
         OrderId,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum PositionDirection {
         #[default]
@@ -2363,7 +2684,16 @@ pub mod types {
         Short,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum SpotFulfillmentType {
         #[default]
@@ -2373,7 +2703,16 @@ pub mod types {
         OpenbookV2,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum SwapReduceOnly {
         #[default]
@@ -2381,7 +2720,16 @@ pub mod types {
         Out,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum TwapPeriod {
         #[default]
@@ -2389,7 +2737,16 @@ pub mod types {
         FiveMin,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum LiquidationMultiplierType {
         #[default]
@@ -2397,7 +2754,16 @@ pub mod types {
         Premium,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum MarginRequirementType {
         #[default]
@@ -2406,7 +2772,16 @@ pub mod types {
         Maintenance,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum OracleValidity {
         #[default]
@@ -2419,7 +2794,16 @@ pub mod types {
         Valid,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum DriftAction {
         #[default]
@@ -2435,7 +2819,16 @@ pub mod types {
         OracleOrderPrice,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum PositionUpdateType {
         #[default]
@@ -2446,7 +2839,16 @@ pub mod types {
         Flip,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum DepositExplanation {
         #[default]
@@ -2456,7 +2858,16 @@ pub mod types {
         RepayBorrow,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum DepositDirection {
         #[default]
@@ -2464,7 +2875,16 @@ pub mod types {
         Withdraw,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum OrderAction {
         #[default]
@@ -2475,7 +2895,16 @@ pub mod types {
         Expire,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum OrderActionExplanation {
         #[default]
@@ -2501,7 +2930,16 @@ pub mod types {
         OrderFilledWithOpenbookV2,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum LPAction {
         #[default]
@@ -2511,7 +2949,16 @@ pub mod types {
         RemoveLiquidityDerisk,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum LiquidationType {
         #[default]
@@ -2523,7 +2970,16 @@ pub mod types {
         SpotBankruptcy,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum SettlePnlExplanation {
         #[default]
@@ -2531,7 +2987,16 @@ pub mod types {
         ExpiredPosition,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum StakeAction {
         #[default]
@@ -2543,7 +3008,16 @@ pub mod types {
         StakeTransfer,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum FillMode {
         #[default]
@@ -2553,7 +3027,16 @@ pub mod types {
         Liquidation,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum PerpFulfillmentMethod {
         #[default]
@@ -2561,14 +3044,33 @@ pub mod types {
         Match,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum SpotFulfillmentMethod {
         #[default]
         ExternalMarket,
         Match,
     }
-    #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Debug, PartialEq)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Debug,
+        PartialEq,
+    )]
     pub enum MarginCalculationMode {
         Standard {
             track_open_orders_fraction: bool,
@@ -2578,7 +3080,16 @@ pub mod types {
         },
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum OracleSource {
         #[default]
@@ -2596,7 +3107,16 @@ pub mod types {
         SwitchboardOnDemand,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum PostOnlyParam {
         #[default]
@@ -2606,7 +3126,16 @@ pub mod types {
         Slide,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum ModifyOrderPolicy {
         #[default]
@@ -2614,7 +3143,16 @@ pub mod types {
         MustModify,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum PlaceAndTakeOrderSuccessCondition {
         #[default]
@@ -2622,7 +3160,16 @@ pub mod types {
         FullFill,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum PerpOperation {
         #[default]
@@ -2634,7 +3181,16 @@ pub mod types {
         Liquidation,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum SpotOperation {
         #[default]
@@ -2645,7 +3201,16 @@ pub mod types {
         Liquidation,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum InsuranceFundOperation {
         #[default]
@@ -2655,7 +3220,16 @@ pub mod types {
         Remove,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum MarketStatus {
         #[default]
@@ -2670,7 +3244,16 @@ pub mod types {
         Delisted,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum ContractType {
         #[default]
@@ -2679,7 +3262,16 @@ pub mod types {
         Prediction,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum ContractTier {
         #[default]
@@ -2691,7 +3283,16 @@ pub mod types {
         Isolated,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum AMMLiquiditySplit {
         #[default]
@@ -2700,7 +3301,16 @@ pub mod types {
         Shared,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum SettlePnlMode {
         #[default]
@@ -2708,7 +3318,16 @@ pub mod types {
         TrySettle,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum SpotBalanceType {
         #[default]
@@ -2716,7 +3335,16 @@ pub mod types {
         Borrow,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum SpotFulfillmentConfigStatus {
         #[default]
@@ -2724,7 +3352,16 @@ pub mod types {
         Disabled,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum AssetTier {
         #[default]
@@ -2735,7 +3372,16 @@ pub mod types {
         Unlisted,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum ExchangeStatus {
         #[default]
@@ -2748,7 +3394,16 @@ pub mod types {
         SettlePnlPaused,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum UserStatus {
         #[default]
@@ -2758,7 +3413,16 @@ pub mod types {
         AdvancedLp,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum AssetType {
         #[default]
@@ -2766,7 +3430,16 @@ pub mod types {
         Quote,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum OrderStatus {
         #[default]
@@ -2776,7 +3449,16 @@ pub mod types {
         Canceled,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum OrderType {
         #[default]
@@ -2787,7 +3469,16 @@ pub mod types {
         Oracle,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum OrderTriggerCondition {
         #[default]
@@ -2797,7 +3488,16 @@ pub mod types {
         TriggeredBelow,
     }
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub enum MarketType {
         #[default]
@@ -2809,7 +3509,16 @@ pub mod accounts {
     use super::{types::*, *};
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct OpenbookV2FulfillmentConfig {
         pub pubkey: Pubkey,
@@ -2824,6 +3533,7 @@ pub mod accounts {
         pub market_index: u16,
         pub fulfillment_type: SpotFulfillmentType,
         pub status: SpotFulfillmentConfigStatus,
+        #[serde(skip)]
         pub padding: Padding<4>,
     }
     #[automatically_derived]
@@ -2867,7 +3577,16 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct PhoenixV1FulfillmentConfig {
         pub pubkey: Pubkey,
@@ -2879,6 +3598,7 @@ pub mod accounts {
         pub market_index: u16,
         pub fulfillment_type: SpotFulfillmentType,
         pub status: SpotFulfillmentConfigStatus,
+        #[serde(skip)]
         pub padding: Padding<4>,
     }
     #[automatically_derived]
@@ -2922,7 +3642,16 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct SerumV3FulfillmentConfig {
         pub pubkey: Pubkey,
@@ -2939,6 +3668,7 @@ pub mod accounts {
         pub market_index: u16,
         pub fulfillment_type: SpotFulfillmentType,
         pub status: SpotFulfillmentConfigStatus,
+        #[serde(skip)]
         pub padding: Padding<4>,
     }
     #[automatically_derived]
@@ -2982,7 +3712,16 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct InsuranceFundStake {
         pub authority: Pubkey,
@@ -2994,6 +3733,7 @@ pub mod accounts {
         pub last_withdraw_request_ts: i64,
         pub cost_basis: i64,
         pub market_index: u16,
+        #[serde(skip)]
         pub padding: Padding<14>,
     }
     #[automatically_derived]
@@ -3037,13 +3777,23 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct ProtocolIfSharesTransferConfig {
         pub whitelisted_signers: [Pubkey; 4],
         pub max_transfer_per_epoch: u128,
         pub current_epoch_transfer: u128,
         pub next_epoch_ts: i64,
+        #[serde(skip)]
         pub padding: Padding<8>,
     }
     #[automatically_derived]
@@ -3087,7 +3837,16 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct PrelaunchOracle {
         pub price: i64,
@@ -3096,6 +3855,7 @@ pub mod accounts {
         pub last_update_slot: u64,
         pub amm_last_update_slot: u64,
         pub perp_market_index: u16,
+        #[serde(skip)]
         pub padding: Padding<70>,
     }
     #[automatically_derived]
@@ -3139,7 +3899,16 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct PerpMarket {
         pub pubkey: Pubkey,
@@ -3173,6 +3942,7 @@ pub mod accounts {
         pub fuel_boost_position: u8,
         pub fuel_boost_taker: u8,
         pub fuel_boost_maker: u8,
+        #[serde(skip)]
         pub padding: Padding<43>,
     }
     #[automatically_derived]
@@ -3216,7 +3986,16 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct SpotMarket {
         pub pubkey: Pubkey,
@@ -3281,6 +4060,7 @@ pub mod accounts {
         pub fuel_boost_maker: u8,
         pub fuel_boost_insurance: u8,
         pub token_program: u8,
+        #[serde(skip)]
         pub padding: Padding<41>,
     }
     #[automatically_derived]
@@ -3324,7 +4104,16 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct State {
         pub admin: Pubkey,
@@ -3351,6 +4140,7 @@ pub mod accounts {
         pub initial_pct_to_liquidate: u16,
         pub max_number_of_sub_accounts: u16,
         pub max_initialize_user_fee: u16,
+        #[serde(skip)]
         pub padding: Padding<10>,
     }
     #[automatically_derived]
@@ -3394,7 +4184,16 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct User {
         pub authority: Pubkey,
@@ -3425,6 +4224,7 @@ pub mod accounts {
         pub has_open_auction: bool,
         pub padding1: [u8; 5],
         pub last_fuel_bonus_update_ts: u32,
+        #[serde(skip)]
         pub padding: Padding<12>,
     }
     #[automatically_derived]
@@ -3468,7 +4268,16 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct UserStats {
         pub authority: Pubkey,
@@ -3495,6 +4304,7 @@ pub mod accounts {
         pub fuel_maker: u32,
         pub if_staked_gov_token_amount: u64,
         pub last_fuel_if_bonus_update_ts: u32,
+        #[serde(skip)]
         pub padding: Padding<12>,
     }
     #[automatically_derived]
@@ -3538,7 +4348,16 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
     )]
     pub struct ReferrerName {
         pub authority: Pubkey,
@@ -3586,7 +4405,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitializeUser {
         pub user: Pubkey,
         pub user_stats: Pubkey,
@@ -3680,7 +4499,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitializeUserStats {
         pub user_stats: Pubkey,
         pub state: Pubkey,
@@ -3768,7 +4587,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitializeReferrerName {
         pub referrer_name: Pubkey,
         pub user: Pubkey,
@@ -3862,7 +4681,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct Deposit {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -3956,7 +4775,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct Withdraw {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -4056,7 +4875,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct TransferDeposit {
         pub from_user: Pubkey,
         pub to_user: Pubkey,
@@ -4144,7 +4963,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct PlacePerpOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -4214,7 +5033,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct CancelOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -4284,7 +5103,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct CancelOrderByUserId {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -4354,7 +5173,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct CancelOrders {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -4424,7 +5243,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct CancelOrdersByIds {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -4494,7 +5313,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct ModifyOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -4564,7 +5383,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct ModifyOrderByUserId {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -4634,7 +5453,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct PlaceAndTakePerpOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -4710,7 +5529,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct PlaceAndMakePerpOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -4798,7 +5617,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct PlaceSwiftTakerOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -4880,7 +5699,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct PlaceSpotOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -4950,7 +5769,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct PlaceAndTakeSpotOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -5026,7 +5845,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct PlaceAndMakeSpotOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -5114,7 +5933,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct PlaceOrders {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -5184,7 +6003,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct BeginSwap {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -5302,7 +6121,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct EndSwap {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -5420,7 +6239,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct AddPerpLpShares {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -5490,7 +6309,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct RemovePerpLpShares {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -5560,7 +6379,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct RemovePerpLpSharesInExpiringMarket {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -5624,7 +6443,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateUserName {
         pub user: Pubkey,
         pub authority: Pubkey,
@@ -5688,7 +6507,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateUserCustomMarginRatio {
         pub user: Pubkey,
         pub authority: Pubkey,
@@ -5752,7 +6571,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateUserMarginTradingEnabled {
         pub user: Pubkey,
         pub authority: Pubkey,
@@ -5816,7 +6635,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateUserDelegate {
         pub user: Pubkey,
         pub authority: Pubkey,
@@ -5880,7 +6699,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateUserReduceOnly {
         pub user: Pubkey,
         pub authority: Pubkey,
@@ -5944,7 +6763,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateUserAdvancedLp {
         pub user: Pubkey,
         pub authority: Pubkey,
@@ -6008,7 +6827,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct DeleteUser {
         pub user: Pubkey,
         pub user_stats: Pubkey,
@@ -6084,7 +6903,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct ReclaimRent {
         pub user: Pubkey,
         pub user_stats: Pubkey,
@@ -6166,7 +6985,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct FillPerpOrder {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -6254,7 +7073,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct RevertFill {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -6330,7 +7149,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct FillSpotOrder {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -6418,7 +7237,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct TriggerOrder {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -6494,7 +7313,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct ForceCancelOrders {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -6570,7 +7389,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateUserIdle {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -6646,7 +7465,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateUserFuelBonus {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -6722,7 +7541,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateUserOpenOrdersCount {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -6798,7 +7617,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct AdminDisableUpdatePerpBidAskTwap {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -6868,7 +7687,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct SettlePnl {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -6944,7 +7763,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct SettleMultiplePnls {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -7020,7 +7839,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct SettleFundingPayment {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -7084,7 +7903,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct SettleLp {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -7148,7 +7967,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct SettleExpiredMarket {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -7218,7 +8037,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct LiquidatePerp {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -7306,7 +8125,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct LiquidatePerpWithFill {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -7394,7 +8213,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct LiquidateSpot {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -7482,7 +8301,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct LiquidateBorrowForPerpPnl {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -7570,7 +8389,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct LiquidatePerpPnlForDeposit {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -7658,7 +8477,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct SetUserStatusToBeingLiquidated {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -7728,7 +8547,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct ResolvePerpPnlDeficit {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -7816,7 +8635,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct ResolvePerpBankruptcy {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -7928,7 +8747,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct ResolveSpotBankruptcy {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -8040,7 +8859,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct SettleRevenueToInsuranceFund {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -8128,7 +8947,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateFundingRate {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -8198,7 +9017,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePrelaunchOracle {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -8268,7 +9087,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpBidAskTwap {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -8350,7 +9169,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketCumulativeInterest {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -8426,7 +9245,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateAmms {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -8490,7 +9309,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketExpiry {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -8560,7 +9379,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateUserQuoteAssetInsuranceStake {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -8648,7 +9467,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateUserGovTokenInsuranceStake {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -8736,7 +9555,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitializeInsuranceFundStake {
         pub spot_market: Pubkey,
         pub insurance_fund_stake: Pubkey,
@@ -8836,7 +9655,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct AddInsuranceFundStake {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -8948,7 +9767,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct RequestRemoveInsuranceFundStake {
         pub spot_market: Pubkey,
         pub insurance_fund_stake: Pubkey,
@@ -9030,7 +9849,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct CancelRequestRemoveInsuranceFundStake {
         pub spot_market: Pubkey,
         pub insurance_fund_stake: Pubkey,
@@ -9112,7 +9931,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct RemoveInsuranceFundStake {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -9218,7 +10037,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct TransferProtocolIfShares {
         pub signer: Pubkey,
         pub transfer_config: Pubkey,
@@ -9318,7 +10137,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePythPullOracle {
         pub keeper: Pubkey,
         pub pyth_solana_receiver: Pubkey,
@@ -9394,7 +10213,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct PostPythPullOracleUpdateAtomic {
         pub keeper: Pubkey,
         pub pyth_solana_receiver: Pubkey,
@@ -9470,7 +10289,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct PostMultiPythPullOracleUpdatesAtomic {
         pub keeper: Pubkey,
         pub pyth_solana_receiver: Pubkey,
@@ -9540,7 +10359,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct Initialize {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -9634,7 +10453,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitializeSpotMarket {
         pub spot_market: Pubkey,
         pub spot_market_mint: Pubkey,
@@ -9752,7 +10571,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct DeleteInitializedSpotMarket {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -9846,7 +10665,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitializeSerumFulfillmentConfig {
         pub base_spot_market: Pubkey,
         pub quote_spot_market: Pubkey,
@@ -9964,7 +10783,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSerumFulfillmentConfigStatus {
         pub state: Pubkey,
         pub serum_fulfillment_config: Pubkey,
@@ -10034,7 +10853,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitializeOpenbookV2FulfillmentConfig {
         pub base_spot_market: Pubkey,
         pub quote_spot_market: Pubkey,
@@ -10146,7 +10965,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct OpenbookV2FulfillmentConfigStatus {
         pub state: Pubkey,
         pub openbook_v2_fulfillment_config: Pubkey,
@@ -10216,7 +11035,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitializePhoenixFulfillmentConfig {
         pub base_spot_market: Pubkey,
         pub quote_spot_market: Pubkey,
@@ -10328,7 +11147,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct PhoenixFulfillmentConfigStatus {
         pub state: Pubkey,
         pub phoenix_fulfillment_config: Pubkey,
@@ -10398,7 +11217,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSerumVault {
         pub state: Pubkey,
         pub admin: Pubkey,
@@ -10468,7 +11287,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitializePerpMarket {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -10556,7 +11375,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitializePredictionMarket {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -10626,7 +11445,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct DeleteInitializedPerpMarket {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -10696,7 +11515,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct MoveAmmPrice {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -10766,7 +11585,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct RecenterPerpMarketAmm {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -10836,7 +11655,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketAmmSummaryStats {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -10918,7 +11737,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketExpiry {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -10988,7 +11807,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct SettleExpiredMarketPoolsToRevenuePool {
         pub state: Pubkey,
         pub admin: Pubkey,
@@ -11064,7 +11883,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct DepositIntoPerpMarketFeePool {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -11164,7 +11983,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct DepositIntoSpotMarketVault {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -11252,7 +12071,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct DepositIntoSpotMarketRevenuePool {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -11340,7 +12159,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct RepegAmmCurve {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -11416,7 +12235,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketAmmOracleTwap {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -11492,7 +12311,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct ResetPerpMarketAmmOracleTwap {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -11568,7 +12387,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateK {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -11644,7 +12463,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketMarginRatio {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -11714,7 +12533,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketFundingPeriod {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -11784,7 +12603,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketMaxImbalances {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -11854,7 +12673,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketLiquidationFee {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -11924,7 +12743,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateInsuranceFundUnstakingPeriod {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -11994,7 +12813,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketLiquidationFee {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12064,7 +12883,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateWithdrawGuardThreshold {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12134,7 +12953,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketIfFactor {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12204,7 +13023,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketRevenueSettlePeriod {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12274,7 +13093,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketStatus {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12344,7 +13163,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketPausedOperations {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12414,7 +13233,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketAssetTier {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12484,7 +13303,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketMarginWeights {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12554,7 +13373,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketBorrowRate {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12624,7 +13443,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketMaxTokenDeposits {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12694,7 +13513,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketMaxTokenBorrows {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12764,7 +13583,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketScaleInitialAssetWeightStart {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12837,7 +13656,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketOracle {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12913,7 +13732,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketStepSizeAndTickSize {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12983,7 +13802,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketMinOrderSize {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13053,7 +13872,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketOrdersEnabled {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13123,7 +13942,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketIfPausedOperations {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13193,7 +14012,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketName {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13263,7 +14082,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketStatus {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13333,7 +14152,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketPausedOperations {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13403,7 +14222,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketContractTier {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13473,7 +14292,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketImfFactor {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13543,7 +14362,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketUnrealizedAssetWeight {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13613,7 +14432,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketConcentrationCoef {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13683,7 +14502,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketCurveUpdateIntensity {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13753,7 +14572,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketTargetBaseAssetAmountPerLp {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13826,7 +14645,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketPerLpBase {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13896,7 +14715,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateLpCooldownTime {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13960,7 +14779,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpFeeStructure {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14024,7 +14843,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotFeeStructure {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14088,7 +14907,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateInitialPctToLiquidate {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14152,7 +14971,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateLiquidationDuration {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14216,7 +15035,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateLiquidationMarginBufferRatio {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14280,7 +15099,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateOracleGuardRails {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14344,7 +15163,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateStateSettlementDuration {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14408,7 +15227,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateStateMaxNumberOfSubAccounts {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14472,7 +15291,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateStateMaxInitializeUserFee {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14536,7 +15355,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketOracle {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -14612,7 +15431,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketBaseSpread {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14682,7 +15501,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateAmmJitIntensity {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14752,7 +15571,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketMaxSpread {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14822,7 +15641,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketStepSizeAndTickSize {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14892,7 +15711,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketName {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14962,7 +15781,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketMinOrderSize {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15032,7 +15851,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketMaxSlippageRatio {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15102,7 +15921,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketMaxFillReserveFraction {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15172,7 +15991,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketMaxOpenInterest {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15242,7 +16061,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketNumberOfUsers {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15312,7 +16131,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketFeeAdjustment {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15382,7 +16201,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketFeeAdjustment {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15452,7 +16271,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketFuel {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15522,7 +16341,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketFuel {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15592,7 +16411,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitUserFuel {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15668,7 +16487,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateAdmin {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15732,7 +16551,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateWhitelistMint {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15796,7 +16615,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateDiscountMint {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15860,7 +16679,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateExchangeStatus {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15924,7 +16743,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpAuctionDuration {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15988,7 +16807,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotAuctionDuration {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16052,7 +16871,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitializeProtocolIfSharesTransferConfig {
         pub admin: Pubkey,
         pub protocol_if_shares_transfer_config: Pubkey,
@@ -16137,7 +16956,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateProtocolIfSharesTransferConfig {
         pub admin: Pubkey,
         pub protocol_if_shares_transfer_config: Pubkey,
@@ -16207,7 +17026,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitializePrelaunchOracle {
         pub admin: Pubkey,
         pub prelaunch_oracle: Pubkey,
@@ -16289,7 +17108,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePrelaunchOracleParams {
         pub admin: Pubkey,
         pub prelaunch_oracle: Pubkey,
@@ -16365,7 +17184,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct DeletePrelaunchOracle {
         pub admin: Pubkey,
         pub prelaunch_oracle: Pubkey,
@@ -16441,7 +17260,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitializePythPullOracle {
         pub admin: Pubkey,
         pub pyth_solana_receiver: Pubkey,
