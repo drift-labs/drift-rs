@@ -21,7 +21,7 @@ Experimental, high performance Rust SDK for building offchain clients for [Drift
 # crates.io*
 drift-rs = "1.0.0-alpha.3"
 
-# build from source (also builds and links 'libdrift_ffi_sys'
+# build from source (also builds and links 'libdrift_ffi_sys')
 drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.3" }
 ```
 

@@ -131,7 +131,7 @@ impl JitProxyClient {
         let program_data = tx_builder.program_data();
         let account_data = tx_builder.account_data();
 
-        let writable_markets = match order.market_type.into() {
+        let writable_markets = match order.market_type {
             MarketType::Perp => {
                 vec![MarketId::perp(order.market_index)]
             }

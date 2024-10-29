@@ -216,7 +216,7 @@ fn generate_idl_types(idl: &Idl) -> String {
 
                 if has_complex_variant {
                     quote! {
-                        #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Debug, PartialEq)]
+                        #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Serialize, Deserialize, Copy, Clone, Debug, PartialEq)]
                         pub enum #type_name {
                             #(#variant_tokens)*
                         }
@@ -224,7 +224,7 @@ fn generate_idl_types(idl: &Idl) -> String {
                 } else {
                     // TODO: need more work to derive 'Default' on complex enums, not currently required
                     quote! {
-                        #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq)]
+                        #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Serialize, Deserialize, Copy, Clone, Default, Debug, PartialEq)]
                         pub enum #type_name {
                             #(#variant_tokens)*
                         }
@@ -246,7 +246,7 @@ fn generate_idl_types(idl: &Idl) -> String {
 
                 quote! {
                     #[repr(C)]
-                    #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq)]
+                    #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Serialize, Deserialize, Copy, Clone, Default, Debug, PartialEq)]
                     pub struct #struct_name {
                         #(#struct_fields)*
                     }
@@ -268,15 +268,20 @@ fn generate_idl_types(idl: &Idl) -> String {
             let field_name =
                 Ident::new(&to_snake_case(&field.name), proc_macro2::Span::call_site());
 
+            let mut serde_decorator = TokenStream::new();
             let mut field_type: Type = syn::parse_str(&field.field_type.to_rust_type()).unwrap();
             // workaround for padding types preventing outertype from deriving 'Default'
             if field_name == "padding" {
                 if let ArgType::Array { array: (_t, len) } = &field.field_type {
                     field_type = syn::parse_str(&format!("Padding<{len}>")).unwrap();
+                    serde_decorator = quote! {
+                        #[serde(skip)]
+                    };
                 }
             }
 
             quote! {
+                #serde_decorator
                 pub #field_name: #field_type,
             }
         });
@@ -286,7 +291,7 @@ fn generate_idl_types(idl: &Idl) -> String {
             .unwrap();
         let struct_def = quote! {
             #[repr(C)]
-            #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq)]
+            #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Serialize, Deserialize, Copy, Clone, Default, Debug, PartialEq)]
             pub struct #struct_name {
                 #(#struct_fields)*
             }
@@ -395,7 +400,7 @@ fn generate_idl_types(idl: &Idl) -> String {
             format!("{:?}", sighash("account", &name)).parse().unwrap();
         let account_struct_def = quote! {
             #[repr(C)]
-            #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
+            #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
             pub struct #struct_name {
                 #(#accounts)*
             }
@@ -508,6 +513,10 @@ fn generate_idl_types(idl: &Idl) -> String {
         };
     }
 
+    let custom_types: TokenStream = include_str!("custom_types.rs")
+        .parse()
+        .expect("custom_types valid rust");
+
     // Wrap generated code in modules with necessary imports
     let output = quote! {
         #![allow(unused_imports)]
@@ -515,139 +524,54 @@ fn generate_idl_types(idl: &Idl) -> String {
         //! Auto-generated IDL types, manual edits do not persist (see `crates/drift-idl-gen`)
         //!
         use anchor_lang::{prelude::{account, AnchorSerialize, AnchorDeserialize, InitSpace, event, error_code, msg, borsh::{self}}, Discriminator};
-        // use solana-sdk PUbkey, the vendored anchor-lang Pubkey maybe behind
+        // use solana-sdk Pubkey, the vendored anchor-lang Pubkey maybe behind
         use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-        use self::traits::ToAccountMetas;
+        use serde::{Serialize, Deserialize};
 
+        use self::traits::ToAccountMetas;
         pub mod traits {
             use solana_sdk::instruction::AccountMeta;
 
-            /// This is distinct from the anchor version of the trait
-            /// reimplemented to ensure the types used are from solana crates _not_ the anchor vendored versions which may be lagging behind
+            /// This is distinct from the anchor_lang version of the trait
+            /// reimplemented to ensure the types used are from `solana`` crates _not_ the anchor_lang vendored versions which may be lagging behind
             pub trait ToAccountMetas {
                 fn to_account_metas(&self) -> Vec<AccountMeta>;
             }
         }
 
         pub mod instructions {
+            //! IDL instruction types
             use super::{*, types::*};
 
             #instructions_tokens
         }
 
         pub mod types {
+            //! IDL types
             use std::ops::Mul;
 
             use super::*;
-            /// backwards compatible u128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned
-            /// https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8
-            #[derive(
-                Default,
-                PartialEq,
-                AnchorSerialize,
-                AnchorDeserialize,
-                Copy,
-                Clone,
-                bytemuck::Zeroable,
-                bytemuck::Pod,
-                Debug,
-            )]
-            #[repr(C)]
-            pub struct u128(pub [u8; 16]);
-
-            impl u128 {
-                /// convert self into the std `u128` type
-                pub fn as_u128(&self) -> std::primitive::u128 {
-                    std::primitive::u128::from_le_bytes(self.0)
-                }
-            }
-
-            impl From<std::primitive::u128> for self::u128 {
-                fn from(value: std::primitive::u128) -> Self {
-                    Self(value.to_le_bytes())
-                }
-            }
-
-            /// backwards compatible i128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned
-            /// https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8
-            #[derive(
-                Default,
-                PartialEq,
-                AnchorSerialize,
-                AnchorDeserialize,
-                Copy,
-                Clone,
-                bytemuck::Zeroable,
-                bytemuck::Pod,
-                Debug,
-            )]
-            #[repr(C)]
-            pub struct i128(pub [u8; 16]);
-
-            impl i128 {
-                /// convert self into the std `i128` type
-                pub fn as_i128(&self) -> core::primitive::i128 {
-                    core::primitive::i128::from_le_bytes(self.0)
-                }
-            }
-
-            impl From<core::primitive::i128> for i128 {
-                fn from(value: core::primitive::i128) -> Self {
-                    Self(value.to_le_bytes())
-                }
-            }
-
-            #[repr(transparent)]
-            #[derive(AnchorDeserialize, AnchorSerialize, Copy, Clone, PartialEq, Debug)]
-            pub struct Signature(pub [u8; 64]);
-
-            impl Default for Signature {
-                fn default() -> Self {
-                    Self([0_u8; 64])
-                }
-            }
-
-            impl anchor_lang::Space for Signature {
-                const INIT_SPACE: usize = 8 * 64;
-            }
-
-            /// wrapper around fixed array types used for padding with `Default` implementation
-            #[repr(transparent)]
-            #[derive(AnchorDeserialize, AnchorSerialize, Copy, Clone, PartialEq)]
-            pub struct Padding<const N: usize>([u8; N]);
-            impl<const N: usize> Default for Padding<N> {
-                fn default() -> Self {
-                    Self([0u8; N])
-                }
-            }
-
-            impl<const N: usize> std::fmt::Debug for Padding<N> {
-                fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    // don't print anything for padding...
-                    Ok(())
-                }
-            }
-
-            impl<const N: usize> anchor_lang::Space for Padding<N> {
-                const INIT_SPACE: usize = 8 * N;
-            }
+            #custom_types
 
             #types_tokens
         }
 
         pub mod accounts {
+            //! IDL Account types
             use super::{*, types::*};
 
             #accounts_tokens
         }
 
         pub mod errors {
+            //! IDL error types
             use super::{*, types::*};
 
             #errors_tokens
         }
 
         pub mod events {
+            //! IDL event types
             use super::{*, types::*};
             #events_tokens
         }

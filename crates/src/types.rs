@@ -27,7 +27,7 @@ pub use crate::drift_idl::{
 };
 use crate::{
     constants::{ids, LUT_DEVNET, LUT_MAINNET},
-    drift_idl::{self, errors::ErrorCode},
+    drift_idl::errors::ErrorCode,
     Wallet,
 };
 
@@ -99,7 +99,25 @@ pub struct MarketId {
     kind: MarketType,
 }
 
+// there are derived/auto-generated trait impls for `MarketType` so
+// it can be used a key in maps, within `MarketId`
+// doing here rather than adding to all structs or special casing in IDL generation
+impl core::cmp::Eq for MarketType {}
+impl core::hash::Hash for MarketType {
+    fn hash<H: core::hash::Hasher>(&self, ra_expand_state: &mut H) {
+        core::mem::discriminant(self).hash(ra_expand_state);
+        match self {
+            MarketType::Spot => {}
+            MarketType::Perp => {}
+        }
+    }
+}
+
 impl MarketId {
+    /// Create a new `MarketId` from parts
+    pub fn new(index: u16, kind: MarketType) -> Self {
+        Self { index, kind }
+    }
     /// `MarketId` for the USDC Spot Market
     pub const QUOTE_SPOT: Self = Self {
         index: 0,
@@ -134,6 +152,9 @@ impl MarketId {
     pub fn is_perp(self) -> bool {
         self.kind == MarketType::Perp
     }
+    pub fn is_spot(self) -> bool {
+        self.kind == MarketType::Spot
+    }
 }
 
 impl std::fmt::Debug for MarketId {
@@ -155,26 +176,6 @@ impl From<(u16, MarketType)> for MarketId {
             index: value.0,
             kind: value.1,
         }
-    }
-}
-
-/// Shadow the IDL market type to add some extra traits e.g. Eq + Hash
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub enum MarketType {
-    #[default]
-    Spot,
-    Perp,
-}
-
-impl From<drift_idl::types::MarketType> for MarketType {
-    fn from(value: drift_idl::types::MarketType) -> Self {
-        unsafe { std::mem::transmute(value) }
-    }
-}
-
-impl From<MarketType> for drift_idl::types::MarketType {
-    fn from(value: MarketType) -> Self {
-        unsafe { std::mem::transmute(value) }
     }
 }
 
@@ -252,7 +253,7 @@ impl NewOrder {
         OrderParams {
             order_type: self.order_type,
             market_index: self.market_id.index,
-            market_type: self.market_id.kind.into(),
+            market_type: self.market_id.kind,
             price: self.price,
             base_asset_amount: self.amount,
             reduce_only: self.reduce_only,
