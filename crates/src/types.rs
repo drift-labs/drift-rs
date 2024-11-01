@@ -548,8 +548,8 @@ mod tests {
     fn market_type_str() {
         assert_eq!(MarketType::from_str("PERP").unwrap(), MarketType::Perp,);
         assert_eq!(MarketType::from_str("spot").unwrap(), MarketType::Spot,);
-        assert_eq!("perp", &MarketType::Perp.to_string(),);
-        assert_eq!("spot", &MarketType::Spot.to_string(),);
+        assert_eq!("perp", MarketType::Perp.as_str());
+        assert_eq!("spot", MarketType::Spot.as_str());
     }
 
     #[test]

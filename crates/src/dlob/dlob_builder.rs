@@ -3,8 +3,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::{
-    dlob::dlob::DLOB, event_emitter::EventEmitter, slot_subscriber::SlotSubscriber,
-    usermap::UserMap, SdkResult,
+    dlob::dlob::DLOB, slot_subscriber::SlotSubscriber, usermap::GlobalUserMap as UserMap, SdkResult,
 };
 
 pub struct DLOBBuilder {
@@ -12,7 +11,6 @@ pub struct DLOBBuilder {
     usermap: UserMap,
     rebuild_frequency: u64,
     dlob: DLOB,
-    event_emitter: EventEmitter<DLOB>,
 }
 
 impl DLOBBuilder {
@@ -28,14 +26,16 @@ impl DLOBBuilder {
             usermap,
             rebuild_frequency,
             dlob: DLOB::new(),
-            event_emitter: EventEmitter::new(),
         }
     }
 
     pub async fn start_building(builder: Arc<Mutex<Self>>) -> SdkResult<()> {
         let mut locked_builder = builder.lock().await;
         let rebuild_frequency = locked_builder.rebuild_frequency;
-        locked_builder.slot_subscriber.subscribe().await?;
+        locked_builder
+            .slot_subscriber
+            .subscribe(move |_slot| {})
+            .await?;
         locked_builder.usermap.subscribe().await?;
         drop(locked_builder);
 
@@ -54,10 +54,10 @@ impl DLOBBuilder {
         Ok(())
     }
 
-    pub fn build(&mut self) {
+    pub fn build(&mut self) -> &DLOB {
         self.dlob
             .build_from_usermap(&self.usermap, self.slot_subscriber.current_slot());
-        self.event_emitter.emit(self.dlob.clone());
+        &self.dlob
     }
 
     pub fn get_dlob(&self) -> DLOB {
@@ -91,14 +91,11 @@ mod tests {
         );
         let dlob_builder = DLOBBuilder::new(slot_subscriber, usermap, 5);
 
-        dlob_builder
-            .event_emitter
-            .clone()
-            .subscribe(DLOBBuilder::SUBSCRIPTION_ID, move |event| {
-                if let Some(_) = event.as_any().downcast_ref::<DLOB>() {
-                    // dbg!("update received");
-                }
-            });
+        dlob_builder.subscribe(DLOBBuilder::SUBSCRIPTION_ID, move |event| {
+            if let Some(_) = event.as_any().downcast_ref::<DLOB>() {
+                // dbg!("update received");
+            }
+        });
 
         DLOBBuilder::start_building(Arc::new(Mutex::new(dlob_builder)))
             .await
