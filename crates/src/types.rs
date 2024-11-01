@@ -494,11 +494,23 @@ impl ReferrerInfo {
     }
 }
 
-impl ToString for MarketType {
-    fn to_string(&self) -> String {
+impl OrderType {
+    pub fn as_str(&self) -> &str {
         match self {
-            MarketType::Perp => "perp".into(),
-            MarketType::Spot => "spot".into(),
+            OrderType::Limit => "limit",
+            OrderType::Market => "market",
+            OrderType::Oracle => "oracle",
+            OrderType::TriggerLimit => "trigger_limit",
+            OrderType::TriggerMarket => "trigger_market",
+        }
+    }
+}
+
+impl MarketType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            MarketType::Perp => "perp",
+            MarketType::Spot => "spot",
         }
     }
 }
