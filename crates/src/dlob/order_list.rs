@@ -2,25 +2,21 @@ use std::collections::BinaryHeap;
 
 use dashmap::DashMap;
 
-use crate::dlob::dlob_node::{get_order_signature, DLOBNode, DirectionalNode, Node, SortDirection};
+use crate::dlob::dlob_node::{get_order_signature, DirectionalNode, Node, NodeKind, OrderId};
 
 #[derive(Clone, Debug)]
-pub struct Orderlist {
-    pub bids: BinaryHeap<DirectionalNode>,
-    pub asks: BinaryHeap<DirectionalNode>,
-    pub order_sigs: DashMap<String, Node>,
-    bid_sort_direction: SortDirection,
-    ask_sort_direction: SortDirection,
+pub struct Orderlist<const ASKASC: bool, const BIDASC: bool, T: NodeKind> {
+    pub bids: BinaryHeap<DirectionalNode<BIDASC, T>>,
+    pub asks: BinaryHeap<DirectionalNode<ASKASC, T>>,
+    pub order_sigs: DashMap<OrderId, Node<T>, ahash::RandomState>,
 }
 
-impl Orderlist {
-    pub fn new(bid_sort_direction: SortDirection, ask_sort_direction: SortDirection) -> Self {
+impl<const A: bool, const B: bool, T: NodeKind> Orderlist<A, B, T> {
+    pub fn new() -> Self {
         Orderlist {
-            bids: BinaryHeap::new(),
-            asks: BinaryHeap::new(),
-            order_sigs: DashMap::new(),
-            bid_sort_direction,
-            ask_sort_direction,
+            bids: BinaryHeap::<DirectionalNode<B, T>>::new(),
+            asks: BinaryHeap::<DirectionalNode<A, T>>::new(),
+            order_sigs: DashMap::default(),
         }
     }
 
@@ -30,23 +26,23 @@ impl Orderlist {
         println!("Asks: {:?}", self.asks);
     }
 
-    pub fn insert_bid(&mut self, node: Node) {
-        let order_sig = get_order_signature(node.get_order().order_id, node.get_user_account());
-        self.order_sigs.insert(order_sig.clone(), node);
-        let directional = DirectionalNode::new(node, self.bid_sort_direction);
+    pub fn insert_bid(&mut self, node: Node<T>) {
+        let order_sig = get_order_signature(node.order().order_id, node.user_account());
+        self.order_sigs.insert(order_sig, node);
+        let directional = DirectionalNode::<B, T>::new(node);
         self.bids.push(directional);
     }
 
-    pub fn insert_ask(&mut self, node: Node) {
-        let order_sig = get_order_signature(node.get_order().order_id, node.get_user_account());
-        self.order_sigs.insert(order_sig.clone(), node);
-        let directional = DirectionalNode::new(node, self.ask_sort_direction);
+    pub fn insert_ask(&mut self, node: Node<T>) {
+        let order_sig = get_order_signature(node.order().order_id, node.user_account());
+        self.order_sigs.insert(order_sig, node);
+        let directional = DirectionalNode::<A, T>::new(node);
         self.asks.push(directional);
     }
 
-    pub fn get_best_bid(&mut self) -> Option<Node> {
+    pub fn get_best_bid(&mut self) -> Option<Node<T>> {
         if let Some(node) = self.bids.pop().map(|node| node.node) {
-            let order_sig = get_order_signature(node.get_order().order_id, node.get_user_account());
+            let order_sig = get_order_signature(node.order().order_id, node.user_account());
             if self.order_sigs.contains_key(&order_sig) {
                 self.order_sigs.remove(&order_sig);
                 return Some(node);
@@ -55,9 +51,22 @@ impl Orderlist {
         None
     }
 
-    pub fn get_best_ask(&mut self) -> Option<Node> {
+    pub fn get_best_bids(&mut self) -> Vec<Node<T>> {
+        let mut bids = Vec::with_capacity(self.bids.len());
+        while let Some(node) = self.bids.pop().map(|node| node.node) {
+            let order_sig = get_order_signature(node.order().order_id, node.user_account());
+            if self.order_sigs.contains_key(&order_sig) {
+                self.order_sigs.remove(&order_sig);
+                bids.push(node);
+            }
+        }
+
+        bids
+    }
+
+    pub fn get_best_ask(&mut self) -> Option<Node<T>> {
         if let Some(node) = self.asks.pop().map(|node| node.node) {
-            let order_sig = get_order_signature(node.get_order().order_id, node.get_user_account());
+            let order_sig = get_order_signature(node.order().order_id, node.user_account());
             if self.order_sigs.contains_key(&order_sig) {
                 self.order_sigs.remove(&order_sig);
                 return Some(node);
@@ -66,7 +75,20 @@ impl Orderlist {
         None
     }
 
-    pub fn get_node(&self, order_sig: &String) -> Option<Node> {
+    pub fn get_best_asks(&mut self) -> Vec<Node<T>> {
+        let mut asks = Vec::with_capacity(self.asks.len());
+        while let Some(node) = self.asks.pop().map(|node| node.node) {
+            let order_sig = get_order_signature(node.order().order_id, node.user_account());
+            if self.order_sigs.contains_key(&order_sig) {
+                self.order_sigs.remove(&order_sig);
+                asks.push(node);
+            }
+        }
+
+        asks
+    }
+
+    pub fn get_node(&self, order_sig: &OrderId) -> Option<Node<T>> {
         self.order_sigs.get(order_sig).map(|node| *node)
     }
 
@@ -85,15 +107,14 @@ impl Orderlist {
 
 #[cfg(test)]
 mod tests {
-    use drift_idl::state::user::Order;
     use solana_sdk::pubkey::Pubkey;
 
     use super::*;
-    use crate::dlob::dlob_node::{create_node, NodeType};
+    use crate::{dlob::dlob_node::node_types::TakingLimit, drift_idl::types::Order};
 
     #[test]
     fn test_insertion_and_ordering() {
-        let mut orderlist = Orderlist::new(SortDirection::Ascending, SortDirection::Ascending);
+        let mut orderlist = Orderlist::<true, true, TakingLimit>::new();
         let user_account = Pubkey::new_unique();
         let order_1 = Order {
             order_id: 1,
@@ -146,17 +167,17 @@ mod tests {
             ..Order::default()
         };
 
-        let node_1 = create_node(NodeType::TakingLimit, order_1, user_account);
-        let node_2 = create_node(NodeType::TakingLimit, order_2, user_account);
-        let node_3 = create_node(NodeType::TakingLimit, order_3, user_account);
-        let node_4 = create_node(NodeType::TakingLimit, order_4, user_account);
-        let node_5 = create_node(NodeType::TakingLimit, order_5, user_account);
+        let node_1 = Node::<TakingLimit>::new(order_1, user_account);
+        let node_2 = Node::<TakingLimit>::new(order_2, user_account);
+        let node_3 = Node::<TakingLimit>::new(order_3, user_account);
+        let node_4 = Node::<TakingLimit>::new(order_4, user_account);
+        let node_5 = Node::<TakingLimit>::new(order_5, user_account);
 
-        let node_6 = create_node(NodeType::TakingLimit, order_6, user_account);
-        let node_7 = create_node(NodeType::TakingLimit, order_7, user_account);
-        let node_8 = create_node(NodeType::TakingLimit, order_8, user_account);
-        let node_9 = create_node(NodeType::TakingLimit, order_9, user_account);
-        let node_10 = create_node(NodeType::TakingLimit, order_10, user_account);
+        let node_6 = Node::<TakingLimit>::new(order_6, user_account);
+        let node_7 = Node::<TakingLimit>::new(order_7, user_account);
+        let node_8 = Node::<TakingLimit>::new(order_8, user_account);
+        let node_9 = Node::<TakingLimit>::new(order_9, user_account);
+        let node_10 = Node::<TakingLimit>::new(order_10, user_account);
 
         orderlist.insert_bid(node_1);
         orderlist.insert_bid(node_2);
@@ -170,16 +191,16 @@ mod tests {
         orderlist.insert_ask(node_9);
         orderlist.insert_ask(node_10);
 
-        assert_eq!(orderlist.get_best_bid().unwrap().get_order().slot, 1);
-        assert_eq!(orderlist.get_best_bid().unwrap().get_order().slot, 2);
-        assert_eq!(orderlist.get_best_bid().unwrap().get_order().slot, 3);
-        assert_eq!(orderlist.get_best_bid().unwrap().get_order().slot, 4);
-        assert_eq!(orderlist.get_best_bid().unwrap().get_order().slot, 5);
+        assert_eq!(orderlist.get_best_bid().unwrap().order().slot, 1);
+        assert_eq!(orderlist.get_best_bid().unwrap().order().slot, 2);
+        assert_eq!(orderlist.get_best_bid().unwrap().order().slot, 3);
+        assert_eq!(orderlist.get_best_bid().unwrap().order().slot, 4);
+        assert_eq!(orderlist.get_best_bid().unwrap().order().slot, 5);
 
-        assert_eq!(orderlist.get_best_ask().unwrap().get_order().slot, 1);
-        assert_eq!(orderlist.get_best_ask().unwrap().get_order().slot, 2);
-        assert_eq!(orderlist.get_best_ask().unwrap().get_order().slot, 3);
-        assert_eq!(orderlist.get_best_ask().unwrap().get_order().slot, 4);
-        assert_eq!(orderlist.get_best_ask().unwrap().get_order().slot, 5);
+        assert_eq!(orderlist.get_best_ask().unwrap().order().slot, 1);
+        assert_eq!(orderlist.get_best_ask().unwrap().order().slot, 2);
+        assert_eq!(orderlist.get_best_ask().unwrap().order().slot, 3);
+        assert_eq!(orderlist.get_best_ask().unwrap().order().slot, 4);
+        assert_eq!(orderlist.get_best_ask().unwrap().order().slot, 5);
     }
 }

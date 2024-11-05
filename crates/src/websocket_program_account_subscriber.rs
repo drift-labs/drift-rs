@@ -177,12 +177,8 @@ mod tests {
         };
         let subscription_name = "Test";
 
-        let mut ws_subscriber = WebsocketProgramAccountSubscriber::<User>::new(
-            subscription_name,
-            mainnet_endpoint(),
-            options,
-            EventEmitter::new(),
-        );
+        let mut ws_subscriber =
+            WebsocketProgramAccountSubscriber::<User>::new(mainnet_endpoint(), options);
 
         let _ = ws_subscriber.subscribe().await;
         dbg!("sub'd");

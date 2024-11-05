@@ -3,12 +3,17 @@
 use std::{collections::BinaryHeap, str::FromStr, sync::Arc};
 
 use dashmap::DashSet;
+use log::warn;
 use rayon::prelude::*;
 use solana_sdk::pubkey::Pubkey;
 
+use super::dlob_node::{
+    node_types::{RestingLimit, TakingLimit},
+    NodeType,
+};
 use crate::{
     dlob::{
-        dlob_node::{create_node, get_order_signature, DLOBNode, DirectionalNode, Node, NodeType},
+        dlob_node::{get_order_signature, DirectionalNode, Node},
         market::{get_node_subtype_and_type, Exchange, OpenOrders, SubType},
     },
     drift_idl::types::{MarketType, Order, OrderStatus},
@@ -30,8 +35,8 @@ impl DLOB {
         let exchange = Exchange::new();
 
         let open_orders = OpenOrders::new();
-        open_orders.insert("perp".to_string(), DashSet::new());
-        open_orders.insert("spot".to_string(), DashSet::new());
+        open_orders.insert(MarketType::Perp.as_str().to_owned(), DashSet::new());
+        open_orders.insert(MarketType::Spot.as_str().to_owned(), DashSet::new());
 
         DLOB {
             exchange,
@@ -77,43 +82,35 @@ impl DLOB {
     }
 
     pub fn insert_order(&self, order: &Order, user_account: Pubkey, slot: u64) {
-        let market_type = order.market_type.as_str();
         let market_index = order.market_index;
 
         let (subtype, node_type) = get_node_subtype_and_type(order, slot);
-        let node = create_node(node_type, *order, user_account);
 
         self.exchange
-            .add_market_indempotent(&market_type, market_index);
+            .add_market_indempotent(order.market_type, market_index);
 
         let mut market = match order.market_type {
             MarketType::Perp => self.exchange.perp.get_mut(&market_index).expect("market"),
             MarketType::Spot => self.exchange.spot.get_mut(&market_index).expect("market"),
         };
 
-        let order_list = market.get_order_list_for_node_insert(node_type);
-
         match subtype {
-            SubType::Bid => order_list.insert_bid(node),
-            SubType::Ask => order_list.insert_ask(node),
-            _ => {}
+            SubType::Bid => market.insert_bid_node(node_type, *order, user_account),
+            SubType::Ask => market.insert_ask_node(node_type, *order, user_account),
+            _ => {
+                warn!(target: "dlob", "inserting order subtype: {subtype:?} is a noop");
+            }
         }
     }
 
     pub fn get_order(&self, order_id: u32, user_account: Pubkey) -> Option<Order> {
         let order_signature = get_order_signature(order_id, user_account);
-        for order_list in self.exchange.get_order_lists() {
-            if let Some(node) = order_list.get_node(&order_signature) {
-                return Some(*node.get_order());
-            }
-        }
-
-        None
+        self.exchange.find_order(&order_signature)
     }
 
     fn update_resting_limit_orders_for_market_type(&mut self, slot: u64, market_type: MarketType) {
-        let mut new_taking_asks: BinaryHeap<DirectionalNode> = BinaryHeap::new();
-        let mut new_taking_bids: BinaryHeap<DirectionalNode> = BinaryHeap::new();
+        let mut new_taking_asks = BinaryHeap::<DirectionalNode<true, TakingLimit>>::default();
+        let mut new_taking_bids = BinaryHeap::<DirectionalNode<true, TakingLimit>>::default();
 
         let market = match market_type {
             MarketType::Perp => &self.exchange.perp,
@@ -124,27 +121,27 @@ impl DLOB {
             let market = market_ref.value_mut();
 
             for directional_node in market.taking_limit_orders.bids.iter() {
-                if is_resting_limit_order(directional_node.node.get_order(), slot) {
+                if is_resting_limit_order(directional_node.node.order(), slot) {
                     market
                         .resting_limit_orders
-                        .insert_bid(directional_node.node)
+                        .insert_bid(directional_node.node.transform())
                 } else {
                     new_taking_bids.push(*directional_node)
                 }
             }
 
             for directional_node in market.taking_limit_orders.asks.iter() {
-                if is_resting_limit_order(directional_node.node.get_order(), slot) {
+                if is_resting_limit_order(directional_node.node.order(), slot) {
                     market
                         .resting_limit_orders
-                        .insert_ask(directional_node.node);
+                        .insert_ask(directional_node.node.transform());
                 } else {
                     new_taking_asks.push(*directional_node);
                 }
             }
 
-            market.taking_limit_orders.bids = new_taking_bids.clone();
-            market.taking_limit_orders.asks = new_taking_asks.clone();
+            market.taking_limit_orders.bids.clone_from(&new_taking_bids);
+            market.taking_limit_orders.asks.clone_from(&new_taking_asks);
         }
     }
 
@@ -163,36 +160,19 @@ impl DLOB {
         &self,
         market_type: MarketType,
         sub_type: SubType,
-        node_type: NodeType,
         market_index: u16,
-    ) -> Vec<Node> {
-        let market = match market_type {
+        node_type: NodeType,
+    ) -> Vec<(Order, Pubkey)> {
+        let mut market = match market_type {
             MarketType::Perp => self.exchange.perp.get_mut(&market_index).expect("market"),
             MarketType::Spot => self.exchange.spot.get_mut(&market_index).expect("market"),
         };
-        let mut order_list = market.get_order_list_for_node_type(node_type);
-
-        let mut best_orders: Vec<Node> = vec![];
 
         match sub_type {
-            SubType::Bid => {
-                while !order_list.bids_empty() {
-                    if let Some(node) = order_list.get_best_bid() {
-                        best_orders.push(node);
-                    }
-                }
-            }
-            SubType::Ask => {
-                while !order_list.asks_empty() {
-                    if let Some(node) = order_list.get_best_ask() {
-                        best_orders.push(node);
-                    }
-                }
-            }
+            SubType::Bid => market.take_bids_by_node_type(node_type),
+            SubType::Ask => market.take_asks_by_node_type(node_type),
             _ => unimplemented!(),
         }
-
-        best_orders
     }
 
     pub fn get_resting_limit_asks(
@@ -201,35 +181,30 @@ impl DLOB {
         market_type: MarketType,
         market_index: u16,
         oracle_price_data: OraclePriceData,
-    ) -> Vec<Node> {
+    ) -> Vec<Node<RestingLimit>> {
         self.update_resting_limit_orders(slot);
+        let mut market = match market_type {
+            MarketType::Perp => self.exchange.perp.get_mut(&market_index).expect("market"),
+            MarketType::Spot => self.exchange.spot.get_mut(&market_index).expect("market"),
+        };
 
-        let mut resting_limit_orders = self.get_best_orders(
-            market_type,
-            SubType::Ask,
-            NodeType::RestingLimit,
-            market_index,
-        );
-        let mut floating_limit_orders = self.get_best_orders(
-            market_type,
-            SubType::Ask,
-            NodeType::FloatingLimit,
-            market_index,
+        let (mut resting_limit_orders, mut floating_limit_orders) = (
+            market.resting_limit_orders.get_best_asks(),
+            market.floating_limit_orders.get_best_asks(),
         );
 
-        let comparative = Box::new(
-            |node_a: &Node, node_b: &Node, slot: u64, oracle_price_data: OraclePriceData| {
-                node_a.get_price(oracle_price_data, slot)
-                    > node_b.get_price(oracle_price_data, slot)
-            },
-        );
-
-        let mut all_orders = vec![];
+        let mut all_orders =
+            Vec::with_capacity(resting_limit_orders.len() + floating_limit_orders.len());
         all_orders.append(&mut resting_limit_orders);
-        all_orders.append(&mut floating_limit_orders);
+        all_orders.append(
+            &mut floating_limit_orders
+                .drain(..)
+                .map(|x| x.transform())
+                .collect(),
+        );
 
         all_orders.sort_by(|a, b| {
-            if comparative(a, b, slot, oracle_price_data) {
+            if a.price(oracle_price_data, slot) > b.price(oracle_price_data, slot) {
                 std::cmp::Ordering::Greater
             } else {
                 std::cmp::Ordering::Less
@@ -245,35 +220,31 @@ impl DLOB {
         market_type: MarketType,
         market_index: u16,
         oracle_price_data: OraclePriceData,
-    ) -> Vec<Node> {
+    ) -> Vec<Node<RestingLimit>> {
         self.update_resting_limit_orders(slot);
 
-        let mut resting_limit_orders = self.get_best_orders(
-            market_type,
-            SubType::Bid,
-            NodeType::RestingLimit,
-            market_index,
-        );
-        let mut floating_limit_orders = self.get_best_orders(
-            market_type,
-            SubType::Bid,
-            NodeType::FloatingLimit,
-            market_index,
+        let mut market = match market_type {
+            MarketType::Perp => self.exchange.perp.get_mut(&market_index).expect("market"),
+            MarketType::Spot => self.exchange.spot.get_mut(&market_index).expect("market"),
+        };
+
+        let (mut resting_limit_orders, mut floating_limit_orders) = (
+            market.resting_limit_orders.get_best_bids(),
+            market.floating_limit_orders.get_best_bids(),
         );
 
-        let comparative = Box::new(
-            |node_a: &Node, node_b: &Node, slot: u64, oracle_price_data: OraclePriceData| {
-                node_a.get_price(oracle_price_data, slot)
-                    < node_b.get_price(oracle_price_data, slot)
-            },
-        );
-
-        let mut all_orders = vec![];
+        let mut all_orders =
+            Vec::with_capacity(resting_limit_orders.len() + floating_limit_orders.len());
         all_orders.append(&mut resting_limit_orders);
-        all_orders.append(&mut floating_limit_orders);
+        all_orders.append(
+            &mut floating_limit_orders
+                .drain(..)
+                .map(|x| x.transform())
+                .collect(),
+        );
 
         all_orders.sort_by(|a, b| {
-            if comparative(a, b, slot, oracle_price_data) {
+            if a.price(oracle_price_data, slot) < b.price(oracle_price_data, slot) {
                 std::cmp::Ordering::Greater
             } else {
                 std::cmp::Ordering::Less
@@ -292,13 +263,14 @@ impl Default for DLOB {
 
 #[cfg(test)]
 mod tests {
-    use drift_idl::{
-        math::constants::PRICE_PRECISION_U64,
-        state::user::{Order, OrderType},
-    };
     use solana_sdk::pubkey::Pubkey;
 
     use super::*;
+    use crate::{
+        drift_idl::types::{Order, OrderType},
+        math::constants::PRICE_PRECISION_U64,
+        PositionDirection,
+    };
 
     #[test]
     fn test_dlob_insert() {
@@ -362,45 +334,50 @@ mod tests {
             order_id: 1,
             slot: 1,
             market_index: 0,
-            direction: drift_idl::controller::position::PositionDirection::Long,
+            direction: PositionDirection::Long,
             market_type: MarketType::Perp,
             auction_duration: 1,
+            order_type: OrderType::Limit,
             ..Order::default()
         };
         let order_2 = Order {
             order_id: 2,
             slot: 2,
             market_index: 0,
-            direction: drift_idl::controller::position::PositionDirection::Long,
+            direction: PositionDirection::Long,
             market_type: MarketType::Perp,
             auction_duration: 1,
+            order_type: OrderType::Limit,
             ..Order::default()
         };
         let order_3 = Order {
             order_id: 3,
             slot: 3,
             market_index: 0,
-            direction: drift_idl::controller::position::PositionDirection::Long,
+            direction: PositionDirection::Long,
             market_type: MarketType::Perp,
             auction_duration: 1,
+            order_type: OrderType::Limit,
             ..Order::default()
         };
         let order_4 = Order {
             order_id: 4,
             slot: 4,
             market_index: 0,
-            direction: drift_idl::controller::position::PositionDirection::Long,
+            direction: PositionDirection::Long,
             market_type: MarketType::Perp,
             auction_duration: 1,
+            order_type: OrderType::Limit,
             ..Order::default()
         };
         let order_5 = Order {
             order_id: 5,
             slot: 5,
             market_index: 0,
-            direction: drift_idl::controller::position::PositionDirection::Long,
+            direction: PositionDirection::Long,
             market_type: MarketType::Perp,
             auction_duration: 1,
+            order_type: OrderType::Limit,
             ..Order::default()
         };
 
@@ -417,13 +394,13 @@ mod tests {
         assert!(dlob.get_order(5, user_account).is_some());
 
         let best_orders =
-            dlob.get_best_orders(MarketType::Perp, SubType::Bid, NodeType::TakingLimit, 0);
+            dlob.get_best_orders(MarketType::Perp, SubType::Bid, 0, NodeType::TakingLimit);
 
-        assert_eq!(best_orders[0].get_order().slot, 1);
-        assert_eq!(best_orders[1].get_order().slot, 2);
-        assert_eq!(best_orders[2].get_order().slot, 3);
-        assert_eq!(best_orders[3].get_order().slot, 4);
-        assert_eq!(best_orders[4].get_order().slot, 5);
+        assert_eq!(best_orders[0].0.slot, 1);
+        assert_eq!(best_orders[1].0.slot, 2);
+        assert_eq!(best_orders[2].0.slot, 3);
+        assert_eq!(best_orders[3].0.slot, 4);
+        assert_eq!(best_orders[4].0.slot, 5);
     }
 
     #[test]
@@ -435,9 +412,10 @@ mod tests {
             order_id: 1,
             slot: 1,
             market_index: 0,
-            direction: drift_idl::controller::position::PositionDirection::Long,
+            direction: PositionDirection::Long,
             market_type: MarketType::Perp,
             auction_duration: 1,
+            order_type: OrderType::Limit,
             ..Order::default()
         };
 
@@ -481,7 +459,7 @@ mod tests {
             order_id: 1,
             slot: 1,
             market_index: 0,
-            direction: drift_idl::controller::position::PositionDirection::Short,
+            direction: PositionDirection::Short,
             market_type: MarketType::Perp,
             order_type: OrderType::Limit,
             auction_duration: 10,
@@ -493,7 +471,7 @@ mod tests {
             order_id: 2,
             slot: 11,
             market_index: 0,
-            direction: drift_idl::controller::position::PositionDirection::Short,
+            direction: PositionDirection::Short,
             market_type: MarketType::Perp,
             order_type: OrderType::Limit,
             auction_duration: 10,
@@ -505,7 +483,7 @@ mod tests {
             order_id: 3,
             slot: 21,
             market_index: 0,
-            direction: drift_idl::controller::position::PositionDirection::Short,
+            direction: PositionDirection::Short,
             market_type: MarketType::Perp,
             order_type: OrderType::Limit,
             auction_duration: 10,
@@ -532,7 +510,7 @@ mod tests {
             dlob.get_resting_limit_asks(slot, MarketType::Perp, 0, oracle_price_data);
 
         assert_eq!(resting_limit_asks.len(), 1);
-        assert_eq!(resting_limit_asks[0].get_order().order_id, 1);
+        assert_eq!(resting_limit_asks[0].order().order_id, 1);
 
         slot += 11;
 
@@ -541,8 +519,8 @@ mod tests {
             dlob.get_resting_limit_asks(slot, MarketType::Perp, 0, oracle_price_data);
 
         assert_eq!(resting_limit_asks.len(), 2);
-        assert_eq!(resting_limit_asks[0].get_order().order_id, 1);
-        assert_eq!(resting_limit_asks[1].get_order().order_id, 2);
+        assert_eq!(resting_limit_asks[0].order().order_id, 1);
+        assert_eq!(resting_limit_asks[1].order().order_id, 2);
 
         slot += 11;
 
@@ -551,9 +529,9 @@ mod tests {
             dlob.get_resting_limit_asks(slot, MarketType::Perp, 0, oracle_price_data);
 
         assert_eq!(resting_limit_asks.len(), 3);
-        assert_eq!(resting_limit_asks[0].get_order().order_id, 1);
-        assert_eq!(resting_limit_asks[1].get_order().order_id, 2);
-        assert_eq!(resting_limit_asks[2].get_order().order_id, 3);
+        assert_eq!(resting_limit_asks[0].order().order_id, 1);
+        assert_eq!(resting_limit_asks[1].order().order_id, 2);
+        assert_eq!(resting_limit_asks[2].order().order_id, 3);
     }
 
     #[test]
@@ -575,7 +553,7 @@ mod tests {
             order_id: 1,
             slot: 1,
             market_index: 0,
-            direction: drift_idl::controller::position::PositionDirection::Long,
+            direction: PositionDirection::Long,
             market_type: MarketType::Perp,
             order_type: OrderType::Limit,
             auction_duration: 10,
@@ -587,7 +565,7 @@ mod tests {
             order_id: 2,
             slot: 11,
             market_index: 0,
-            direction: drift_idl::controller::position::PositionDirection::Long,
+            direction: PositionDirection::Long,
             market_type: MarketType::Perp,
             order_type: OrderType::Limit,
             auction_duration: 10,
@@ -599,7 +577,7 @@ mod tests {
             order_id: 3,
             slot: 21,
             market_index: 0,
-            direction: drift_idl::controller::position::PositionDirection::Long,
+            direction: PositionDirection::Long,
             market_type: MarketType::Perp,
             order_type: OrderType::Limit,
             auction_duration: 10,
@@ -626,7 +604,7 @@ mod tests {
             dlob.get_resting_limit_bids(slot, MarketType::Perp, 0, oracle_price_data);
 
         assert_eq!(resting_limit_bids.len(), 1);
-        assert_eq!(resting_limit_bids[0].get_order().order_id, 1);
+        assert_eq!(resting_limit_bids[0].order().order_id, 1);
 
         slot += 11;
 
@@ -635,8 +613,8 @@ mod tests {
             dlob.get_resting_limit_bids(slot, MarketType::Perp, 0, oracle_price_data);
 
         assert_eq!(resting_limit_bids.len(), 2);
-        assert_eq!(resting_limit_bids[0].get_order().order_id, 2);
-        assert_eq!(resting_limit_bids[1].get_order().order_id, 1);
+        assert_eq!(resting_limit_bids[0].order().order_id, 2);
+        assert_eq!(resting_limit_bids[1].order().order_id, 1);
 
         slot += 11;
 
@@ -645,8 +623,8 @@ mod tests {
             dlob.get_resting_limit_bids(slot, MarketType::Perp, 0, oracle_price_data);
 
         assert_eq!(resting_limit_bids.len(), 3);
-        assert_eq!(resting_limit_bids[0].get_order().order_id, 3);
-        assert_eq!(resting_limit_bids[1].get_order().order_id, 2);
-        assert_eq!(resting_limit_bids[2].get_order().order_id, 1);
+        assert_eq!(resting_limit_bids[0].order().order_id, 3);
+        assert_eq!(resting_limit_bids[1].order().order_id, 2);
+        assert_eq!(resting_limit_bids[2].order().order_id, 1);
     }
 }

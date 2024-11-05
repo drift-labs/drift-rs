@@ -65,7 +65,7 @@ impl DLOBBuilder {
     }
 }
 
-#[cfg(test)]
+#[cfg(feature = "rpc_tests")]
 mod tests {
     use env_logger;
     use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
@@ -74,7 +74,6 @@ mod tests {
     use crate::{memcmp::get_user_with_order_filter, utils::get_ws_url};
 
     #[tokio::test]
-    #[cfg(feature = "rpc_tests")]
     async fn test_dlob_builder() {
         env_logger::init();
         let endpoint = "rpc".to_string();
@@ -105,7 +104,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg(feature = "rpc_tests")]
     async fn test_build_time() {
         let endpoint = "rpc".to_string();
         let commitment = CommitmentConfig {

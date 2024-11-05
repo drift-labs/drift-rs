@@ -45,8 +45,14 @@ type-layout = "0.2.0"
 
 [dev-dependencies]
 bytes = "1"
+criterion = { version = "0.5", features = ["html_reports"] }
 hex = "0.4"
 hex-literal = "0.4"
 
 [build-dependencies]
 drift-idl-gen = { version = "0.1.1", path = "crates/drift-idl-gen"}
+
+[[bench]]
+name = "dlob"
+harness = false
+required-features = ["dlob"]
