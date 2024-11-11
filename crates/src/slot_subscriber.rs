@@ -46,7 +46,7 @@ impl SlotSubscriber {
         *slot_guard
     }
 
-    pub async fn subscribe<F>(&mut self, handler_fn: F) -> SdkResult<()>
+    pub async fn subscribe<F>(&self, handler_fn: F) -> SdkResult<()>
     where
         F: 'static + Send + Fn(SlotUpdate),
     {
@@ -57,7 +57,7 @@ impl SlotSubscriber {
         Ok(())
     }
 
-    async fn subscribe_ws<F>(&mut self, handler_fn: F) -> SdkResult<()>
+    async fn subscribe_ws<F>(&self, handler_fn: F) -> SdkResult<()>
     where
         F: 'static + Send + Fn(SlotUpdate),
     {
