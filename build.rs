@@ -122,7 +122,6 @@ fn main() {
         println!("{LIB}: searching for lib at: {lib_path}");
         println!("cargo:rustc-link-search=native={lib_path}");
     }
-    println!("cargo:rustc-link-search=native=/usr/local/lib");
     println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
 }
 

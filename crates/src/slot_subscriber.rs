@@ -1,6 +1,6 @@
 use std::{
     sync::{atomic::AtomicU64, Arc, Mutex},
-    time::{Duration, SystemTime},
+    time::Duration,
 };
 
 use futures_util::StreamExt;

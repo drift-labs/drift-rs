@@ -32,10 +32,7 @@ impl DLOBBuilder {
     pub async fn start_building(builder: Arc<Mutex<Self>>) -> SdkResult<()> {
         let mut locked_builder = builder.lock().await;
         let rebuild_frequency = locked_builder.rebuild_frequency;
-        locked_builder
-            .slot_subscriber
-            .subscribe(move |_slot| {})
-            .await?;
+        locked_builder.slot_subscriber.subscribe(move |_slot| {});
         locked_builder.usermap.subscribe().await?;
         drop(locked_builder);
 
