@@ -91,6 +91,7 @@ fn main() {
         }
 
         if let Ok(out_dir) = std::env::var("OUT_DIR") {
+            println!("{LIB}: searching for lib at: {out_dir}");
             println!("cargo:rustc-link-search=native={out_dir}");
         } else {
             // install the dylib to system path
@@ -104,7 +105,8 @@ fn main() {
                 ])
                 .output()
                 .expect("install ok");
-            println!("cargo:rustc-link-search=native=/usr/local/lib/");
+            println!("{LIB}: searching for lib at: /usr/local/lib");
+            println!("cargo:rustc-link-search=native=/usr/local/lib");
         }
     }
 
