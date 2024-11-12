@@ -494,11 +494,23 @@ impl ReferrerInfo {
     }
 }
 
-impl ToString for MarketType {
-    fn to_string(&self) -> String {
+impl OrderType {
+    pub fn as_str(&self) -> &str {
         match self {
-            MarketType::Perp => "perp".into(),
-            MarketType::Spot => "spot".into(),
+            OrderType::Limit => "limit",
+            OrderType::Market => "market",
+            OrderType::Oracle => "oracle",
+            OrderType::TriggerLimit => "trigger_limit",
+            OrderType::TriggerMarket => "trigger_market",
+        }
+    }
+}
+
+impl MarketType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            MarketType::Perp => "perp",
+            MarketType::Spot => "spot",
         }
     }
 }
@@ -536,8 +548,8 @@ mod tests {
     fn market_type_str() {
         assert_eq!(MarketType::from_str("PERP").unwrap(), MarketType::Perp,);
         assert_eq!(MarketType::from_str("spot").unwrap(), MarketType::Spot,);
-        assert_eq!("perp", &MarketType::Perp.to_string(),);
-        assert_eq!("spot", &MarketType::Spot.to_string(),);
+        assert_eq!("perp", MarketType::Perp.as_str());
+        assert_eq!("spot", MarketType::Spot.as_str());
     }
 
     #[test]

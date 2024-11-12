@@ -78,7 +78,14 @@ impl Market {
 }
 
 pub(crate) fn get_node_subtype_and_type(order: &Order, slot: u64) -> (SubType, NodeType) {
-    let is_inactive_trigger_order = order.must_be_triggered() && !order.triggered();
+    // let is_inactive_trigger_order = order.must_be_triggered() && !order.triggered();
+    let is_inactive_trigger_order = match (order.order_type, order.trigger_condition) {
+        (
+            OrderType::TriggerMarket | OrderType::TriggerLimit,
+            OrderTriggerCondition::TriggeredAbove | OrderTriggerCondition::TriggeredBelow,
+        ) => true,
+        _ => false,
+    };
 
     let node_type = if is_inactive_trigger_order {
         NodeType::Trigger

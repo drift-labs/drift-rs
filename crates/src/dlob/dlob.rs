@@ -11,13 +11,10 @@ use crate::{
         dlob_node::{create_node, get_order_signature, DLOBNode, DirectionalNode, Node, NodeType},
         market::{get_node_subtype_and_type, Exchange, OpenOrders, SubType},
     },
-    drift_idl::{
-        ffi::OraclePriceData,
-        types::{MarketType, Order, OrderStatus},
-    },
+    drift_idl::types::{MarketType, Order, OrderStatus},
+    ffi::OraclePriceData,
     math::order::is_resting_limit_order,
-    usermap::UserMap,
-    utils::market_type_to_string,
+    usermap::GlobalUserMap as UserMap,
 };
 
 #[derive(Clone)]
@@ -80,7 +77,7 @@ impl DLOB {
     }
 
     pub fn insert_order(&self, order: &Order, user_account: Pubkey, slot: u64) {
-        let market_type = market_type_to_string(&order.market_type);
+        let market_type = order.market_type.as_str();
         let market_index = order.market_index;
 
         let (subtype, node_type) = get_node_subtype_and_type(order, slot);
