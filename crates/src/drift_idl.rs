@@ -52,13 +52,25 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeRfqUser {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct InitializeSwiftUserOrders {}
+    pub struct InitializeSwiftUserOrders {
+        pub num_orders: u16,
+    }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeSwiftUserOrders {
         const DISCRIMINATOR: [u8; 8] = [26, 91, 2, 246, 96, 153, 117, 194];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeSwiftUserOrders {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct ResizeSwiftUserOrders {
+        pub num_orders: u16,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ResizeSwiftUserOrders {
+        const DISCRIMINATOR: [u8; 8] = [36, 57, 40, 90, 193, 150, 249, 53];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ResizeSwiftUserOrders {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct InitializeReferrerName {
         pub name: [u8; 32],
@@ -409,6 +421,14 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for DeleteUser {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct DeleteSwiftUserOrders {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for DeleteSwiftUserOrders {
+        const DISCRIMINATOR: [u8; 8] = [83, 157, 116, 215, 177, 177, 158, 20];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for DeleteSwiftUserOrders {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct ReclaimRent {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for ReclaimRent {
@@ -499,6 +519,14 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserFuelBonus {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateUserStatsReferrerStatus {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateUserStatsReferrerStatus {
+        const DISCRIMINATOR: [u8; 8] = [174, 154, 72, 42, 191, 148, 145, 205];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateUserStatsReferrerStatus {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdateUserOpenOrdersCount {}
     #[automatically_derived]
@@ -2698,6 +2726,25 @@ pub mod types {
         pub uuid: [u8; 8],
         pub max_slot: u64,
         pub order_id: u32,
+        pub padding: u32,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct SwiftUserOrdersFixed {
+        pub user_pubkey: Pubkey,
+        pub padding: u32,
+        pub len: u32,
     }
     #[repr(C)]
     #[derive(
@@ -3360,6 +3407,7 @@ pub mod types {
         SettlePnl,
         SettlePnlWithPosition,
         Liquidation,
+        AmmImmediateFill,
     }
     #[derive(
         AnchorSerialize,
@@ -3493,6 +3541,24 @@ pub mod types {
         Debug,
         PartialEq,
     )]
+    pub enum AMMAvailability {
+        #[default]
+        Immediate,
+        AfterMinDuration,
+        Unavailable,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
     pub enum SettlePnlMode {
         #[default]
         MustSettle,
@@ -3573,6 +3639,7 @@ pub mod types {
         LiqPaused,
         FundingPaused,
         SettlePnlPaused,
+        AmmImmediateFillPaused,
     }
     #[derive(
         AnchorSerialize,
@@ -4518,31 +4585,17 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, Serialize, Deserialize, Clone, Default, Debug, PartialEq,
     )]
     pub struct SwiftUserOrders {
         pub user_pubkey: Pubkey,
-        pub swift_order_data: [SwiftOrderId; 32],
+        pub padding: u32,
+        pub swift_order_data: Vec<SwiftOrderId>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SwiftUserOrders {
         const DISCRIMINATOR: [u8; 8] = [67, 121, 127, 98, 21, 50, 57, 193];
     }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for SwiftUserOrders {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for SwiftUserOrders {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for SwiftUserOrders {}
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SwiftUserOrders {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
@@ -5104,7 +5157,7 @@ pub mod accounts {
                 AccountMeta {
                     pubkey: self.user,
                     is_signer: false,
-                    is_writable: true,
+                    is_writable: false,
                 },
                 AccountMeta {
                     pubkey: self.payer,
@@ -5138,6 +5191,82 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for InitializeSwiftUserOrders {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct ResizeSwiftUserOrders {
+        pub swift_user_orders: Pubkey,
+        pub authority: Pubkey,
+        pub user: Pubkey,
+        pub system_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ResizeSwiftUserOrders {
+        const DISCRIMINATOR: [u8; 8] = [237, 41, 225, 39, 0, 209, 116, 228];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for ResizeSwiftUserOrders {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ResizeSwiftUserOrders {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for ResizeSwiftUserOrders {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ResizeSwiftUserOrders {}
+    #[automatically_derived]
+    impl ToAccountMetas for ResizeSwiftUserOrders {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.swift_user_orders,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.system_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for ResizeSwiftUserOrders {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for ResizeSwiftUserOrders {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -7653,6 +7782,82 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct DeleteSwiftUserOrders {
+        pub user: Pubkey,
+        pub swift_user_orders: Pubkey,
+        pub state: Pubkey,
+        pub authority: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for DeleteSwiftUserOrders {
+        const DISCRIMINATOR: [u8; 8] = [183, 16, 243, 132, 133, 172, 85, 107];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for DeleteSwiftUserOrders {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for DeleteSwiftUserOrders {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for DeleteSwiftUserOrders {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for DeleteSwiftUserOrders {}
+    #[automatically_derived]
+    impl ToAccountMetas for DeleteSwiftUserOrders {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.user,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.swift_user_orders,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for DeleteSwiftUserOrders {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for DeleteSwiftUserOrders {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct ReclaimRent {
         pub user: Pubkey,
         pub user_stats: Pubkey,
@@ -8426,6 +8631,76 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for UpdateUserFuelBonus {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateUserStatsReferrerStatus {
+        pub state: Pubkey,
+        pub authority: Pubkey,
+        pub user_stats: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateUserStatsReferrerStatus {
+        const DISCRIMINATOR: [u8; 8] = [88, 125, 77, 90, 13, 11, 141, 158];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserStatsReferrerStatus {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateUserStatsReferrerStatus {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateUserStatsReferrerStatus {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateUserStatsReferrerStatus {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateUserStatsReferrerStatus {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.user_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateUserStatsReferrerStatus {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateUserStatsReferrerStatus {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {

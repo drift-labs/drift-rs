@@ -59,6 +59,10 @@ fn main() {
             fail_build();
         }
 
+        // install the dylib to system path
+        let libffi_out_path =
+            drift_ffi_sys_crate.join(Path::new(&format!("target/{profile}/{LIB}.{lib_ext}")));
+
         // Build ffi crate and link
         let mut ffi_build = std::process::Command::new("rustup");
         ffi_build
@@ -89,9 +93,6 @@ fn main() {
                 String::from_utf8_lossy(output.stderr.as_slice())
             );
         }
-        // install the dylib to system path
-        let libffi_out_path =
-            drift_ffi_sys_crate.join(Path::new(&format!("target/{profile}/{LIB}.{lib_ext}")));
 
         if let Ok(out_dir) = std::env::var("OUT_DIR") {
             let _output = std::process::Command::new("cp")
@@ -103,19 +104,19 @@ fn main() {
                 .expect("install ok");
             println!("{LIB}: searching for lib at: {out_dir}");
             println!("cargo:rustc-link-search=native={out_dir}");
-        } else {
-            let _output = std::process::Command::new("ln")
-                .args([
-                    "-sf",
-                    libffi_out_path.to_str().expect("ffi build path"),
-                    "/usr/local/lib/",
-                ])
-                .output()
-                .expect("install ok");
-
-            println!("{LIB}: searching for lib at: /usr/local/lib");
-            println!("cargo:rustc-link-search=native=/usr/local/lib");
         }
+
+        let _output = std::process::Command::new("ln")
+            .args([
+                "-sf",
+                libffi_out_path.to_str().expect("ffi build path"),
+                "/usr/local/lib/",
+            ])
+            .output()
+            .expect("install ok");
+
+        println!("{LIB}: searching for lib at: /usr/local/lib");
+        println!("cargo:rustc-link-search=native=/usr/local/lib");
     }
 
     if let Ok(lib_path) = std::env::var("CARGO_DRIFT_FFI_PATH") {
