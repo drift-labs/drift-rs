@@ -30,13 +30,13 @@ jobs:
         run: |
           rustup show active-toolchain
           rustup component add clippy rustfmt
-      - name: install libdrift_ffi_sys
-        run: |
-          curl -L https://github.com/user-attachments/files/17160233/libdrift_ffi_sys.so.zip > ffi.zip
-          unzip ffi.zip
-          ldd libdrift_ffi_sys.so
-          sudo cp libdrift_ffi_sys.so /usr/lib
-          ldconfig -p
+      # - name: install libdrift_ffi_sys
+      #   run: |
+      #     curl -L https://github.com/user-attachments/files/17160233/libdrift_ffi_sys.so.zip > ffi.zip
+      #     unzip ffi.zip
+      #     ldd libdrift_ffi_sys.so
+      #     sudo cp libdrift_ffi_sys.so /usr/lib
+      #     ldconfig -p
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build

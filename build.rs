@@ -60,11 +60,8 @@ fn main() {
         }
 
         // install the dylib to system path
-        let lib_major_v = std::env::var("CARGO_PKG_VERSION_MAJOR").unwrap();
-        let lib_minor_v = std::env::var("CARGO_PKG_VERSION_MINOR").unwrap();
-        let libffi_out_path = drift_ffi_sys_crate.join(Path::new(&format!(
-            "target/{profile}/{LIB}.{lib_ext}.{lib_major_v}.{lib_minor_v}"
-        )));
+        let libffi_out_path =
+            drift_ffi_sys_crate.join(Path::new(&format!("target/{profile}/{LIB}.{lib_ext}")));
 
         if !libffi_out_path.exists() {
             // Build ffi crate and link
