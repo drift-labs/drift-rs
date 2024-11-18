@@ -264,34 +264,70 @@ fn generate_idl_types(idl: &Idl) -> String {
     for account in &idl.accounts {
         let struct_name = Ident::new(&account.name, proc_macro2::Span::call_site());
 
-        let struct_fields = account.account_type.fields.iter().map(|field| {
-            let field_name =
-                Ident::new(&to_snake_case(&field.name), proc_macro2::Span::call_site());
-
-            let mut serde_decorator = TokenStream::new();
-            let mut field_type: Type = syn::parse_str(&field.field_type.to_rust_type()).unwrap();
-            // workaround for padding types preventing outertype from deriving 'Default'
-            if field_name == "padding" {
-                if let ArgType::Array { array: (_t, len) } = &field.field_type {
-                    field_type = syn::parse_str(&format!("Padding<{len}>")).unwrap();
-                    serde_decorator = quote! {
-                        #[serde(skip)]
-                    };
+        let mut has_vec_field = false;
+        let struct_fields: Vec<TokenStream> = account
+            .account_type
+            .fields
+            .iter()
+            .map(|field| {
+                let field_name =
+                    Ident::new(&to_snake_case(&field.name), proc_macro2::Span::call_site());
+                if let ArgType::Vec { .. } = field.field_type {
+                    dbg!(&field.name, "has vec");
+                    has_vec_field = true;
                 }
-            }
+                let mut serde_decorator = TokenStream::new();
+                let mut field_type: Type =
+                    syn::parse_str(&field.field_type.to_rust_type()).unwrap();
+                // workaround for padding types preventing outertype from deriving 'Default'
+                if field_name == "padding" {
+                    if let ArgType::Array { array: (_t, len) } = &field.field_type {
+                        field_type = syn::parse_str(&format!("Padding<{len}>")).unwrap();
+                        serde_decorator = quote! {
+                            #[serde(skip)]
+                        };
+                    }
+                }
 
+                quote! {
+                    #serde_decorator
+                    pub #field_name: #field_type,
+                }
+            })
+            .collect();
+
+        let derive_tokens = if !has_vec_field {
             quote! {
-                #serde_decorator
-                pub #field_name: #field_type,
+                #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Serialize, Deserialize, Copy, Clone, Default, Debug, PartialEq)]
             }
-        });
+        } else {
+            // can't derive `Copy` on accounts with `Vec` field
+            // `InitSpace` requires a 'max_len' but no point enforcing here if unset on program side
+            quote! {
+                #[derive(AnchorSerialize, AnchorDeserialize, Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
+            }
+        };
+
+        let zc_tokens = if !has_vec_field {
+            // without copy can't derive the ZeroCopy trait
+            quote! {
+                #[automatically_derived]
+                unsafe impl anchor_lang::__private::bytemuck::Pod for #struct_name {}
+                #[automatically_derived]
+                unsafe impl anchor_lang::__private::bytemuck::Zeroable for #struct_name {}
+                #[automatically_derived]
+                impl anchor_lang::ZeroCopy for #struct_name {}
+            }
+        } else {
+            Default::default()
+        };
 
         let discriminator: TokenStream = format!("{:?}", sighash("account", &account.name))
             .parse()
             .unwrap();
         let struct_def = quote! {
             #[repr(C)]
-            #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Serialize, Deserialize, Copy, Clone, Default, Debug, PartialEq)]
+            #derive_tokens
             pub struct #struct_name {
                 #(#struct_fields)*
             }
@@ -299,12 +335,7 @@ fn generate_idl_types(idl: &Idl) -> String {
             impl anchor_lang::Discriminator for #struct_name {
                 const DISCRIMINATOR: [u8; 8] = #discriminator;
             }
-            #[automatically_derived]
-            unsafe impl anchor_lang::__private::bytemuck::Pod for #struct_name {}
-            #[automatically_derived]
-            unsafe impl anchor_lang::__private::bytemuck::Zeroable for #struct_name {}
-            #[automatically_derived]
-            impl anchor_lang::ZeroCopy for #struct_name {}
+            #zc_tokens
             #[automatically_derived]
             impl anchor_lang::AccountSerialize for #struct_name {
                 fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {

@@ -1,5 +1,5 @@
 {
-  "version": "2.97.0",
+  "version": "2.100.0",
   "name": "drift",
   "instructions": [
     {
@@ -144,7 +144,7 @@
         },
         {
           "name": "user",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -163,7 +163,43 @@
           "isSigner": false
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "numOrders",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "resizeSwiftUserOrders",
+      "accounts": [
+        {
+          "name": "swiftUserOrders",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "user",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "numOrders",
+          "type": "u16"
+        }
+      ]
     },
     {
       "name": "initializeReferrerName",
@@ -1423,6 +1459,32 @@
       "args": []
     },
     {
+      "name": "deleteSwiftUserOrders",
+      "accounts": [
+        {
+          "name": "user",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "swiftUserOrders",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "state",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "reclaimRent",
       "accounts": [
         {
@@ -1742,6 +1804,27 @@
           "name": "user",
           "isMut": true,
           "isSigner": false
+        },
+        {
+          "name": "userStats",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "updateUserStatsReferrerStatus",
+      "accounts": [
+        {
+          "name": "state",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": true
         },
         {
           "name": "userStats",
@@ -7568,6 +7651,9 @@
     },
     {
       "name": "SwiftUserOrders",
+      "docs": [
+        "* This struct is a duplicate of SwiftUserOrdersZeroCopy\n * It is used to give anchor an struct to generate the idl for clients\n * The struct SwiftUserOrdersZeroCopy is used to load the data in efficiently"
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -7576,14 +7662,15 @@
             "type": "publicKey"
           },
           {
+            "name": "padding",
+            "type": "u32"
+          },
+          {
             "name": "swiftOrderData",
             "type": {
-              "array": [
-                {
-                  "defined": "SwiftOrderId"
-                },
-                32
-              ]
+              "vec": {
+                "defined": "SwiftOrderId"
+              }
             }
           }
         ]
@@ -9789,6 +9876,30 @@
           {
             "name": "orderId",
             "type": "u32"
+          },
+          {
+            "name": "padding",
+            "type": "u32"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SwiftUserOrdersFixed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "userPubkey",
+            "type": "publicKey"
+          },
+          {
+            "name": "padding",
+            "type": "u32"
+          },
+          {
+            "name": "len",
+            "type": "u32"
           }
         ]
       }
@@ -10692,7 +10803,10 @@
             "name": "PlaceAndMake"
           },
           {
-            "name": "PlaceAndTake"
+            "name": "PlaceAndTake",
+            "fields": [
+              "bool"
+            ]
           },
           {
             "name": "Liquidation"
@@ -10888,6 +11002,9 @@
           },
           {
             "name": "Liquidation"
+          },
+          {
+            "name": "AmmImmediateFill"
           }
         ]
       }
@@ -11031,6 +11148,23 @@
       }
     },
     {
+      "name": "AMMAvailability",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Immediate"
+          },
+          {
+            "name": "AfterMinDuration"
+          },
+          {
+            "name": "Unavailable"
+          }
+        ]
+      }
+    },
+    {
       "name": "SettlePnlMode",
       "type": {
         "kind": "enum",
@@ -11120,6 +11254,9 @@
           },
           {
             "name": "SettlePnlPaused"
+          },
+          {
+            "name": "AmmImmediateFillPaused"
           }
         ]
       }
@@ -11681,6 +11818,7 @@
         },
         {
           "name": "hash",
+          "doc": "capitalized to (S)tring for drift-idl-gen to work easier",
           "type": "String",
           "index": false
         },

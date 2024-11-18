@@ -54,6 +54,7 @@ extern "C" {
         market: &accounts::PerpMarket,
         size: u128,
         margin_type: MarginRequirementType,
+        high_leverage_mode: bool,
     ) -> FfiResult<u32>;
     #[allow(improper_ctypes)]
     pub fn perp_market_get_open_interest(market: &accounts::PerpMarket) -> u128;
@@ -246,8 +247,11 @@ impl accounts::PerpMarket {
         &self,
         size: u128,
         margin_requirement_type: MarginRequirementType,
+        high_leverage_mode: bool,
     ) -> SdkResult<u32> {
-        to_sdk_result(unsafe { perp_market_get_margin_ratio(self, size, margin_requirement_type) })
+        to_sdk_result(unsafe {
+            perp_market_get_margin_ratio(self, size, margin_requirement_type, high_leverage_mode)
+        })
     }
     pub fn get_open_interest(&self) -> u128 {
         unsafe { perp_market_get_open_interest(self) }
@@ -651,22 +655,29 @@ mod tests {
             margin_ratio_initial: 1_000 * MARGIN_PRECISION, // 10%
             margin_ratio_maintenance: 500,                  // 5%
             imf_factor: 0,                                  // No impact for simplicity
+            high_leverage_margin_ratio_maintenance: 1_234,
             ..Default::default()
         };
 
         let size = 1_000 * MARGIN_PRECISION as u128; // Assuming MARGIN_PRECISION is defined
 
         // Test initial margin ratio
-        let result = perp_market.get_margin_ratio(size, MarginRequirementType::Initial);
+        let result = perp_market.get_margin_ratio(size, MarginRequirementType::Initial, false);
         assert!(result.is_ok());
         let initial_margin_ratio = result.unwrap();
         assert_eq!(initial_margin_ratio, 1_000 * MARGIN_PRECISION); // 10%
 
         // Test maintenance margin ratio
-        let result = perp_market.get_margin_ratio(size, MarginRequirementType::Maintenance);
+        let result = perp_market.get_margin_ratio(size, MarginRequirementType::Maintenance, false);
         assert!(result.is_ok());
         let maintenance_margin_ratio = result.unwrap();
         assert_eq!(maintenance_margin_ratio, 500); // 5%
+
+        // HL mode
+        let result = perp_market.get_margin_ratio(size, MarginRequirementType::Maintenance, true);
+        assert!(result.is_ok());
+        let maintenance_margin_ratio = result.unwrap();
+        assert_eq!(maintenance_margin_ratio, 1_234); // 5%
     }
 
     #[test]

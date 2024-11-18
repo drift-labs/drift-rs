@@ -19,7 +19,7 @@ use crate::{
         accounts::{PerpMarket, SpotMarket, User},
         MarginRequirementType, PerpPosition,
     },
-    DriftClient, MarketId, SdkError, SdkResult, SpotPosition,
+    DriftClient, MarginMode, MarketId, SdkError, SdkResult, SpotPosition,
 };
 
 /// Info on a position's liquidation price and unrealized PnL
@@ -178,8 +178,12 @@ pub fn calculate_liquidation_price_inner(
     let perp_position_with_lp =
         perp_position.simulate_settled_lp_position(perp_market, oracle_price)?;
 
-    let perp_free_collateral_delta =
-        calculate_perp_free_collateral_delta(&perp_position_with_lp, perp_market, oracle_price);
+    let perp_free_collateral_delta = calculate_perp_free_collateral_delta(
+        &perp_position_with_lp,
+        perp_market,
+        oracle_price,
+        user.margin_mode,
+    );
 
     // user holding spot asset case
     let mut spot_free_collateral_delta = 0;
@@ -210,6 +214,7 @@ fn calculate_perp_free_collateral_delta(
     position: &PerpPosition,
     market: &PerpMarket,
     oracle_price: i64,
+    margin_mode: MarginMode,
 ) -> i64 {
     let current_base_asset_amount = position.base_asset_amount;
 
@@ -220,6 +225,7 @@ fn calculate_perp_free_collateral_delta(
         .get_margin_ratio(
             worst_case_base_amount.unsigned_abs(),
             MarginRequirementType::Maintenance,
+            margin_mode == MarginMode::HighLeverage,
         )
         .unwrap();
     let margin_ratio = (margin_ratio as i64 * QUOTE_PRECISION_I64) / MARGIN_PRECISION as i64;
