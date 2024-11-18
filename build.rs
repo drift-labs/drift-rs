@@ -63,62 +63,60 @@ fn main() {
         let libffi_out_path =
             drift_ffi_sys_crate.join(Path::new(&format!("target/{profile}/{LIB}.{lib_ext}")));
 
-        if !libffi_out_path.exists() {
-            // Build ffi crate and link
-            let mut ffi_build = std::process::Command::new("rustup");
-            ffi_build
-                .env_clear()
-                .envs(ffi_build_envs)
-                .current_dir(drift_ffi_sys_crate.clone())
-                .args(["run", &ffi_toolchain, "cargo", "build"]);
+        // Build ffi crate and link
+        let mut ffi_build = std::process::Command::new("rustup");
+        ffi_build
+            .env_clear()
+            .envs(ffi_build_envs)
+            .current_dir(drift_ffi_sys_crate.clone())
+            .args(["run", &ffi_toolchain, "cargo", "build"]);
 
-            match profile.as_str() {
-                "debug" => (),
-                "release" => {
-                    ffi_build.arg("--release");
-                }
-                custom => {
-                    ffi_build.arg(format!("--profile={custom}"));
-                }
+        match profile.as_str() {
+            "debug" => (),
+            "release" => {
+                ffi_build.arg("--release");
             }
-
-            let output = ffi_build.output().expect("drift-ffi-sys built");
-            if !output.status.success() {
-                eprintln!(" {}", String::from_utf8_lossy(output.stderr.as_slice()));
-                fail_build();
+            custom => {
+                ffi_build.arg(format!("--profile={custom}"));
             }
+        }
 
-            if !output.status.success() {
-                eprintln!(
-                    "{LIB} could not be installed: {}",
-                    String::from_utf8_lossy(output.stderr.as_slice())
-                );
-            }
+        let output = ffi_build.output().expect("drift-ffi-sys built");
+        if !output.status.success() {
+            eprintln!(" {}", String::from_utf8_lossy(output.stderr.as_slice()));
+            fail_build();
+        }
 
-            if let Ok(out_dir) = std::env::var("OUT_DIR") {
-                let _output = std::process::Command::new("cp")
-                    .args([
-                        libffi_out_path.to_str().expect("ffi build path"),
-                        out_dir.as_str(),
-                    ])
-                    .output()
-                    .expect("install ok");
-                println!("{LIB}: searching for lib at: {out_dir}");
-                println!("cargo:rustc-link-search=native={out_dir}");
-            }
+        if !output.status.success() {
+            eprintln!(
+                "{LIB} could not be installed: {}",
+                String::from_utf8_lossy(output.stderr.as_slice())
+            );
+        }
 
-            let _output = std::process::Command::new("ln")
+        if let Ok(out_dir) = std::env::var("OUT_DIR") {
+            let _output = std::process::Command::new("cp")
                 .args([
-                    "-sf",
                     libffi_out_path.to_str().expect("ffi build path"),
-                    "/usr/local/lib/",
+                    out_dir.as_str(),
                 ])
                 .output()
                 .expect("install ok");
-
-            println!("{LIB}: searching for lib at: /usr/local/lib");
-            println!("cargo:rustc-link-search=native=/usr/local/lib");
+            println!("{LIB}: searching for lib at: {out_dir}");
+            println!("cargo:rustc-link-search=native={out_dir}");
         }
+
+        let _output = std::process::Command::new("ln")
+            .args([
+                "-sf",
+                libffi_out_path.to_str().expect("ffi build path"),
+                "/usr/local/lib/",
+            ])
+            .output()
+            .expect("install ok");
+
+        println!("{LIB}: searching for lib at: /usr/local/lib");
+        println!("cargo:rustc-link-search=native=/usr/local/lib");
     }
 
     if let Ok(lib_path) = std::env::var("CARGO_DRIFT_FFI_PATH") {
