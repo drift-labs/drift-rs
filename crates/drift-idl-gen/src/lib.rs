@@ -273,7 +273,6 @@ fn generate_idl_types(idl: &Idl) -> String {
                 let field_name =
                     Ident::new(&to_snake_case(&field.name), proc_macro2::Span::call_site());
                 if let ArgType::Vec { .. } = field.field_type {
-                    dbg!(&field.name, "has vec");
                     has_vec_field = true;
                 }
                 let mut serde_decorator = TokenStream::new();

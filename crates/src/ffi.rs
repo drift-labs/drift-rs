@@ -655,7 +655,9 @@ mod tests {
             margin_ratio_initial: 1_000 * MARGIN_PRECISION, // 10%
             margin_ratio_maintenance: 500,                  // 5%
             imf_factor: 0,                                  // No impact for simplicity
+            // enable HL mode for this market
             high_leverage_margin_ratio_maintenance: 1_234,
+            high_leverage_margin_ratio_initial: 4_321,
             ..Default::default()
         };
 
