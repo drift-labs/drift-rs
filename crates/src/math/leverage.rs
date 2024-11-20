@@ -152,7 +152,7 @@ impl UserMargin for DriftClient {
             &user_account,
             &market_account,
             oracle_price,
-            lp_buffer as u64,
+            lp_buffer,
         )?;
 
         Ok(max_position_size as u64 + opposite_side_liability_value * is_reduce_only as u64)
@@ -182,13 +182,13 @@ impl UserMargin for DriftClient {
         let margin_ratio = market
             .get_margin_ratio(
                 worst_case_base_amount.unsigned_abs(),
-                crate::MarginRequirementType::Initial,
+                MarginRequirementType::Initial,
                 user.margin_mode == MarginMode::HighLeverage,
             )
             .expect("got margin ratio");
         let margin_ratio = margin_ratio.max(user.max_margin_ratio);
 
-        return Ok((free_collateral * MARGIN_PRECISION as u128) / margin_ratio as u128);
+        Ok((free_collateral * MARGIN_PRECISION as u128) / margin_ratio as u128)
     }
 }
 
