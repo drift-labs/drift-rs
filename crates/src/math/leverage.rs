@@ -216,11 +216,23 @@ mod tests {
     #[test]
     fn calculate_perp_liability_value_works() {
         use crate::math::constants::{BASE_PRECISION_I64, PRICE_PRECISION_I64};
-
-        calculate_perp_liability_value(1 * BASE_PRECISION_I64, 5 * PRICE_PRECISION_I64, false);
-        calculate_perp_liability_value(-1 * BASE_PRECISION_I64, 5 * PRICE_PRECISION_I64, false);
-        calculate_perp_liability_value(-1 * BASE_PRECISION_I64, 10_000, true);
-        calculate_perp_liability_value(1 * BASE_PRECISION_I64, 90_000, true);
+        // test values taken from TS sdk
+        assert_eq!(
+            calculate_perp_liability_value(1 * BASE_PRECISION_I64, 5 * PRICE_PRECISION_I64, false),
+            5_000_000
+        );
+        assert_eq!(
+            calculate_perp_liability_value(-1 * BASE_PRECISION_I64, 5 * PRICE_PRECISION_I64, false),
+            5_000_000
+        );
+        assert_eq!(
+            calculate_perp_liability_value(-1 * BASE_PRECISION_I64, 10_000, true),
+            990_000
+        );
+        assert_eq!(
+            calculate_perp_liability_value(1 * BASE_PRECISION_I64, 90_000, true),
+            90_000
+        );
     }
 }
 
