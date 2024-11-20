@@ -124,38 +124,43 @@ impl UserMargin for DriftClient {
         market: MarketId,
         trade_side: PositionDirection,
     ) -> SdkResult<u64> {
-        // TODO: implement for spot
         let oracle = self
             .try_get_oracle_price_data_and_slot(market)
             .ok_or(SdkError::NoMarketData(market))?;
         let oracle_price = oracle.data.price;
-        let market_account = self.try_get_perp_market_account(market.index())?;
         let user_account = self.try_get_account::<User>(user)?;
 
-        let position = user_account
-            .get_perp_position(market_account.market_index)
-            .map_err(|_| SdkError::NoMarketData(MarketId::perp(market_account.market_index)))?;
-        // add any position we have on the opposite side of the current trade
-        // because we can "flip" the size of this position without taking any extra leverage.
-        let is_reduce_only = position.base_asset_amount.is_negative() as u8 != trade_side as u8;
-        let opposite_side_liability_value = calculate_perp_liability_value(
-            position.base_asset_amount,
-            oracle_price,
-            market_account.contract_type == ContractType::Prediction,
-        );
+        if market.is_perp() {
+            let market_account = self.try_get_perp_market_account(market.index())?;
 
-        let lp_buffer = ((oracle_price as u64 * market_account.amm.order_step_size)
-            / AMM_RESERVE_PRECISION as u64)
-            * position.lp_shares.max(1);
+            let position = user_account
+                .get_perp_position(market_account.market_index)
+                .map_err(|_| SdkError::NoMarketData(MarketId::perp(market_account.market_index)))?;
+            // add any position we have on the opposite side of the current trade
+            // because we can "flip" the size of this position without taking any extra leverage.
+            let is_reduce_only = position.base_asset_amount.is_negative() as u8 != trade_side as u8;
+            let opposite_side_liability_value = calculate_perp_liability_value(
+                position.base_asset_amount,
+                oracle_price,
+                market_account.contract_type == ContractType::Prediction,
+            );
 
-        let max_position_size = self.calculate_perp_buying_power(
-            &user_account,
-            &market_account,
-            oracle_price,
-            lp_buffer,
-        )?;
+            let lp_buffer = ((oracle_price as u64 * market_account.amm.order_step_size)
+                / AMM_RESERVE_PRECISION as u64)
+                * position.lp_shares.max(1);
 
-        Ok(max_position_size as u64 + opposite_side_liability_value * is_reduce_only as u64)
+            let max_position_size = self.calculate_perp_buying_power(
+                &user_account,
+                &market_account,
+                oracle_price,
+                lp_buffer,
+            )?;
+
+            Ok(max_position_size as u64 + opposite_side_liability_value * is_reduce_only as u64)
+        } else {
+            // TODO: implement for spot
+            Err(SdkError::Generic("spot market unimplemented".to_string()))
+        }
     }
     /// Calculate buying power = free collateral / initial margin ratio
     ///
