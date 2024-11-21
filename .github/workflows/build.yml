@@ -30,19 +30,11 @@ jobs:
         run: |
           rustup show active-toolchain
           rustup component add clippy rustfmt
-      - name: install libdrift_ffi_sys
-        run: |
-          curl -L https://github.com/user-attachments/files/17806677/libdrift_ffi_sys.so.zip > ffi.zip
-          unzip ffi.zip
-          ldd libdrift_ffi_sys.so
-          sudo cp libdrift_ffi_sys.so /usr/lib
-          ldconfig -p
+          rustup install 1.76.0-x86_64-unknown-linux-gnu
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
         run: cargo check
-        env:
-          CARGO_DRIFT_FFI_PATH: "/usr/lib"
       # - name: Clippy
       #   uses: giraffate/clippy-action@v1
       #   with:
@@ -60,4 +52,3 @@ jobs:
           TEST_DEVNET_RPC_ENDPOINT: ${{ secrets.DEVNET_RPC_ENDPOINT }}
           TEST_MAINNET_RPC_ENDPOINT: ${{ secrets.MAINNET_RPC_ENDPOINT }}
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
-          CARGO_DRIFT_FFI_PATH: "/usr/lib"
