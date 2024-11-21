@@ -10,9 +10,14 @@ use crate::{
     DriftClient, MarketId, SdkError, SdkResult,
 };
 
-/// Builds an AccountList of relevant spot, perp, and oracle accounts from rpc
+/// Builds a list of users's associated spot, perp, and oracle accounts
+///
+/// ```example(no_run)
+/// let mut builder = AccountsListBuilder::default();
+/// let accounts_list = builder.try_build(client, user).expect("build accounts");
+/// ```
 #[derive(Default)]
-pub(crate) struct AccountsListBuilder {
+pub struct AccountsListBuilder {
     /// placeholder account values populated with real market & oracle account data
     perp_accounts: Vec<AccountWithKey>,
     spot_accounts: Vec<AccountWithKey>,
@@ -20,7 +25,10 @@ pub(crate) struct AccountsListBuilder {
 }
 
 impl AccountsListBuilder {
-    /// Constructs an account map from `user` positions
+    /// Constructs an accounts list from `user` positions sync
+    ///
+    /// * `client` - drift client instance
+    /// * `user` - the account to build against
     ///
     /// It relies on the `client` being subscribed to all the necessary markets and oracles
     pub fn try_build(&mut self, client: &DriftClient, user: &User) -> SdkResult<AccountsList> {
@@ -108,7 +116,11 @@ impl AccountsListBuilder {
         })
     }
 
-    /// Constructs an account map from `user` positions
+    /// Constructs an accounts list from `user` positions
+    /// fetching from RPC as necessary
+    ///
+    /// * `client` - drift client instance
+    /// * `user` - the account to build against
     ///
     /// like `try_build` but will fall back to network queries to fetch market/oracle accounts as required
     /// if the client is already subscribed to necessary market/oracles then no network requests are made.
