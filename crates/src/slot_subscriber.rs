@@ -118,7 +118,7 @@ impl SlotSubscriber {
                                 handler_fn(SlotUpdate::new(new_slot));
                             }
                             None => {
-
+                                break;
                             }
                         }
                     }

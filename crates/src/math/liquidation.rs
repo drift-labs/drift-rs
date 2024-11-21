@@ -361,8 +361,6 @@ fn calculate_collateral_inner(
 
 #[cfg(test)]
 mod tests {
-    use anchor_lang::Discriminator;
-    use bytes::BytesMut;
     use solana_sdk::{account::Account, pubkey::Pubkey};
 
     use super::*;
@@ -374,6 +372,7 @@ mod tests {
             PRICE_PRECISION_I64, SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64,
             SPOT_CUMULATIVE_INTEREST_PRECISION,
         },
+        utils::test_utils::*,
         MarketId,
     };
 
@@ -888,147 +887,5 @@ mod tests {
         dbg!(unrealized_pnl);
         // entry at $80, upnl at $100
         assert_eq!(unrealized_pnl, 20_i128 * QUOTE_PRECISION_I64 as i128);
-    }
-
-    // helpers from drift-program test_utils.
-    fn get_pyth_price(price: i64, expo: i32) -> pyth_test::Price {
-        let mut pyth_price = pyth_test::Price::default();
-        let price = price * 10_i64.pow(expo as u32);
-        pyth_price.agg.price = price;
-        pyth_price.twap = price;
-        pyth_price.expo = expo;
-        pyth_price
-    }
-
-    mod pyth_test {
-        //! helper structs for pyth oracle prices
-        use bytemuck::{Pod, Zeroable};
-        use serde::Serialize;
-
-        #[derive(Default, Copy, Clone, Serialize)]
-        #[repr(C)]
-        pub struct AccKey {
-            pub val: [u8; 32],
-        }
-
-        #[derive(Copy, Clone, Default, Serialize)]
-        #[repr(C)]
-        #[allow(dead_code)]
-        pub enum PriceStatus {
-            Unknown,
-            #[default]
-            Trading,
-            Halted,
-            Auction,
-        }
-
-        #[derive(Copy, Clone, Default, Serialize)]
-        #[repr(C)]
-        pub enum CorpAction {
-            #[default]
-            NoCorpAct,
-        }
-
-        #[derive(Default, Copy, Clone, Serialize)]
-        #[repr(C)]
-        pub struct PriceInfo {
-            pub price: i64,
-            pub conf: u64,
-            pub status: PriceStatus,
-            pub corp_act: CorpAction,
-            pub pub_slot: u64,
-        }
-        #[derive(Default, Copy, Clone, Serialize)]
-        #[repr(C)]
-        pub struct PriceComp {
-            publisher: AccKey,
-            agg: PriceInfo,
-            latest: PriceInfo,
-        }
-
-        #[derive(Copy, Clone, Default, Serialize)]
-        #[repr(C)]
-        #[allow(dead_code, clippy::upper_case_acronyms)]
-        pub enum PriceType {
-            Unknown,
-            #[default]
-            Price,
-            TWAP,
-            Volatility,
-        }
-
-        #[derive(Default, Copy, Clone, Serialize)]
-        #[repr(C)]
-        pub struct Price {
-            pub magic: u32,       // Pyth magic number.
-            pub ver: u32,         // Program version.
-            pub atype: u32,       // Account type.
-            pub size: u32,        // Price account size.
-            pub ptype: PriceType, // Price or calculation type.
-            pub expo: i32,        // Price exponent.
-            pub num: u32,         // Number of component prices.
-            pub unused: u32,
-            pub curr_slot: u64,        // Currently accumulating price slot.
-            pub valid_slot: u64,       // Valid slot-time of agg. price.
-            pub twap: i64,             // Time-weighted average price.
-            pub avol: u64,             // Annualized price volatility.
-            pub drv0: i64,             // Space for future derived values.
-            pub drv1: i64,             // Space for future derived values.
-            pub drv2: i64,             // Space for future derived values.
-            pub drv3: i64,             // Space for future derived values.
-            pub drv4: i64,             // Space for future derived values.
-            pub drv5: i64,             // Space for future derived values.
-            pub prod: AccKey,          // Product account key.
-            pub next: AccKey,          // Next Price account in linked list.
-            pub agg_pub: AccKey,       // Quoter who computed last aggregate price.
-            pub agg: PriceInfo,        // Aggregate price info.
-            pub comp: [PriceComp; 32], // Price components one per quoter.
-        }
-
-        #[cfg(target_endian = "little")]
-        unsafe impl Zeroable for Price {}
-
-        #[cfg(target_endian = "little")]
-        unsafe impl Pod for Price {}
-    }
-
-    pub fn get_account_bytes<T: bytemuck::Pod>(account: &mut T) -> BytesMut {
-        let mut bytes = BytesMut::new();
-        let data = bytemuck::bytes_of_mut(account);
-        bytes.extend_from_slice(data);
-        bytes
-    }
-
-    pub fn get_anchor_account_bytes<T: bytemuck::Pod + Discriminator>(account: &mut T) -> BytesMut {
-        let mut bytes = BytesMut::new();
-        bytes.extend_from_slice(&T::discriminator());
-        let data = bytemuck::bytes_of_mut(account);
-        bytes.extend_from_slice(data);
-        bytes
-    }
-
-    #[macro_export]
-    macro_rules! create_account_info {
-        ($account:expr, $pubkey:expr, $owner:expr, $name: ident) => {
-            let acc = Account {
-                data: get_account_bytes(&mut $account).to_vec(),
-                owner: $owner,
-                ..Default::default()
-            };
-            let $name: crate::ffi::AccountWithKey = (*$pubkey, acc).into();
-        };
-    }
-
-    #[macro_export]
-    macro_rules! create_anchor_account_info {
-        ($account:expr, $pubkey:expr, $type:ident, $name: ident) => {
-            let owner = constants::PROGRAM_ID;
-            let acc = Account {
-                data: get_anchor_account_bytes(&mut $account).to_vec(),
-                owner,
-                ..Default::default()
-            };
-            let $name: crate::ffi::AccountWithKey = ($pubkey, acc).into();
-        };
     }
 }
