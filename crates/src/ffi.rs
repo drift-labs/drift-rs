@@ -114,6 +114,13 @@ extern "C" {
         user: &accounts::User,
         market_index: u16,
     ) -> FfiResult<&types::PerpPosition>;
+    #[allow(improper_ctypes)]
+    pub fn orders_place_perp_order(
+        user: &accounts::User,
+        state: &accounts::State,
+        order_params: &types::OrderParams,
+        accounts: &mut AccountsList,
+    ) -> FfiResult<bool>;
 }
 
 //
@@ -156,6 +163,20 @@ pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
             user, accounts, mode,
         )
     };
+    to_sdk_result(res)
+}
+
+/// Simulates the program's `place_perp_order` ix
+/// Useful to verify an order can be placed given factors such as available margin, etc.
+///
+/// Returns `true` if the order could be placed
+pub fn simulate_place_perp_order(
+    user: &accounts::User,
+    accounts: &mut AccountsList,
+    state: &accounts::State,
+    order_params: &types::OrderParams,
+) -> SdkResult<bool> {
+    let res = unsafe { orders_place_perp_order(user, state, order_params, accounts) };
     to_sdk_result(res)
 }
 
@@ -381,14 +402,19 @@ mod tests {
     use solana_sdk::{account::Account, pubkey::Pubkey};
     use type_layout::TypeLayout;
 
-    use super::{AccountWithKey, AccountsList, MarginCalculation, MarginContextMode};
+    use super::{
+        simulate_place_perp_order, AccountWithKey, AccountsList, MarginCalculation,
+        MarginContextMode,
+    };
     use crate::{
-        constants::{self},
+        accounts::State,
+        constants::{self, ids::pyth_program},
+        create_account_info,
         drift_idl::{
             accounts::{PerpMarket, SpotMarket, User},
             types::{
-                ContractType, MarginRequirementType, OracleSource, Order, OrderType, PerpPosition,
-                SpotBalanceType, SpotPosition,
+                ContractType, MarginRequirementType, OracleSource, Order, OrderParams, OrderType,
+                PerpPosition, SpotBalanceType, SpotPosition,
             },
         },
         ffi::{
@@ -396,17 +422,14 @@ mod tests {
             calculate_margin_requirement_and_total_collateral_and_liability_info, get_oracle_price,
         },
         math::constants::{
-            BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, MARGIN_PRECISION, PRICE_PRECISION_I64,
-            QUOTE_PRECISION, QUOTE_PRECISION_I64, SPOT_BALANCE_PRECISION,
+            BASE_PRECISION, BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, MARGIN_PRECISION,
+            PRICE_PRECISION_I64, QUOTE_PRECISION, QUOTE_PRECISION_I64, SPOT_BALANCE_PRECISION,
             SPOT_BALANCE_PRECISION_U64, SPOT_CUMULATIVE_INTEREST_PRECISION, SPOT_WEIGHT_PRECISION,
         },
-        PositionDirection,
+        types::MarketType,
+        utils::test_utils::{get_account_bytes, get_pyth_price},
+        HistoricalOracleData, MarketStatus, PositionDirection, AMM,
     };
-
-    const _SOL_PYTH_PRICE_STR: &str = include_str!("../../res/sol-oracle-pyth.hex");
-    /// encoded pyth price account for SOL, see math/liquidation.rs tests
-    const SOL_PYTH_PRICE: std::cell::LazyCell<Vec<u8>> =
-        std::cell::LazyCell::new(|| hex::decode(_SOL_PYTH_PRICE_STR).unwrap());
 
     fn sol_spot_market() -> SpotMarket {
         SpotMarket {
@@ -422,15 +445,42 @@ mod tests {
             maintenance_liability_weight: 11 * SPOT_WEIGHT_PRECISION / 10,
             liquidator_fee: LIQUIDATION_FEE_PRECISION / 1000,
             deposit_balance: (1_000 * SPOT_BALANCE_PRECISION).into(),
+            order_step_size: 1_000,
+            order_tick_size: 1_000,
+            historical_oracle_data: HistoricalOracleData {
+                last_oracle_price_twap5min: 240_000_000_000,
+                ..Default::default()
+            },
             ..Default::default()
+        }
+    }
+
+    fn usdc_spot_market() -> SpotMarket {
+        SpotMarket {
+            market_index: 0,
+            oracle_source: OracleSource::QuoteAsset,
+            cumulative_deposit_interest: SPOT_CUMULATIVE_INTEREST_PRECISION.into(),
+            decimals: 6,
+            initial_asset_weight: SPOT_WEIGHT_PRECISION,
+            maintenance_asset_weight: SPOT_WEIGHT_PRECISION,
+            deposit_balance: (100_000 * SPOT_BALANCE_PRECISION).into(),
+            liquidator_fee: 0,
+            order_step_size: 1_000,
+            order_tick_size: 1_000,
+            historical_oracle_data: HistoricalOracleData {
+                last_oracle_price_twap5min: 1_000_000,
+                ..Default::default()
+            },
+            ..SpotMarket::default()
         }
     }
 
     #[test]
     fn ffi_deser_1_76_0_spot_market() {
         // smoke test for deserializing program data (where u128/i128 alignment is 8)
-        let buf = hex_literal::hex!("64b1086ba84141270000000000000000000000000000000000000000000000000000000000000000fe650f0367d4a7ef9815a593ea15d36593f0643aaaf0149bb04be67ab851decd0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010a5d4e800000000000000000000000000000000000000000000000000000000e40b5402000000000000000000000000e40b54020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000401f000028230000e02e0000f82a000000000000e803000000000000000000000000000000000000090000000100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
-        let actual: &SpotMarket = bytemuck::from_bytes::<SpotMarket>(&buf.as_ref()[8..]); // ignore dscriminator
+        let spot_market_borsh =
+            hex::decode(include_str!("../../res/spot_market_1_76_0.hex")).unwrap();
+        let actual: &SpotMarket = bytemuck::from_bytes::<SpotMarket>(&spot_market_borsh[8..]); // ignore dscriminator
 
         assert_eq!(actual, &sol_spot_market());
     }
@@ -605,8 +655,7 @@ mod tests {
     fn ffi_get_oracle_price() {
         let oracle_pubkey = Pubkey::new_unique();
         let oracle_account = Account {
-            // encoded from pyth Price, see liquidation tests
-            data: SOL_PYTH_PRICE.clone(),
+            data: get_account_bytes(&mut get_pyth_price(240, 9)).to_vec(),
             owner: constants::ids::pyth_program::ID,
             ..Default::default()
         };
@@ -621,7 +670,7 @@ mod tests {
         let oracle_price_data = result.unwrap();
 
         dbg!(oracle_price_data.price);
-        assert!(oracle_price_data.price == 60 * QUOTE_PRECISION as i64);
+        assert!(oracle_price_data.price == 240 * QUOTE_PRECISION as i64);
     }
 
     #[test]
@@ -735,8 +784,7 @@ mod tests {
         let mut oracles = [AccountWithKey {
             key: Pubkey::new_unique(),
             account: Account {
-                // encoded from pyth Price, see liquidation tests
-                data: SOL_PYTH_PRICE.clone(),
+                data: get_account_bytes(&mut get_pyth_price(240, 9)).to_vec(),
                 owner: constants::ids::pyth_program::ID,
                 ..Default::default()
             },
@@ -757,6 +805,138 @@ mod tests {
                 *mode,
             );
         }
+    }
+
+    #[test]
+    fn ffi_simulate_place_perp_order() {
+        // smoke test for ffi compatability, logic tested in `math::` module
+        let btc_perp_index = 1_u16;
+        let mut user = User::default();
+        user.spot_positions[1] = SpotPosition {
+            market_index: 1,
+            scaled_balance: (1_000 * SPOT_BALANCE_PRECISION) as u64,
+            balance_type: SpotBalanceType::Deposit,
+            ..Default::default()
+        };
+        user.perp_positions[0] = PerpPosition {
+            market_index: btc_perp_index,
+            base_asset_amount: 100 * BASE_PRECISION_I64 as i64,
+            quote_asset_amount: -5_000 * QUOTE_PRECISION as i64,
+            ..Default::default()
+        };
+        user.perp_positions[1] = PerpPosition {
+            market_index: 0,
+            base_asset_amount: 100 * BASE_PRECISION_I64 as i64,
+            quote_asset_amount: -5_000 * QUOTE_PRECISION as i64,
+            ..Default::default()
+        };
+
+        // Create mock accounts
+        let mut perp_markets = vec![
+            AccountWithKey {
+                key: Pubkey::new_unique(),
+                account: Account {
+                    owner: crate::constants::PROGRAM_ID,
+                    data: [
+                        PerpMarket::DISCRIMINATOR.as_slice(),
+                        bytemuck::bytes_of(&PerpMarket {
+                            market_index: btc_perp_index,
+                            status: MarketStatus::Active,
+                            amm: AMM {
+                                order_step_size: 1_000,
+                                order_tick_size: 1_000,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        }),
+                    ]
+                    .concat()
+                    .to_vec(),
+                    ..Default::default()
+                },
+            },
+            AccountWithKey {
+                key: Pubkey::new_unique(),
+                account: Account {
+                    owner: crate::constants::PROGRAM_ID,
+                    data: [
+                        PerpMarket::DISCRIMINATOR.as_slice(),
+                        bytemuck::bytes_of(&PerpMarket {
+                            market_index: 0,
+                            status: MarketStatus::Active,
+                            amm: AMM {
+                                order_step_size: 1_000,
+                                order_tick_size: 1_000,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        }),
+                    ]
+                    .concat()
+                    .to_vec(),
+                    ..Default::default()
+                },
+            },
+        ];
+        let mut spot_markets = vec![
+            AccountWithKey {
+                key: Pubkey::new_unique(),
+                account: Account {
+                    owner: crate::constants::PROGRAM_ID,
+                    data: [
+                        SpotMarket::DISCRIMINATOR.as_slice(),
+                        bytemuck::bytes_of(&sol_spot_market()),
+                    ]
+                    .concat()
+                    .to_vec(),
+                    ..Default::default()
+                },
+            },
+            AccountWithKey {
+                key: Pubkey::new_unique(),
+                account: Account {
+                    owner: crate::constants::PROGRAM_ID,
+                    data: [
+                        SpotMarket::DISCRIMINATOR.as_slice(),
+                        bytemuck::bytes_of(&usdc_spot_market()),
+                    ]
+                    .concat()
+                    .to_vec(),
+                    ..Default::default()
+                },
+            },
+        ];
+
+        create_account_info!(
+            get_pyth_price(240, 9),
+            &sol_spot_market().oracle,
+            pyth_program::ID,
+            sol_oracle
+        );
+        create_account_info!(
+            get_pyth_price(1, 6),
+            &usdc_spot_market().oracle,
+            pyth_program::ID,
+            usdc_oracle
+        );
+
+        let mut oracles = [sol_oracle, usdc_oracle];
+        let mut accounts = AccountsList::new(&mut perp_markets, &mut spot_markets, &mut oracles);
+
+        let res = simulate_place_perp_order(
+            &user,
+            &mut accounts,
+            &State::default(),
+            &OrderParams {
+                market_index: 1,
+                market_type: MarketType::Perp,
+                direction: PositionDirection::Short,
+                base_asset_amount: 123 * BASE_PRECISION as u64,
+                order_type: OrderType::Market,
+                ..Default::default()
+            },
+        );
+        assert!(res.is_ok_and(|truthy| truthy))
     }
 
     #[test]

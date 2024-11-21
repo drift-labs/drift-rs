@@ -182,7 +182,10 @@ impl UserMargin for DriftClient {
             .worst_case_base_asset_amount(oracle_price, market.contract_type)?;
 
         let margin_info = self.calculate_margin_info(user)?;
-        let free_collateral = margin_info.get_free_collateral() - collateral_buffer as u128;
+        let free_collateral = margin_info
+            .get_free_collateral()
+            .checked_sub(collateral_buffer as u128)
+            .ok_or(SdkError::MathError("underflow".to_string()))?;
 
         let margin_ratio = market
             .get_margin_ratio(
