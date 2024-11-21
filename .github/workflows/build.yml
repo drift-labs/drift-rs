@@ -19,9 +19,11 @@ on:
       - "**.toml"
       - "**.lock"
       - ".github/workflows/*.yml"
-    
+
 jobs:
   format-build-test:
+    env:
+      CARGO_DRIFT_FFI_PATH: "/usr/lib"
     runs-on: ubicloud
     steps:
       - name: Check out
@@ -30,25 +32,22 @@ jobs:
         run: |
           rustup show active-toolchain
           rustup component add clippy rustfmt
-          rustup install 1.76.0-x86_64-unknown-linux-gnu
+      - name: install libdrift_ffi_sys
+        run: |
+          curl -L https://github.com/user-attachments/files/17849111/libdrift_ffi_sys.so.zip > ffi.zip
+          unzip ffi.zip
+          ldd libdrift_ffi_sys.so
+          sudo cp libdrift_ffi_sys.so $CARGO_DRIFT_FFI_PATH
+          ldconfig -p
       - name: Format
         run: cargo fmt --all -- --check
       - name: Build
         run: cargo check
-      # - name: Clippy
-      #   uses: giraffate/clippy-action@v1
-      #   with:
-      #    reporter: 'github-pr-review'
-      #    github_token: ${{ secrets.GITHUB_TOKEN }}
-      #   env:
-      #     RUST_TOOLCHAIN: stable-x86_64-linux-unknown-gnu # force clippy to build with same rust version
-      #     CARGO_DRIFT_FFI_PATH: "/usr/lib"
       - name: Test
         run: |
           cargo test --no-fail-fast --lib -- --nocapture
           cargo test --no-fail-fast --test integration -- --nocapture --test-threads 1
         env:
-          RUST_LOG: info
           TEST_DEVNET_RPC_ENDPOINT: ${{ secrets.DEVNET_RPC_ENDPOINT }}
           TEST_MAINNET_RPC_ENDPOINT: ${{ secrets.MAINNET_RPC_ENDPOINT }}
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
