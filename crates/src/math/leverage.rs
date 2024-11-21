@@ -1,7 +1,7 @@
 use solana_sdk::pubkey::Pubkey;
 
 use super::{
-    account_map_builder::AccountsListBuilder,
+    account_list_builder::AccountsListBuilder,
     constants::{AMM_RESERVE_PRECISION, BASE_PRECISION, MARGIN_PRECISION, PRICE_PRECISION},
 };
 use crate::{
@@ -17,7 +17,7 @@ use crate::{
 
 pub fn get_leverage(client: &DriftClient, user: &User) -> SdkResult<u128> {
     let mut builder = AccountsListBuilder::default();
-    let mut accounts = builder.try_build(client, user)?;
+    let mut accounts = builder.try_build(client, user, &[])?;
     let margin_calculation = calculate_margin_requirement_and_total_collateral_and_liability_info(
         user,
         &mut accounts,
@@ -47,7 +47,7 @@ pub fn get_leverage(client: &DriftClient, user: &User) -> SdkResult<u128> {
 
 pub fn get_spot_asset_value(client: &DriftClient, user: &User) -> SdkResult<i128> {
     let mut builder = AccountsListBuilder::default();
-    let mut accounts = builder.try_build(client, user)?;
+    let mut accounts = builder.try_build(client, user, &[])?;
 
     let margin_calculation = calculate_margin_requirement_and_total_collateral_and_liability_info(
         user,
@@ -111,7 +111,7 @@ pub trait UserMargin {
 impl UserMargin for DriftClient {
     fn calculate_margin_info(&self, user: &User) -> SdkResult<MarginCalculation> {
         let mut builder = AccountsListBuilder::default();
-        let mut accounts = builder.try_build(self, user)?;
+        let mut accounts = builder.try_build(self, user, &[])?;
         calculate_margin_requirement_and_total_collateral_and_liability_info(
             user,
             &mut accounts,

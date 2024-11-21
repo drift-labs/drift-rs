@@ -9,7 +9,7 @@ use crate::{
         MarginContextMode,
     },
     math::{
-        account_map_builder::AccountsListBuilder,
+        account_list_builder::AccountsListBuilder,
         constants::{
             AMM_RESERVE_PRECISION_I128, BASE_PRECISION_I128, MARGIN_PRECISION,
             QUOTE_PRECISION_I128, QUOTE_PRECISION_I64, SPOT_WEIGHT_PRECISION,
@@ -51,7 +51,7 @@ pub async fn calculate_liquidation_price_and_unrealized_pnl(
 
     // build a list of all user positions for margin calculations
     let mut builder = AccountsListBuilder::default();
-    let mut accounts_list = builder.build(client, user).await?;
+    let mut accounts_list = builder.build(client, user, &[]).await?;
 
     let oracle = accounts_list
         .oracles
@@ -124,7 +124,7 @@ pub async fn calculate_liquidation_price(
     market_index: u16,
 ) -> SdkResult<i64> {
     let mut accounts_builder = AccountsListBuilder::default();
-    let mut account_maps = accounts_builder.build(client, user).await?;
+    let mut account_maps = accounts_builder.build(client, user, &[]).await?;
     let perp_market = client
         .program_data()
         .perp_market_config_by_index(market_index)
@@ -294,7 +294,7 @@ pub fn calculate_margin_requirements(
 ) -> SdkResult<MarginRequirementInfo> {
     calculate_margin_requirements_inner(
         user,
-        &mut AccountsListBuilder::default().try_build(client, user)?,
+        &mut AccountsListBuilder::default().try_build(client, user, &[])?,
     )
 }
 
@@ -337,7 +337,7 @@ pub fn calculate_collateral(
     let mut accounts_builder = AccountsListBuilder::default();
     calculate_collateral_inner(
         user,
-        &mut accounts_builder.try_build(client, user)?,
+        &mut accounts_builder.try_build(client, user, &[])?,
         margin_requirement_type,
     )
 }
