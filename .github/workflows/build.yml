@@ -23,7 +23,7 @@ on:
 jobs:
   format-build-test:
     env:
-      CARGO_DRIFT_FFI_PATH: "/usr/lib"
+      CARGO_DRIFT_FFI_PATH: /usr/lib
     runs-on: ubicloud
     steps:
       - name: Check out

@@ -46,7 +46,7 @@ pub struct OracleMap {
 }
 
 impl OracleMap {
-    pub const SUBSCRIPTION_ID: &str = "oraclemap";
+    pub const SUBSCRIPTION_ID: &'static str = "oraclemap";
 
     /// Create a new `OracleMap`
     ///
