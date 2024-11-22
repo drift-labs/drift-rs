@@ -29,41 +29,64 @@ impl AccountsListBuilder {
     ///
     /// * `client` - drift client instance
     /// * `user` - the account to build against
+    /// * `force_markets` - additional market accounts that should be included in the account list
     ///
     /// It relies on the `client` being subscribed to all the necessary markets and oracles
-    pub fn try_build(&mut self, client: &DriftClient, user: &User) -> SdkResult<AccountsList> {
+    pub fn try_build(
+        &mut self,
+        client: &DriftClient,
+        user: &User,
+        force_markets: &[MarketId],
+    ) -> SdkResult<AccountsList> {
         let mut oracle_markets =
             HashMap::<Pubkey, MarketId>::with_capacity_and_hasher(16, Default::default());
-        let mut spot_markets = Vec::<SpotMarket>::with_capacity(user.spot_positions.len());
-        let mut perp_markets = Vec::<PerpMarket>::with_capacity(user.perp_positions.len());
+        let mut spot_markets = Vec::<SpotMarket>::new();
+        let mut perp_markets = Vec::<PerpMarket>::new();
         let drift_state_account = client.try_get_account::<State>(state_account())?;
 
-        for p in user.spot_positions.iter().filter(|p| !p.is_available()) {
-            let market = client.try_get_spot_market_account(p.market_index)?;
+        let force_spot_iter = force_markets
+            .iter()
+            .filter(|m| m.is_spot())
+            .map(|m| m.index());
+        let mut spot_market_idxs = ahash::HashSet::from_iter(
+            user.spot_positions
+                .iter()
+                .filter(|p| !p.is_available())
+                .map(|p| p.market_index)
+                .chain(force_spot_iter),
+        );
+        spot_market_idxs.insert(MarketId::QUOTE_SPOT.index());
+
+        for idx in spot_market_idxs {
+            let market = client.try_get_spot_market_account(idx)?;
             oracle_markets.insert(market.oracle, MarketId::spot(market.market_index));
             spot_markets.push(market);
         }
 
-        let quote_market = client.try_get_spot_market_account(MarketId::QUOTE_SPOT.index())?;
-        if oracle_markets
-            .insert(quote_market.oracle, MarketId::QUOTE_SPOT)
-            .is_none()
-        {
-            spot_markets.push(quote_market);
-        }
+        let force_perp_iter = force_markets
+            .iter()
+            .filter(|m| m.is_perp())
+            .map(|m| m.index());
+        let perp_market_idxs = ahash::HashSet::from_iter(
+            user.perp_positions
+                .iter()
+                .filter(|p| !p.is_available())
+                .map(|p| p.market_index)
+                .chain(force_perp_iter),
+        );
 
-        for p in user.perp_positions.iter().filter(|p| !p.is_available()) {
-            let market = client.try_get_perp_market_account(p.market_index)?;
+        for idx in perp_market_idxs {
+            let market = client.try_get_perp_market_account(idx)?;
             oracle_markets.insert(market.amm.oracle, MarketId::perp(market.market_index));
             perp_markets.push(market);
         }
 
-        for market in spot_markets.iter() {
+        for market in spot_markets {
             self.spot_accounts.push(
                 (
                     market.pubkey,
                     Account {
-                        data: zero_account_to_bytes(*market),
+                        data: zero_account_to_bytes(market),
                         owner: constants::PROGRAM_ID,
                         ..Default::default()
                     },
@@ -72,12 +95,12 @@ impl AccountsListBuilder {
             );
         }
 
-        for market in perp_markets.iter() {
+        for market in perp_markets {
             self.perp_accounts.push(
                 (
                     market.pubkey,
                     Account {
-                        data: zero_account_to_bytes(*market),
+                        data: zero_account_to_bytes(market),
                         owner: constants::PROGRAM_ID,
                         ..Default::default()
                     },
@@ -121,34 +144,56 @@ impl AccountsListBuilder {
     ///
     /// * `client` - drift client instance
     /// * `user` - the account to build against
+    /// * `force_markets` - additional market accounts that should be included in the account list
     ///
     /// like `try_build` but will fall back to network queries to fetch market/oracle accounts as required
     /// if the client is already subscribed to necessary market/oracles then no network requests are made.
-    pub async fn build(&mut self, client: &DriftClient, user: &User) -> SdkResult<AccountsList> {
+    pub async fn build(
+        &mut self,
+        client: &DriftClient,
+        user: &User,
+        force_markets: &[MarketId],
+    ) -> SdkResult<AccountsList> {
         let mut oracle_markets =
             HashMap::<Pubkey, MarketId>::with_capacity_and_hasher(16, Default::default());
-        let mut spot_markets = Vec::<SpotMarket>::with_capacity(user.spot_positions.len());
-        let mut perp_markets = Vec::<PerpMarket>::with_capacity(user.perp_positions.len());
+        let mut spot_markets = Vec::<SpotMarket>::new();
+        let mut perp_markets = Vec::<PerpMarket>::new();
         let drift_state_account = client.try_get_account::<State>(state_account())?;
 
-        for p in user.spot_positions.iter().filter(|p| !p.is_available()) {
-            let market = client.get_spot_market_account(p.market_index).await?;
+        // TODO: could batch the requests
+        let force_spot_iter = force_markets
+            .iter()
+            .filter(|m| m.is_spot())
+            .map(|m| m.index());
+        let mut spot_market_idxs = ahash::HashSet::from_iter(
+            user.spot_positions
+                .iter()
+                .filter(|p| !p.is_available())
+                .map(|p| p.market_index)
+                .chain(force_spot_iter),
+        );
+        spot_market_idxs.insert(MarketId::QUOTE_SPOT.index());
+
+        for market_idx in spot_market_idxs.iter() {
+            let market = client.get_spot_market_account(*market_idx).await?;
             oracle_markets.insert(market.oracle, MarketId::spot(market.market_index));
             spot_markets.push(market);
         }
 
-        let quote_market = client
-            .get_spot_market_account(MarketId::QUOTE_SPOT.index())
-            .await?;
-        if oracle_markets
-            .insert(quote_market.oracle, MarketId::QUOTE_SPOT)
-            .is_none()
-        {
-            spot_markets.push(quote_market);
-        }
+        let force_perp_iter = force_markets
+            .iter()
+            .filter(|m| m.is_perp())
+            .map(|m| m.index());
+        let perp_market_idxs = ahash::HashSet::from_iter(
+            user.perp_positions
+                .iter()
+                .filter(|p| !p.is_available())
+                .map(|p| p.market_index)
+                .chain(force_perp_iter),
+        );
 
-        for p in user.perp_positions.iter().filter(|p| !p.is_available()) {
-            let market = client.get_perp_market_account(p.market_index).await?;
+        for market_idx in perp_market_idxs.iter() {
+            let market = client.get_perp_market_account(*market_idx).await?;
             oracle_markets.insert(market.amm.oracle, MarketId::perp(market.market_index));
             perp_markets.push(market);
         }

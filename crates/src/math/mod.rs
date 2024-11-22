@@ -3,7 +3,7 @@ use crate::drift_idl::{
     types::{MarginCalculationMode, MarginRequirementType, MarketIdentifier},
 };
 
-pub mod account_map_builder;
+pub mod account_list_builder;
 pub mod auction;
 pub mod constants;
 pub mod leverage;
