@@ -8,6 +8,30 @@ use drift_rs::{
 use solana_sdk::signature::Keypair;
 
 #[tokio::test]
+async fn client_sync_subscribe_all_devnet() {
+    let client = DriftClient::new(
+        Context::DevNet,
+        RpcClient::new(devnet_endpoint()),
+        Keypair::new().into(),
+    )
+    .await
+    .expect("connects");
+
+    tokio::try_join!(
+        client.subscribe_all_markets(),
+        client.subscribe_all_oracles(),
+    )
+    .expect("subscribes");
+
+    let all_markets = client.get_all_market_ids();
+    for market in all_markets {
+        let price = client.oracle_price(market).await.expect("ok");
+        assert!(price > 0);
+        dbg!(market, price);
+    }
+}
+
+#[tokio::test]
 async fn client_sync_subscribe_devnet() {
     let client = DriftClient::new(
         Context::DevNet,
