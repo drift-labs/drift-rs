@@ -368,6 +368,14 @@ impl PubsubClient {
             'manager: loop {
                 tokio::select! {
                     biased;
+                    // Send close on shutdown signal
+                    _ = (&mut shutdown_receiver) => {
+                        log::info!("PubsubClient received shutdown");
+                        let frame = CloseFrame { code: CloseCode::Normal, reason: "".into() };
+                        ws.send(Message::Close(Some(frame))).await?;
+                        ws.flush().await?;
+                        break 'reconnect Ok(());
+                    },
                     // Read incoming WebSocket message
                     next_msg = ws.next() => {
                         let msg = match next_msg {
@@ -487,14 +495,6 @@ impl PubsubClient {
                             continue 'manager;
                         }
                     }
-                    // Send close on shutdown signal
-                    _ = (&mut shutdown_receiver) => {
-                        log::info!("PubsubClient received shutdown");
-                        let frame = CloseFrame { code: CloseCode::Normal, reason: "".into() };
-                        ws.send(Message::Close(Some(frame))).await?;
-                        ws.flush().await?;
-                        break 'reconnect Ok(());
-                    },
                     // Read message for subscribe
                     Some((operation, params, response_sender)) = subscribe_receiver.recv() => {
                         request_id += 1;
