@@ -47,7 +47,7 @@ pub async fn calculate_liquidation_price_and_unrealized_pnl(
 
     let position = user
         .get_perp_position(market_index)
-        .map_err(|_| SdkError::NoPosiiton(market_index))?;
+        .map_err(|_| SdkError::NoPosition(market_index))?;
 
     // build a list of all user positions for margin calculations
     let mut builder = AccountsListBuilder::default();
@@ -100,7 +100,7 @@ pub async fn calculate_unrealized_pnl(
 
         calculate_unrealized_pnl_inner(&position, oracle_price)
     } else {
-        Err(SdkError::NoPosiiton(market_index))
+        Err(SdkError::NoPosition(market_index))
     }
 }
 
@@ -173,7 +173,7 @@ pub fn calculate_liquidation_price_inner(
     // calculate perp free collateral delta
     let perp_position = user
         .get_perp_position(perp_market.market_index)
-        .map_err(|_| SdkError::NoPosiiton(perp_market.market_index))?;
+        .map_err(|_| SdkError::NoPosition(perp_market.market_index))?;
 
     let perp_position_with_lp =
         perp_position.simulate_settled_lp_position(perp_market, oracle_price)?;

@@ -8,6 +8,7 @@ use std::{
 
 use anchor_lang::{AccountDeserialize, AnchorDeserialize};
 use dashmap::DashMap;
+use drift_pubsub_client::PubsubClient;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use serde_json::json;
 use solana_account_decoder::UiAccountEncoding;
@@ -24,7 +25,6 @@ use crate::{
     constants::{self, derive_perp_market_account, derive_spot_market_account, state_account},
     drift_idl::types::OracleSource,
     memcmp::get_market_filter,
-    utils::get_ws_url,
     websocket_account_subscriber::WebsocketAccountSubscriber,
     DataAndSlot, MarketId, MarketType, PerpMarket, SdkError, SdkResult, SpotMarket, UnsubHandle,
 };
@@ -78,6 +78,7 @@ pub struct MarketMap<T: AnchorDeserialize + Send> {
     subscriptions: DashMap<u16, UnsubHandle, ahash::RandomState>,
     latest_slot: Arc<AtomicU64>,
     rpc: Arc<RpcClient>,
+    pubsub: Arc<PubsubClient>,
 }
 
 impl<T> MarketMap<T>
@@ -86,11 +87,12 @@ where
 {
     pub const SUBSCRIPTION_ID: &'static str = "marketmap";
 
-    pub fn new(rpc: Arc<RpcClient>) -> Self {
+    pub fn new(rpc: Arc<RpcClient>, pubsub: Arc<PubsubClient>) -> Self {
         Self {
             subscriptions: Default::default(),
             marketmap: Arc::default(),
             latest_slot: Arc::new(AtomicU64::new(0)),
+            pubsub,
             rpc,
         }
     }
@@ -98,7 +100,6 @@ where
     /// Subscribe to market account updates
     pub async fn subscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
         log::debug!(target: LOG_TARGET, "subscribing: {:?}", T::MARKET_TYPE);
-        let url = get_ws_url(&self.rpc.url()).expect("valid url");
 
         let markets = HashSet::<MarketId>::from_iter(markets.iter().copied());
         let mut pending_subscriptions =
@@ -113,8 +114,11 @@ where
                 MarketType::Spot => derive_spot_market_account(market.index()),
             };
 
-            let market_subscriber =
-                WebsocketAccountSubscriber::new(url.clone(), market_pubkey, self.rpc.commitment());
+            let market_subscriber = WebsocketAccountSubscriber::new(
+                Arc::clone(&self.pubsub),
+                market_pubkey,
+                self.rpc.commitment(),
+            );
 
             pending_subscriptions.push((market.index(), market_subscriber));
         }
@@ -337,14 +341,29 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
 mod tests {
     use std::sync::Arc;
 
+    use drift_pubsub_client::PubsubClient;
     use solana_client::nonblocking::rpc_client::RpcClient;
 
     use super::{get_market_accounts_with_fallback, MarketMap};
-    use crate::{accounts::{PerpMarket, SpotMarket}, utils::test_envs::{devnet_endpoint, mainnet_endpoint}, MarketId};
+    use crate::{
+        accounts::{PerpMarket, SpotMarket},
+        utils::{
+            get_ws_url,
+            test_envs::{devnet_endpoint, mainnet_endpoint},
+        },
+        MarketId,
+    };
 
     #[tokio::test]
     async fn marketmap_subscribe() {
-        let map = MarketMap::<PerpMarket>::new(Arc::new(RpcClient::new(devnet_endpoint())));
+        let map = MarketMap::<PerpMarket>::new(
+            Arc::new(RpcClient::new(devnet_endpoint())),
+            Arc::new(
+                PubsubClient::new(&get_ws_url(&devnet_endpoint()).unwrap())
+                    .await
+                    .expect("ws connects"),
+            ),
+        );
 
         assert!(map
             .subscribe(&[MarketId::perp(0), MarketId::perp(1), MarketId::perp(1)])
@@ -370,8 +389,9 @@ mod tests {
             dbg!(market.market_index, market.status);
         }
 
-        let result = get_market_accounts_with_fallback::<SpotMarket>(&RpcClient::new(mainnet_endpoint()))
-            .await;
+        let result =
+            get_market_accounts_with_fallback::<SpotMarket>(&RpcClient::new(mainnet_endpoint()))
+                .await;
 
         for market in result.unwrap().0 {
             dbg!(market.market_index, market.status);

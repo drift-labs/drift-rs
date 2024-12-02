@@ -14,13 +14,9 @@ log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
 solana-account-decoder = "2"
-solana-account-decoder-client-types = "2"
 solana-client = "2"
-solana-clock = "2"
-solana-pubkey = "2"
 solana-sdk = "2"
 solana-rpc-client-api = "2"
-solana-signature = "2"
 solana-transaction-status = "2"
 thiserror = "1"
 tokio = { version = "1.40", features = ["full"] }

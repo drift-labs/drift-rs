@@ -271,7 +271,7 @@ pub enum SdkError {
     #[error("{0}")]
     Rpc(#[from] solana_client::client_error::ClientError),
     #[error("{0}")]
-    Ws(#[from] solana_client::nonblocking::pubsub_client::PubsubClientError),
+    Ws(#[from] drift_pubsub_client::PubsubClientError),
     #[error("{0}")]
     Anchor(#[from] Box<anchor_lang::error::Error>),
     #[error("error while deserializing")]
@@ -285,7 +285,7 @@ pub enum SdkError {
     #[error("invalid base58 value")]
     InvalidBase58,
     #[error("user does not have position: {0}")]
-    NoPosiiton(u16),
+    NoPosition(u16),
     #[error("insufficient SOL balance for fees")]
     OutOfSOL,
     #[error("{0}")]

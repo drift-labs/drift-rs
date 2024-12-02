@@ -3,9 +3,9 @@ use std::{
     time::Duration,
 };
 
+use drift_pubsub_client::PubsubClient;
 use futures_util::StreamExt;
 use log::{debug, error, warn};
-use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_sdk::clock::Slot;
 use tokio::sync::{
     mpsc::{self},
@@ -35,8 +35,8 @@ const LOG_TARGET: &str = "slotsub";
 /// ```
 ///
 pub struct SlotSubscriber {
+    pubsub: Arc<PubsubClient>,
     current_slot: Arc<AtomicU64>,
-    url: String,
     unsub: Mutex<Option<oneshot::Sender<()>>>,
 }
 
@@ -59,10 +59,15 @@ impl SlotSubscriber {
         guard.is_some()
     }
 
-    pub fn new(url: String) -> Self {
+    /// Create a new `SlotSubscriber`
+    ///
+    /// * `pubsub` - a `PubsubClient` instance for the subscription to utilize (maybe shared)
+    ///
+    /// Consumer must call `.subscribe()` to start receiving updates
+    pub fn new(pubsub: Arc<PubsubClient>) -> Self {
         Self {
+            pubsub,
             current_slot: Arc::default(),
-            url,
             unsub: Mutex::new(None),
         }
     }
@@ -72,6 +77,7 @@ impl SlotSubscriber {
         self.current_slot.load(std::sync::atomic::Ordering::Relaxed)
     }
 
+    /// Start the slot subscription task
     pub fn subscribe<F>(&mut self, handler_fn: F) -> SdkResult<()>
     where
         F: 'static + Send + Fn(SlotUpdate),
@@ -87,13 +93,13 @@ impl SlotSubscriber {
         F: 'static + Send + Fn(SlotUpdate),
     {
         let (slot_tx, mut slot_rx) = mpsc::channel(8);
-        let url = self.url.clone();
+        let pubsub = Arc::clone(&self.pubsub);
 
         let join_handle = spawn_retry_task(
             move || {
                 let task = SlotSubscriberTask {
-                    endpoint: url.clone(),
                     slot_tx: slot_tx.clone(),
+                    pubsub: Arc::clone(&pubsub),
                 };
                 task.slot_subscribe()
             },
@@ -148,21 +154,14 @@ impl SlotSubscriber {
 }
 
 struct SlotSubscriberTask {
-    endpoint: String,
     slot_tx: mpsc::Sender<Slot>,
+    pubsub: Arc<PubsubClient>,
 }
 
 impl SlotSubscriberTask {
     async fn slot_subscribe(self) {
         debug!(target: LOG_TARGET, "start task");
-        let pubsub = match PubsubClient::new(&self.endpoint).await {
-            Ok(p) => p,
-            Err(err) => {
-                debug!(target: LOG_TARGET, "connect failed: {err:?}");
-                return;
-            }
-        };
-        let (mut slot_updates, unsubscriber) = match pubsub.slot_subscribe().await {
+        let (mut slot_updates, unsubscriber) = match self.pubsub.slot_subscribe().await {
             Ok(s) => s,
             Err(err) => {
                 debug!(target: LOG_TARGET, "subscribe failed: {err:?}");

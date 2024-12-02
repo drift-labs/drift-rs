@@ -8,9 +8,7 @@ use futures_util::{
 use log::*;
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
-use solana_account_decoder_client_types::UiAccount;
-use solana_clock::Slot;
-use solana_pubkey::Pubkey;
+use solana_account_decoder::UiAccount;
 use solana_rpc_client_api::{
     config::{
         RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
@@ -23,7 +21,7 @@ use solana_rpc_client_api::{
         RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
     },
 };
-use solana_signature::Signature;
+use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 use thiserror::Error;
 use tokio::{
     sync::{
@@ -146,6 +144,7 @@ impl PubsubClient {
         self.ws.await.unwrap() // WS future should not be cancelled or panicked
     }
 
+    // TODO: if the underlying Ws is ready, it should tell users somehow??
     async fn subscribe<'a, T>(&self, operation: &str, params: Value) -> SubscribeResult<'a, T>
     where
         T: DeserializeOwned + Send + 'a,
