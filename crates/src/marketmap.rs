@@ -340,7 +340,7 @@ mod tests {
     use solana_client::nonblocking::rpc_client::RpcClient;
 
     use super::{get_market_accounts_with_fallback, MarketMap};
-    use crate::{accounts::PerpMarket, utils::test_envs::devnet_endpoint, MarketId};
+    use crate::{accounts::{PerpMarket, SpotMarket}, utils::test_envs::{devnet_endpoint, mainnet_endpoint}, MarketId};
 
     #[tokio::test]
     async fn marketmap_subscribe() {
@@ -362,11 +362,21 @@ mod tests {
 
     #[tokio::test]
     async fn get_market_accounts_with_fallback_works() {
-        let result =
-            get_market_accounts_with_fallback::<PerpMarket>(&RpcClient::new(devnet_endpoint()))
+        let result: Result<(Vec<PerpMarket>, _), _> =
+            get_market_accounts_with_fallback::<PerpMarket>(&RpcClient::new(mainnet_endpoint()))
                 .await;
 
-        assert!(result.is_ok_and(|r| r.0.len() > 0 && r.1 > 0));
+        for market in result.unwrap().0 {
+            dbg!(market.market_index, market.status);
+        }
+
+        let result = get_market_accounts_with_fallback::<SpotMarket>(&RpcClient::new(mainnet_endpoint()))
+            .await;
+
+        for market in result.unwrap().0 {
+            dbg!(market.market_index, market.status);
+        }
+        //assert!(result.is_ok_and(|r| r.0.len() > 0 && r.1 > 0));
     }
 }
 

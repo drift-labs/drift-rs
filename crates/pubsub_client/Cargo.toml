@@ -1,0 +1,31 @@
+[package]
+name = "pubsub-client-fixed"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/drift-labs/drift-rs"
+
+[dependencies]
+ahash = "0.8.11"
+base64 = "0.22"
+env_logger = "0.11"
+futures-util = "0.3"
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["raw_value"] }
+solana-account-decoder = "2"
+solana-account-decoder-client-types = "2"
+solana-client = "2"
+solana-clock = "2"
+solana-pubkey = "2"
+solana-sdk = "2"
+solana-rpc-client-api = "2"
+solana-signature = "2"
+solana-transaction-status = "2"
+thiserror = "1"
+tokio = { version = "1.40", features = ["full"] }
+tokio-stream = "*"
+tokio-tungstenite = "*"
+url = "*"
+gjson = "0.8.1"
