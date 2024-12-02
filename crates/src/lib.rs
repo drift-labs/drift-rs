@@ -139,11 +139,86 @@ impl DriftClient {
         self.backend.subscribe_markets(markets).await
     }
 
+    /// Subscribe to all spot and perp markets
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_all_markets(&self) -> SdkResult<()> {
+        let markets = self.get_all_market_ids();
+        self.backend.subscribe_markets(&markets).await
+    }
+
+    /// Subscribe to all spot markets
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_all_spot_markets(&self) -> SdkResult<()> {
+        let markets = self.get_all_spot_market_ids();
+        self.backend.subscribe_markets(&markets).await
+    }
+
+    /// Subscribe to all perp markets
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_all_perp_markets(&self) -> SdkResult<()> {
+        let markets = self.get_all_perp_market_ids();
+        self.backend.subscribe_markets(&markets).await
+    }
+
     /// Starts background subscriptions for live oracle account updates by market
     ///
     /// This is a no-op if already subscribed
     pub async fn subscribe_oracles(&self, markets: &[MarketId]) -> SdkResult<()> {
         self.backend.subscribe_oracles(markets).await
+    }
+
+    /// Subscribe to all oracles
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_all_oracles(&self) -> SdkResult<()> {
+        let markets = self.get_all_market_ids();
+        self.backend.subscribe_oracles(&markets).await
+    }
+
+    /// Subscribe to all spot market oracles
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_all_spot_oracles(&self) -> SdkResult<()> {
+        let markets = self.get_all_spot_market_ids();
+        self.backend.subscribe_oracles(&markets).await
+    }
+
+    /// Subscribe to all perp market oracles
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_all_perp_oracles(&self) -> SdkResult<()> {
+        let markets = self.get_all_perp_market_ids();
+        self.backend.subscribe_oracles(&markets).await
+    }
+
+    /// Returns the MarketIds for all spot markets
+    ///
+    /// Useful for iterating over all spot markets
+    pub fn get_all_spot_market_ids(&self) -> Vec<MarketId> {
+        (0..self.backend.spot_market_map.len())
+            .map(|x| MarketId::spot(x as u16))
+            .collect()
+    }
+
+    /// Returns the MarketIds for all perp markets
+    ///
+    /// Useful for iterating over all perp markets
+    pub fn get_all_perp_market_ids(&self) -> Vec<MarketId> {
+        (0..self.backend.perp_market_map.len())
+            .map(|x| MarketId::perp(x as u16))
+            .collect()
+    }
+
+    /// Returns the MarketIds for all markets
+    ///
+    /// Useful for iterating over all markets
+    pub fn get_all_market_ids(&self) -> Vec<MarketId> {
+        let spot_markets = self.get_all_spot_market_ids();
+        let perp_markets = self.get_all_perp_market_ids();
+        spot_markets.into_iter().chain(perp_markets).collect()
     }
 
     /// Unsubscribe from network resources
