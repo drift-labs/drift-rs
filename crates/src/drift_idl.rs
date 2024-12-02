@@ -2,6 +2,7 @@
 #![doc = r""]
 #![doc = r" Auto-generated IDL types, manual edits do not persist (see `crates/drift-idl-gen`)"]
 #![doc = r""]
+use self::traits::ToAccountMetas;
 use anchor_lang::{
     prelude::{
         account,
@@ -12,8 +13,6 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-
-use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
     #[doc = r" This is distinct from the anchor_lang version of the trait"]
@@ -1919,9 +1918,8 @@ pub mod instructions {
 }
 pub mod types {
     #![doc = r" IDL types"]
-    use std::ops::Mul;
-
     use super::*;
+    use std::ops::Mul;
     #[doc = ""]
     #[doc = " backwards compatible u128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
     #[doc = " https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]

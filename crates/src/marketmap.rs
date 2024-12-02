@@ -382,21 +382,16 @@ mod tests {
     #[tokio::test]
     async fn get_market_accounts_with_fallback_works() {
         let result: Result<(Vec<PerpMarket>, _), _> =
-            get_market_accounts_with_fallback::<PerpMarket>(&RpcClient::new(mainnet_endpoint()))
+            get_market_accounts_with_fallback::<PerpMarket>(&RpcClient::new(devnet_endpoint()))
                 .await;
 
-        for market in result.unwrap().0 {
-            dbg!(market.market_index, market.status);
-        }
+        assert!(result.is_ok_and(|r| r.0.len() > 0 && r.1 > 0));
 
         let result =
-            get_market_accounts_with_fallback::<SpotMarket>(&RpcClient::new(mainnet_endpoint()))
+            get_market_accounts_with_fallback::<SpotMarket>(&RpcClient::new(devnet_endpoint()))
                 .await;
 
-        for market in result.unwrap().0 {
-            dbg!(market.market_index, market.status);
-        }
-        //assert!(result.is_ok_and(|r| r.0.len() > 0 && r.1 > 0));
+        assert!(result.is_ok_and(|r| r.0.len() > 0 && r.1 > 0));
     }
 }
 
