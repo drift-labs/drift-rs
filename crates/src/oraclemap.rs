@@ -5,6 +5,7 @@ use std::sync::{
 
 use ahash::HashSet;
 use dashmap::{DashMap, ReadOnlyView};
+use drift_pubsub_client::PubsubClient;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use log::warn;
 use solana_client::nonblocking::rpc_client::RpcClient;
@@ -13,7 +14,6 @@ use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 use crate::{
     drift_idl::types::OracleSource,
     ffi::{get_oracle_price, OraclePriceData},
-    utils::get_ws_url,
     websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber},
     MarketId, SdkError, SdkResult, UnsubHandle,
 };
@@ -43,6 +43,7 @@ pub struct OracleMap {
     oracle_by_market: ReadOnlyView<MarketId, Pubkey>,
     latest_slot: Arc<AtomicU64>,
     rpc: Arc<RpcClient>,
+    pubsub: Arc<PubsubClient>,
 }
 
 impl OracleMap {
@@ -50,9 +51,13 @@ impl OracleMap {
 
     /// Create a new `OracleMap`
     ///
+    /// * `rpc_client` - Shared RPC client instance
+    /// * `pubsub_client` - Shared Pubsub client instance
     /// * `all_oracles` - Exhaustive list of all Drift oracle pubkeys and source by market
+    ///
     pub fn new(
         rpc_client: Arc<RpcClient>,
+        pubsub_client: Arc<PubsubClient>,
         all_oracles: &[(MarketId, Pubkey, OracleSource)],
     ) -> Self {
         log::debug!(target: LOG_TARGET, "all oracles: {:?}", all_oracles);
@@ -83,6 +88,7 @@ impl OracleMap {
             subcriptions: Default::default(),
             latest_slot: Arc::new(AtomicU64::new(0)),
             rpc: rpc_client,
+            pubsub: pubsub_client,
         }
     }
 
@@ -97,7 +103,6 @@ impl OracleMap {
         let markets = HashSet::from_iter(markets);
         log::debug!(target: LOG_TARGET, "subscribe market oracles: {markets:?}");
 
-        let url = get_ws_url(&self.rpc.url()).expect("valid url");
         let mut pending_subscriptions =
             Vec::<(WebsocketAccountSubscriber, Oracle)>::with_capacity(markets.len());
 
@@ -115,8 +120,11 @@ impl OracleMap {
                 continue;
             }
 
-            let oracle_subscriber =
-                WebsocketAccountSubscriber::new(url.clone(), *oracle_pubkey, self.rpc.commitment());
+            let oracle_subscriber = WebsocketAccountSubscriber::new(
+                Arc::clone(&self.pubsub),
+                *oracle_pubkey,
+                self.rpc.commitment(),
+            );
 
             pending_subscriptions.push((oracle_subscriber, oracle_info.clone()));
         }
@@ -385,7 +393,7 @@ async fn get_multi_account_data_with_fallback(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::test_envs::devnet_endpoint;
+    use crate::utils::{get_ws_url, test_envs::devnet_endpoint};
 
     const SOL_PERP_ORACLE: Pubkey =
         solana_sdk::pubkey!("BAtFj4kQttZRVep3UZS2aZRDixkGYgWsbqTBVDbnSsPF");
@@ -407,7 +415,12 @@ mod tests {
             (MarketId::spot(1), SOL_PERP_ORACLE, OracleSource::PythPull),
         ];
         let rpc = Arc::new(RpcClient::new(devnet_endpoint().into()));
-        let map = OracleMap::new(rpc, &all_oracles);
+        let pubsub = Arc::new(
+            PubsubClient::new(&get_ws_url(&devnet_endpoint()).unwrap())
+                .await
+                .expect("ws connects"),
+        );
+        let map = OracleMap::new(rpc, pubsub, &all_oracles);
 
         // - dups ignored
         // - makerts with same oracle pubkey, make at most 1 sub
@@ -437,7 +450,12 @@ mod tests {
             (MarketId::spot(1), SOL_PERP_ORACLE, OracleSource::PythPull),
         ];
         let rpc = Arc::new(RpcClient::new(devnet_endpoint().into()));
-        let map = OracleMap::new(rpc, &all_oracles);
+        let pubsub = Arc::new(
+            PubsubClient::new(&get_ws_url(&devnet_endpoint()).unwrap())
+                .await
+                .expect("ws connects"),
+        );
+        let map = OracleMap::new(rpc, pubsub, &all_oracles);
 
         // - dups ignored
         // - makerts with same oracle pubkey, make at most 1 sub
@@ -477,6 +495,11 @@ mod tests {
         ];
         let map = OracleMap::new(
             Arc::new(RpcClient::new(devnet_endpoint().into())),
+            Arc::new(
+                PubsubClient::new(&get_ws_url(&devnet_endpoint()).unwrap())
+                    .await
+                    .expect("ws connects"),
+            ),
             &all_oracles,
         );
         map.subscribe(&[MarketId::spot(0), MarketId::perp(1)])

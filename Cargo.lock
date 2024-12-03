@@ -1492,6 +1492,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "log",
+ "pubsub-client-fixed",
  "rayon",
  "regex",
  "serde",
@@ -1832,6 +1833,12 @@ name = "gimli"
 version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32085ea23f3234fc7846555e85283ba4de91e21016dc0455a16286d87a292d64"
+
+[[package]]
+name = "gjson"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43503cc176394dd30a6525f5f36e838339b8b5619be33ed9a7783841580a97b6"
 
 [[package]]
 name = "goblin"
@@ -2809,6 +2816,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e719e8df665df0d1c8fbfd238015744736151d4445ec0836b8e628aae103b77"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "pubsub-client-fixed"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.11.5",
+ "futures-util",
+ "gjson",
+ "log",
+ "serde",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-client",
+ "solana-rpc-client-api",
+ "solana-sdk",
+ "solana-transaction-status",
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tokio-tungstenite",
+ "url",
 ]
 
 [[package]]
