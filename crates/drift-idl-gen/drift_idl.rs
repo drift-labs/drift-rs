@@ -11,18 +11,14 @@ use anchor_lang::{
     },
     Discriminator,
 };
-use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
-    #[doc = r" This is distinct from the anchor_lang version of the trait"]
-    #[doc = r" reimplemented to ensure the types used are from `solana`` crates _not_ the anchor_lang vendored versions which may be lagging behind"]
     pub trait ToAccountMetas {
         fn to_account_metas(&self) -> Vec<AccountMeta>;
     }
 }
 pub mod instructions {
-    #![doc = r" IDL instruction types"]
     use super::{types::*, *};
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct InitializeUser {
@@ -43,34 +39,6 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeUserStats {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct InitializeRfqUser {}
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for InitializeRfqUser {
-        const DISCRIMINATOR: [u8; 8] = [87, 2, 27, 16, 186, 206, 169, 38];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for InitializeRfqUser {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct InitializeSwiftUserOrders {
-        pub num_orders: u16,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for InitializeSwiftUserOrders {
-        const DISCRIMINATOR: [u8; 8] = [26, 91, 2, 246, 96, 153, 117, 194];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for InitializeSwiftUserOrders {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct ResizeSwiftUserOrders {
-        pub num_orders: u16,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for ResizeSwiftUserOrders {
-        const DISCRIMINATOR: [u8; 8] = [36, 57, 40, 90, 193, 150, 249, 53];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for ResizeSwiftUserOrders {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct InitializeReferrerName {
         pub name: [u8; 32],
@@ -193,7 +161,7 @@ pub mod instructions {
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct PlaceAndTakePerpOrder {
         pub params: OrderParams,
-        pub success_condition: Option<u32>,
+        pub maker_order_id: Option<u32>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceAndTakePerpOrder {
@@ -212,38 +180,6 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PlaceAndMakePerpOrder {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct PlaceAndMakeSwiftPerpOrder {
-        pub params: OrderParams,
-        pub swift_order_uuid: [u8; 8],
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for PlaceAndMakeSwiftPerpOrder {
-        const DISCRIMINATOR: [u8; 8] = [0, 160, 153, 76, 136, 212, 248, 16];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for PlaceAndMakeSwiftPerpOrder {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct PlaceSwiftTakerOrder {
-        pub swift_message_bytes: Vec<u8>,
-        pub swift_order_params_message_bytes: Vec<u8>,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for PlaceSwiftTakerOrder {
-        const DISCRIMINATOR: [u8; 8] = [50, 89, 120, 78, 254, 15, 104, 140];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for PlaceSwiftTakerOrder {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct PlaceAndMatchRfqOrders {
-        pub rfq_matches: Vec<RFQMatch>,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for PlaceAndMatchRfqOrders {
-        const DISCRIMINATOR: [u8; 8] = [111, 3, 51, 243, 178, 174, 219, 100];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for PlaceAndMatchRfqOrders {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct PlaceSpotOrder {
         pub params: OrderParams,
@@ -380,17 +316,6 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserMarginTradingEnabled {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct UpdateUserPoolId {
-        pub sub_account_id: u16,
-        pub pool_id: u8,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateUserPoolId {
-        const DISCRIMINATOR: [u8; 8] = [219, 86, 73, 106, 56, 218, 128, 109];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateUserPoolId {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdateUserDelegate {
         pub sub_account_id: u16,
         pub delegate: Pubkey,
@@ -424,17 +349,6 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserAdvancedLp {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct UpdateUserProtectedMakerOrders {
-        pub sub_account_id: u16,
-        pub protected_maker_orders: bool,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateUserProtectedMakerOrders {
-        const DISCRIMINATOR: [u8; 8] = [114, 39, 123, 198, 187, 25, 90, 219];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateUserProtectedMakerOrders {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct DeleteUser {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for DeleteUser {
@@ -443,22 +357,6 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for DeleteUser {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct ForceDeleteUser {}
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for ForceDeleteUser {
-        const DISCRIMINATOR: [u8; 8] = [2, 241, 195, 172, 227, 24, 254, 158];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for ForceDeleteUser {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct DeleteSwiftUserOrders {}
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for DeleteSwiftUserOrders {
-        const DISCRIMINATOR: [u8; 8] = [83, 157, 116, 215, 177, 177, 158, 20];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for DeleteSwiftUserOrders {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct ReclaimRent {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for ReclaimRent {
@@ -466,16 +364,6 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for ReclaimRent {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct EnableUserHighLeverageMode {
-        pub sub_account_id: u16,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for EnableUserHighLeverageMode {
-        const DISCRIMINATOR: [u8; 8] = [231, 24, 230, 112, 201, 173, 73, 184];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for EnableUserHighLeverageMode {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct FillPerpOrder {
         pub order_id: Option<u32>,
@@ -533,30 +421,6 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserIdle {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct DisableUserHighLeverageMode {}
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for DisableUserHighLeverageMode {
-        const DISCRIMINATOR: [u8; 8] = [183, 155, 45, 0, 226, 85, 213, 69];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for DisableUserHighLeverageMode {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct UpdateUserFuelBonus {}
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateUserFuelBonus {
-        const DISCRIMINATOR: [u8; 8] = [88, 175, 201, 190, 222, 100, 143, 57];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateUserFuelBonus {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct UpdateUserStatsReferrerStatus {}
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateUserStatsReferrerStatus {
-        const DISCRIMINATOR: [u8; 8] = [174, 154, 72, 42, 191, 148, 145, 205];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateUserStatsReferrerStatus {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdateUserOpenOrdersCount {}
     #[automatically_derived]
@@ -805,16 +669,6 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserGovTokenInsuranceStake {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct UpdateUserGovTokenInsuranceStakeDevnet {
-        pub gov_stake_amount: u64,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateUserGovTokenInsuranceStakeDevnet {
-        const DISCRIMINATOR: [u8; 8] = [129, 185, 243, 183, 228, 111, 64, 175];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateUserGovTokenInsuranceStakeDevnet {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct InitializeInsuranceFundStake {
         pub market_index: u16,
@@ -1205,17 +1059,6 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketMarginRatio {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct UpdatePerpMarketHighLeverageMarginRatio {
-        pub margin_ratio_initial: u16,
-        pub margin_ratio_maintenance: u16,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdatePerpMarketHighLeverageMarginRatio {
-        const DISCRIMINATOR: [u8; 8] = [88, 112, 86, 49, 24, 116, 74, 157];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdatePerpMarketHighLeverageMarginRatio {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdatePerpMarketFundingPeriod {
         pub funding_period: i64,
     }
@@ -1258,16 +1101,6 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateInsuranceFundUnstakingPeriod {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct UpdateSpotMarketPoolId {
-        pub pool_id: u8,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateSpotMarketPoolId {
-        const DISCRIMINATOR: [u8; 8] = [22, 213, 197, 160, 139, 193, 81, 149];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateSpotMarketPoolId {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdateSpotMarketLiquidationFee {
         pub liquidator_fee: u32,
@@ -1944,63 +1777,17 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializePythPullOracle {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct InitializeHighLeverageModeConfig {
-        pub max_users: u32,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for InitializeHighLeverageModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [213, 167, 93, 246, 208, 130, 90, 248];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for InitializeHighLeverageModeConfig {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct UpdateHighLeverageModeConfig {
-        pub max_users: u32,
-        pub reduce_only: bool,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateHighLeverageModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [64, 122, 212, 93, 141, 217, 202, 55];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateHighLeverageModeConfig {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct InitializeProtectedMakerModeConfig {
-        pub max_users: u32,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for InitializeProtectedMakerModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [67, 103, 220, 67, 88, 32, 252, 8];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for InitializeProtectedMakerModeConfig {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct UpdateProtectedMakerModeConfig {
-        pub max_users: u32,
-        pub reduce_only: bool,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateProtectedMakerModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [86, 166, 235, 253, 67, 202, 223, 17];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateProtectedMakerModeConfig {}
 }
 pub mod types {
-    #![doc = r" IDL types"]
     use super::*;
     use std::ops::Mul;
-    #[doc = ""]
-    #[doc = " backwards compatible u128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
-    #[doc = " https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]
+    #[doc = r" backwards compatible u128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
+    #[doc = r" https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]
     #[derive(
         Default,
         PartialEq,
         AnchorSerialize,
         AnchorDeserialize,
-        Serialize,
-        Deserialize,
         Copy,
         Clone,
         bytemuck :: Zeroable,
@@ -2010,7 +1797,7 @@ pub mod types {
     #[repr(C)]
     pub struct u128(pub [u8; 16]);
     impl u128 {
-        #[doc = " convert self into the std `u128` type"]
+        #[doc = r" convert self into the std `u128` type"]
         pub fn as_u128(&self) -> std::primitive::u128 {
             std::primitive::u128::from_le_bytes(self.0)
         }
@@ -2020,15 +1807,13 @@ pub mod types {
             Self(value.to_le_bytes())
         }
     }
-    #[doc = " backwards compatible i128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
-    #[doc = " https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]
+    #[doc = r" backwards compatible i128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
+    #[doc = r" https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]
     #[derive(
         Default,
         PartialEq,
         AnchorSerialize,
         AnchorDeserialize,
-        Serialize,
-        Deserialize,
         Copy,
         Clone,
         bytemuck :: Zeroable,
@@ -2038,7 +1823,7 @@ pub mod types {
     #[repr(C)]
     pub struct i128(pub [u8; 16]);
     impl i128 {
-        #[doc = " convert self into the std `i128` type"]
+        #[doc = r" convert self into the std `i128` type"]
         pub fn as_i128(&self) -> core::primitive::i128 {
             core::primitive::i128::from_le_bytes(self.0)
         }
@@ -2048,34 +1833,7 @@ pub mod types {
             Self(value.to_le_bytes())
         }
     }
-    #[repr(transparent)]
-    #[derive(AnchorDeserialize, AnchorSerialize, Copy, Clone, PartialEq, Debug)]
-    pub struct Signature(pub [u8; 64]);
-    impl Default for Signature {
-        fn default() -> Self {
-            Self([0_u8; 64])
-        }
-    }
-    impl serde::Serialize for Signature {
-        fn serialize<S: serde::Serializer>(
-            &self,
-            serializer: S,
-        ) -> std::result::Result<S::Ok, S::Error> {
-            serializer.serialize_bytes(&self.0)
-        }
-    }
-    impl<'de> serde::Deserialize<'de> for Signature {
-        fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
-            let s = <&[u8]>::deserialize(d)?;
-            s.try_into()
-                .map(Signature)
-                .map_err(serde::de::Error::custom)
-        }
-    }
-    impl anchor_lang::Space for Signature {
-        const INIT_SPACE: usize = 8 * 64;
-    }
-    #[doc = " wrapper around fixed array types used for padding with `Default` implementation"]
+    #[doc = r" wrapper around fixed array types used for padding with `Default` implementation"]
     #[repr(transparent)]
     #[derive(AnchorDeserialize, AnchorSerialize, Copy, Clone, PartialEq)]
     pub struct Padding<const N: usize>([u8; N]);
@@ -2094,16 +1852,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct UpdatePerpMarketSummaryStatsParams {
         pub quote_asset_amount_with_unsettled_lp: Option<i64>,
@@ -2112,16 +1861,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct LiquidatePerpRecord {
         pub market_index: u16,
@@ -2137,16 +1877,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct LiquidateSpotRecord {
         pub asset_market_index: u16,
@@ -2159,16 +1890,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct LiquidateBorrowForPerpPnlRecord {
         pub perp_market_index: u16,
@@ -2180,16 +1902,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct LiquidatePerpPnlForDepositRecord {
         pub perp_market_index: u16,
@@ -2201,16 +1914,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct PerpBankruptcyRecord {
         pub market_index: u16,
@@ -2222,16 +1926,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct SpotBankruptcyRecord {
         pub market_index: u16,
@@ -2241,16 +1936,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct MarketIdentifier {
         pub market_type: MarketType,
@@ -2258,16 +1944,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct HistoricalOracleData {
         pub last_oracle_price: i64,
@@ -2279,16 +1956,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct HistoricalIndexData {
         pub last_index_bid_price: u64,
@@ -2299,16 +1967,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct PrelaunchOracleParams {
         pub perp_market_index: u16,
@@ -2317,16 +1976,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct OrderParams {
         pub order_type: OrderType,
@@ -2349,129 +1999,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub struct SwiftServerMessage {
-        pub uuid: [u8; 8],
-        pub swift_order_signature: Signature,
-        pub slot: u64,
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub struct SwiftOrderParamsMessage {
-        pub swift_order_params: OrderParams,
-        pub sub_account_id: u16,
-        pub take_profit_order_params: Option<SwiftTriggerOrderParams>,
-        pub stop_loss_order_params: Option<SwiftTriggerOrderParams>,
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub struct SwiftTriggerOrderParams {
-        pub trigger_price: u64,
-        pub base_asset_amount: u64,
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub struct RFQMakerOrderParams {
-        pub uuid: [u8; 8],
-        pub authority: Pubkey,
-        pub sub_account_id: u16,
-        pub market_index: u16,
-        pub market_type: MarketType,
-        pub base_asset_amount: u64,
-        pub price: u64,
-        pub direction: PositionDirection,
-        pub max_ts: i64,
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub struct RFQMakerMessage {
-        pub order_params: RFQMakerOrderParams,
-        pub signature: Signature,
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub struct RFQMatch {
-        pub base_asset_amount: u64,
-        pub maker_order_params: RFQMakerOrderParams,
-        pub maker_signature: Signature,
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct ModifyOrderParams {
         pub direction: Option<PositionDirection>,
@@ -2487,20 +2015,11 @@ pub mod types {
         pub auction_duration: Option<u8>,
         pub auction_start_price: Option<i64>,
         pub auction_end_price: Option<i64>,
-        pub policy: Option<u8>,
+        pub policy: Option<ModifyOrderPolicy>,
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct InsuranceClaim {
         pub revenue_withdraw_since_last_settle: i64,
@@ -2511,16 +2030,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct PoolBalance {
         pub scaled_balance: u128,
@@ -2529,16 +2039,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct AMM {
         pub oracle: Pubkey,
@@ -2628,33 +2129,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub struct RFQOrderId {
-        pub uuid: [u8; 8],
-        pub max_ts: i64,
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct InsuranceFund {
         pub vault: Pubkey,
@@ -2669,16 +2144,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct OracleGuardRails {
         pub price_divergence: PriceDivergenceGuardRails,
@@ -2686,16 +2152,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct PriceDivergenceGuardRails {
         pub mark_oracle_percent_divergence: u64,
@@ -2703,16 +2160,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct ValidityGuardRails {
         pub slots_before_stale_for_amm: i64,
@@ -2722,16 +2170,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct FeeStructure {
         pub fee_tiers: [FeeTier; 10],
@@ -2741,16 +2180,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct FeeTier {
         pub fee_numerator: u32,
@@ -2764,16 +2194,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct OrderFillerRewardStructure {
         pub reward_numerator: u32,
@@ -2782,53 +2203,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub struct SwiftOrderId {
-        pub uuid: [u8; 8],
-        pub max_slot: u64,
-        pub order_id: u32,
-        pub padding: u32,
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub struct SwiftUserOrdersFixed {
-        pub user_pubkey: Pubkey,
-        pub padding: u32,
-        pub len: u32,
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct UserFees {
         pub total_fee_paid: u64,
@@ -2840,16 +2215,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct SpotPosition {
         pub scaled_balance: u64,
@@ -2863,16 +2229,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct PerpPosition {
         pub last_cumulative_funding_rate: i64,
@@ -2893,16 +2250,7 @@ pub mod types {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct Order {
         pub slot: u64,
@@ -2931,16 +2279,7 @@ pub mod types {
         pub padding: [u8; 3],
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum SwapDirection {
         #[default]
@@ -2948,16 +2287,7 @@ pub mod types {
         Remove,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum ModifyOrderId {
         #[default]
@@ -2965,16 +2295,7 @@ pub mod types {
         OrderId,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum PositionDirection {
         #[default]
@@ -2982,16 +2303,7 @@ pub mod types {
         Short,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum SpotFulfillmentType {
         #[default]
@@ -3001,16 +2313,7 @@ pub mod types {
         OpenbookV2,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum SwapReduceOnly {
         #[default]
@@ -3018,16 +2321,7 @@ pub mod types {
         Out,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum TwapPeriod {
         #[default]
@@ -3035,16 +2329,7 @@ pub mod types {
         FiveMin,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum LiquidationMultiplierType {
         #[default]
@@ -3052,16 +2337,7 @@ pub mod types {
         Premium,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum MarginRequirementType {
         #[default]
@@ -3070,16 +2346,7 @@ pub mod types {
         Maintenance,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum OracleValidity {
         #[default]
@@ -3092,16 +2359,7 @@ pub mod types {
         Valid,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum DriftAction {
         #[default]
@@ -3117,16 +2375,7 @@ pub mod types {
         OracleOrderPrice,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum PositionUpdateType {
         #[default]
@@ -3137,16 +2386,7 @@ pub mod types {
         Flip,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum DepositExplanation {
         #[default]
@@ -3156,16 +2396,7 @@ pub mod types {
         RepayBorrow,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum DepositDirection {
         #[default]
@@ -3173,16 +2404,7 @@ pub mod types {
         Withdraw,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum OrderAction {
         #[default]
@@ -3193,16 +2415,7 @@ pub mod types {
         Expire,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum OrderActionExplanation {
         #[default]
@@ -3228,16 +2441,7 @@ pub mod types {
         OrderFilledWithOpenbookV2,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum LPAction {
         #[default]
@@ -3247,16 +2451,7 @@ pub mod types {
         RemoveLiquidityDerisk,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum LiquidationType {
         #[default]
@@ -3268,16 +2463,7 @@ pub mod types {
         SpotBankruptcy,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum SettlePnlExplanation {
         #[default]
@@ -3285,16 +2471,7 @@ pub mod types {
         ExpiredPosition,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum StakeAction {
         #[default]
@@ -3306,16 +2483,7 @@ pub mod types {
         StakeTransfer,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum FillMode {
         #[default]
@@ -3323,19 +2491,9 @@ pub mod types {
         PlaceAndMake,
         PlaceAndTake,
         Liquidation,
-        RFQ,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum PerpFulfillmentMethod {
         #[default]
@@ -3343,33 +2501,14 @@ pub mod types {
         Match,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum SpotFulfillmentMethod {
         #[default]
         ExternalMarket,
         Match,
     }
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Debug,
-        PartialEq,
-    )]
+    #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Debug, PartialEq)]
     pub enum MarginCalculationMode {
         Standard {
             track_open_orders_fraction: bool,
@@ -3379,16 +2518,7 @@ pub mod types {
         },
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum OracleSource {
         #[default]
@@ -3406,16 +2536,7 @@ pub mod types {
         SwitchboardOnDemand,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum PostOnlyParam {
         #[default]
@@ -3425,50 +2546,15 @@ pub mod types {
         Slide,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum ModifyOrderPolicy {
         #[default]
+        TryModify,
         MustModify,
-        ExcludePreviousFill,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub enum PlaceAndTakeOrderSuccessCondition {
-        #[default]
-        PartialFill,
-        FullFill,
-    }
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum PerpOperation {
         #[default]
@@ -3478,19 +2564,9 @@ pub mod types {
         SettlePnl,
         SettlePnlWithPosition,
         Liquidation,
-        AmmImmediateFill,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum SpotOperation {
         #[default]
@@ -3501,16 +2577,7 @@ pub mod types {
         Liquidation,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum InsuranceFundOperation {
         #[default]
@@ -3520,16 +2587,7 @@ pub mod types {
         Remove,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum MarketStatus {
         #[default]
@@ -3544,16 +2602,7 @@ pub mod types {
         Delisted,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum ContractType {
         #[default]
@@ -3562,16 +2611,7 @@ pub mod types {
         Prediction,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum ContractTier {
         #[default]
@@ -3583,16 +2623,7 @@ pub mod types {
         Isolated,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum AMMLiquiditySplit {
         #[default]
@@ -3601,34 +2632,7 @@ pub mod types {
         Shared,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub enum AMMAvailability {
-        #[default]
-        Immediate,
-        AfterMinDuration,
-        Unavailable,
-    }
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum SettlePnlMode {
         #[default]
@@ -3636,16 +2640,7 @@ pub mod types {
         TrySettle,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum SpotBalanceType {
         #[default]
@@ -3653,16 +2648,7 @@ pub mod types {
         Borrow,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum SpotFulfillmentConfigStatus {
         #[default]
@@ -3670,16 +2656,7 @@ pub mod types {
         Disabled,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum AssetTier {
         #[default]
@@ -3690,16 +2667,7 @@ pub mod types {
         Unlisted,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum ExchangeStatus {
         #[default]
@@ -3710,19 +2678,9 @@ pub mod types {
         LiqPaused,
         FundingPaused,
         SettlePnlPaused,
-        AmmImmediateFillPaused,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum UserStatus {
         #[default]
@@ -3730,19 +2688,9 @@ pub mod types {
         Bankrupt,
         ReduceOnly,
         AdvancedLp,
-        ProtectedMakerOrders,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum AssetType {
         #[default]
@@ -3750,16 +2698,7 @@ pub mod types {
         Quote,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum OrderStatus {
         #[default]
@@ -3769,16 +2708,7 @@ pub mod types {
         Canceled,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum OrderType {
         #[default]
@@ -3789,16 +2719,7 @@ pub mod types {
         Oracle,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum OrderTriggerCondition {
         #[default]
@@ -3808,72 +2729,19 @@ pub mod types {
         TriggeredBelow,
     }
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub enum MarketType {
         #[default]
         Spot,
         Perp,
     }
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub enum ReferrerStatus {
-        #[default]
-        IsReferrer,
-        IsReferred,
-    }
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub enum MarginMode {
-        #[default]
-        Default,
-        HighLeverage,
-    }
 }
 pub mod accounts {
-    #![doc = r" IDL Account types"]
     use super::{types::*, *};
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct OpenbookV2FulfillmentConfig {
         pub pubkey: Pubkey,
@@ -3888,7 +2756,6 @@ pub mod accounts {
         pub market_index: u16,
         pub fulfillment_type: SpotFulfillmentType,
         pub status: SpotFulfillmentConfigStatus,
-        #[serde(skip)]
         pub padding: Padding<4>,
     }
     #[automatically_derived]
@@ -3932,16 +2799,7 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct PhoenixV1FulfillmentConfig {
         pub pubkey: Pubkey,
@@ -3953,7 +2811,6 @@ pub mod accounts {
         pub market_index: u16,
         pub fulfillment_type: SpotFulfillmentType,
         pub status: SpotFulfillmentConfigStatus,
-        #[serde(skip)]
         pub padding: Padding<4>,
     }
     #[automatically_derived]
@@ -3997,16 +2854,7 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct SerumV3FulfillmentConfig {
         pub pubkey: Pubkey,
@@ -4023,7 +2871,6 @@ pub mod accounts {
         pub market_index: u16,
         pub fulfillment_type: SpotFulfillmentType,
         pub status: SpotFulfillmentConfigStatus,
-        #[serde(skip)]
         pub padding: Padding<4>,
     }
     #[automatically_derived]
@@ -4067,75 +2914,7 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub struct HighLeverageModeConfig {
-        pub max_users: u32,
-        pub current_users: u32,
-        pub reduce_only: u8,
-        #[serde(skip)]
-        pub padding: Padding<31>,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for HighLeverageModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [3, 196, 90, 189, 193, 64, 228, 234];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for HighLeverageModeConfig {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for HighLeverageModeConfig {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for HighLeverageModeConfig {}
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for HighLeverageModeConfig {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for HighLeverageModeConfig {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct InsuranceFundStake {
         pub authority: Pubkey,
@@ -4147,7 +2926,6 @@ pub mod accounts {
         pub last_withdraw_request_ts: i64,
         pub cost_basis: i64,
         pub market_index: u16,
-        #[serde(skip)]
         pub padding: Padding<14>,
     }
     #[automatically_derived]
@@ -4191,23 +2969,13 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct ProtocolIfSharesTransferConfig {
         pub whitelisted_signers: [Pubkey; 4],
         pub max_transfer_per_epoch: u128,
         pub current_epoch_transfer: u128,
         pub next_epoch_ts: i64,
-        #[serde(skip)]
         pub padding: Padding<8>,
     }
     #[automatically_derived]
@@ -4251,16 +3019,7 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct PrelaunchOracle {
         pub price: i64,
@@ -4269,7 +3028,6 @@ pub mod accounts {
         pub last_update_slot: u64,
         pub amm_last_update_slot: u64,
         pub perp_market_index: u16,
-        #[serde(skip)]
         pub padding: Padding<70>,
     }
     #[automatically_derived]
@@ -4313,16 +3071,7 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct PerpMarket {
         pub pubkey: Pubkey,
@@ -4356,11 +3105,7 @@ pub mod accounts {
         pub fuel_boost_position: u8,
         pub fuel_boost_taker: u8,
         pub fuel_boost_maker: u8,
-        pub pool_id: u8,
-        pub high_leverage_margin_ratio_initial: u16,
-        pub high_leverage_margin_ratio_maintenance: u16,
-        #[serde(skip)]
-        pub padding: Padding<38>,
+        pub padding: Padding<43>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PerpMarket {
@@ -4403,131 +3148,7 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub struct ProtectedMakerModeConfig {
-        pub max_users: u32,
-        pub current_users: u32,
-        pub reduce_only: u8,
-        #[serde(skip)]
-        pub padding: Padding<31>,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for ProtectedMakerModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [47, 86, 90, 9, 224, 255, 10, 69];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for ProtectedMakerModeConfig {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ProtectedMakerModeConfig {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for ProtectedMakerModeConfig {}
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for ProtectedMakerModeConfig {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for ProtectedMakerModeConfig {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub struct RFQUser {
-        pub user_pubkey: Pubkey,
-        pub rfq_order_data: [RFQOrderId; 32],
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for RFQUser {
-        const DISCRIMINATOR: [u8; 8] = [213, 84, 187, 159, 70, 112, 52, 186];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for RFQUser {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for RFQUser {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for RFQUser {}
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for RFQUser {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for RFQUser {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct SpotMarket {
         pub pubkey: Pubkey,
@@ -4592,9 +3213,7 @@ pub mod accounts {
         pub fuel_boost_maker: u8,
         pub fuel_boost_insurance: u8,
         pub token_program: u8,
-        pub pool_id: u8,
-        #[serde(skip)]
-        pub padding: Padding<40>,
+        pub padding: Padding<41>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SpotMarket {
@@ -4637,16 +3256,7 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct State {
         pub admin: Pubkey,
@@ -4673,7 +3283,6 @@ pub mod accounts {
         pub initial_pct_to_liquidate: u16,
         pub max_number_of_sub_accounts: u16,
         pub max_initialize_user_fee: u16,
-        #[serde(skip)]
         pub padding: Padding<10>,
     }
     #[automatically_derived]
@@ -4717,58 +3326,7 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, Serialize, Deserialize, Clone, Default, Debug, PartialEq,
-    )]
-    pub struct SwiftUserOrders {
-        pub user_pubkey: Pubkey,
-        pub padding: u32,
-        pub swift_order_data: Vec<SwiftOrderId>,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for SwiftUserOrders {
-        const DISCRIMINATOR: [u8; 8] = [67, 121, 127, 98, 21, 50, 57, 193];
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for SwiftUserOrders {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for SwiftUserOrders {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct User {
         pub authority: Pubkey,
@@ -4797,11 +3355,8 @@ pub mod accounts {
         pub has_open_order: bool,
         pub open_auctions: u8,
         pub has_open_auction: bool,
-        pub margin_mode: MarginMode,
-        pub pool_id: u8,
-        pub padding1: [u8; 3],
+        pub padding1: [u8; 5],
         pub last_fuel_bonus_update_ts: u32,
-        #[serde(skip)]
         pub padding: Padding<12>,
     }
     #[automatically_derived]
@@ -4845,16 +3400,7 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct UserStats {
         pub authority: Pubkey,
@@ -4870,7 +3416,7 @@ pub mod accounts {
         pub if_staked_quote_asset_amount: u64,
         pub number_of_sub_accounts: u16,
         pub number_of_sub_accounts_created: u16,
-        pub referrer_status: u8,
+        pub is_referrer: bool,
         pub disable_update_perp_bid_ask_twap: bool,
         pub padding1: [u8; 2],
         pub fuel_insurance: u32,
@@ -4881,7 +3427,6 @@ pub mod accounts {
         pub fuel_maker: u32,
         pub if_staked_gov_token_amount: u64,
         pub last_fuel_if_bonus_update_ts: u32,
-        #[serde(skip)]
         pub padding: Padding<12>,
     }
     #[automatically_derived]
@@ -4925,16 +3470,7 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
+        AnchorSerialize, AnchorDeserialize, InitSpace, Copy, Clone, Default, Debug, PartialEq,
     )]
     pub struct ReferrerName {
         pub authority: Pubkey,
@@ -4982,7 +3518,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct InitializeUser {
         pub user: Pubkey,
         pub user_stats: Pubkey,
@@ -5076,7 +3612,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct InitializeUserStats {
         pub user_stats: Pubkey,
         pub state: Pubkey,
@@ -5164,259 +3700,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct InitializeRfqUser {
-        pub rfq_user: Pubkey,
-        pub authority: Pubkey,
-        pub user: Pubkey,
-        pub payer: Pubkey,
-        pub rent: Pubkey,
-        pub system_program: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for InitializeRfqUser {
-        const DISCRIMINATOR: [u8; 8] = [92, 138, 138, 72, 176, 27, 12, 100];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeRfqUser {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for InitializeRfqUser {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for InitializeRfqUser {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for InitializeRfqUser {}
-    #[automatically_derived]
-    impl ToAccountMetas for InitializeRfqUser {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.rfq_user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.payer,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.rent,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.system_program,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for InitializeRfqUser {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for InitializeRfqUser {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct InitializeSwiftUserOrders {
-        pub swift_user_orders: Pubkey,
-        pub authority: Pubkey,
-        pub user: Pubkey,
-        pub payer: Pubkey,
-        pub rent: Pubkey,
-        pub system_program: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for InitializeSwiftUserOrders {
-        const DISCRIMINATOR: [u8; 8] = [78, 117, 148, 206, 195, 205, 137, 8];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeSwiftUserOrders {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for InitializeSwiftUserOrders {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for InitializeSwiftUserOrders {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for InitializeSwiftUserOrders {}
-    #[automatically_derived]
-    impl ToAccountMetas for InitializeSwiftUserOrders {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.swift_user_orders,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.user,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.payer,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.rent,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.system_program,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for InitializeSwiftUserOrders {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for InitializeSwiftUserOrders {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct ResizeSwiftUserOrders {
-        pub swift_user_orders: Pubkey,
-        pub authority: Pubkey,
-        pub user: Pubkey,
-        pub system_program: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for ResizeSwiftUserOrders {
-        const DISCRIMINATOR: [u8; 8] = [237, 41, 225, 39, 0, 209, 116, 228];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for ResizeSwiftUserOrders {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ResizeSwiftUserOrders {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for ResizeSwiftUserOrders {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for ResizeSwiftUserOrders {}
-    #[automatically_derived]
-    impl ToAccountMetas for ResizeSwiftUserOrders {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.swift_user_orders,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.user,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.system_program,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for ResizeSwiftUserOrders {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for ResizeSwiftUserOrders {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct InitializeReferrerName {
         pub referrer_name: Pubkey,
         pub user: Pubkey,
@@ -5510,7 +3794,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct Deposit {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -5604,7 +3888,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct Withdraw {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -5704,7 +3988,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct TransferDeposit {
         pub from_user: Pubkey,
         pub to_user: Pubkey,
@@ -5792,7 +4076,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct PlacePerpOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -5862,7 +4146,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct CancelOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -5932,7 +4216,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct CancelOrderByUserId {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -6002,7 +4286,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct CancelOrders {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -6072,7 +4356,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct CancelOrdersByIds {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -6142,7 +4426,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct ModifyOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -6212,7 +4496,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct ModifyOrderByUserId {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -6282,7 +4566,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct PlaceAndTakePerpOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -6358,7 +4642,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct PlaceAndMakePerpOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -6446,271 +4730,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct PlaceAndMakeSwiftPerpOrder {
-        pub state: Pubkey,
-        pub user: Pubkey,
-        pub user_stats: Pubkey,
-        pub taker: Pubkey,
-        pub taker_stats: Pubkey,
-        pub taker_swift_user_orders: Pubkey,
-        pub authority: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for PlaceAndMakeSwiftPerpOrder {
-        const DISCRIMINATOR: [u8; 8] = [126, 41, 46, 87, 157, 255, 202, 213];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for PlaceAndMakeSwiftPerpOrder {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for PlaceAndMakeSwiftPerpOrder {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for PlaceAndMakeSwiftPerpOrder {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for PlaceAndMakeSwiftPerpOrder {}
-    #[automatically_derived]
-    impl ToAccountMetas for PlaceAndMakeSwiftPerpOrder {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.user_stats,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.taker,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.taker_stats,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.taker_swift_user_orders,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for PlaceAndMakeSwiftPerpOrder {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for PlaceAndMakeSwiftPerpOrder {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct PlaceSwiftTakerOrder {
-        pub state: Pubkey,
-        pub user: Pubkey,
-        pub user_stats: Pubkey,
-        pub swift_user_orders: Pubkey,
-        pub authority: Pubkey,
-        pub ix_sysvar: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for PlaceSwiftTakerOrder {
-        const DISCRIMINATOR: [u8; 8] = [237, 23, 214, 85, 135, 68, 88, 236];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for PlaceSwiftTakerOrder {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for PlaceSwiftTakerOrder {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for PlaceSwiftTakerOrder {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for PlaceSwiftTakerOrder {}
-    #[automatically_derived]
-    impl ToAccountMetas for PlaceSwiftTakerOrder {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.user_stats,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.swift_user_orders,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.ix_sysvar,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for PlaceSwiftTakerOrder {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for PlaceSwiftTakerOrder {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct PlaceAndMatchRfqOrders {
-        pub state: Pubkey,
-        pub user: Pubkey,
-        pub user_stats: Pubkey,
-        pub authority: Pubkey,
-        pub ix_sysvar: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for PlaceAndMatchRfqOrders {
-        const DISCRIMINATOR: [u8; 8] = [115, 0, 66, 163, 147, 164, 6, 212];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for PlaceAndMatchRfqOrders {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for PlaceAndMatchRfqOrders {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for PlaceAndMatchRfqOrders {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for PlaceAndMatchRfqOrders {}
-    #[automatically_derived]
-    impl ToAccountMetas for PlaceAndMatchRfqOrders {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.user_stats,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.ix_sysvar,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for PlaceAndMatchRfqOrders {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for PlaceAndMatchRfqOrders {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct PlaceSpotOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -6780,7 +4800,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct PlaceAndTakeSpotOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -6856,7 +4876,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct PlaceAndMakeSpotOrder {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -6944,7 +4964,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct PlaceOrders {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -7014,7 +5034,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct BeginSwap {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -7132,7 +5152,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct EndSwap {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -7250,7 +5270,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct AddPerpLpShares {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -7320,7 +5340,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct RemovePerpLpShares {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -7390,7 +5410,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct RemovePerpLpSharesInExpiringMarket {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -7454,7 +5474,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateUserName {
         pub user: Pubkey,
         pub authority: Pubkey,
@@ -7518,7 +5538,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateUserCustomMarginRatio {
         pub user: Pubkey,
         pub authority: Pubkey,
@@ -7582,7 +5602,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateUserMarginTradingEnabled {
         pub user: Pubkey,
         pub authority: Pubkey,
@@ -7646,71 +5666,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct UpdateUserPoolId {
-        pub user: Pubkey,
-        pub authority: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateUserPoolId {
-        const DISCRIMINATOR: [u8; 8] = [215, 193, 254, 33, 60, 226, 249, 100];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserPoolId {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateUserPoolId {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for UpdateUserPoolId {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateUserPoolId {}
-    #[automatically_derived]
-    impl ToAccountMetas for UpdateUserPoolId {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for UpdateUserPoolId {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for UpdateUserPoolId {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateUserDelegate {
         pub user: Pubkey,
         pub authority: Pubkey,
@@ -7774,7 +5730,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateUserReduceOnly {
         pub user: Pubkey,
         pub authority: Pubkey,
@@ -7838,7 +5794,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateUserAdvancedLp {
         pub user: Pubkey,
         pub authority: Pubkey,
@@ -7902,83 +5858,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct UpdateUserProtectedMakerOrders {
-        pub state: Pubkey,
-        pub user: Pubkey,
-        pub authority: Pubkey,
-        pub protected_maker_mode_config: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateUserProtectedMakerOrders {
-        const DISCRIMINATOR: [u8; 8] = [220, 255, 63, 84, 125, 9, 84, 92];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserProtectedMakerOrders {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateUserProtectedMakerOrders {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for UpdateUserProtectedMakerOrders {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateUserProtectedMakerOrders {}
-    #[automatically_derived]
-    impl ToAccountMetas for UpdateUserProtectedMakerOrders {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.protected_maker_mode_config,
-                    is_signer: false,
-                    is_writable: true,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for UpdateUserProtectedMakerOrders {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for UpdateUserProtectedMakerOrders {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct DeleteUser {
         pub user: Pubkey,
         pub user_stats: Pubkey,
@@ -8054,171 +5934,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct ForceDeleteUser {
-        pub user: Pubkey,
-        pub user_stats: Pubkey,
-        pub state: Pubkey,
-        pub authority: Pubkey,
-        pub keeper: Pubkey,
-        pub drift_signer: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for ForceDeleteUser {
-        const DISCRIMINATOR: [u8; 8] = [224, 206, 23, 192, 99, 164, 175, 251];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for ForceDeleteUser {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ForceDeleteUser {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for ForceDeleteUser {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for ForceDeleteUser {}
-    #[automatically_derived]
-    impl ToAccountMetas for ForceDeleteUser {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.user_stats,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.keeper,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.drift_signer,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for ForceDeleteUser {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for ForceDeleteUser {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct DeleteSwiftUserOrders {
-        pub user: Pubkey,
-        pub swift_user_orders: Pubkey,
-        pub state: Pubkey,
-        pub authority: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for DeleteSwiftUserOrders {
-        const DISCRIMINATOR: [u8; 8] = [183, 16, 243, 132, 133, 172, 85, 107];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for DeleteSwiftUserOrders {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for DeleteSwiftUserOrders {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for DeleteSwiftUserOrders {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for DeleteSwiftUserOrders {}
-    #[automatically_derived]
-    impl ToAccountMetas for DeleteSwiftUserOrders {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.swift_user_orders,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for DeleteSwiftUserOrders {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for DeleteSwiftUserOrders {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct ReclaimRent {
         pub user: Pubkey,
         pub user_stats: Pubkey,
@@ -8300,83 +6016,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct EnableUserHighLeverageMode {
-        pub state: Pubkey,
-        pub user: Pubkey,
-        pub authority: Pubkey,
-        pub high_leverage_mode_config: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for EnableUserHighLeverageMode {
-        const DISCRIMINATOR: [u8; 8] = [87, 74, 202, 252, 83, 254, 102, 158];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for EnableUserHighLeverageMode {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for EnableUserHighLeverageMode {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for EnableUserHighLeverageMode {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for EnableUserHighLeverageMode {}
-    #[automatically_derived]
-    impl ToAccountMetas for EnableUserHighLeverageMode {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.high_leverage_mode_config,
-                    is_signer: false,
-                    is_writable: true,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for EnableUserHighLeverageMode {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for EnableUserHighLeverageMode {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct FillPerpOrder {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -8464,7 +6104,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct RevertFill {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -8540,7 +6180,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct FillSpotOrder {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -8628,7 +6268,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct TriggerOrder {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -8704,7 +6344,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct ForceCancelOrders {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -8780,7 +6420,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateUserIdle {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -8856,229 +6496,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct DisableUserHighLeverageMode {
-        pub state: Pubkey,
-        pub authority: Pubkey,
-        pub user: Pubkey,
-        pub high_leverage_mode_config: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for DisableUserHighLeverageMode {
-        const DISCRIMINATOR: [u8; 8] = [126, 242, 88, 155, 81, 152, 143, 68];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for DisableUserHighLeverageMode {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for DisableUserHighLeverageMode {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for DisableUserHighLeverageMode {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for DisableUserHighLeverageMode {}
-    #[automatically_derived]
-    impl ToAccountMetas for DisableUserHighLeverageMode {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.high_leverage_mode_config,
-                    is_signer: false,
-                    is_writable: true,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for DisableUserHighLeverageMode {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for DisableUserHighLeverageMode {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct UpdateUserFuelBonus {
-        pub state: Pubkey,
-        pub authority: Pubkey,
-        pub user: Pubkey,
-        pub user_stats: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateUserFuelBonus {
-        const DISCRIMINATOR: [u8; 8] = [179, 14, 130, 214, 107, 254, 33, 235];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserFuelBonus {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateUserFuelBonus {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for UpdateUserFuelBonus {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateUserFuelBonus {}
-    #[automatically_derived]
-    impl ToAccountMetas for UpdateUserFuelBonus {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.user_stats,
-                    is_signer: false,
-                    is_writable: true,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for UpdateUserFuelBonus {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for UpdateUserFuelBonus {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct UpdateUserStatsReferrerStatus {
-        pub state: Pubkey,
-        pub authority: Pubkey,
-        pub user_stats: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateUserStatsReferrerStatus {
-        const DISCRIMINATOR: [u8; 8] = [88, 125, 77, 90, 13, 11, 141, 158];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserStatsReferrerStatus {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateUserStatsReferrerStatus {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for UpdateUserStatsReferrerStatus {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateUserStatsReferrerStatus {}
-    #[automatically_derived]
-    impl ToAccountMetas for UpdateUserStatsReferrerStatus {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.user_stats,
-                    is_signer: false,
-                    is_writable: true,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for UpdateUserStatsReferrerStatus {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for UpdateUserStatsReferrerStatus {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateUserOpenOrdersCount {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -9154,7 +6572,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct AdminDisableUpdatePerpBidAskTwap {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -9224,7 +6642,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct SettlePnl {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -9300,7 +6718,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct SettleMultiplePnls {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -9376,7 +6794,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct SettleFundingPayment {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -9440,7 +6858,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct SettleLp {
         pub state: Pubkey,
         pub user: Pubkey,
@@ -9504,11 +6922,10 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct SettleExpiredMarket {
-        pub admin: Pubkey,
         pub state: Pubkey,
-        pub perp_market: Pubkey,
+        pub authority: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettleExpiredMarket {
@@ -9527,19 +6944,14 @@ pub mod accounts {
         fn to_account_metas(&self) -> Vec<AccountMeta> {
             vec![
                 AccountMeta {
-                    pubkey: self.admin,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
                     pubkey: self.state,
                     is_signer: false,
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.perp_market,
-                    is_signer: false,
-                    is_writable: true,
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
                 },
             ]
         }
@@ -9574,7 +6986,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct LiquidatePerp {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -9662,7 +7074,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct LiquidatePerpWithFill {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -9750,7 +7162,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct LiquidateSpot {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -9838,7 +7250,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct LiquidateBorrowForPerpPnl {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -9926,7 +7338,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct LiquidatePerpPnlForDeposit {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -10014,11 +7426,10 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct SetUserStatusToBeingLiquidated {
         pub state: Pubkey,
         pub user: Pubkey,
-        pub authority: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SetUserStatusToBeingLiquidated {
@@ -10045,11 +7456,6 @@ pub mod accounts {
                     pubkey: self.user,
                     is_signer: false,
                     is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: false,
                 },
             ]
         }
@@ -10084,7 +7490,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct ResolvePerpPnlDeficit {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -10172,7 +7578,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct ResolvePerpBankruptcy {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -10284,7 +7690,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct ResolveSpotBankruptcy {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -10396,7 +7802,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct SettleRevenueToInsuranceFund {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -10484,7 +7890,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateFundingRate {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -10554,7 +7960,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePrelaunchOracle {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -10624,7 +8030,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpBidAskTwap {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -10706,7 +8112,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketCumulativeInterest {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -10782,7 +8188,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateAmms {
         pub state: Pubkey,
         pub authority: Pubkey,
@@ -10846,7 +8252,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketExpiry {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -10916,7 +8322,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateUserQuoteAssetInsuranceStake {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -11004,7 +8410,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateUserGovTokenInsuranceStake {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -11092,71 +8498,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct UpdateUserGovTokenInsuranceStakeDevnet {
-        pub user_stats: Pubkey,
-        pub signer: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateUserGovTokenInsuranceStakeDevnet {
-        const DISCRIMINATOR: [u8; 8] = [7, 243, 156, 21, 134, 61, 166, 81];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserGovTokenInsuranceStakeDevnet {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateUserGovTokenInsuranceStakeDevnet {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for UpdateUserGovTokenInsuranceStakeDevnet {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateUserGovTokenInsuranceStakeDevnet {}
-    #[automatically_derived]
-    impl ToAccountMetas for UpdateUserGovTokenInsuranceStakeDevnet {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.user_stats,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.signer,
-                    is_signer: true,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for UpdateUserGovTokenInsuranceStakeDevnet {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for UpdateUserGovTokenInsuranceStakeDevnet {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct InitializeInsuranceFundStake {
         pub spot_market: Pubkey,
         pub insurance_fund_stake: Pubkey,
@@ -11256,7 +8598,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct AddInsuranceFundStake {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -11368,7 +8710,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct RequestRemoveInsuranceFundStake {
         pub spot_market: Pubkey,
         pub insurance_fund_stake: Pubkey,
@@ -11450,7 +8792,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct CancelRequestRemoveInsuranceFundStake {
         pub spot_market: Pubkey,
         pub insurance_fund_stake: Pubkey,
@@ -11532,7 +8874,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct RemoveInsuranceFundStake {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -11638,7 +8980,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct TransferProtocolIfShares {
         pub signer: Pubkey,
         pub transfer_config: Pubkey,
@@ -11738,7 +9080,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePythPullOracle {
         pub keeper: Pubkey,
         pub pyth_solana_receiver: Pubkey,
@@ -11814,7 +9156,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct PostPythPullOracleUpdateAtomic {
         pub keeper: Pubkey,
         pub pyth_solana_receiver: Pubkey,
@@ -11890,7 +9232,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct PostMultiPythPullOracleUpdatesAtomic {
         pub keeper: Pubkey,
         pub pyth_solana_receiver: Pubkey,
@@ -11960,7 +9302,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct Initialize {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12054,7 +9396,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct InitializeSpotMarket {
         pub spot_market: Pubkey,
         pub spot_market_mint: Pubkey,
@@ -12172,7 +9514,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct DeleteInitializedSpotMarket {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12266,7 +9608,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct InitializeSerumFulfillmentConfig {
         pub base_spot_market: Pubkey,
         pub quote_spot_market: Pubkey,
@@ -12384,7 +9726,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSerumFulfillmentConfigStatus {
         pub state: Pubkey,
         pub serum_fulfillment_config: Pubkey,
@@ -12454,7 +9796,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct InitializeOpenbookV2FulfillmentConfig {
         pub base_spot_market: Pubkey,
         pub quote_spot_market: Pubkey,
@@ -12566,7 +9908,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct OpenbookV2FulfillmentConfigStatus {
         pub state: Pubkey,
         pub openbook_v2_fulfillment_config: Pubkey,
@@ -12636,7 +9978,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct InitializePhoenixFulfillmentConfig {
         pub base_spot_market: Pubkey,
         pub quote_spot_market: Pubkey,
@@ -12748,7 +10090,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct PhoenixFulfillmentConfigStatus {
         pub state: Pubkey,
         pub phoenix_fulfillment_config: Pubkey,
@@ -12818,7 +10160,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSerumVault {
         pub state: Pubkey,
         pub admin: Pubkey,
@@ -12888,7 +10230,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct InitializePerpMarket {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -12976,7 +10318,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct InitializePredictionMarket {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13046,7 +10388,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct DeleteInitializedPerpMarket {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13116,7 +10458,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct MoveAmmPrice {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13186,7 +10528,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct RecenterPerpMarketAmm {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13256,7 +10598,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketAmmSummaryStats {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13338,7 +10680,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketExpiry {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -13408,7 +10750,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct SettleExpiredMarketPoolsToRevenuePool {
         pub state: Pubkey,
         pub admin: Pubkey,
@@ -13484,7 +10826,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct DepositIntoPerpMarketFeePool {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -13584,7 +10926,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct DepositIntoSpotMarketVault {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -13672,7 +11014,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct DepositIntoSpotMarketRevenuePool {
         pub state: Pubkey,
         pub spot_market: Pubkey,
@@ -13760,7 +11102,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct RepegAmmCurve {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -13836,7 +11178,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketAmmOracleTwap {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -13912,7 +11254,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct ResetPerpMarketAmmOracleTwap {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -13988,7 +11330,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateK {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14064,7 +11406,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketMarginRatio {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14134,77 +11476,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct UpdatePerpMarketHighLeverageMarginRatio {
-        pub admin: Pubkey,
-        pub state: Pubkey,
-        pub perp_market: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdatePerpMarketHighLeverageMarginRatio {
-        const DISCRIMINATOR: [u8; 8] = [94, 44, 114, 224, 250, 149, 47, 90];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketHighLeverageMarginRatio {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdatePerpMarketHighLeverageMarginRatio {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for UpdatePerpMarketHighLeverageMarginRatio {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdatePerpMarketHighLeverageMarginRatio {}
-    #[automatically_derived]
-    impl ToAccountMetas for UpdatePerpMarketHighLeverageMarginRatio {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.admin,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.perp_market,
-                    is_signer: false,
-                    is_writable: true,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for UpdatePerpMarketHighLeverageMarginRatio {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for UpdatePerpMarketHighLeverageMarginRatio {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketFundingPeriod {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14274,7 +11546,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketMaxImbalances {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14344,7 +11616,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketLiquidationFee {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14414,7 +11686,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateInsuranceFundUnstakingPeriod {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14484,77 +11756,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct UpdateSpotMarketPoolId {
-        pub admin: Pubkey,
-        pub state: Pubkey,
-        pub spot_market: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateSpotMarketPoolId {
-        const DISCRIMINATOR: [u8; 8] = [221, 222, 116, 19, 147, 70, 109, 228];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketPoolId {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateSpotMarketPoolId {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for UpdateSpotMarketPoolId {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateSpotMarketPoolId {}
-    #[automatically_derived]
-    impl ToAccountMetas for UpdateSpotMarketPoolId {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.admin,
-                    is_signer: true,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.spot_market,
-                    is_signer: false,
-                    is_writable: true,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for UpdateSpotMarketPoolId {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for UpdateSpotMarketPoolId {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketLiquidationFee {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14624,7 +11826,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateWithdrawGuardThreshold {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14694,7 +11896,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketIfFactor {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14764,7 +11966,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketRevenueSettlePeriod {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14834,7 +12036,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketStatus {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14904,7 +12106,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketPausedOperations {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -14974,7 +12176,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketAssetTier {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15044,7 +12246,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketMarginWeights {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15114,7 +12316,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketBorrowRate {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15184,7 +12386,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketMaxTokenDeposits {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15254,7 +12456,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketMaxTokenBorrows {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15324,7 +12526,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketScaleInitialAssetWeightStart {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15397,7 +12599,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketOracle {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15473,7 +12675,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketStepSizeAndTickSize {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15543,7 +12745,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketMinOrderSize {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15613,7 +12815,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketOrdersEnabled {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15683,7 +12885,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketIfPausedOperations {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15753,7 +12955,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketName {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15823,7 +13025,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketStatus {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15893,7 +13095,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketPausedOperations {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -15963,7 +13165,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketContractTier {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16033,7 +13235,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketImfFactor {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16103,7 +13305,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketUnrealizedAssetWeight {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16173,7 +13375,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketConcentrationCoef {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16243,7 +13445,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketCurveUpdateIntensity {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16313,7 +13515,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketTargetBaseAssetAmountPerLp {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16386,7 +13588,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketPerLpBase {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16456,7 +13658,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateLpCooldownTime {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16520,7 +13722,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpFeeStructure {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16584,7 +13786,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotFeeStructure {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16648,7 +13850,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateInitialPctToLiquidate {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16712,7 +13914,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateLiquidationDuration {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16776,7 +13978,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateLiquidationMarginBufferRatio {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16840,7 +14042,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateOracleGuardRails {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16904,7 +14106,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateStateSettlementDuration {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -16968,7 +14170,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateStateMaxNumberOfSubAccounts {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -17032,7 +14234,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateStateMaxInitializeUserFee {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -17096,7 +14298,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketOracle {
         pub state: Pubkey,
         pub perp_market: Pubkey,
@@ -17172,7 +14374,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketBaseSpread {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -17242,7 +14444,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateAmmJitIntensity {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -17312,7 +14514,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketMaxSpread {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -17382,7 +14584,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketStepSizeAndTickSize {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -17452,7 +14654,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketName {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -17522,7 +14724,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketMinOrderSize {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -17592,7 +14794,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketMaxSlippageRatio {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -17662,7 +14864,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketMaxFillReserveFraction {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -17732,7 +14934,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketMaxOpenInterest {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -17802,7 +15004,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketNumberOfUsers {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -17872,7 +15074,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketFeeAdjustment {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -17942,7 +15144,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketFeeAdjustment {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -18012,7 +15214,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpMarketFuel {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -18082,7 +15284,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotMarketFuel {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -18152,7 +15354,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct InitUserFuel {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -18228,7 +15430,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateAdmin {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -18292,7 +15494,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateWhitelistMint {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -18356,7 +15558,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateDiscountMint {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -18420,7 +15622,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateExchangeStatus {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -18484,7 +15686,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePerpAuctionDuration {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -18548,7 +15750,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateSpotAuctionDuration {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -18612,7 +15814,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct InitializeProtocolIfSharesTransferConfig {
         pub admin: Pubkey,
         pub protocol_if_shares_transfer_config: Pubkey,
@@ -18697,7 +15899,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdateProtocolIfSharesTransferConfig {
         pub admin: Pubkey,
         pub protocol_if_shares_transfer_config: Pubkey,
@@ -18767,7 +15969,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct InitializePrelaunchOracle {
         pub admin: Pubkey,
         pub prelaunch_oracle: Pubkey,
@@ -18849,7 +16051,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct UpdatePrelaunchOracleParams {
         pub admin: Pubkey,
         pub prelaunch_oracle: Pubkey,
@@ -18925,7 +16127,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct DeletePrelaunchOracle {
         pub admin: Pubkey,
         pub prelaunch_oracle: Pubkey,
@@ -19001,7 +16203,7 @@ pub mod accounts {
         }
     }
     #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
     pub struct InitializePythPullOracle {
         pub admin: Pubkey,
         pub pyth_solana_receiver: Pubkey,
@@ -19082,313 +16284,8 @@ pub mod accounts {
                 .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
         }
     }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct InitializeHighLeverageModeConfig {
-        pub admin: Pubkey,
-        pub high_leverage_mode_config: Pubkey,
-        pub state: Pubkey,
-        pub rent: Pubkey,
-        pub system_program: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for InitializeHighLeverageModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [125, 235, 77, 45, 130, 90, 134, 48];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeHighLeverageModeConfig {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for InitializeHighLeverageModeConfig {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for InitializeHighLeverageModeConfig {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for InitializeHighLeverageModeConfig {}
-    #[automatically_derived]
-    impl ToAccountMetas for InitializeHighLeverageModeConfig {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.admin,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.high_leverage_mode_config,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.rent,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.system_program,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for InitializeHighLeverageModeConfig {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for InitializeHighLeverageModeConfig {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct UpdateHighLeverageModeConfig {
-        pub admin: Pubkey,
-        pub high_leverage_mode_config: Pubkey,
-        pub state: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateHighLeverageModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [254, 192, 159, 254, 254, 74, 141, 70];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateHighLeverageModeConfig {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateHighLeverageModeConfig {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for UpdateHighLeverageModeConfig {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateHighLeverageModeConfig {}
-    #[automatically_derived]
-    impl ToAccountMetas for UpdateHighLeverageModeConfig {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.admin,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.high_leverage_mode_config,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for UpdateHighLeverageModeConfig {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for UpdateHighLeverageModeConfig {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct InitializeProtectedMakerModeConfig {
-        pub admin: Pubkey,
-        pub protected_maker_mode_config: Pubkey,
-        pub state: Pubkey,
-        pub rent: Pubkey,
-        pub system_program: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for InitializeProtectedMakerModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [71, 150, 108, 182, 19, 30, 72, 149];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeProtectedMakerModeConfig {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for InitializeProtectedMakerModeConfig {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for InitializeProtectedMakerModeConfig {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for InitializeProtectedMakerModeConfig {}
-    #[automatically_derived]
-    impl ToAccountMetas for InitializeProtectedMakerModeConfig {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.admin,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.protected_maker_mode_config,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.rent,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.system_program,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for InitializeProtectedMakerModeConfig {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for InitializeProtectedMakerModeConfig {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct UpdateProtectedMakerModeConfig {
-        pub admin: Pubkey,
-        pub protected_maker_mode_config: Pubkey,
-        pub state: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdateProtectedMakerModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [189, 135, 186, 140, 137, 238, 182, 65];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateProtectedMakerModeConfig {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateProtectedMakerModeConfig {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for UpdateProtectedMakerModeConfig {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdateProtectedMakerModeConfig {}
-    #[automatically_derived]
-    impl ToAccountMetas for UpdateProtectedMakerModeConfig {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.admin,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.protected_maker_mode_config,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for UpdateProtectedMakerModeConfig {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for UpdateProtectedMakerModeConfig {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
 }
 pub mod errors {
-    #![doc = r" IDL error types"]
     use super::{types::*, *};
     #[derive(PartialEq)]
     #[error_code]
@@ -19963,48 +16860,9 @@ pub mod errors {
         LiquidationOrderFailedToFill,
         #[msg("Invalid prediction market order")]
         InvalidPredictionMarketOrder,
-        #[msg("Ed25519 Ix must be before place and make swift order ix")]
-        InvalidVerificationIxIndex,
-        #[msg("Swift message verificaiton failed")]
-        SigVerificationFailed,
-        #[msg("Market index mismatched b/w taker and maker swift order params")]
-        MismatchedSwiftOrderParamsMarketIndex,
-        #[msg("Swift only available for market/oracle perp orders")]
-        InvalidSwiftOrderParam,
-        #[msg("Place and take order success condition failed")]
-        PlaceAndTakeOrderSuccessConditionFailed,
-        #[msg("Invalid High Leverage Mode Config")]
-        InvalidHighLeverageModeConfig,
-        #[msg("Invalid RFQ User Account")]
-        InvalidRFQUserAccount,
-        #[msg("RFQUserAccount should be mutable")]
-        RFQUserAccountWrongMutability,
-        #[msg("RFQUserAccount has too many active RFQs")]
-        RFQUserAccountFull,
-        #[msg("RFQ order not filled as expected")]
-        RFQOrderNotFilled,
-        #[msg("RFQ orders must be jit makers")]
-        InvalidRFQOrder,
-        #[msg("RFQ matches must be valid")]
-        InvalidRFQMatch,
-        #[msg("Invalid swift user account")]
-        InvalidSwiftUserAccount,
-        #[msg("Swift account wrong mutability")]
-        SwiftUserAccountWrongMutability,
-        #[msg("SwiftUserAccount has too many active orders")]
-        SwiftUserOrdersAccountFull,
-        #[msg("Order with swift uuid does not exist")]
-        SwiftOrderDoesNotExist,
-        #[msg("Swift order id cannot be 0s")]
-        InvalidSwiftOrderId,
-        #[msg("Invalid pool id")]
-        InvalidPoolId,
-        #[msg("Invalid Protected Maker Mode Config")]
-        InvalidProtectedMakerModeConfig,
     }
 }
 pub mod events {
-    #![doc = r" IDL event types"]
     use super::{types::*, *};
     #[event]
     pub struct NewUserRecord {
@@ -20096,16 +16954,6 @@ pub mod events {
         pub fill_record: u128,
         pub number_of_users: u32,
         pub market_index: u16,
-    }
-    #[event]
-    pub struct SwiftOrderRecord {
-        pub user: Pubkey,
-        pub hash: String,
-        pub matching_order_params: OrderParams,
-        pub user_order_id: u32,
-        pub swift_order_max_slot: u64,
-        pub swift_order_uuid: [u8; 8],
-        pub ts: i64,
     }
     #[event]
     pub struct OrderRecord {
@@ -20235,13 +17083,5 @@ pub mod events {
         pub cumulative_deposit_interest_after: u128,
         pub deposit_token_amount_before: u64,
         pub amount: u64,
-    }
-    #[event]
-    pub struct DeleteUserRecord {
-        pub ts: i64,
-        pub user_authority: Pubkey,
-        pub user: Pubkey,
-        pub sub_account_id: u16,
-        pub keeper: Option<Pubkey>,
     }
 }
