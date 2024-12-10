@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, time::Duration};
 use futures_util::{
     future::{ready, BoxFuture, FutureExt},
     sink::SinkExt,
-    stream::{BoxStream, StreamExt},
+    stream::{self, BoxStream, StreamExt},
 };
 use log::*;
 use serde::de::DeserializeOwned;
@@ -89,6 +89,17 @@ type RequestMsg = (
     oneshot::Sender<Result<Value, PubsubClientError>>,
 );
 
+#[derive(Clone)]
+struct SubscriptionInfo {
+    sender: UnboundedSender<Value>,
+    payload: String,
+}
+
+#[derive(Debug)]
+pub struct RetryConfig {
+    max_retires: u8,
+}
+
 /// A client for subscribing to messages from the RPC server.
 ///
 /// See the [module documentation][self].
@@ -97,6 +108,7 @@ pub struct PubsubClient {
     subscribe_sender: mpsc::UnboundedSender<SubscribeRequestMsg>,
     _request_sender: mpsc::UnboundedSender<RequestMsg>,
     shutdown_sender: oneshot::Sender<()>,
+    retry_config: RetryConfig,
     ws: JoinHandle<Result<(), PubsubClientError>>,
     url: Url,
 }
@@ -144,7 +156,6 @@ impl PubsubClient {
         self.ws.await.unwrap() // WS future should not be cancelled or panicked
     }
 
-    // TODO: if the underlying Ws is ready, it should tell users somehow??
     async fn subscribe<'a, T>(&self, operation: &str, params: Value) -> SubscribeResult<'a, T>
     where
         T: DeserializeOwned + Send + 'a,
@@ -336,7 +347,14 @@ impl PubsubClient {
         // this loop will retry indefinitely unless the consumer invokes `shutdown`
         let max_retry_count = 3;
         let mut retry_count = 0;
+
+        // all existing subscriptions here
+        let mut request_id: u64 = 0;
+        let mut subscriptions = BTreeMap::<u64, SubscriptionInfo>::new();
+        let (unsubscribe_sender, mut unsubscribe_receiver) = mpsc::unbounded_channel();
+
         'reconnect: loop {
+            log::debug!(target: "ws", "PubsubClient connecting: {:?}", url.as_str());
             let (mut ws, _response) = match connect_async(url.as_str()).await {
                 Ok(res) => {
                     retry_count = 0;
@@ -345,32 +363,46 @@ impl PubsubClient {
                 Err(err) => {
                     log::warn!(target: "ws", "couldn't reconnect: {err:?}");
                     if retry_count >= max_retry_count {
-                        log::warn!(target: "ws", "reached max reconneciton attempts: {err:?}");
+                        log::warn!(target: "ws", "reached max reconnect attempts: {err:?}");
                         break 'reconnect Err(PubsubClientError::ConnectionError(err));
                     }
                     retry_count += 1;
                     let delay = 2_u64.pow(2 + retry_count);
-                    info!("PubSubClient try reconnect after {delay}s, attempt: {retry_count}/{max_retry_count}");
+                    info!(target: "ws", "PubsubClient trying reconnect after {delay}s, attempt: {retry_count}/{max_retry_count}");
                     tokio::time::sleep(Duration::from_secs(delay)).await;
                     continue 'reconnect;
                 }
             };
 
-            let mut request_id: u64 = 0;
+            // resend subscriptions
+            if let Err(err) = ws
+                .send_all(&mut stream::iter(
+                    subscriptions
+                        .values()
+                        .cloned()
+                        .map(|s| Ok(Message::text(s.payload.clone()))),
+                ))
+                .await
+            {
+                error!(target: "ws", "PubsubClient failed resubscribing: {err:?}");
+                continue 'reconnect;
+            }
 
-            let mut requests_subscribe =
-                BTreeMap::<u64, (String, oneshot::Sender<SubscribeResponseMsg>)>::new();
-            let mut requests_unsubscribe = BTreeMap::<u64, oneshot::Sender<()>>::new();
-            let mut other_requests = BTreeMap::<u64, oneshot::Sender<_>>::new();
-            let mut subscriptions = BTreeMap::<u64, UnboundedSender<_>>::new();
-            let (unsubscribe_sender, mut unsubscribe_receiver) = mpsc::unbounded_channel();
+            let mut inflight_subscribes =
+                BTreeMap::<u64, (String, String, oneshot::Sender<SubscribeResponseMsg>)>::new();
+            let mut inflight_unsubscribes = BTreeMap::<u64, oneshot::Sender<()>>::new();
+            let mut inflight_requests = BTreeMap::<u64, oneshot::Sender<_>>::new();
+
+            let mut liveness_check = tokio::time::interval(Duration::from_secs(60));
+            let _ = liveness_check.tick().await;
 
             'manager: loop {
+                liveness_check.reset();
                 tokio::select! {
                     biased;
                     // Send close on shutdown signal
                     _ = (&mut shutdown_receiver) => {
-                        log::info!("PubsubClient received shutdown");
+                        log::info!(target: "ws", "PubsubClient received shutdown");
                         let frame = CloseFrame { code: CloseCode::Normal, reason: "".into() };
                         ws.send(Message::Close(Some(frame))).await?;
                         ws.flush().await?;
@@ -398,9 +430,9 @@ impl PubsubClient {
                             let sid = params.get("subscription").u64();
                             let mut unsubscribe_required = false;
 
-                            if let Some(notifications_sender) = subscriptions.get(&sid) {
+                            if let Some(sub) = subscriptions.get(&sid) {
                                 let result = params.get("result");
-                                if result.exists() && notifications_sender.send(serde_json::from_str(result.json()).expect("valid json")).is_err() {
+                                if result.exists() && sub.sender.send(serde_json::from_str(result.json()).expect("valid json")).is_err() {
                                     unsubscribe_required = true;
                                 }
                             } else {
@@ -437,7 +469,7 @@ impl PubsubClient {
                             };
 
                             let id = id.u64();
-                            if let Some(response_sender) = other_requests.remove(&id) {
+                            if let Some(response_sender) = inflight_requests.remove(&id) {
                                 match err {
                                     Some(reason) => {
                                         let _ = response_sender.send(Err(PubsubClientError::RequestFailed { reason, message: text.clone()}));
@@ -456,9 +488,9 @@ impl PubsubClient {
                                         }
                                     }
                                 }
-                            } else if let Some(response_sender) = requests_unsubscribe.remove(&id) {
+                            } else if let Some(response_sender) = inflight_unsubscribes.remove(&id) {
                                 let _ = response_sender.send(()); // do not care if receiver is closed
-                            } else if let Some((operation, response_sender)) = requests_subscribe.remove(&id) {
+                            } else if let Some((operation, payload, response_sender)) = inflight_subscribes.remove(&id) {
                                 match err {
                                     Some(reason) => {
                                         let _ = response_sender.send(Err(PubsubClientError::SubscribeFailed { reason, message: text.clone()}));
@@ -485,7 +517,10 @@ impl PubsubClient {
                                         if response_sender.send(Ok((notifications_receiver, unsubscribe))).is_err() {
                                             break 'manager;
                                         }
-                                        subscriptions.insert(sid, notifications_sender);
+                                        subscriptions.insert(sid, SubscriptionInfo {
+                                            sender: notifications_sender,
+                                            payload,
+                                        });
                                     }
                                 }
                             } else {
@@ -500,8 +535,8 @@ impl PubsubClient {
                         request_id += 1;
                         let method = format!("{operation}Subscribe");
                         let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params}).to_string();
-                        ws.send(Message::Text(text)).await?;
-                        requests_subscribe.insert(request_id, (operation, response_sender));
+                        ws.send(Message::Text(text.clone())).await?;
+                        inflight_subscribes.insert(request_id, (operation, text, response_sender));
                     },
                     // Read message for unsubscribe
                     Some((operation, sid, response_sender)) = unsubscribe_receiver.recv() => {
@@ -510,14 +545,18 @@ impl PubsubClient {
                         let method = format!("{operation}Unsubscribe");
                         let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":[sid]}).to_string();
                         ws.send(Message::Text(text)).await?;
-                        requests_unsubscribe.insert(request_id, response_sender);
+                        inflight_unsubscribes.insert(request_id, response_sender);
                     },
                     // Read message for other requests
                     Some((method, params, response_sender)) = request_receiver.recv() => {
                         request_id += 1;
                         let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params}).to_string();
                         ws.send(Message::Text(text)).await?;
-                        other_requests.insert(request_id, response_sender);
+                        inflight_requests.insert(request_id, response_sender);
+                    },
+                    _ = liveness_check.tick() => {
+                        warn!(target: "ws", "PubsubClient timed out");
+                        break 'manager;
                     }
                 }
             }

@@ -1,22 +1,18 @@
 use std::time::Instant;
 
 use anchor_lang::AnchorDeserialize;
+use drift_pubsub_client::PubsubClient;
 use futures_util::StreamExt;
-use log::{debug, error, warn};
+use log::warn;
 use solana_account_decoder::UiAccountEncoding;
 use solana_client::{
-    nonblocking::pubsub_client::PubsubClient,
     rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     rpc_filter::RpcFilterType,
 };
 use solana_sdk::commitment_config::CommitmentConfig;
 use tokio::sync::oneshot;
 
-use crate::{
-    constants,
-    types::{DataAndSlot, SdkError},
-    UnsubHandle,
-};
+use crate::{constants, types::DataAndSlot, UnsubHandle};
 
 #[derive(Clone, Debug)]
 pub struct ProgramAccountUpdate<T: AnchorDeserialize + Send> {
@@ -64,93 +60,53 @@ impl WebsocketProgramAccountSubscriber {
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.options.commitment),
             encoding: Some(self.options.encoding),
-            ..RpcAccountInfoConfig::default()
+            ..Default::default()
         };
         let config = RpcProgramAccountsConfig {
             filters: Some(self.options.filters.clone()),
             account_config,
-            ..RpcProgramAccountsConfig::default()
+            ..Default::default()
         };
 
         let (unsub_tx, mut unsub_rx) = oneshot::channel::<()>();
-        let mut attempt = 0;
-        let max_reconnection_attempts = 20;
-        let base_delay = tokio::time::Duration::from_secs(5);
         let url = self.url.clone();
 
         tokio::spawn(async move {
             let mut latest_slot = 0;
-            let result = 'outer: loop {
-                let pubsub = PubsubClient::new(&url).await.expect("connects");
-                match pubsub
-                    .program_subscribe(&constants::PROGRAM_ID, Some(config.clone()))
-                    .await
-                {
-                    Ok((mut accounts, unsubscriber)) => loop {
-                        attempt = 0;
-                        tokio::select! {
-                            biased;
-                            message = accounts.next() => {
-                                match message {
-                                    Some(message) => {
-                                        let slot = message.context.slot;
-                                        if slot >= latest_slot {
-                                            latest_slot = slot;
-                                            let pubkey = message.value.pubkey;
-                                            let data = &message.value.account.data.decode().expect("account has data");
-                                            match T::deserialize(&mut &data[8..]) {
-                                                Ok(data) => {
-                                                    let data_and_slot = DataAndSlot::<T> { slot, data };
-                                                    handler_fn(&ProgramAccountUpdate::new(pubkey, data_and_slot, Instant::now()));
-                                                },
-                                                Err(err) => {
-                                                    // The account at this pubkey does not match `T`
-                                                    panic!("invalid account data: {err:?}");
-                                                }
-                                            }
-                                        }
-                                    },
-                                    None => {
-                                        warn!("stream ended: {subscription_name}");
-                                        unsubscriber().await;
-                                        break;
-                                    }
+            let pubsub = PubsubClient::new(&url).await.expect("connects");
+            let (mut accounts, unsub) = pubsub
+                .program_subscribe(&constants::PROGRAM_ID, Some(config.clone()))
+                .await
+                .expect("subscribes");
+
+            loop {
+                tokio::select! {
+                    biased;
+                    message = accounts.next() => {
+                        match message {
+                            Some(message) => {
+                                let slot = message.context.slot;
+                                if slot >= latest_slot {
+                                    latest_slot = slot;
+                                    let pubkey = message.value.pubkey;
+                                    let data = &message.value.account.data.decode().expect("account has data");
+                                    let data = T::deserialize(&mut &data[8..]).expect("deserializes T");
+                                    handler_fn(&ProgramAccountUpdate::new(pubkey, DataAndSlot::<T> { slot, data }, Instant::now()));
                                 }
+                            },
+                            None => {
+                                warn!("stream ended: {subscription_name}");
+                                break;
                             }
-                            _ = &mut unsub_rx => {
-                                warn!("unsubscribing: {subscription_name}");
-                                unsubscriber().await;
-                                break 'outer Ok(())
-                            }
-                        }
-                    },
-                    Err(_) => {
-                        error!("Failed to subscribe to program stream, retrying.");
-                        attempt += 1;
-                        if attempt >= max_reconnection_attempts {
-                            error!("Max reconnection attempts reached.");
-                            break 'outer Err(SdkError::MaxReconnectionAttemptsReached);
                         }
                     }
+                    _ = &mut unsub_rx => {
+                        warn!("unsubscribing: {subscription_name}");
+                        break;
+                    }
                 }
-
-                if attempt >= max_reconnection_attempts {
-                    error!("Max reconnection attempts reached.");
-                    break 'outer Err(SdkError::MaxReconnectionAttemptsReached);
-                }
-
-                let delay_duration = base_delay * 2_u32.pow(attempt);
-                debug!(
-                    "{}: Reconnecting in {:?}",
-                    subscription_name, delay_duration
-                );
-                tokio::time::sleep(delay_duration).await;
-                attempt += 1;
-            };
-
-            if result.is_err() {
-                panic!("subscription task failed");
             }
+            unsub().await;
         });
 
         unsub_tx

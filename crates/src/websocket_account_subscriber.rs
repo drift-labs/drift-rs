@@ -88,71 +88,57 @@ impl WebsocketAccountSubscriber {
             drop(rpc);
         }
 
+        let (unsub_tx, mut unsub_rx) = oneshot::channel::<()>();
         let account_config = RpcAccountInfoConfig {
             commitment: Some(self.commitment),
             encoding: Some(UiAccountEncoding::Base64Zstd),
             ..RpcAccountInfoConfig::default()
         };
+        let pubkey = self.pubkey;
+        let pubsub = Arc::clone(&self.pubsub);
 
-        let (unsub_tx, mut unsub_rx) = oneshot::channel::<()>();
-
-        tokio::spawn({
+        tokio::spawn(async move {
+            log::debug!(target: LOG_TARGET, "spawn account subscriber: {subscription_name}-{:?}", pubkey);
+            let (mut account_updates, account_unsubscribe) = pubsub
+                .account_subscribe(&pubkey, Some(account_config))
+                .await
+                .expect("account subd");
+            log::debug!(target: LOG_TARGET, "account subscribed: {subscription_name}-{pubkey:?}");
             let mut latest_slot = 0;
-            let pubkey = self.pubkey;
-            let pubsub = Arc::clone(&self.pubsub);
-
-            async move {
-                log::debug!(target: LOG_TARGET, "spawn account subscriber: {subscription_name}-{pubkey:?}");
-                'outer: loop {
-                    let (mut account_updates, account_unsubscribe) = match pubsub
-                        .account_subscribe(&pubkey, Some(account_config.clone()))
-                        .await
-                    {
-                        Ok(res) => res,
-                        Err(err) => {
-                            log::error!("{subscription_name}: Failed to subscribe to account stream: {err:?}, retrying");
-                            continue;
-                        }
-                    };
-
-                    log::debug!(target: LOG_TARGET, "account subscribed: {subscription_name}-{pubkey:?}");
-                    loop {
-                        tokio::select! {
-                            biased;
-                            message = account_updates.next() => {
-                                match message {
-                                    Some(message) => {
-                                        let slot = message.context.slot;
-                                        if slot >= latest_slot {
-                                            latest_slot = slot;
-                                            if let Some(data) = message.value.data.decode() {
-                                                let account_update = AccountUpdate {
-                                                    owner: Pubkey::from_str(&message.value.owner).unwrap(),
-                                                    lamports: message.value.lamports,
-                                                    pubkey,
-                                                    data,
-                                                    slot,
-                                                };
-                                                handler_fn(&account_update);
-                                            }
-                                        }
-                                    }
-                                    None => {
-                                        log::warn!("{}: Account stream interrupted", subscription_name);
-                                        account_unsubscribe().await;
-                                        break;
+            loop {
+                tokio::select! {
+                    biased;
+                    message = account_updates.next() => {
+                        match message {
+                            Some(message) => {
+                                let slot = message.context.slot;
+                                if slot >= latest_slot {
+                                    latest_slot = slot;
+                                    if let Some(data) = message.value.data.decode() {
+                                        let account_update = AccountUpdate {
+                                            owner: Pubkey::from_str(&message.value.owner).unwrap(),
+                                            lamports: message.value.lamports,
+                                            pubkey,
+                                            data,
+                                            slot,
+                                        };
+                                        handler_fn(&account_update);
                                     }
                                 }
                             }
-                            _ = &mut unsub_rx => {
-                                log::debug!(target: LOG_TARGET, "{}: Unsubscribing from account stream: {pubkey:?}", subscription_name);
-                                account_unsubscribe().await;
-                                break 'outer;
+                            None => {
+                                log::warn!("{}: Account stream interrupted", subscription_name);
+                                break;
                             }
                         }
                     }
+                    _ = &mut unsub_rx => {
+                        log::debug!(target: LOG_TARGET, "{}: Unsubscribing from account stream: {pubkey:?}", subscription_name);
+                        break;
+                    }
                 }
             }
+            account_unsubscribe().await;
         });
 
         Ok(unsub_tx)

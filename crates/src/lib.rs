@@ -157,8 +157,19 @@ impl DriftClient {
     }
 
     /// Return a handle to the inner RPC client
+    #[deprecated]
     pub fn inner(&self) -> &RpcClient {
+        &self.backend.rpc_client
+    }
+
+    /// Return a handle to the inner RPC client
+    pub fn rpc(&self) -> Arc<RpcClient> {
         self.backend.client()
+    }
+
+    /// Return a handle to the inner Ws client
+    pub fn ws(&self) -> Arc<PubsubClient> {
+        self.backend.ws()
     }
 
     /// Return on-chain program metadata
@@ -673,8 +684,13 @@ impl DriftClientBackend {
     }
 
     /// Return a handle to the inner RPC client
-    fn client(&self) -> &RpcClient {
-        &self.rpc_client
+    fn client(&self) -> Arc<RpcClient> {
+        Arc::clone(&self.rpc_client)
+    }
+
+    /// Return a handle to the inner RPC client
+    fn ws(&self) -> Arc<PubsubClient> {
+        Arc::clone(&self.pubsub_client)
     }
 
     /// Get recent tx priority fees
@@ -764,7 +780,7 @@ impl DriftClientBackend {
         match self.blockhash_subscriber.get_latest_blockhash() {
             Some(hash) => Ok(hash),
             None => self
-                .client()
+                .rpc_client
                 .get_latest_blockhash()
                 .await
                 .map_err(SdkError::Rpc),
