@@ -19,10 +19,10 @@ Experimental, high performance Rust SDK for building offchain clients for [Drift
 ## Install
 ```toml
 # crates.io*
-drift-rs = "1.0.0-alpha.3"
+drift-rs = "1.0.0-alpha.4"
 
 # build from source (also builds and links 'libdrift_ffi_sys')
-drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.3" }
+drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.4" }
 ```
 
 _*_`drift-rs` uses drift program over ffi.
@@ -70,3 +70,10 @@ CARGO_DRIFT_FFI_STATIC=1
 # Provide a prebuilt drift_ffi_sys lib 
 CARGO_DRIFT_FFI_PATH="/path/to/libdrift_ffi_sys"
 ```
+## Development
+
+## Update IDL types
+1) copy updated IDL to `res/drift.json` from protocol-v2 branch
+2) `cargo check`
+3) commit changes
+

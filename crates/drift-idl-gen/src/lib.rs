@@ -64,6 +64,8 @@ impl ArgType {
                     "Pubkey".to_string()
                 } else if t == "bytes" {
                     "Vec<u8>".to_string()
+                } else if t == "string" {
+                    "String".to_string()
                 } else {
                     t.clone()
                 }
