@@ -1,5 +1,7 @@
 # drfit-idl-gen
 
+⚠️ for drift-rs there's no need to run this manually. The `build.rs` script will trigger it.
+
 Generates rust anchor structs from IDL json
 This is implemented rather than another project for a couple reasons:
 

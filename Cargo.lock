@@ -1477,7 +1477,7 @@ dependencies = [
 
 [[package]]
 name = "drift-rs"
-version = "1.0.0-alpha.4"
+version = "1.0.0-alpha.5"
 dependencies = [
  "abi_stable",
  "ahash 0.8.11",
