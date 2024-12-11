@@ -12066,7 +12066,7 @@
         },
         {
           "name": "hash",
-          "type": "string",
+          "type": "String",
           "index": false
         },
         {

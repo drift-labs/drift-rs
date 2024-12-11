@@ -22,7 +22,7 @@ Experimental, high performance Rust SDK for building offchain clients for [Drift
 drift-rs = "1.0.0-alpha.4"
 
 # build from source (also builds and links 'libdrift_ffi_sys')
-drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.4" }
+drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.5" }
 ```
 
 _*_`drift-rs` uses drift program over ffi.
@@ -63,17 +63,16 @@ rustup override set 1.81.0-x86_64-apple-darwin
 ⚠️ the default toolchain is incompatible due to memory layout differences between solana program (BPF) and aarch64 and will fail at runtime with deserialization errors like: `InvalidSize`.
 
 ## Local Development
-drift-rs links to the drift program crate via FFI, build from source or optionally install from [drift-ffi-sys](https://github.com/drift-labs/drift-ffi-sys/releases)
+drift-rs links to the drift program crate via FFI, build from source (default) or optionally install from [drift-ffi-sys](https://github.com/drift-labs/drift-ffi-sys/releases)
 ```bash
-# Build from source
+# Build from source (default)
 CARGO_DRIFT_FFI_STATIC=1
 # Provide a prebuilt drift_ffi_sys lib 
 CARGO_DRIFT_FFI_PATH="/path/to/libdrift_ffi_sys"
 ```
 ## Development
 
-## Update IDL types
-1) copy updated IDL to `res/drift.json` from protocol-v2 branch
+## Updating IDL types
+1) copy the updated IDL to `res/drift.json` from protocol-v2 branch
 2) `cargo check`
 3) commit changes
-
