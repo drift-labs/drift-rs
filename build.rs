@@ -24,7 +24,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn generate_idl_types(idl_source_path: &Path, idl_mod_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+fn generate_idl_types(
+    idl_source_path: &Path,
+    idl_mod_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
     let idl_mod_rs = drift_idl_gen::generate_rust_types(&idl_source_path)
         .map_err(|err| format!("generating IDL failed: {err:?}"))?;
 
