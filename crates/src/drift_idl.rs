@@ -2,6 +2,7 @@
 #![doc = r""]
 #![doc = r" Auto-generated IDL types, manual edits do not persist (see `crates/drift-idl-gen`)"]
 #![doc = r""]
+use self::traits::ToAccountMetas;
 use anchor_lang::{
     prelude::{
         account,
@@ -12,8 +13,6 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-
-use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
     #[doc = r" This is distinct from the anchor_lang version of the trait"]
@@ -226,7 +225,6 @@ pub mod instructions {
     impl anchor_lang::InstructionData for PlaceAndMakeSwiftPerpOrder {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct PlaceSwiftTakerOrder {
-        pub swift_message_bytes: Vec<u8>,
         pub swift_order_params_message_bytes: Vec<u8>,
     }
     #[automatically_derived]
@@ -534,6 +532,14 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserIdle {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct LogUserBalances {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for LogUserBalances {
+        const DISCRIMINATOR: [u8; 8] = [162, 21, 35, 251, 32, 57, 161, 210];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for LogUserBalances {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct DisableUserHighLeverageMode {}
     #[automatically_derived]
@@ -1946,6 +1952,26 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializePythPullOracle {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct InitializePythLazerOracle {
+        pub feed_id: u32,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for InitializePythLazerOracle {
+        const DISCRIMINATOR: [u8; 8] = [140, 107, 33, 214, 235, 219, 103, 20];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for InitializePythLazerOracle {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct PostPythLazerOracleUpdate {
+        pub pyth_message: Vec<u8>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for PostPythLazerOracleUpdate {
+        const DISCRIMINATOR: [u8; 8] = [218, 237, 170, 245, 39, 143, 166, 33];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for PostPythLazerOracleUpdate {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct InitializeHighLeverageModeConfig {
         pub max_users: u32,
     }
@@ -1990,9 +2016,8 @@ pub mod instructions {
 }
 pub mod types {
     #![doc = r" IDL types"]
-    use std::ops::Mul;
-
     use super::*;
+    use std::ops::Mul;
     #[doc = ""]
     #[doc = " backwards compatible u128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
     #[doc = " https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]
@@ -2362,27 +2387,11 @@ pub mod types {
         Debug,
         PartialEq,
     )]
-    pub struct SwiftServerMessage {
-        pub uuid: [u8; 8],
-        pub swift_order_signature: Signature,
-        pub slot: u64,
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
     pub struct SwiftOrderParamsMessage {
         pub swift_order_params: OrderParams,
         pub sub_account_id: u16,
+        pub slot: u64,
+        pub uuid: [u8; 8],
         pub take_profit_order_params: Option<SwiftTriggerOrderParams>,
         pub stop_loss_order_params: Option<SwiftTriggerOrderParams>,
     }
@@ -3406,6 +3415,7 @@ pub mod types {
         Pyth1MPull,
         PythStableCoinPull,
         SwitchboardOnDemand,
+        PythLazer,
     }
     #[derive(
         AnchorSerialize,
@@ -4447,6 +4457,67 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for ProtectedMakerModeConfig {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct PythLazerOracle {
+        pub price: i64,
+        pub publish_time: u64,
+        pub posted_slot: u64,
+        pub exponent: i32,
+        #[serde(skip)]
+        pub padding: Padding<4>,
+        pub conf: u64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for PythLazerOracle {
+        const DISCRIMINATOR: [u8; 8] = [159, 7, 161, 249, 34, 81, 121, 133];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for PythLazerOracle {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for PythLazerOracle {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for PythLazerOracle {}
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for PythLazerOracle {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for PythLazerOracle {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -8842,6 +8913,76 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for UpdateUserIdle {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct LogUserBalances {
+        pub state: Pubkey,
+        pub authority: Pubkey,
+        pub user: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for LogUserBalances {
+        const DISCRIMINATOR: [u8; 8] = [121, 191, 93, 132, 153, 217, 15, 171];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for LogUserBalances {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for LogUserBalances {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for LogUserBalances {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for LogUserBalances {}
+    #[automatically_derived]
+    impl ToAccountMetas for LogUserBalances {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.user,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for LogUserBalances {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for LogUserBalances {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -19086,6 +19227,158 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct InitializePythLazerOracle {
+        pub admin: Pubkey,
+        pub lazer_oracle: Pubkey,
+        pub state: Pubkey,
+        pub rent: Pubkey,
+        pub system_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for InitializePythLazerOracle {
+        const DISCRIMINATOR: [u8; 8] = [89, 72, 144, 241, 94, 171, 28, 143];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for InitializePythLazerOracle {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for InitializePythLazerOracle {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for InitializePythLazerOracle {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for InitializePythLazerOracle {}
+    #[automatically_derived]
+    impl ToAccountMetas for InitializePythLazerOracle {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.lazer_oracle,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.rent,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.system_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for InitializePythLazerOracle {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for InitializePythLazerOracle {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct PostPythLazerOracleUpdate {
+        pub keeper: Pubkey,
+        pub pyth_lazer_storage: Pubkey,
+        pub ix_sysvar: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for PostPythLazerOracleUpdate {
+        const DISCRIMINATOR: [u8; 8] = [168, 250, 82, 74, 96, 140, 128, 207];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for PostPythLazerOracleUpdate {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for PostPythLazerOracleUpdate {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for PostPythLazerOracleUpdate {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for PostPythLazerOracleUpdate {}
+    #[automatically_derived]
+    impl ToAccountMetas for PostPythLazerOracleUpdate {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.keeper,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.pyth_lazer_storage,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.ix_sysvar,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for PostPythLazerOracleUpdate {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for PostPythLazerOracleUpdate {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct InitializeHighLeverageModeConfig {
         pub admin: Pubkey,
         pub high_leverage_mode_config: Pubkey,
@@ -19949,9 +20242,9 @@ pub mod errors {
         OracleWrongVaaOwner,
         #[msg("Multi updates must have 2 or fewer accounts passed in remaining accounts")]
         OracleTooManyPriceAccountUpdates,
-        #[msg("Don't have the same remaining accounts number and merkle price updates left")]
+        #[msg("Don't have the same remaining accounts number and pyth updates left")]
         OracleMismatchedVaaAndPriceUpdates,
-        #[msg("Remaining account passed is not a valid pda")]
+        #[msg("Remaining account passed does not match oracle update derived pda")]
         OracleBadRemainingAccountPublicKey,
         #[msg("FailedOpenbookV2CPI")]
         FailedOpenbookV2CPI,
@@ -20003,6 +20296,14 @@ pub mod errors {
         InvalidPoolId,
         #[msg("Invalid Protected Maker Mode Config")]
         InvalidProtectedMakerModeConfig,
+        #[msg("Invalid pyth lazer storage owner")]
+        InvalidPythLazerStorageOwner,
+        #[msg("Verification of pyth lazer message failed")]
+        UnverifiedPythLazerMessage,
+        #[msg("Invalid pyth lazer message")]
+        InvalidPythLazerMessage,
+        #[msg("Pyth lazer message does not correspond to correct fed id")]
+        PythLazerMessagePriceFeedMismatch,
     }
 }
 pub mod events {
