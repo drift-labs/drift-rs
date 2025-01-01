@@ -95,11 +95,6 @@ struct SubscriptionInfo {
     payload: String,
 }
 
-#[derive(Debug)]
-pub struct RetryConfig {
-    max_retires: u8,
-}
-
 /// A client for subscribing to messages from the RPC server.
 ///
 /// See the [module documentation][self].
@@ -108,7 +103,6 @@ pub struct PubsubClient {
     subscribe_sender: mpsc::UnboundedSender<SubscribeRequestMsg>,
     _request_sender: mpsc::UnboundedSender<RequestMsg>,
     shutdown_sender: oneshot::Sender<()>,
-    retry_config: RetryConfig,
     ws: JoinHandle<Result<(), PubsubClientError>>,
     url: Url,
 }

@@ -117,7 +117,7 @@ pub fn calculate_unrealized_pnl_inner(
 
 /// Calculate the liquidation price of a user's perp position (given by `market_index`)
 ///
-/// Returns the liquidaton price (PRICE_PRECISION / 1e6)
+/// Returns the liquidation price (PRICE_PRECISION / 1e6)
 pub async fn calculate_liquidation_price(
     client: &DriftClient,
     user: &User,
