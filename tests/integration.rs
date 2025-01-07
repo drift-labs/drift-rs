@@ -22,7 +22,6 @@ async fn client_sync_subscribe_all_devnet() {
         client.subscribe_all_oracles(),
     )
     .expect("subscribes");
-
     let all_markets = client.get_all_market_ids();
     for market in all_markets {
         let price = client.oracle_price(market).await.expect("ok");
@@ -33,6 +32,7 @@ async fn client_sync_subscribe_all_devnet() {
 
 #[tokio::test]
 async fn client_sync_subscribe_devnet() {
+    env_logger::init();
     let client = DriftClient::new(
         Context::DevNet,
         RpcClient::new(devnet_endpoint()),

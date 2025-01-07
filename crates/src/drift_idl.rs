@@ -918,6 +918,14 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for PostMultiPythPullOracleUpdatesAtomic {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct PauseSpotMarketDepositWithdraw {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for PauseSpotMarketDepositWithdraw {
+        const DISCRIMINATOR: [u8; 8] = [183, 119, 59, 170, 137, 35, 242, 86];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for PauseSpotMarketDepositWithdraw {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct Initialize {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for Initialize {
@@ -12111,6 +12119,82 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for PostMultiPythPullOracleUpdatesAtomic {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct PauseSpotMarketDepositWithdraw {
+        pub state: Pubkey,
+        pub keeper: Pubkey,
+        pub spot_market: Pubkey,
+        pub spot_market_vault: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for PauseSpotMarketDepositWithdraw {
+        const DISCRIMINATOR: [u8; 8] = [229, 56, 238, 247, 130, 249, 245, 152];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for PauseSpotMarketDepositWithdraw {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for PauseSpotMarketDepositWithdraw {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for PauseSpotMarketDepositWithdraw {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for PauseSpotMarketDepositWithdraw {}
+    #[automatically_derived]
+    impl ToAccountMetas for PauseSpotMarketDepositWithdraw {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.keeper,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market_vault,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for PauseSpotMarketDepositWithdraw {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for PauseSpotMarketDepositWithdraw {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
