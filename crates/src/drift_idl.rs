@@ -3870,6 +3870,30 @@ pub mod types {
         Default,
         HighLeverage,
     }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub enum SignatureVerificationError {
+        #[default]
+        InvalidEd25519InstructionProgramId,
+        InvalidEd25519InstructionDataLength,
+        InvalidSignatureIndex,
+        InvalidSignatureOffset,
+        InvalidPublicKeyOffset,
+        InvalidMessageOffset,
+        InvalidMessageDataSize,
+        InvalidInstructionIndex,
+        MessageOffsetOverflow,
+    }
 }
 pub mod accounts {
     #![doc = r" IDL Account types"]
@@ -8092,7 +8116,7 @@ pub mod accounts {
                 AccountMeta {
                     pubkey: self.authority,
                     is_signer: true,
-                    is_writable: false,
+                    is_writable: true,
                 },
             ]
         }
@@ -20264,7 +20288,7 @@ pub mod errors {
         SigVerificationFailed,
         #[msg("Market index mismatched b/w taker and maker swift order params")]
         MismatchedSwiftOrderParamsMarketIndex,
-        #[msg("Swift only available for market/oracle perp orders")]
+        #[msg("Invalid swift order param")]
         InvalidSwiftOrderParam,
         #[msg("Place and take order success condition failed")]
         PlaceAndTakeOrderSuccessConditionFailed,
