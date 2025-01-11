@@ -667,6 +667,29 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for LiquidateSpot {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct LiquidateSpotWithSwapBegin {
+        pub asset_market_index: u16,
+        pub liability_market_index: u16,
+        pub swap_amount: u64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for LiquidateSpotWithSwapBegin {
+        const DISCRIMINATOR: [u8; 8] = [12, 43, 176, 83, 156, 251, 117, 13];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for LiquidateSpotWithSwapBegin {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct LiquidateSpotWithSwapEnd {
+        pub asset_market_index: u16,
+        pub liability_market_index: u16,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for LiquidateSpotWithSwapEnd {
+        const DISCRIMINATOR: [u8; 8] = [142, 88, 163, 160, 223, 75, 55, 225];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for LiquidateSpotWithSwapEnd {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct LiquidateBorrowForPerpPnl {
         pub perp_market_index: u16,
         pub spot_market_index: u16,
@@ -1828,7 +1851,7 @@ pub mod instructions {
     impl anchor_lang::InstructionData for UpdateSpotMarketFuel {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct InitUserFuel {
-        pub fuel_boost_deposits: Option<u32>,
+        pub fuel_boost_deposits: Option<i32>,
         pub fuel_boost_borrows: Option<u32>,
         pub fuel_boost_taker: Option<u32>,
         pub fuel_boost_maker: Option<u32>,
@@ -3901,6 +3924,7 @@ pub mod types {
         InvalidMessageDataSize,
         InvalidInstructionIndex,
         MessageOffsetOverflow,
+        InvalidMessageHex,
     }
 }
 pub mod accounts {
@@ -9997,6 +10021,266 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for LiquidateSpot {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct LiquidateSpotWithSwapBegin {
+        pub state: Pubkey,
+        pub authority: Pubkey,
+        pub liquidator: Pubkey,
+        pub liquidator_stats: Pubkey,
+        pub user: Pubkey,
+        pub user_stats: Pubkey,
+        pub liability_spot_market_vault: Pubkey,
+        pub asset_spot_market_vault: Pubkey,
+        pub liability_token_account: Pubkey,
+        pub asset_token_account: Pubkey,
+        pub token_program: Pubkey,
+        pub drift_signer: Pubkey,
+        pub instructions: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for LiquidateSpotWithSwapBegin {
+        const DISCRIMINATOR: [u8; 8] = [58, 245, 239, 110, 253, 194, 212, 67];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for LiquidateSpotWithSwapBegin {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for LiquidateSpotWithSwapBegin {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for LiquidateSpotWithSwapBegin {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for LiquidateSpotWithSwapBegin {}
+    #[automatically_derived]
+    impl ToAccountMetas for LiquidateSpotWithSwapBegin {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.liquidator,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.liquidator_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.liability_spot_market_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.asset_spot_market_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.liability_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.asset_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.drift_signer,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.instructions,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for LiquidateSpotWithSwapBegin {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for LiquidateSpotWithSwapBegin {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct LiquidateSpotWithSwapEnd {
+        pub state: Pubkey,
+        pub authority: Pubkey,
+        pub liquidator: Pubkey,
+        pub liquidator_stats: Pubkey,
+        pub user: Pubkey,
+        pub user_stats: Pubkey,
+        pub liability_spot_market_vault: Pubkey,
+        pub asset_spot_market_vault: Pubkey,
+        pub liability_token_account: Pubkey,
+        pub asset_token_account: Pubkey,
+        pub token_program: Pubkey,
+        pub drift_signer: Pubkey,
+        pub instructions: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for LiquidateSpotWithSwapEnd {
+        const DISCRIMINATOR: [u8; 8] = [157, 1, 82, 217, 233, 241, 137, 175];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for LiquidateSpotWithSwapEnd {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for LiquidateSpotWithSwapEnd {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for LiquidateSpotWithSwapEnd {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for LiquidateSpotWithSwapEnd {}
+    #[automatically_derived]
+    impl ToAccountMetas for LiquidateSpotWithSwapEnd {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.liquidator,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.liquidator_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.liability_spot_market_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.asset_spot_market_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.liability_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.asset_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.drift_signer,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.instructions,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for LiquidateSpotWithSwapEnd {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for LiquidateSpotWithSwapEnd {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -20412,6 +20696,8 @@ pub mod errors {
         InvalidPythLazerMessage,
         #[msg("Pyth lazer message does not correspond to correct fed id")]
         PythLazerMessagePriceFeedMismatch,
+        #[msg("InvalidLiquidateSpotWithSwap")]
+        InvalidLiquidateSpotWithSwap,
     }
 }
 pub mod events {
