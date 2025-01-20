@@ -1,7 +1,11 @@
+use anchor_lang::Space;
 use drift_rs::{
     event_subscriber::RpcClient,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
-    types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam},
+    types::{
+        accounts::User, Context, MarketId, NewOrder, Order, PerpPosition, PostOnlyParam,
+        SpotPosition,
+    },
     utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
     DriftClient, TransactionBuilder, Wallet,
 };
