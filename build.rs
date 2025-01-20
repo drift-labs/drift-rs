@@ -171,8 +171,3 @@ fn link_library() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
     Ok(())
 }
-
-fn fail_build() -> ! {
-    println!("cargo:warning={LIB} build failed");
-    std::process::exit(1);
-}
