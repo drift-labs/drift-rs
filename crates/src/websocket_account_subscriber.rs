@@ -172,9 +172,9 @@ impl WebsocketAccountSubscriber {
                                 }
                             }
                         },
-                        Err(_) => {
+                        Err(err) => {
                             log::error!(
-                                "{}: Failed to subscribe to account stream, retrying",
+                                "{}: Failed to subscribe to account stream: {err:?}, retrying",
                                 subscription_name
                             );
                             attempt += 1;
