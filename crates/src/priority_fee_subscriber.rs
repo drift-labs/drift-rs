@@ -85,6 +85,8 @@ impl PriorityFeeSubscriber {
                     .unwrap_or(DEFAULT_SLOT_WINDOW)
                     .clamp(5, 150) as usize; // 150 max slots from node cache
 
+                let max_attempts = 3;
+                let mut attempts = 0;
                 loop {
                     let _ = refresh.tick().await;
                     let response = this
@@ -94,6 +96,7 @@ impl PriorityFeeSubscriber {
 
                     match response {
                         Ok(response) => {
+                            attempts = 0;
                             let mut latest_fees: Vec<u64> = response
                                 .iter()
                                 .take(window)
@@ -105,6 +108,10 @@ impl PriorityFeeSubscriber {
                         }
                         Err(err) => {
                             warn!("failed to fetch priority fee: {err:?}");
+                            attempts += 1;
+                            if attempts > max_attempts {
+                                panic!("unable to fetch priority fees");
+                            }
                         }
                     }
 
@@ -139,6 +146,9 @@ impl PriorityFeeSubscriber {
     pub fn priority_fee_nth(&self, percentile: f32) -> u64 {
         let percentile = percentile.min(1.0);
         let lock = self.latest_fees.read().expect("acquired");
+        if lock.is_empty() {
+            panic!("PriorityFeeSubscriber is not subscribed");
+        }
         let idx = ((lock.len() - 1) as f32 * percentile).round() as usize;
         lock[idx]
     }

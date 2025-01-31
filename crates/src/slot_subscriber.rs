@@ -3,21 +3,15 @@ use std::{
     time::Duration,
 };
 
+use drift_pubsub_client::PubsubClient;
 use futures_util::StreamExt;
 use log::{debug, error, warn};
-use solana_client::nonblocking::pubsub_client::PubsubClient;
 use solana_sdk::clock::Slot;
-use tokio::sync::{
-    mpsc::{self},
-    oneshot,
-};
+use tokio::sync::oneshot;
 
-use crate::{
-    async_utils::{retry_policy, spawn_retry_task},
-    types::{SdkError, SdkResult},
-};
+use crate::types::{SdkError, SdkResult};
 
-/// Max. time for slot subscriber to run without an update
+/// Max. time for slot subscriber to run without an update (10 slots)
 const SLOT_STALENESS_THRESHOLD: Duration = Duration::from_secs(4);
 
 const LOG_TARGET: &str = "slotsub";
@@ -35,8 +29,8 @@ const LOG_TARGET: &str = "slotsub";
 /// ```
 ///
 pub struct SlotSubscriber {
+    pubsub: Arc<PubsubClient>,
     current_slot: Arc<AtomicU64>,
-    url: String,
     unsub: Mutex<Option<oneshot::Sender<()>>>,
 }
 
@@ -59,10 +53,15 @@ impl SlotSubscriber {
         guard.is_some()
     }
 
-    pub fn new(url: String) -> Self {
+    /// Create a new `SlotSubscriber`
+    ///
+    /// * `pubsub` - a `PubsubClient` instance for the subscription to utilize (maybe shared)
+    ///
+    /// Consumer must call `.subscribe()` to start receiving updates
+    pub fn new(pubsub: Arc<PubsubClient>) -> Self {
         Self {
+            pubsub,
             current_slot: Arc::default(),
-            url,
             unsub: Mutex::new(None),
         }
     }
@@ -72,34 +71,24 @@ impl SlotSubscriber {
         self.current_slot.load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub fn subscribe<F>(&mut self, handler_fn: F) -> SdkResult<()>
+    /// Start the slot subscription task
+    ///
+    /// * `on_slot` - callback invoked on new slot updates
+    ///
+    pub fn subscribe<F>(&mut self, on_slot: F) -> SdkResult<()>
     where
         F: 'static + Send + Fn(SlotUpdate),
     {
         if self.is_subscribed() {
             return Ok(());
         }
-        self.subscribe_ws(handler_fn)
+        self.subscribe_ws(on_slot)
     }
 
-    fn subscribe_ws<F>(&mut self, handler_fn: F) -> SdkResult<()>
+    fn subscribe_ws<F>(&mut self, on_slot: F) -> SdkResult<()>
     where
         F: 'static + Send + Fn(SlotUpdate),
     {
-        let (slot_tx, mut slot_rx) = mpsc::channel(8);
-        let url = self.url.clone();
-
-        let join_handle = spawn_retry_task(
-            move || {
-                let task = SlotSubscriberTask {
-                    endpoint: url.clone(),
-                    slot_tx: slot_tx.clone(),
-                };
-                task.slot_subscribe()
-            },
-            retry_policy::forever(1),
-        );
-
         let (unsub_tx, mut unsub_rx) = oneshot::channel::<()>();
         {
             let mut guard = self.unsub.try_lock().expect("uncontested");
@@ -107,28 +96,46 @@ impl SlotSubscriber {
         }
 
         let current_slot = Arc::clone(&self.current_slot);
+        let pubsub = Arc::clone(&self.pubsub);
+
         tokio::spawn(async move {
+            debug!(target: LOG_TARGET, "start slot subscriber");
+
+            let (mut slot_updates, unsubscriber) = match pubsub.slot_subscribe().await {
+                Ok(s) => s,
+                Err(err) => {
+                    debug!(target: LOG_TARGET, "subscribe failed: {err:?}");
+                    return;
+                }
+            };
+
             loop {
                 tokio::select! {
                     biased;
-                    new_slot = slot_rx.recv() => {
+                    new_slot = tokio::time::timeout(SLOT_STALENESS_THRESHOLD, slot_updates.next()) => {
                         match new_slot {
-                            Some(new_slot) => {
-                                current_slot.store(new_slot, std::sync::atomic::Ordering::Relaxed);
-                                handler_fn(SlotUpdate::new(new_slot));
+                            Ok(Some(update)) => {
+                                current_slot.store(update.slot, std::sync::atomic::Ordering::Relaxed);
+                                on_slot(SlotUpdate::new(update.slot));
                             }
-                            None => {
+                            Ok(None) => {
+                                warn!(target: LOG_TARGET, "slot subscriber finished");
+                                break;
+                            }
+                            Err(err) => {
+                                warn!(target: LOG_TARGET, "slot subscriber failed: {err:?}");
                                 break;
                             }
                         }
                     }
                     _ = &mut unsub_rx => {
                         debug!("unsubscribed");
+                        unsubscriber().await;
                         break;
                     }
                 }
             }
-            join_handle.abort();
+            panic!("slot subscriber stale or disconnected");
         });
 
         Ok(())
@@ -147,42 +154,6 @@ impl SlotSubscriber {
     }
 }
 
-struct SlotSubscriberTask {
-    endpoint: String,
-    slot_tx: mpsc::Sender<Slot>,
-}
-
-impl SlotSubscriberTask {
-    async fn slot_subscribe(self) {
-        debug!(target: LOG_TARGET, "start task");
-        let pubsub = match PubsubClient::new(&self.endpoint).await {
-            Ok(p) => p,
-            Err(err) => {
-                debug!(target: LOG_TARGET, "connect failed: {err:?}");
-                return;
-            }
-        };
-        let (mut slot_updates, unsubscriber) = match pubsub.slot_subscribe().await {
-            Ok(s) => s,
-            Err(err) => {
-                debug!(target: LOG_TARGET, "subscribe failed: {err:?}");
-                return;
-            }
-        };
-
-        let mut current_slot = 0;
-        while let Ok(Some(message)) =
-            tokio::time::timeout(SLOT_STALENESS_THRESHOLD, slot_updates.next()).await
-        {
-            if message.slot >= current_slot {
-                current_slot = message.slot;
-                self.slot_tx.try_send(current_slot).expect("sent");
-            }
-        }
-        warn!(target: LOG_TARGET, "slot stream stale or disconnected");
-        unsubscriber().await;
-    }
-}
 #[cfg(feature = "rpc_tests")]
 mod tests {
     use std::str::FromStr;

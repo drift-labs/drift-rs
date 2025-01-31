@@ -47,11 +47,14 @@ impl BlockhashSubscriber {
             let last_twenty_hashes = Arc::clone(&self.last_twenty_hashes);
             let mut refresh = tokio::time::interval(self.refresh_frequency);
 
+            let max_attempts = 3;
+            let mut attempts = 0;
             async move {
                 loop {
                     let _ = refresh.tick().await;
                     match rpc_client.get_latest_blockhash().await {
                         Ok(blockhash) => {
+                            attempts = 0;
                             let mut hashes = last_twenty_hashes.write().expect("acquired");
                             hashes.push_back(blockhash);
                             if hashes.len() > 20 {
@@ -60,6 +63,10 @@ impl BlockhashSubscriber {
                         }
                         Err(err) => {
                             warn!("blockhash subscriber missed update: {err:?}");
+                            attempts += 1;
+                            if attempts > max_attempts {
+                                panic!("unable to fetch blockhash");
+                            }
                         }
                     }
 
@@ -84,7 +91,7 @@ impl BlockhashSubscriber {
         lock.front().copied()
     }
 
-    /// Stop the blockhash subscriber task, if it exists
+    /// Stop the blockhash subscriber task, if it exists    ``
     pub fn unsubscribe(&self) {
         let mut guard = self.unsub.lock().expect("uncontested");
         if let Some(unsub) = guard.take() {

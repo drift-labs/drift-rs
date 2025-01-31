@@ -2,12 +2,13 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use anchor_lang::AccountDeserialize;
 use dashmap::DashMap;
+use drift_pubsub_client::PubsubClient;
 use log::debug;
 use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{
-    types::DataAndSlot, utils::get_ws_url,
-    websocket_account_subscriber::WebsocketAccountSubscriber, SdkResult, UnsubHandle,
+    types::DataAndSlot, websocket_account_subscriber::WebsocketAccountSubscriber, SdkResult,
+    UnsubHandle,
 };
 
 const LOG_TARGET: &str = "accountmap";
@@ -20,15 +21,15 @@ pub struct AccountSlot {
 
 /// Set of subscriptions to a dynamic subset of network accounts
 pub struct AccountMap {
-    endpoint: String,
+    pubsub: Arc<PubsubClient>,
     commitment: CommitmentConfig,
     inner: DashMap<Pubkey, AccountSub<Subscribed>, ahash::RandomState>,
 }
 
 impl AccountMap {
-    pub fn new(endpoint: String, commitment: CommitmentConfig) -> Self {
+    pub fn new(pubsub: Arc<PubsubClient>, commitment: CommitmentConfig) -> Self {
         Self {
-            endpoint,
+            pubsub,
             commitment,
             inner: Default::default(),
         }
@@ -40,7 +41,7 @@ impl AccountMap {
         }
         debug!(target: LOG_TARGET, "subscribing: {account:?}");
 
-        let user = AccountSub::new(&self.endpoint, self.commitment, *account);
+        let user = AccountSub::new(Arc::clone(&self.pubsub), self.commitment, *account);
         let user = user.subscribe().await?;
 
         self.inner.insert(*account, user);
@@ -88,12 +89,8 @@ pub struct AccountSub<S> {
 impl AccountSub<Unsubscribed> {
     pub const SUBSCRIPTION_ID: &'static str = "account";
 
-    pub fn new(endpoint: &str, commitment: CommitmentConfig, pubkey: Pubkey) -> Self {
-        let subscription = WebsocketAccountSubscriber::new(
-            get_ws_url(endpoint).expect("valid url"),
-            pubkey,
-            commitment,
-        );
+    pub fn new(pubsub: Arc<PubsubClient>, commitment: CommitmentConfig, pubkey: Pubkey) -> Self {
+        let subscription = WebsocketAccountSubscriber::new(pubsub, pubkey, commitment);
 
         Self {
             pubkey,
@@ -165,13 +162,21 @@ mod tests {
 
     use super::*;
     use crate::{
-        accounts::User, constants::DEFAULT_PUBKEY, utils::test_envs::mainnet_endpoint, Wallet,
+        accounts::User,
+        constants::DEFAULT_PUBKEY,
+        utils::{get_ws_url, test_envs::mainnet_endpoint},
+        Wallet,
     };
 
     #[tokio::test]
     async fn test_user_subscribe() {
         let _ = env_logger::try_init();
-        let account_map = AccountMap::new(mainnet_endpoint().into(), CommitmentConfig::confirmed());
+        let pubsub = Arc::new(
+            PubsubClient::new(&get_ws_url(&mainnet_endpoint()).unwrap())
+                .await
+                .expect("ws connects"),
+        );
+        let account_map = AccountMap::new(pubsub, CommitmentConfig::confirmed());
         let user_1 = Wallet::derive_user_account(
             &pubkey!("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"),
             0,

@@ -3,6 +3,7 @@
 use std::{borrow::Cow, collections::BTreeSet, sync::Arc, time::Duration};
 
 use anchor_lang::{AccountDeserialize, InstructionData};
+use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
 use log::debug;
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_response::Response};
@@ -18,6 +19,7 @@ use solana_sdk::{
     transaction::VersionedTransaction,
 };
 pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
+use utils::get_ws_url;
 
 use crate::{
     account_map::AccountMap,
@@ -230,8 +232,19 @@ impl DriftClient {
     }
 
     /// Return a handle to the inner RPC client
+    #[deprecated]
     pub fn inner(&self) -> &RpcClient {
+        &self.backend.rpc_client
+    }
+
+    /// Return a handle to the inner RPC client
+    pub fn rpc(&self) -> Arc<RpcClient> {
         self.backend.client()
+    }
+
+    /// Return a handle to the inner Ws client
+    pub fn ws(&self) -> Arc<PubsubClient> {
+        self.backend.ws()
     }
 
     /// Return on-chain program metadata
@@ -596,6 +609,7 @@ impl DriftClient {
 /// It is intended to be a singleton
 pub struct DriftClientBackend {
     rpc_client: Arc<RpcClient>,
+    pubsub_client: Arc<PubsubClient>,
     program_data: ProgramData,
     blockhash_subscriber: BlockhashSubscriber,
     account_map: AccountMap,
@@ -607,14 +621,19 @@ pub struct DriftClientBackend {
 impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
     async fn new(context: Context, rpc_client: Arc<RpcClient>) -> SdkResult<Self> {
-        let perp_market_map = MarketMap::<PerpMarket>::new(Arc::clone(&rpc_client));
-        let spot_market_map = MarketMap::<SpotMarket>::new(Arc::clone(&rpc_client));
+        let pubsub_client =
+            Arc::new(PubsubClient::new(&get_ws_url(rpc_client.url().as_str())?).await?);
+
+        let perp_market_map =
+            MarketMap::<PerpMarket>::new(Arc::clone(&pubsub_client), rpc_client.commitment());
+        let spot_market_map =
+            MarketMap::<SpotMarket>::new(Arc::clone(&pubsub_client), rpc_client.commitment());
 
         let lookup_table_address = context.lut();
 
         let (_, _, lut) = tokio::try_join!(
-            perp_market_map.sync(),
-            spot_market_map.sync(),
+            perp_market_map.sync(&rpc_client),
+            spot_market_map.sync(&rpc_client),
             rpc_client
                 .get_account(&lookup_table_address)
                 .map_err(Into::into),
@@ -632,16 +651,18 @@ impl DriftClientBackend {
             all_oracles.push(*market_oracle_info);
         }
 
-        let oracle_map = OracleMap::new(Arc::clone(&rpc_client), all_oracles.as_slice());
-        let account_map = AccountMap::new(rpc_client.url(), rpc_client.commitment());
+        let oracle_map = OracleMap::new(
+            Arc::clone(&pubsub_client),
+            all_oracles.as_slice(),
+            rpc_client.commitment(),
+        );
+        let account_map = AccountMap::new(Arc::clone(&pubsub_client), rpc_client.commitment());
         account_map.subscribe_account(state_account()).await?;
 
         Ok(Self {
             rpc_client: Arc::clone(&rpc_client),
-            blockhash_subscriber: BlockhashSubscriber::new(
-                Duration::from_secs(2),
-                Arc::clone(&rpc_client),
-            ),
+            pubsub_client,
+            blockhash_subscriber: BlockhashSubscriber::new(Duration::from_secs(2), rpc_client),
             program_data: ProgramData::new(
                 spot_market_map.values(),
                 perp_market_map.values(),
@@ -738,8 +759,13 @@ impl DriftClientBackend {
     }
 
     /// Return a handle to the inner RPC client
-    fn client(&self) -> &RpcClient {
-        &self.rpc_client
+    fn client(&self) -> Arc<RpcClient> {
+        Arc::clone(&self.rpc_client)
+    }
+
+    /// Return a handle to the inner RPC client
+    fn ws(&self) -> Arc<PubsubClient> {
+        Arc::clone(&self.pubsub_client)
     }
 
     /// Get recent tx priority fees
@@ -829,7 +855,7 @@ impl DriftClientBackend {
         match self.blockhash_subscriber.get_latest_blockhash() {
             Some(hash) => Ok(hash),
             None => self
-                .client()
+                .rpc_client
                 .get_latest_blockhash()
                 .await
                 .map_err(SdkError::Rpc),
@@ -1758,23 +1784,29 @@ mod tests {
             rpc_mocks,
         ));
 
-        let perp_market_map = MarketMap::<PerpMarket>::new(Arc::clone(&rpc_client));
-        let spot_market_map = MarketMap::<SpotMarket>::new(Arc::clone(&rpc_client));
+        let pubsub_client = Arc::new(
+            PubsubClient::new(&get_ws_url(DEVNET_ENDPOINT).unwrap())
+                .await
+                .expect("ws connects"),
+        );
+
+        let perp_market_map =
+            MarketMap::<PerpMarket>::new(Arc::clone(&pubsub_client), rpc_client.commitment());
+        let spot_market_map =
+            MarketMap::<SpotMarket>::new(Arc::clone(&pubsub_client), rpc_client.commitment());
 
         let backend = DriftClientBackend {
             rpc_client: Arc::clone(&rpc_client),
+            pubsub_client: Arc::clone(&pubsub_client),
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map: OracleMap::new(Arc::clone(&rpc_client), &[]),
+            oracle_map: OracleMap::new(Arc::clone(&pubsub_client), &[], rpc_client.commitment()),
             blockhash_subscriber: BlockhashSubscriber::new(
                 Duration::from_secs(2),
                 Arc::clone(&rpc_client),
             ),
-            account_map: AccountMap::new(
-                DEVNET_ENDPOINT.to_string(),
-                CommitmentConfig::processed(),
-            ),
+            account_map: AccountMap::new(Arc::clone(&pubsub_client), CommitmentConfig::processed()),
         };
 
         DriftClient {
