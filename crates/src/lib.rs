@@ -625,15 +625,15 @@ impl DriftClientBackend {
             Arc::new(PubsubClient::new(&get_ws_url(rpc_client.url().as_str())?).await?);
 
         let perp_market_map =
-            MarketMap::<PerpMarket>::new(Arc::clone(&rpc_client), Arc::clone(&pubsub_client));
+            MarketMap::<PerpMarket>::new(Arc::clone(&pubsub_client), rpc_client.commitment());
         let spot_market_map =
-            MarketMap::<SpotMarket>::new(Arc::clone(&rpc_client), Arc::clone(&pubsub_client));
+            MarketMap::<SpotMarket>::new(Arc::clone(&pubsub_client), rpc_client.commitment());
 
         let lookup_table_address = context.lut();
 
         let (_, _, lut) = tokio::try_join!(
-            perp_market_map.sync(),
-            spot_market_map.sync(),
+            perp_market_map.sync(&rpc_client),
+            spot_market_map.sync(&rpc_client),
             rpc_client
                 .get_account(&lookup_table_address)
                 .map_err(Into::into),
@@ -652,9 +652,9 @@ impl DriftClientBackend {
         }
 
         let oracle_map = OracleMap::new(
-            Arc::clone(&rpc_client),
             Arc::clone(&pubsub_client),
             all_oracles.as_slice(),
+            rpc_client.commitment(),
         );
         let account_map = AccountMap::new(Arc::clone(&pubsub_client), rpc_client.commitment());
         account_map.subscribe_account(state_account()).await?;
@@ -1791,9 +1791,9 @@ mod tests {
         );
 
         let perp_market_map =
-            MarketMap::<PerpMarket>::new(Arc::clone(&rpc_client), Arc::clone(&pubsub_client));
+            MarketMap::<PerpMarket>::new(Arc::clone(&pubsub_client), rpc_client.commitment());
         let spot_market_map =
-            MarketMap::<SpotMarket>::new(Arc::clone(&rpc_client), Arc::clone(&pubsub_client));
+            MarketMap::<SpotMarket>::new(Arc::clone(&pubsub_client), rpc_client.commitment());
 
         let backend = DriftClientBackend {
             rpc_client: Arc::clone(&rpc_client),
@@ -1801,7 +1801,7 @@ mod tests {
             program_data: ProgramData::uninitialized(),
             perp_market_map,
             spot_market_map,
-            oracle_map: OracleMap::new(Arc::clone(&rpc_client), Arc::clone(&pubsub_client), &[]),
+            oracle_map: OracleMap::new(Arc::clone(&pubsub_client), &[], rpc_client.commitment()),
             blockhash_subscriber: BlockhashSubscriber::new(
                 Duration::from_secs(2),
                 Arc::clone(&rpc_client),

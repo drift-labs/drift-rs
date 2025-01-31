@@ -9,7 +9,9 @@ use drift_pubsub_client::PubsubClient;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use log::warn;
 use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
+use solana_sdk::{
+    account::Account, clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey,
+};
 
 use crate::{
     drift_idl::types::OracleSource,
@@ -42,7 +44,7 @@ pub struct OracleMap {
     /// Oracle pubkey by MarketId (immutable)
     oracle_by_market: ReadOnlyView<MarketId, Pubkey>,
     latest_slot: Arc<AtomicU64>,
-    rpc: Arc<RpcClient>,
+    commitment: CommitmentConfig,
     pubsub: Arc<PubsubClient>,
 }
 
@@ -56,9 +58,9 @@ impl OracleMap {
     /// * `all_oracles` - Exhaustive list of all Drift oracle pubkeys and source by market
     ///
     pub fn new(
-        rpc_client: Arc<RpcClient>,
         pubsub_client: Arc<PubsubClient>,
         all_oracles: &[(MarketId, Pubkey, OracleSource)],
+        commitment: CommitmentConfig,
     ) -> Self {
         log::debug!(target: LOG_TARGET, "all oracles: {:?}", all_oracles);
         let oraclemap = all_oracles
@@ -87,7 +89,7 @@ impl OracleMap {
             oracle_by_market: oracle_by_market.into_read_only(),
             subcriptions: Default::default(),
             latest_slot: Arc::new(AtomicU64::new(0)),
-            rpc: rpc_client,
+            commitment,
             pubsub: pubsub_client,
         }
     }
@@ -123,7 +125,7 @@ impl OracleMap {
             let oracle_subscriber = WebsocketAccountSubscriber::new(
                 Arc::clone(&self.pubsub),
                 *oracle_pubkey,
-                self.rpc.commitment(),
+                self.commitment,
             );
 
             pending_subscriptions.push((oracle_subscriber, oracle_info.clone()));
@@ -182,7 +184,7 @@ impl OracleMap {
     /// Fetches account data for each market oracle set by `markets`
     ///
     /// This may be invoked manually to resync oracle data for some set of markets
-    pub async fn sync(&self, markets: &[MarketId]) -> SdkResult<()> {
+    pub async fn sync(&self, markets: &[MarketId], rpc: &RpcClient) -> SdkResult<()> {
         let markets = HashSet::<MarketId>::from_iter(markets.iter().copied());
         log::debug!(target: LOG_TARGET, "sync oracles for: {markets:?}");
 
@@ -199,7 +201,7 @@ impl OracleMap {
             .collect();
 
         let (synced_oracles, latest_slot) =
-            match get_multi_account_data_with_fallback(&self.rpc, &oracle_pubkeys).await {
+            match get_multi_account_data_with_fallback(rpc, &oracle_pubkeys).await {
                 Ok(result) => result,
                 Err(err) => {
                     warn!(target: LOG_TARGET, "failed to sync oracle accounts");
@@ -447,7 +449,7 @@ mod tests {
                 .await
                 .expect("ws connects"),
         );
-        let map = OracleMap::new(rpc, pubsub, &all_oracles);
+        let map = OracleMap::new(pubsub, &all_oracles, rpc.commitment());
 
         // - dups ignored
         // - makerts with same oracle pubkey, make at most 1 sub
@@ -457,7 +459,7 @@ mod tests {
             MarketId::perp(1),
             MarketId::spot(1),
         ];
-        map.sync(&markets).await.expect("subd");
+        map.sync(&markets, &rpc).await.expect("subd");
     }
 
     #[tokio::test]
@@ -482,7 +484,7 @@ mod tests {
                 .await
                 .expect("ws connects"),
         );
-        let map = OracleMap::new(rpc, pubsub, &all_oracles);
+        let map = OracleMap::new(pubsub, &all_oracles, rpc.commitment());
 
         // - dups ignored
         // - makerts with same oracle pubkey, make at most 1 sub
@@ -521,13 +523,13 @@ mod tests {
             ),
         ];
         let map = OracleMap::new(
-            Arc::new(RpcClient::new(devnet_endpoint().into())),
             Arc::new(
                 PubsubClient::new(&get_ws_url(&devnet_endpoint()).unwrap())
                     .await
                     .expect("ws connects"),
             ),
             &all_oracles,
+            CommitmentConfig::confirmed(),
         );
         map.subscribe(&[MarketId::spot(0), MarketId::perp(1)])
             .await

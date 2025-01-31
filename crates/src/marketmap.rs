@@ -18,7 +18,7 @@ use solana_client::{
     rpc_request::RpcRequest,
     rpc_response::{OptionalContext, RpcKeyedAccount},
 };
-use solana_sdk::{clock::Slot, pubkey::Pubkey};
+use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{
     accounts::State,
@@ -77,8 +77,8 @@ pub struct MarketMap<T: AnchorDeserialize + Send> {
     marketmap: Arc<DashMap<u16, DataAndSlot<T>, ahash::RandomState>>,
     subscriptions: DashMap<u16, UnsubHandle, ahash::RandomState>,
     latest_slot: Arc<AtomicU64>,
-    rpc: Arc<RpcClient>,
     pubsub: Arc<PubsubClient>,
+    commitment: CommitmentConfig,
 }
 
 impl<T> MarketMap<T>
@@ -87,13 +87,13 @@ where
 {
     pub const SUBSCRIPTION_ID: &'static str = "marketmap";
 
-    pub fn new(rpc: Arc<RpcClient>, pubsub: Arc<PubsubClient>) -> Self {
+    pub fn new(pubsub: Arc<PubsubClient>, commitment: CommitmentConfig) -> Self {
         Self {
             subscriptions: Default::default(),
             marketmap: Arc::default(),
             latest_slot: Arc::new(AtomicU64::new(0)),
             pubsub,
-            rpc,
+            commitment,
         }
     }
 
@@ -113,11 +113,10 @@ where
                 MarketType::Perp => derive_perp_market_account(market.index()),
                 MarketType::Spot => derive_spot_market_account(market.index()),
             };
-
             let market_subscriber = WebsocketAccountSubscriber::new(
                 Arc::clone(&self.pubsub),
                 market_pubkey,
-                self.rpc.commitment(),
+                self.commitment,
             );
 
             pending_subscriptions.push((market.index(), market_subscriber));
@@ -211,9 +210,9 @@ where
     }
 
     /// Sync all market accounts
-    pub async fn sync(&self) -> SdkResult<()> {
+    pub async fn sync(&self, rpc: &RpcClient) -> SdkResult<()> {
         log::debug!(target: LOG_TARGET, "syncing marketmap: {:?}", T::MARKET_TYPE);
-        let (markets, latest_slot) = get_market_accounts_with_fallback::<T>(&self.rpc).await?;
+        let (markets, latest_slot) = get_market_accounts_with_fallback::<T>(rpc).await?;
         for market in markets {
             self.marketmap.insert(
                 market.market_index(),
@@ -356,6 +355,7 @@ mod tests {
 
     use drift_pubsub_client::PubsubClient;
     use solana_client::nonblocking::rpc_client::RpcClient;
+    use solana_sdk::commitment_config::CommitmentConfig;
 
     use super::{get_market_accounts_with_fallback, MarketMap};
     use crate::{
@@ -370,12 +370,12 @@ mod tests {
     #[tokio::test]
     async fn marketmap_subscribe() {
         let map = MarketMap::<PerpMarket>::new(
-            Arc::new(RpcClient::new(devnet_endpoint())),
             Arc::new(
                 PubsubClient::new(&get_ws_url(&devnet_endpoint()).unwrap())
                     .await
                     .expect("ws connects"),
             ),
+            CommitmentConfig::confirmed(),
         );
 
         assert!(map
@@ -410,7 +410,7 @@ mod tests {
 
 #[cfg(feature = "rpc_tests")]
 mod rpc_tests {
-    use solana_sdk::commitment_config::CommitmentLevel;
+    use solana_sdk::commitment_config::CommitmentConfig;
 
     use super::*;
     use crate::utils::test_envs::mainnet_endpoint;
@@ -418,7 +418,7 @@ mod rpc_tests {
     #[tokio::test]
     async fn test_marketmap_perp() {
         let commitment = CommitmentConfig {
-            commitment: CommitmentLevel::Processed,
+            commitment: CommitmentConfig::Processed,
         };
 
         let marketmap = MarketMap::<PerpMarket>::new(commitment, mainnet_endpoint(), true);
@@ -442,7 +442,7 @@ mod rpc_tests {
     #[tokio::test]
     async fn test_marketmap_spot() {
         let commitment = CommitmentConfig {
-            commitment: CommitmentLevel::Processed,
+            commitment: CommitmentConfig::Processed,
         };
 
         let marketmap = MarketMap::<SpotMarket>::new(commitment, RPC, true);

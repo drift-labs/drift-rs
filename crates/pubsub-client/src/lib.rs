@@ -357,8 +357,8 @@ impl PubsubClient {
                 Err(err) => {
                     log::warn!(target: "ws", "couldn't reconnect: {err:?}");
                     if retry_count >= max_retry_count {
-                        log::warn!(target: "ws", "reached max reconnect attempts: {err:?}");
-                        break 'reconnect Err(PubsubClientError::ConnectionError(err));
+                        log::error!(target: "ws", "reached max reconnect attempts: {err:?}");
+                        panic!("PubsubCliwnt reached max reconnect attempts: {err:?}");
                     }
                     retry_count += 1;
                     let delay = 2_u64.pow(2 + retry_count);
@@ -374,7 +374,7 @@ impl PubsubClient {
                     subscriptions
                         .values()
                         .cloned()
-                        .map(|s| Ok(Message::text(s.payload.clone()))),
+                        .map(|s| Ok(Message::text(s.payload))),
                 ))
                 .await
             {
