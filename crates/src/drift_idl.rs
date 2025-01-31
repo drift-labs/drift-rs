@@ -1985,7 +1985,6 @@ pub mod instructions {
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct InitializePythLazerOracle {
         pub feed_id: u32,
-        pub exponent: i32,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializePythLazerOracle {
@@ -1993,17 +1992,6 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializePythLazerOracle {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct UpdatePythLazerOracleExponent {
-        pub feed_id: u32,
-        pub exponent: i32,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdatePythLazerOracleExponent {
-        const DISCRIMINATOR: [u8; 8] = [80, 30, 57, 83, 39, 183, 97, 185];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdatePythLazerOracleExponent {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct PostPythLazerOracleUpdate {
         pub pyth_message: Vec<u8>,
@@ -19697,76 +19685,6 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct UpdatePythLazerOracleExponent {
-        pub admin: Pubkey,
-        pub lazer_oracle: Pubkey,
-        pub state: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdatePythLazerOracleExponent {
-        const DISCRIMINATOR: [u8; 8] = [123, 11, 72, 80, 41, 152, 104, 72];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePythLazerOracleExponent {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdatePythLazerOracleExponent {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for UpdatePythLazerOracleExponent {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdatePythLazerOracleExponent {}
-    #[automatically_derived]
-    impl ToAccountMetas for UpdatePythLazerOracleExponent {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.admin,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.lazer_oracle,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.state,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for UpdatePythLazerOracleExponent {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for UpdatePythLazerOracleExponent {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct PostPythLazerOracleUpdate {
         pub keeper: Pubkey,
         pub pyth_lazer_storage: Pubkey,
@@ -20764,6 +20682,8 @@ pub mod errors {
         PythLazerMessagePriceFeedMismatch,
         #[msg("InvalidLiquidateSpotWithSwap")]
         InvalidLiquidateSpotWithSwap,
+        #[msg("User in swift message does not match user in ix context")]
+        SwiftUserContextUserMismatch,
     }
 }
 pub mod events {

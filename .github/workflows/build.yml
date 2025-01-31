@@ -48,7 +48,7 @@ jobs:
           rustup component add clippy rustfmt
       - name: install libdrift_ffi_sys
         run: |
-          curl -L https://github.com/drift-labs/drift-ffi-sys/releases/download/v2.107.0/libdrift_ffi_sys.so > libdrift_ffi_sys.so
+          curl -L https://github.com/drift-labs/drift-ffi-sys/releases/download/v2.108.0/libdrift_ffi_sys.so > libdrift_ffi_sys.so
           sudo cp libdrift_ffi_sys.so $CARGO_DRIFT_FFI_PATH
       - name: Format
         run: cargo fmt --all -- --check
