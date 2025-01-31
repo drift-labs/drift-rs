@@ -45,14 +45,14 @@ impl WebsocketAccountSubscriber {
     ///
     /// * `subscription_name` - some user defined identifier for the subscription
     /// * `sync` - true if subscription should fetch account data on start
-    /// * `handler_fn` - handles updates from the subscription task
+    /// * `on_update` - function to call on updates from the subscription
     ///
     /// Fetches the account to set the initial value, then uses event based updates
     pub async fn subscribe<F>(
         &self,
         subscription_name: &'static str,
         sync: bool,
-        handler_fn: F,
+        on_update: F,
     ) -> SdkResult<UnsubHandle>
     where
         F: 'static + Send + Fn(&AccountUpdate),
@@ -69,7 +69,7 @@ impl WebsocketAccountSubscriber {
                 Ok(response) => {
                     if let Some(account) = response.value {
                         owner = account.owner;
-                        handler_fn(&AccountUpdate {
+                        on_update(&AccountUpdate {
                             owner,
                             lamports: account.lamports,
                             pubkey: self.pubkey,
@@ -122,7 +122,7 @@ impl WebsocketAccountSubscriber {
                                             data,
                                             slot,
                                         };
-                                        handler_fn(&account_update);
+                                        on_update(&account_update);
                                     }
                                 }
                             }

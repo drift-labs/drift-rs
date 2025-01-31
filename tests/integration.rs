@@ -1,14 +1,42 @@
+use anchor_lang::Space;
 use drift_rs::{
     event_subscriber::RpcClient,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
-    types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam},
+    types::{
+        accounts::User, Context, MarketId, NewOrder, Order, PerpPosition, PostOnlyParam,
+        SpotPosition,
+    },
     utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
     DriftClient, TransactionBuilder, Wallet,
 };
 use solana_sdk::signature::Keypair;
 
 #[tokio::test]
+async fn client_sync_subscribe_all_devnet() {
+    let client = DriftClient::new(
+        Context::DevNet,
+        RpcClient::new(devnet_endpoint()),
+        Keypair::new().into(),
+    )
+    .await
+    .expect("connects");
+
+    tokio::try_join!(
+        client.subscribe_all_markets(),
+        client.subscribe_all_oracles(),
+    )
+    .expect("subscribes");
+    let all_markets = client.get_all_market_ids();
+    for market in all_markets {
+        let price = client.oracle_price(market).await.expect("ok");
+        assert!(price > 0);
+        dbg!(market, price);
+    }
+}
+
+#[tokio::test]
 async fn client_sync_subscribe_devnet() {
+    env_logger::init();
     let client = DriftClient::new(
         Context::DevNet,
         RpcClient::new(devnet_endpoint()),

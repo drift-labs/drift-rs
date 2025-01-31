@@ -1,6 +1,6 @@
 [package]
 name = "drift-rs"
-version = "1.0.0-alpha.4"
+version = "1.0.0-alpha.6"
 edition = "2021"
 build = "build.rs"
 license = "Apache-2.0"
@@ -51,4 +51,4 @@ hex = "0.4"
 hex-literal = "0.4"
 
 [build-dependencies]
-drift-idl-gen = { version = "0.1.1", path = "crates/drift-idl-gen"}
+drift-idl-gen = { version = "0.1.3", path = "crates/drift-idl-gen"}

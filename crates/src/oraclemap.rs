@@ -346,18 +346,45 @@ async fn get_multi_account_data_with_fallback(
     rpc: &RpcClient,
     pubkeys: &[Pubkey],
 ) -> SdkResult<(Vec<(Pubkey, Account)>, Slot)> {
-    let mut account_data = Vec::default();
+    let mut account_data = Vec::with_capacity(pubkeys.len());
 
     // try 'getMultipleAccounts'
-    let accounts_response = rpc
-        .get_multiple_accounts_with_commitment(pubkeys, rpc.commitment())
-        .await;
-    if let Ok(response) = accounts_response {
-        for (pubkey, account) in pubkeys.iter().zip(response.value) {
-            let account = account.expect("market account exists");
-            account_data.push((*pubkey, account));
+    let mut gma_requests = FuturesUnordered::new();
+    for keys in pubkeys.chunks(64) {
+        gma_requests.push(async move {
+            let response = rpc
+                .get_multiple_accounts_with_commitment(keys, rpc.commitment())
+                .await;
+            (response, keys)
+        });
+    }
+
+    let mut gma_slot = 0;
+    while let Some((gma_response, keys)) = gma_requests.next().await {
+        match gma_response {
+            Ok(response) => {
+                gma_slot = response.context.slot;
+                for (oracle, pubkey) in response.value.into_iter().zip(keys) {
+                    match oracle {
+                        Some(oracle) => {
+                            account_data.push((*pubkey, oracle));
+                        }
+                        None => {
+                            log::warn!(target: LOG_TARGET, "failed to fetch oracle account (missing)");
+                            break;
+                        }
+                    }
+                }
+            }
+            Err(err) => {
+                log::warn!(target: LOG_TARGET, "failed to fetch oracle accounts: {err:?}");
+                return Err(err)?;
+            }
         }
-        return Ok((account_data, response.context.slot));
+    }
+
+    if account_data.len() == pubkeys.len() {
+        return Ok((account_data, gma_slot));
     }
     log::debug!(target: LOG_TARGET, "syncing with getMultipleAccounts failed");
 

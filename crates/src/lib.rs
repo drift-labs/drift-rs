@@ -1,6 +1,6 @@
 //! Drift SDK
 
-use std::{borrow::Cow, sync::Arc, time::Duration};
+use std::{borrow::Cow, collections::BTreeSet, sync::Arc, time::Duration};
 
 use anchor_lang::{AccountDeserialize, InstructionData};
 use drift_pubsub_client::PubsubClient;
@@ -141,11 +141,86 @@ impl DriftClient {
         self.backend.subscribe_markets(markets).await
     }
 
+    /// Subscribe to all spot and perp markets
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_all_markets(&self) -> SdkResult<()> {
+        let markets = self.get_all_market_ids();
+        self.backend.subscribe_markets(&markets).await
+    }
+
+    /// Subscribe to all spot markets
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_all_spot_markets(&self) -> SdkResult<()> {
+        let markets = self.get_all_spot_market_ids();
+        self.backend.subscribe_markets(&markets).await
+    }
+
+    /// Subscribe to all perp markets
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_all_perp_markets(&self) -> SdkResult<()> {
+        let markets = self.get_all_perp_market_ids();
+        self.backend.subscribe_markets(&markets).await
+    }
+
     /// Starts background subscriptions for live oracle account updates by market
     ///
     /// This is a no-op if already subscribed
     pub async fn subscribe_oracles(&self, markets: &[MarketId]) -> SdkResult<()> {
         self.backend.subscribe_oracles(markets).await
+    }
+
+    /// Subscribe to all oracles
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_all_oracles(&self) -> SdkResult<()> {
+        let markets = self.get_all_market_ids();
+        self.backend.subscribe_oracles(&markets).await
+    }
+
+    /// Subscribe to all spot market oracles
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_all_spot_oracles(&self) -> SdkResult<()> {
+        let markets = self.get_all_spot_market_ids();
+        self.backend.subscribe_oracles(&markets).await
+    }
+
+    /// Subscribe to all perp market oracles
+    ///
+    /// This is a no-op if already subscribed
+    pub async fn subscribe_all_perp_oracles(&self) -> SdkResult<()> {
+        let markets = self.get_all_perp_market_ids();
+        self.backend.subscribe_oracles(&markets).await
+    }
+
+    /// Returns the MarketIds for all spot markets
+    ///
+    /// Useful for iterating over all spot markets
+    pub fn get_all_spot_market_ids(&self) -> Vec<MarketId> {
+        (0..self.backend.spot_market_map.len())
+            .map(|x| MarketId::spot(x as u16))
+            .collect()
+    }
+
+    /// Returns the MarketIds for all perp markets
+    ///
+    /// Useful for iterating over all perp markets
+    pub fn get_all_perp_market_ids(&self) -> Vec<MarketId> {
+        (0..self.backend.perp_market_map.len())
+            .map(|x| MarketId::perp(x as u16))
+            .collect()
+    }
+
+    /// Returns the MarketIds for all markets
+    ///
+    /// Useful for iterating over all markets
+    pub fn get_all_market_ids(&self) -> Vec<MarketId> {
+        let spot_markets = self.get_all_spot_market_ids();
+        let perp_markets = self.get_all_perp_market_ids();
+        spot_markets.into_iter().chain(perp_markets).collect()
     }
 
     /// Unsubscribe from network resources
@@ -1496,53 +1571,42 @@ pub fn build_accounts<'a>(
     markets_writable: impl Iterator<Item = &'a MarketId>,
 ) -> Vec<AccountMeta> {
     // the order of accounts returned must be instruction, oracles, spot, perps see (https://github.com/drift-labs/protocol-v2/blob/master/programs/drift/src/instructions/optional_accounts.rs#L28)
-    let mut seen = [0_u64; 2]; // [spot, perp]
-    let mut accounts = Vec::<RemainingAccount>::default();
+    let mut accounts = BTreeSet::<RemainingAccount>::new();
 
     // add accounts to the ordered list
-    let mut include_market = |market_index: u16, market_type: MarketType, writable: bool| {
-        let index_bit = 1_u64 << market_index as u8;
-        // always safe since market type is 0 or 1
-        let seen_by_type = unsafe { seen.get_unchecked_mut(market_type as usize % 2) };
-        if *seen_by_type & index_bit > 0 {
-            return;
-        }
-        *seen_by_type |= index_bit;
-
-        let (account, oracle) = match market_type {
+    let mut include_market =
+        |market_index: u16, market_type: MarketType, writable: bool| match market_type {
             MarketType::Spot => {
                 let SpotMarket { pubkey, oracle, .. } = program_data
                     .spot_market_config_by_index(market_index)
                     .expect("exists");
-                (
-                    RemainingAccount::Spot {
-                        pubkey: *pubkey,
-                        writable,
-                    },
-                    oracle,
+                accounts.extend(
+                    [
+                        RemainingAccount::Spot {
+                            pubkey: *pubkey,
+                            writable,
+                        },
+                        RemainingAccount::Oracle { pubkey: *oracle },
+                    ]
+                    .iter(),
                 )
             }
             MarketType::Perp => {
                 let PerpMarket { pubkey, amm, .. } = program_data
                     .perp_market_config_by_index(market_index)
                     .expect("exists");
-                (
-                    RemainingAccount::Perp {
-                        pubkey: *pubkey,
-                        writable,
-                    },
-                    &amm.oracle,
+                accounts.extend(
+                    [
+                        RemainingAccount::Perp {
+                            pubkey: *pubkey,
+                            writable,
+                        },
+                        RemainingAccount::Oracle { pubkey: amm.oracle },
+                    ]
+                    .iter(),
                 )
             }
         };
-        if let Err(idx) = accounts.binary_search(&account) {
-            accounts.insert(idx, account);
-        }
-        let oracle = RemainingAccount::Oracle { pubkey: *oracle };
-        if let Err(idx) = accounts.binary_search(&oracle) {
-            accounts.insert(idx, oracle);
-        }
-    };
 
     for market in markets_writable {
         include_market(market.index(), market.kind(), true);

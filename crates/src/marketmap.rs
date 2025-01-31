@@ -26,7 +26,7 @@ use crate::{
     drift_idl::types::OracleSource,
     memcmp::get_market_filter,
     websocket_account_subscriber::WebsocketAccountSubscriber,
-    DataAndSlot, MarketId, MarketType, PerpMarket, SdkError, SdkResult, SpotMarket, UnsubHandle,
+    DataAndSlot, MarketId, MarketType, PerpMarket, SdkResult, SpotMarket, UnsubHandle,
 };
 
 const LOG_TARGET: &str = "marketmap";
@@ -295,25 +295,38 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
     };
 
     // try 'getMultipleAccounts'
-    let market_responses = rpc
-        .get_multiple_accounts_with_commitment(market_pdas.as_slice(), rpc.commitment())
-        .await;
-    if let Ok(response) = market_responses {
-        for account in response.value {
-            match account {
-                Some(account) => {
-                    markets.push(
-                        T::deserialize(&mut &account.data.as_slice()[8..])
-                            .expect("market deserializes"),
-                    );
-                }
-                None => {
-                    log::warn!("failed to fetch market account");
-                    return Err(SdkError::InvalidAccount)?;
+    let mut market_requests = FuturesUnordered::new();
+    for market_chunk in market_pdas.chunks(64) {
+        market_requests
+            .push(rpc.get_multiple_accounts_with_commitment(market_chunk, rpc.commitment()));
+    }
+
+    while let Some(market_response) = market_requests.next().await {
+        match market_response {
+            Ok(data) => {
+                for market in data.value {
+                    match market {
+                        Some(market) => {
+                            markets.push(
+                                T::deserialize(&mut &market.data.as_slice()[8..])
+                                    .expect("market deserializes"),
+                            );
+                        }
+                        None => {
+                            log::warn!(target: LOG_TARGET, "failed to fetch market account (missing)");
+                            break;
+                        }
+                    }
                 }
             }
+            Err(err) => {
+                log::warn!(target: LOG_TARGET, "failed to fetch market accounts: {err:?}");
+                return Err(err)?;
+            }
         }
-        return Ok((markets, response.context.slot));
+    }
+    if market_pdas.len() == markets.len() {
+        return Ok((markets, state_response.context.slot));
     }
     log::debug!(target: LOG_TARGET, "syncing with getMultipleAccounts failed: {:?}", T::MARKET_TYPE);
 
