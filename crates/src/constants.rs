@@ -198,10 +198,10 @@ pub fn oracle_source_to_owner(context: Context, source: OracleSource) -> Pubkey 
         OracleSource::Switchboard => ids::switchboard_program::ID,
         OracleSource::SwitchboardOnDemand => ids::switchboard_on_demand::ID,
         OracleSource::QuoteAsset => DEFAULT_PUBKEY,
-        OracleSource::Prelaunch | OracleSource::PythLazer => PROGRAM_ID,
-        OracleSource::PythLazer1K | OracleSource::PythLazer1M => {
-            ids::drift_oracle_receiver_program::ID
-        }
+        OracleSource::Prelaunch
+        | OracleSource::PythLazer
+        | OracleSource::PythLazer1K
+        | OracleSource::PythLazer1M => PROGRAM_ID,
     }
 }
 
