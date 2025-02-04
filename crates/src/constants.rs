@@ -24,7 +24,7 @@ pub const TOKEN_PROGRAM_ID: Pubkey =
 /// Drift market lookup table (DevNet)
 pub const LUT_DEVNET: Pubkey = solana_sdk::pubkey!("FaMS3U4uBojvGn5FSDEPimddcXsCfwkKsFgMVVnDdxGb");
 /// Drift market lookup table (MainNet)
-pub const LUT_MAINNET: Pubkey = solana_sdk::pubkey!("D9cnvzswDikQDf53k4HpQ3KJ9y1Fv3HGGDFYMXnK5T6c");
+pub const LUT_MAINNET: Pubkey = solana_sdk::pubkey!("Fpys8GRa5RBWfyeN7AaDUwFGD1zkDCA4z3t4CJLV8dfL");
 
 /// Drift state account
 pub fn state_account() -> &'static Pubkey {
