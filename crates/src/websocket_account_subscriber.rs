@@ -99,10 +99,16 @@ impl WebsocketAccountSubscriber {
 
         tokio::spawn(async move {
             log::debug!(target: LOG_TARGET, "spawn account subscriber: {subscription_name}-{:?}", pubkey);
-            let (mut account_updates, account_unsubscribe) = pubsub
-                .account_subscribe(&pubkey, Some(account_config))
+            let (mut account_updates, account_unsubscribe) = match pubsub
+                .account_subscribe(&pubkey, Some(account_config.clone()))
                 .await
-                .expect("account subd");
+            {
+                Ok(res) => res,
+                Err(err) => {
+                    log::error!(target: LOG_TARGET, "account subscribe {pubkey} failed: {err:?}");
+                    std::process::exit(1);
+                }
+            };
             log::debug!(target: LOG_TARGET, "account subscribed: {subscription_name}-{pubkey:?}");
             let mut latest_slot = 0;
             loop {
@@ -126,8 +132,8 @@ impl WebsocketAccountSubscriber {
                                 }
                             }
                             None => {
-                                log::error!("{subscription_name}: Ws account stream ended unexpectedly");
-                                std::process::exit(1); // tokio won't propogate a panic
+                                log::error!(target: LOG_TARGET, "{subscription_name}: Ws ended unexpectedly");
+                                std::process::exit(1);
                             }
                         }
                     }

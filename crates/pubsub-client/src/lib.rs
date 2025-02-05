@@ -345,6 +345,7 @@ impl PubsubClient {
         // all existing subscriptions here
         let mut request_id: u64 = 0;
         let mut subscriptions = BTreeMap::<u64, SubscriptionInfo>::new();
+        let mut request_id_to_sid = BTreeMap::<u64, u64>::new();
         let (unsubscribe_sender, mut unsubscribe_receiver) = mpsc::unbounded_channel();
 
         'reconnect: loop {
@@ -377,6 +378,11 @@ impl PubsubClient {
                 }
             };
 
+            let mut inflight_subscribes =
+                BTreeMap::<u64, (String, String, oneshot::Sender<SubscribeResponseMsg>)>::new();
+            let mut inflight_unsubscribes = BTreeMap::<u64, oneshot::Sender<()>>::new();
+            let mut inflight_requests = BTreeMap::<u64, oneshot::Sender<_>>::new();
+
             // resend subscriptions
             if !subscriptions.is_empty() {
                 info!(target: "ws", "resubscribing: {:?}", subscriptions.values().map(|x| x.payload.clone()).collect::<Vec<String>>());
@@ -394,11 +400,6 @@ impl PubsubClient {
                 }
             }
 
-            let mut inflight_subscribes =
-                BTreeMap::<u64, (String, String, oneshot::Sender<SubscribeResponseMsg>)>::new();
-            let mut inflight_unsubscribes = BTreeMap::<u64, oneshot::Sender<()>>::new();
-            let mut inflight_requests = BTreeMap::<u64, oneshot::Sender<_>>::new();
-
             let mut liveness_check = tokio::time::interval(Duration::from_secs(60));
             let _ = liveness_check.tick().await;
 
@@ -412,16 +413,23 @@ impl PubsubClient {
                     _ = (&mut shutdown_receiver) => {
                         log::info!(target: "ws", "PubsubClient received shutdown");
                         let frame = CloseFrame { code: CloseCode::Normal, reason: "".into() };
-                        ws.send(Message::Close(Some(frame))).await?;
-                        ws.flush().await?;
+                        let _ = ws.send(Message::Close(Some(frame))).await;
+                        let _ = ws.flush().await;
                         break 'reconnect Ok(());
                     },
                     // Read incoming WebSocket message
                     next_msg = ws.next() => {
                         liveness_check.reset();
                         let msg = match next_msg {
-                            Some(msg) => msg?,
-                            None => break 'manager,
+                            Some(Ok(msg)) => msg,
+                            Some(Err(err)) => {
+                                log::warn!(target: "ws", "PubsubClient disconnected: {err:?}");
+                                break 'manager
+                            }
+                            None => {
+                                log::debug!(target: "ws", "PubsubClient disconnected");
+                                break 'manager
+                            },
                         };
                         trace!("ws.next(): {:?}", &msg);
 
@@ -518,23 +526,49 @@ impl PubsubClient {
                                         let unsubscribe = Box::new(move || async move {
                                             let (response_sender, response_receiver) = oneshot::channel();
                                             // do nothing if ws already closed
-                                            if unsubscribe_sender.send((operation, sid, response_sender)).is_ok() {
+                                            if unsubscribe_sender.send((operation, id, response_sender)).is_ok() {
                                                 let _ = response_receiver.await; // channel can be closed only if ws is closed
                                             }
                                         }.boxed());
 
+                                        // TODO: fix sid doesn't match request id
+                                        // a sid exists, clients have a valid handle
+                                        // resubscribe => route new Ws subscription to existing handle
                                         if response_sender.send(Ok((notifications_receiver, unsubscribe))).is_err() {
                                             break 'manager;
                                         }
+                                        info!(target: "ws", "subscription added: {sid:?}");
+                                        request_id_to_sid.insert(id, sid);
                                         subscriptions.insert(sid, SubscriptionInfo {
                                             sender: notifications_sender,
                                             payload,
                                         });
                                     }
                                 }
-                            } else if subscriptions.contains_key(&id) {
-                                info!(target: "ws", "resubscribed id: {id}");
-                                continue 'manager;
+                            } else if let Some(previous_sid) = request_id_to_sid.remove(&id) {
+                                match err {
+                                    Some(reason) => {
+                                        log::error!(target: "ws", "resubscription failed: {:?}, {reason:?}", text);
+                                        panic!();
+                                    },
+                                    None => {
+                                        // Subscribe Id
+                                        let sid = gjson::get(text, "result");
+                                        if !sid.exists() {
+                                            log::error!(target: "ws", "resubscription failed. invalid `result` field: {:?}", text);
+                                            panic!();
+                                        }
+                                        let new_sid = sid.u64();
+
+                                        info!(target: "ws", "resubscribed: {previous_sid:>} => {new_sid:?}");
+                                        request_id_to_sid.insert(id, new_sid);
+                                        let info = subscriptions.remove(&previous_sid).unwrap();
+                                        subscriptions.insert(
+                                            new_sid,
+                                            info
+                                        );
+                                    }
+                                }
                             } else {
                                 error!(target: "ws", "PubSubClient received unknown request id: {id}");
                                 break 'manager;
@@ -548,25 +582,34 @@ impl PubsubClient {
                         request_id += 1;
                         let method = format!("{operation}Subscribe");
                         let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params}).to_string();
-                        ws.send(Message::Text(text.clone())).await?;
+                        if let Err(err) = ws.send(Message::Text(text.clone())).await {
+                            log::warn!(target: "ws", "sending subscribe failed: {text}, {err:?}");
+                            break 'manager;
+                        }
                         inflight_subscribes.insert(request_id, (operation, text, response_sender));
                     },
                     // Read message for unsubscribe
                    unsubscribe = unsubscribe_receiver.recv() => {
-                        let (operation, sid, response_sender) = unsubscribe.expect("unsub channel");
-                        subscriptions.remove(&sid);
-                        request_id += 1;
-                        let method = format!("{operation}Unsubscribe");
-                        let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":[sid]}).to_string();
-                        ws.send(Message::Text(text)).await?;
-                        inflight_unsubscribes.insert(request_id, response_sender);
+                        let (operation, id, response_sender) = unsubscribe.expect("unsub channel");
+                        if let Some(sid) = request_id_to_sid.remove(&id) {
+                            subscriptions.remove(&sid);
+                            request_id += 1;
+                            let method = format!("{operation}Unsubscribe");
+                            let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":[sid]}).to_string();
+                            if let Err(err) = ws.send(Message::Text(text.clone())).await {
+                                log::warn!(target: "ws", "sending unsubscribe failed: {text}, {err:?}");
+                            }
+                            inflight_unsubscribes.insert(request_id, response_sender);
+                        }
                     },
                     // Read message for other requests
                     request = request_receiver.recv() => {
                         let (method, params, response_sender) = request.expect("request channel");
                         request_id += 1;
                         let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params}).to_string();
-                        ws.send(Message::Text(text)).await?;
+                        if let Err(err) = ws.send(Message::Text(text)).await {
+                            log::warn!(target: "ws", "sending request failed. {err:?}");
+                        }
                         inflight_requests.insert(request_id, response_sender);
                     },
                     _ = heartbeat.tick() => {
@@ -578,6 +621,7 @@ impl PubsubClient {
                     }
                 }
             }
+            log::debug!(target: "ws", "manager finished");
         }
     }
 }
