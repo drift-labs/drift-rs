@@ -351,7 +351,7 @@ impl PubsubClient {
             log::debug!(target: "ws", "PubsubClient connecting: {:?}", url.as_str());
             let mut ws = match connect_async(url.as_str()).await {
                 Ok((ws, response)) => {
-                    if !response.status().is_success() {
+                    if response.status().is_server_error() || response.status().is_client_error() {
                         log::warn!(target: "ws", "couldn't reconnect: {response:?}");
                         retry_count += 1;
                         let delay = 2_u64.pow(2 + retry_count);
