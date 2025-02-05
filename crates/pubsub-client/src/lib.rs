@@ -402,8 +402,10 @@ impl PubsubClient {
             let mut liveness_check = tokio::time::interval(Duration::from_secs(60));
             let _ = liveness_check.tick().await;
 
+            let mut heartbeat = tokio::time::interval(Duration::from_secs(30));
+            let _ = heartbeat.tick().await;
+
             'manager: loop {
-                liveness_check.reset();
                 tokio::select! {
                     biased;
                     // Send close on shutdown signal
@@ -416,6 +418,7 @@ impl PubsubClient {
                     },
                     // Read incoming WebSocket message
                     next_msg = ws.next() => {
+                        liveness_check.reset();
                         let msg = match next_msg {
                             Some(msg) => msg?,
                             None => break 'manager,
@@ -540,7 +543,8 @@ impl PubsubClient {
                         }
                     }
                     // Read message for subscribe
-                    Some((operation, params, response_sender)) = subscribe_receiver.recv() => {
+                    subscribe = subscribe_receiver.recv() => {
+                        let (operation, params, response_sender) = subscribe.expect("subscribe channel");
                         request_id += 1;
                         let method = format!("{operation}Subscribe");
                         let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params}).to_string();
@@ -548,7 +552,8 @@ impl PubsubClient {
                         inflight_subscribes.insert(request_id, (operation, text, response_sender));
                     },
                     // Read message for unsubscribe
-                    Some((operation, sid, response_sender)) = unsubscribe_receiver.recv() => {
+                   unsubscribe = unsubscribe_receiver.recv() => {
+                        let (operation, sid, response_sender) = unsubscribe.expect("unsub channel");
                         subscriptions.remove(&sid);
                         request_id += 1;
                         let method = format!("{operation}Unsubscribe");
@@ -557,11 +562,15 @@ impl PubsubClient {
                         inflight_unsubscribes.insert(request_id, response_sender);
                     },
                     // Read message for other requests
-                    Some((method, params, response_sender)) = request_receiver.recv() => {
+                    request = request_receiver.recv() => {
+                        let (method, params, response_sender) = request.expect("request channel");
                         request_id += 1;
                         let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params}).to_string();
                         ws.send(Message::Text(text)).await?;
                         inflight_requests.insert(request_id, response_sender);
+                    },
+                    _ = heartbeat.tick() => {
+                        ws.send(Message::Ping(Default::default())).await?;
                     },
                     _ = liveness_check.tick() => {
                         warn!(target: "ws", "PubsubClient timed out");
