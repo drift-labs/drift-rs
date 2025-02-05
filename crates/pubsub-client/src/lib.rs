@@ -531,9 +531,6 @@ impl PubsubClient {
                                             }
                                         }.boxed());
 
-                                        // TODO: fix sid doesn't match request id
-                                        // a sid exists, clients have a valid handle
-                                        // resubscribe => route new Ws subscription to existing handle
                                         if response_sender.send(Ok((notifications_receiver, unsubscribe))).is_err() {
                                             break 'manager;
                                         }
