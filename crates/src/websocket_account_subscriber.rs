@@ -99,10 +99,16 @@ impl WebsocketAccountSubscriber {
 
         tokio::spawn(async move {
             log::debug!(target: LOG_TARGET, "spawn account subscriber: {subscription_name}-{:?}", pubkey);
-            let (mut account_updates, account_unsubscribe) = pubsub
-                .account_subscribe(&pubkey, Some(account_config))
+            let (mut account_updates, account_unsubscribe) = match pubsub
+                .account_subscribe(&pubkey, Some(account_config.clone()))
                 .await
-                .expect("account subd");
+            {
+                Ok(res) => res,
+                Err(err) => {
+                    log::error!(target: LOG_TARGET, "account subscribe {pubkey} failed: {err:?}");
+                    std::process::exit(1);
+                }
+            };
             log::debug!(target: LOG_TARGET, "account subscribed: {subscription_name}-{pubkey:?}");
             let mut latest_slot = 0;
             loop {
@@ -114,21 +120,20 @@ impl WebsocketAccountSubscriber {
                                 let slot = message.context.slot;
                                 if slot >= latest_slot {
                                     latest_slot = slot;
-                                    if let Some(data) = message.value.data.decode() {
-                                        let account_update = AccountUpdate {
-                                            owner: Pubkey::from_str(&message.value.owner).unwrap(),
-                                            lamports: message.value.lamports,
-                                            pubkey,
-                                            data,
-                                            slot,
-                                        };
-                                        on_update(&account_update);
-                                    }
+                                    let data = message.value.data.decode().expect("decoded");
+                                    let account_update = AccountUpdate {
+                                        owner: Pubkey::from_str(&message.value.owner).unwrap(),
+                                        lamports: message.value.lamports,
+                                        pubkey,
+                                        data,
+                                        slot,
+                                    };
+                                    on_update(&account_update);
                                 }
                             }
                             None => {
-                                log::warn!("{}: Account stream interrupted", subscription_name);
-                                break;
+                                log::error!(target: LOG_TARGET, "{subscription_name}: Ws ended unexpectedly");
+                                std::process::exit(1);
                             }
                         }
                     }
