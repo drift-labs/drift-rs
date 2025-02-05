@@ -51,8 +51,8 @@ impl WebsocketProgramAccountSubscriber {
     /// Start a GPA subscription task
     ///
     /// `subscription_name` some user defined identifier for the subscription
-    /// `handler_fn` handles updates from the subscription task
-    pub fn subscribe<T, F>(&self, subscription_name: &'static str, handler_fn: F) -> UnsubHandle
+    /// `on_update` handles updates from the subscription task
+    pub fn subscribe<T, F>(&self, subscription_name: &'static str, on_update: F) -> UnsubHandle
     where
         T: AnchorDeserialize + Clone + Send + 'static,
         F: 'static + Send + Fn(&ProgramAccountUpdate<T>),
@@ -91,12 +91,12 @@ impl WebsocketProgramAccountSubscriber {
                                     let pubkey = message.value.pubkey;
                                     let data = &message.value.account.data.decode().expect("account has data");
                                     let data = T::deserialize(&mut &data[8..]).expect("deserializes T");
-                                    handler_fn(&ProgramAccountUpdate::new(pubkey, DataAndSlot::<T> { slot, data }, Instant::now()));
+                                    on_update(&ProgramAccountUpdate::new(pubkey, DataAndSlot::<T> { slot, data }, Instant::now()));
                                 }
                             },
                             None => {
-                                warn!("stream ended: {subscription_name}");
-                                break;
+                                log::error!("{subscription_name}: Ws GPA stream ended unexpectedly");
+                                std::process::exit(1); // tokio won't propogate a panic
                             }
                         }
                     }

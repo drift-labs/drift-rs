@@ -338,7 +338,7 @@ impl PubsubClient {
         mut shutdown_receiver: oneshot::Receiver<()>,
     ) -> PubsubClientResult {
         // manage Ws requests and forward subscription messages to subscribers
-        // this loop will retry indefinitely unless the consumer invokes `shutdown`
+        // this loop will retry indefinitely unless the consumer invokes `shutdown` or successive failures excceed maximum
         let max_retry_count = 3;
         let mut retry_count = 0;
 
@@ -349,10 +349,19 @@ impl PubsubClient {
 
         'reconnect: loop {
             log::debug!(target: "ws", "PubsubClient connecting: {:?}", url.as_str());
-            let (mut ws, _response) = match connect_async(url.as_str()).await {
-                Ok(res) => {
+            let mut ws = match connect_async(url.as_str()).await {
+                Ok((ws, response)) => {
+                    if !response.status().is_success() {
+                        log::warn!(target: "ws", "couldn't reconnect: {response:?}");
+                        retry_count += 1;
+                        let delay = 2_u64.pow(2 + retry_count);
+                        info!(target: "ws", "PubsubClient trying reconnect after {delay}s, attempt: {retry_count}/{max_retry_count}");
+                        tokio::time::sleep(Duration::from_secs(delay)).await;
+                        continue 'reconnect;
+                    }
+
                     retry_count = 0;
-                    res
+                    ws
                 }
                 Err(err) => {
                     log::warn!(target: "ws", "couldn't reconnect: {err:?}");
@@ -369,17 +378,20 @@ impl PubsubClient {
             };
 
             // resend subscriptions
-            if let Err(err) = ws
-                .send_all(&mut stream::iter(
-                    subscriptions
-                        .values()
-                        .cloned()
-                        .map(|s| Ok(Message::text(s.payload))),
-                ))
-                .await
-            {
-                error!(target: "ws", "PubsubClient failed resubscribing: {err:?}");
-                continue 'reconnect;
+            if !subscriptions.is_empty() {
+                info!(target: "ws", "resubscribing: {:?}", subscriptions.values().map(|x| x.payload.clone()).collect::<Vec<String>>());
+                if let Err(err) = ws
+                    .send_all(&mut stream::iter(
+                        subscriptions
+                            .values()
+                            .cloned()
+                            .map(|s| Ok(Message::text(s.payload))),
+                    ))
+                    .await
+                {
+                    error!(target: "ws", "PubsubClient failed resubscribing: {err:?}");
+                    continue 'reconnect;
+                }
             }
 
             let mut inflight_subscribes =
@@ -517,8 +529,11 @@ impl PubsubClient {
                                         });
                                     }
                                 }
+                            } else if subscriptions.contains_key(&id) {
+                                info!(target: "ws", "resubscribed id: {id}");
+                                continue 'manager;
                             } else {
-                                error!("Unknown request id: {id}");
+                                error!(target: "ws", "PubSubClient received unknown request id: {id}");
                                 break 'manager;
                             }
                             continue 'manager;

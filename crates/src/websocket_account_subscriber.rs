@@ -114,21 +114,20 @@ impl WebsocketAccountSubscriber {
                                 let slot = message.context.slot;
                                 if slot >= latest_slot {
                                     latest_slot = slot;
-                                    if let Some(data) = message.value.data.decode() {
-                                        let account_update = AccountUpdate {
-                                            owner: Pubkey::from_str(&message.value.owner).unwrap(),
-                                            lamports: message.value.lamports,
-                                            pubkey,
-                                            data,
-                                            slot,
-                                        };
-                                        on_update(&account_update);
-                                    }
+                                    let data = message.value.data.decode().expect("decoded");
+                                    let account_update = AccountUpdate {
+                                        owner: Pubkey::from_str(&message.value.owner).unwrap(),
+                                        lamports: message.value.lamports,
+                                        pubkey,
+                                        data,
+                                        slot,
+                                    };
+                                    on_update(&account_update);
                                 }
                             }
                             None => {
-                                log::warn!("{}: Account stream interrupted", subscription_name);
-                                break;
+                                log::error!("{subscription_name}: Ws account stream ended unexpectedly");
+                                std::process::exit(1); // tokio won't propogate a panic
                             }
                         }
                     }
