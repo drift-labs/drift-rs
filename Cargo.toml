@@ -43,7 +43,7 @@ thiserror = "1"
 tokio = { version = "1.40", features = ["full"] }
 type-layout = "0.2.0"
 
-drift-pubsub-client = { path = "crates/pubsub-client", version = "0.1.0" }
+drift-pubsub-client = { path = "crates/drift-pubsub-client", version = "0.1.0" }
 
 [dev-dependencies]
 bytes = "1"
