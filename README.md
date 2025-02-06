@@ -18,15 +18,12 @@ Experimental, high performance Rust SDK for building offchain clients for [Drift
 
 ## Install
 ```toml
-# crates.io*
-drift-rs = "1.0.0-alpha.4"
+# crates.io
+drift-rs = "1.0.0-alpha.8"
 
-# build from source (also builds and links 'libdrift_ffi_sys')
-drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.5" }
+# build from source
+drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.8" }
 ```
-
-_*_`drift-rs` uses drift program over ffi.
-ensure [libdrift_ffi_sys](https://github.com/drift-labs/drift-ffi-sys/blob/master/README.md#installation) is installed when using via crates.io.
 
 ## Use
 ```rust
@@ -55,15 +52,15 @@ Install rosetta and configure Rust toolchain for `x86_64`
 
 ```bash
 softwareupdate --install-rosetta
-# replace `1.81.0` with preferred stable version
-rustup install 1.81.0-x86_64-apple-darwin
-rustup override set 1.81.0-x86_64-apple-darwin
+# replace `1.84.0` with preferred stable version
+rustup install 1.84.0-x86_64-apple-darwin
+rustup override set 1.84.0-x86_64-apple-darwin
 ```
 
 ⚠️ the default toolchain is incompatible due to memory layout differences between solana program (BPF) and aarch64 and will fail at runtime with deserialization errors like: `InvalidSize`.
 
 ## Local Development
-drift-rs links to the drift program crate via FFI, build from source (default) or optionally install from [drift-ffi-sys](https://github.com/drift-labs/drift-ffi-sys/releases)
+drift-rs links to the drift program crate via FFI, build from source (default) or dynamically link with a version from [drift-ffi-sys](https://github.com/drift-labs/drift-ffi-sys/releases)
 ```bash
 # Build from source (default)
 CARGO_DRIFT_FFI_STATIC=1
@@ -71,6 +68,9 @@ CARGO_DRIFT_FFI_STATIC=1
 CARGO_DRIFT_FFI_PATH="/path/to/libdrift_ffi_sys"
 ```
 ## Development
+
+## Release
+`git tag v<MAJOR.MINOR.PATCH> && git push`
 
 ## Updating IDL types
 1) copy the updated IDL to `res/drift.json` from protocol-v2 branch
