@@ -22,5 +22,5 @@ solana-transaction-status = "2"
 thiserror = "1"
 tokio = { version = "1.42", features = ["full"] }
 tokio-stream = "0.1"
-tokio-tungstenite = "0.20"
+tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
 url = "2.5"
