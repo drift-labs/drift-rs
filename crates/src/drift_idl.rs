@@ -72,6 +72,30 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for ResizeSwiftUserOrders {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct InitializeFuelOverflow {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for InitializeFuelOverflow {
+        const DISCRIMINATOR: [u8; 8] = [88, 223, 132, 161, 208, 88, 142, 42];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for InitializeFuelOverflow {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct SweepFuel {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for SweepFuel {
+        const DISCRIMINATOR: [u8; 8] = [175, 107, 19, 56, 165, 241, 43, 69];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for SweepFuel {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct ResetFuelSeason {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ResetFuelSeason {
+        const DISCRIMINATOR: [u8; 8] = [199, 122, 192, 255, 32, 99, 63, 200];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ResetFuelSeason {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct InitializeReferrerName {
         pub name: [u8; 32],
     }
@@ -2970,7 +2994,8 @@ pub mod types {
         pub immediate_or_cancel: bool,
         pub trigger_condition: OrderTriggerCondition,
         pub auction_duration: u8,
-        pub padding: [u8; 3],
+        pub posted_slot_tail: u8,
+        pub padding: [u8; 2],
     }
     #[derive(
         AnchorSerialize,
@@ -3449,6 +3474,7 @@ pub mod types {
         PythLazer,
         PythLazer1K,
         PythLazer1M,
+        PythLazerStableCoin,
     }
     #[derive(
         AnchorSerialize,
@@ -3902,6 +3928,22 @@ pub mod types {
         #[default]
         Default,
         HighLeverage,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub enum FuelOverflowStatus {
+        #[default]
+        Exists,
     }
     #[derive(
         AnchorSerialize,
@@ -5003,7 +5045,8 @@ pub mod accounts {
         pub number_of_sub_accounts_created: u16,
         pub referrer_status: u8,
         pub disable_update_perp_bid_ask_twap: bool,
-        pub padding1: [u8; 2],
+        pub padding1: [u8; 1],
+        pub fuel_overflow_status: u8,
         pub fuel_insurance: u32,
         pub fuel_deposits: u32,
         pub fuel_borrows: u32,
@@ -5097,6 +5140,71 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for ReferrerName {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct FuelOverflow {
+        pub authority: Pubkey,
+        pub fuel_insurance: u128,
+        pub fuel_deposits: u128,
+        pub fuel_borrows: u128,
+        pub fuel_positions: u128,
+        pub fuel_taker: u128,
+        pub fuel_maker: u128,
+        pub last_fuel_sweep_ts: u32,
+        pub last_reset_ts: u32,
+        #[serde(skip)]
+        pub padding: Padding<6>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for FuelOverflow {
+        const DISCRIMINATOR: [u8; 8] = [182, 64, 231, 177, 226, 142, 69, 58];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for FuelOverflow {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for FuelOverflow {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for FuelOverflow {}
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for FuelOverflow {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for FuelOverflow {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -5519,6 +5627,240 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for ResizeSwiftUserOrders {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct InitializeFuelOverflow {
+        pub fuel_overflow: Pubkey,
+        pub user_stats: Pubkey,
+        pub authority: Pubkey,
+        pub payer: Pubkey,
+        pub rent: Pubkey,
+        pub system_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for InitializeFuelOverflow {
+        const DISCRIMINATOR: [u8; 8] = [87, 122, 96, 232, 83, 190, 67, 60];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeFuelOverflow {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for InitializeFuelOverflow {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for InitializeFuelOverflow {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for InitializeFuelOverflow {}
+    #[automatically_derived]
+    impl ToAccountMetas for InitializeFuelOverflow {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.fuel_overflow,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.payer,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.rent,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.system_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for InitializeFuelOverflow {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for InitializeFuelOverflow {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct SweepFuel {
+        pub fuel_overflow: Pubkey,
+        pub user_stats: Pubkey,
+        pub authority: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for SweepFuel {
+        const DISCRIMINATOR: [u8; 8] = [213, 69, 211, 253, 19, 221, 144, 63];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for SweepFuel {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for SweepFuel {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for SweepFuel {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for SweepFuel {}
+    #[automatically_derived]
+    impl ToAccountMetas for SweepFuel {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.fuel_overflow,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for SweepFuel {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for SweepFuel {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct ResetFuelSeason {
+        pub user_stats: Pubkey,
+        pub authority: Pubkey,
+        pub state: Pubkey,
+        pub admin: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ResetFuelSeason {
+        const DISCRIMINATOR: [u8; 8] = [1, 202, 193, 87, 106, 234, 121, 179];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for ResetFuelSeason {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ResetFuelSeason {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for ResetFuelSeason {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ResetFuelSeason {}
+    #[automatically_derived]
+    impl ToAccountMetas for ResetFuelSeason {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.user_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for ResetFuelSeason {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for ResetFuelSeason {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -20684,6 +21026,10 @@ pub mod errors {
         InvalidLiquidateSpotWithSwap,
         #[msg("User in swift message does not match user in ix context")]
         SwiftUserContextUserMismatch,
+        #[msg("User fuel overflow threshold not met")]
+        UserFuelOverflowThresholdNotMet,
+        #[msg("FuelOverflow account not found")]
+        FuelOverflowAccountNotFound,
     }
 }
 pub mod events {
@@ -20926,5 +21272,34 @@ pub mod events {
         pub user: Pubkey,
         pub sub_account_id: u16,
         pub keeper: Option<Pubkey>,
+    }
+    #[event]
+    pub struct FuelSweepRecord {
+        pub ts: i64,
+        pub authority: Pubkey,
+        pub user_stats_fuel_insurance: u32,
+        pub user_stats_fuel_deposits: u32,
+        pub user_stats_fuel_borrows: u32,
+        pub user_stats_fuel_positions: u32,
+        pub user_stats_fuel_taker: u32,
+        pub user_stats_fuel_maker: u32,
+        pub fuel_overflow_fuel_insurance: u128,
+        pub fuel_overflow_fuel_deposits: u128,
+        pub fuel_overflow_fuel_borrows: u128,
+        pub fuel_overflow_fuel_positions: u128,
+        pub fuel_overflow_fuel_taker: u128,
+        pub fuel_overflow_fuel_maker: u128,
+    }
+    #[event]
+    pub struct FuelSeasonRecord {
+        pub ts: i64,
+        pub authority: Pubkey,
+        pub fuel_insurance: u128,
+        pub fuel_deposits: u128,
+        pub fuel_borrows: u128,
+        pub fuel_positions: u128,
+        pub fuel_taker: u128,
+        pub fuel_maker: u128,
+        pub fuel_total: u128,
     }
 }

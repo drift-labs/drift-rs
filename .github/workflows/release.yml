@@ -38,7 +38,7 @@ jobs:
       - name: Publish drift-rs
         run: |
           # add libdrift_ffi_sys
-          curl -L https://github.com/drift-labs/drift-ffi-sys/releases/download/v2.108.0/libdrift_ffi_sys.so > libdrift_ffi_sys.so
+          curl -L https://github.com/drift-labs/drift-ffi-sys/releases/download/v2.109.0/libdrift_ffi_sys.so > libdrift_ffi_sys.so
           sudo mv libdrift_ffi_sys.so $CARGO_DRIFT_FFI_PATH
           # publish to crates.io
           cargo publish
