@@ -80,6 +80,7 @@ impl SlotSubscriber {
         F: 'static + Send + Fn(SlotUpdate),
     {
         if self.is_subscribed() {
+            debug!(target: LOG_TARGET, "already subscribed");
             return Ok(());
         }
         self.subscribe_ws(on_slot)
@@ -109,7 +110,7 @@ impl SlotSubscriber {
                 }
             };
 
-            loop {
+            let res = loop {
                 tokio::select! {
                     biased;
                     new_slot = tokio::time::timeout(SLOT_STALENESS_THRESHOLD, slot_updates.next()) => {
@@ -120,22 +121,26 @@ impl SlotSubscriber {
                             }
                             Ok(None) => {
                                 warn!(target: LOG_TARGET, "slot subscriber finished");
-                                break;
+                                break Err(());
                             }
                             Err(err) => {
                                 warn!(target: LOG_TARGET, "slot subscriber failed: {err:?}");
-                                break;
+                                break Err(());
                             }
                         }
                     }
                     _ = &mut unsub_rx => {
-                        debug!("unsubscribed");
+                        debug!(target: LOG_TARGET, "unsubscribed");
                         unsubscriber().await;
-                        break;
+                        break Ok(());
                     }
                 }
+            };
+
+            if res.is_err() {
+                log::error!(target: LOG_TARGET, "slot subscriber failed");
+                std::process::exit(1);
             }
-            panic!("slot subscriber stale or disconnected");
         });
 
         Ok(())
@@ -145,7 +150,7 @@ impl SlotSubscriber {
         let mut guard = self.unsub.lock().expect("acquired");
         if let Some(unsub) = guard.take() {
             if unsub.send(()).is_err() {
-                error!("Failed to send unsubscribe signal");
+                error!(target: LOG_TARGET, "Failed to send unsubscribe signal");
                 return Err(SdkError::CouldntUnsubscribe);
             }
         }

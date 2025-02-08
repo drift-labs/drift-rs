@@ -201,7 +201,8 @@ pub fn oracle_source_to_owner(context: Context, source: OracleSource) -> Pubkey 
         OracleSource::Prelaunch
         | OracleSource::PythLazer
         | OracleSource::PythLazer1K
-        | OracleSource::PythLazer1M => PROGRAM_ID,
+        | OracleSource::PythLazer1M
+        | OracleSource::PythLazerStableCoin => PROGRAM_ID,
     }
 }
 

@@ -651,8 +651,7 @@ fn format_rust_code(code: &str) -> String {
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
-        .expect("Failed to start rustfmt");
-
+        .expect("Failed to run rustfmt");
     {
         let stdin = rustfmt.stdin.as_mut().expect("Failed to open stdin");
         stdin
