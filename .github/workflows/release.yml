@@ -41,6 +41,7 @@ jobs:
           curl -L https://github.com/drift-labs/drift-ffi-sys/releases/download/v2.109.0/libdrift_ffi_sys.so > libdrift_ffi_sys.so
           sudo mv libdrift_ffi_sys.so $CARGO_DRIFT_FFI_PATH
           # publish to crates.io
+          cargo -V
           cargo publish
         env:
           CARGO_DRIFT_FFI_PATH: "/usr/lib"
