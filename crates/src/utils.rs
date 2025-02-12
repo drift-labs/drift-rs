@@ -52,7 +52,9 @@ pub fn load_keypair_multi_format(path_or_key: &str) -> SdkResult<Keypair> {
 
 const LOOKUP_TABLE_META_SIZE: usize = 56;
 
-/// modified from sdk.1.17.x
+/// Deserialize AddressLookupTableAccount
+///
+/// DEV: modified from sdk.1.17.x
 /// https://docs.rs/solana-program/latest/src/solana_program/address_lookup_table/state.rs.html#192
 pub fn deserialize_alt(address: Pubkey, account: &Account) -> SdkResult<AddressLookupTableAccount> {
     let raw_addresses_data: &[u8] = account.data.get(LOOKUP_TABLE_META_SIZE..).ok_or({

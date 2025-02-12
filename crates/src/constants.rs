@@ -25,6 +25,9 @@ pub const TOKEN_PROGRAM_ID: Pubkey =
 pub const LUT_DEVNET: Pubkey = solana_sdk::pubkey!("FaMS3U4uBojvGn5FSDEPimddcXsCfwkKsFgMVVnDdxGb");
 /// Drift market lookup table (MainNet)
 pub const LUT_MAINNET: Pubkey = solana_sdk::pubkey!("Fpys8GRa5RBWfyeN7AaDUwFGD1zkDCA4z3t4CJLV8dfL");
+// https://github.com/drift-labs/protocol-v2/pull/1471
+pub const LUT_MAINNET_2: Pubkey =
+    solana_sdk::pubkey!("EiWSskK5HXnBTptiS5DH6gpAJRVNQ3cAhTKBGaiaysAb");
 
 /// Drift state account
 pub fn state_account() -> &'static Pubkey {
@@ -102,7 +105,7 @@ impl MarketExt for SpotMarket {
 pub struct ProgramData {
     spot_markets: &'static [SpotMarket],
     perp_markets: &'static [PerpMarket],
-    pub lookup_table: AddressLookupTableAccount,
+    pub lookup_tables: &'static [AddressLookupTableAccount],
 }
 
 impl ProgramData {
@@ -111,17 +114,14 @@ impl ProgramData {
         Self {
             spot_markets: &[],
             perp_markets: &[],
-            lookup_table: AddressLookupTableAccount {
-                key: Pubkey::new_from_array([0; 32]),
-                addresses: vec![],
-            },
+            lookup_tables: &[],
         }
     }
     /// Initialize `ProgramData`
     pub fn new(
         mut spot: Vec<SpotMarket>,
         mut perp: Vec<PerpMarket>,
-        lookup_table: AddressLookupTableAccount,
+        lookup_tables: Vec<AddressLookupTableAccount>,
     ) -> Self {
         spot.sort_by(|a, b| a.market_index.cmp(&b.market_index));
         perp.sort_by(|a, b| a.market_index.cmp(&b.market_index));
@@ -142,7 +142,7 @@ impl ProgramData {
         Self {
             spot_markets: Box::leak(spot.into_boxed_slice()),
             perp_markets: Box::leak(perp.into_boxed_slice()),
-            lookup_table,
+            lookup_tables: Box::leak(lookup_tables.into_boxed_slice()),
         }
     }
 

@@ -202,11 +202,13 @@ impl JitProxyClient {
         }
         ixs.push(ix);
 
-        let lut = program_data.lookup_table.clone();
-
-        let message =
-            v0::Message::try_compile(authority, ixs.as_slice(), &[lut], Default::default())
-                .expect("failed to compile message");
+        let message = v0::Message::try_compile(
+            authority,
+            ixs.as_slice(),
+            program_data.lookup_tables,
+            Default::default(),
+        )
+        .expect("failed to compile message");
 
         Ok(VersionedMessage::V0(message))
     }

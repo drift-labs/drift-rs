@@ -629,16 +629,23 @@ impl DriftClientBackend {
         let spot_market_map =
             MarketMap::<SpotMarket>::new(Arc::clone(&pubsub_client), rpc_client.commitment());
 
-        let lookup_table_address = context.lut();
-
-        let (_, _, lut) = tokio::try_join!(
+        let (_, _, lut_accounts) = tokio::try_join!(
             perp_market_map.sync(&rpc_client),
             spot_market_map.sync(&rpc_client),
             rpc_client
-                .get_account(&lookup_table_address)
-                .map_err(Into::into),
+                .get_multiple_accounts(context.luts())
+                .map_err(Into::into)
         )?;
-        let lookup_table = utils::deserialize_alt(lookup_table_address, &lut)?;
+
+        let lookup_tables: Vec<AddressLookupTableAccount> = context
+            .luts()
+            .iter()
+            .zip(lut_accounts.into_iter())
+            .map(|(addr, acc)| {
+                utils::deserialize_alt(*addr, &acc.expect("LUT account fetched"))
+                    .expect("deserialize LUT")
+            })
+            .collect();
 
         let mut all_oracles = Vec::<(MarketId, Pubkey, OracleSource)>::with_capacity(
             perp_market_map.len() + spot_market_map.len(),
@@ -666,7 +673,7 @@ impl DriftClientBackend {
             program_data: ProgramData::new(
                 spot_market_map.values(),
                 perp_market_map.values(),
-                lookup_table,
+                lookup_tables,
             ),
             account_map,
             perp_market_map,
@@ -1025,8 +1032,6 @@ pub struct TransactionBuilder<'a> {
     ixs: Vec<Instruction>,
     /// use legacy transaction mode
     legacy: bool,
-    /// add additional lookup tables (v0 only)
-    lookup_tables: Vec<AddressLookupTableAccount>,
     /// some markets forced to include in the tx accounts list
     force_markets: ForceMarkets,
 }
@@ -1057,7 +1062,6 @@ impl<'a> TransactionBuilder<'a> {
             account_data: user,
             sub_account,
             ixs: Default::default(),
-            lookup_tables: vec![program_data.lookup_table.clone()],
             legacy: false,
             force_markets: Default::default(),
         }
@@ -1070,14 +1074,6 @@ impl<'a> TransactionBuilder<'a> {
     /// Use legacy tx mode
     pub fn legacy(mut self) -> Self {
         self.legacy = true;
-        self
-    }
-    /// Set the tx lookup tables
-    pub fn lookup_tables(mut self, lookup_tables: &[AddressLookupTableAccount]) -> Self {
-        self.lookup_tables = lookup_tables.to_vec();
-        self.lookup_tables
-            .push(self.program_data.lookup_table.clone());
-
         self
     }
     /// Set the priority fee of the tx
@@ -1537,7 +1533,7 @@ impl<'a> TransactionBuilder<'a> {
             let message = v0::Message::try_compile(
                 &self.authority,
                 self.ixs.as_slice(),
-                self.lookup_tables.as_slice(),
+                self.program_data().lookup_tables,
                 Default::default(),
             )
             .expect("ok");
