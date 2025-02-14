@@ -22,5 +22,6 @@ solana-transaction-status = "2"
 thiserror = "1"
 tokio = { version = "1.42", features = ["full"] }
 tokio-stream = "0.1"
-tokio-tungstenite = { version = "0.20", features = ["native-tls"] }
+# bump after solana-sdk crate updates to 2.1.x
+tokio-tungstenite = { version = "0.20.1", features = ["native-tls"] }
 url = "2.5"
