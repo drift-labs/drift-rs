@@ -360,10 +360,7 @@ mod tests {
     use super::{get_market_accounts_with_fallback, MarketMap};
     use crate::{
         accounts::{PerpMarket, SpotMarket},
-        utils::{
-            get_ws_url,
-            test_envs::{devnet_endpoint, mainnet_endpoint},
-        },
+        utils::{get_ws_url, test_envs::devnet_endpoint},
         MarketId,
     };
 

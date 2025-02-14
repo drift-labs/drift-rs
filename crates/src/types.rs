@@ -16,6 +16,7 @@ use solana_sdk::{
 };
 use thiserror::Error;
 use tokio::sync::oneshot;
+use tokio_tungstenite::tungstenite;
 
 // re-export types in public API
 pub use crate::drift_idl::{
@@ -322,6 +323,8 @@ pub enum SdkError {
     AlreadySubscribed,
     #[error("invalid URL")]
     InvalidUrl,
+    #[error("{0}")]
+    WsClient(#[from] tungstenite::Error),
 }
 
 impl SdkError {

@@ -19,6 +19,7 @@ use solana_sdk::{
     transaction::VersionedTransaction,
 };
 pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
+use swift_order_subscriber::SwiftOrderStream;
 use utils::get_ws_url;
 
 use crate::{
@@ -60,6 +61,7 @@ pub mod auction_subscriber;
 pub mod blockhash_subscriber;
 pub mod event_subscriber;
 pub mod priority_fee_subscriber;
+pub mod swift_order_subscriber;
 
 pub mod jit_client;
 
@@ -194,6 +196,16 @@ impl DriftClient {
     pub async fn subscribe_all_perp_oracles(&self) -> SdkResult<()> {
         let markets = self.get_all_perp_market_ids();
         self.backend.subscribe_oracles(&markets).await
+    }
+
+    /// Subscribe to swift order feed for given `markets`
+    ///
+    /// Returns a stream of swift orders
+    pub async fn subscribe_swift_orders(
+        &self,
+        markets: &[MarketId],
+    ) -> SdkResult<SwiftOrderStream> {
+        swift_order_subscriber::subscribe_swift_orders(self, markets).await
     }
 
     /// Returns the MarketIds for all spot markets
@@ -621,6 +633,7 @@ pub struct DriftClientBackend {
 impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
     async fn new(context: Context, rpc_client: Arc<RpcClient>) -> SdkResult<Self> {
+        log::info!("drift-ffi-sys: {}", ffi::check_ffi_version());
         let pubsub_client =
             Arc::new(PubsubClient::new(&get_ws_url(rpc_client.url().as_str())?).await?);
 
@@ -1386,7 +1399,7 @@ impl<'a> TransactionBuilder<'a> {
     /// * `order` - the order to place
     /// * `taker_info` - taker account address and data
     /// * `taker_order_id` - the id of the taker's order to match with
-    /// * `referrer` - pukey of the taker's referrer account, if any
+    /// * `referrer` - pubkey of the taker's referrer account, if any
     /// * `fulfillment_type` - type of fill for spot orders, ignored for perp orders
     pub fn place_and_make(
         mut self,
@@ -1528,6 +1541,62 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
+    /// Make against a `swift_taker_order` (Perps only)
+    pub fn place_and_make_swift(
+        mut self,
+        swift_taker_order: SwiftOrderParamsMessage,
+        taker_account: &User,
+        taker_account_stats: &UserStats,
+    ) -> Self {
+        assert!(
+            swift_taker_order.swift_order_params.market_type == MarketType::Perp,
+            "only swift perps are supported"
+        );
+
+        let perp_writable = [MarketId::perp(
+            swift_taker_order.swift_order_params.market_index,
+        )];
+        let mut accounts = build_accounts(
+            self.program_data,
+            types::accounts::PlaceAndMakeSwiftPerpOrder {
+                state: *state_account(),
+                authority: self.authority,
+                user: self.sub_account,
+                taker: taker_account.authority,
+                taker_swift_user_orders: Wallet::derive_swift_taker_account(
+                    &taker_account.authority,
+                ),
+                user_stats: Wallet::derive_stats_account(&self.authority),
+                taker_stats: Wallet::derive_stats_account(&taker_account.authority),
+            },
+            &[self.account_data.as_ref(), taker_account],
+            self.force_markets.readable.iter(),
+            perp_writable
+                .iter()
+                .chain(self.force_markets.writeable.iter()),
+        );
+
+        if taker_account_stats.referrer != Pubkey::default() {
+            accounts.push(AccountMeta::new(
+                Wallet::derive_stats_account(&taker_account_stats.referrer),
+                true,
+            ));
+            accounts.push(AccountMeta::new(taker_account_stats.referrer, true));
+        }
+
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::PlaceAndMakeSwiftPerpOrder {
+                params: swift_taker_order.swift_order_params,
+                swift_order_uuid: swift_taker_order.uuid,
+            }),
+        };
+
+        self.ixs.push(ix);
+        self
+    }
+
     /// Build the transaction message ready for signing and sending
     pub fn build(self) -> VersionedMessage {
         if self.legacy {
@@ -1557,7 +1626,7 @@ impl<'a> TransactionBuilder<'a> {
 /// Builds a set of required accounts from a user's open positions and additional given accounts
 ///
 /// * `base_accounts` - base anchor accounts
-/// * `user` - Drift user account data
+/// * `users` - Drift user account data
 /// * `markets_readable` - IDs of markets to include as readable
 /// * `markets_writable` - IDs of markets to include as writable (takes priority over readable)
 ///
@@ -1709,6 +1778,15 @@ impl Wallet {
     pub fn derive_stats_account(account: &Pubkey) -> Pubkey {
         let (account_drift_pda, _seed) = Pubkey::find_program_address(
             &[&b"user_stats"[..], account.as_ref()],
+            &constants::PROGRAM_ID,
+        );
+        account_drift_pda
+    }
+
+    /// Calculate the address of `authority`s Swift taker order account
+    pub fn derive_swift_taker_account(authority: &Pubkey) -> Pubkey {
+        let (account_drift_pda, _seed) = Pubkey::find_program_address(
+            &[&b"SWIFT"[..], authority.as_ref()],
             &constants::PROGRAM_ID,
         );
         account_drift_pda

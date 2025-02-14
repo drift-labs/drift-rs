@@ -5,6 +5,7 @@ use drift_rs::{
     utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
     DriftClient, TransactionBuilder, Wallet,
 };
+use futures_util::StreamExt;
 use solana_sdk::signature::Keypair;
 
 #[tokio::test]
@@ -171,4 +172,30 @@ async fn place_and_take() {
     dbg!(&result);
     // TODO: add a place and make to match against
     assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn client_subscribe_swift_orders() {
+    let _ = env_logger::try_init();
+    let client = DriftClient::new(
+        Context::DevNet,
+        RpcClient::new(devnet_endpoint()),
+        Keypair::new().into(),
+    )
+    .await
+    .expect("connects");
+
+    let all_markets = client.get_all_perp_market_ids();
+    let mut swift_order_stream = client
+        .subscribe_swift_orders(all_markets.as_slice())
+        .await
+        .unwrap();
+    let mut recv_count = 0;
+    while let Some(order) = swift_order_stream.next().await {
+        if recv_count > 5 {
+            break;
+        }
+        dbg!(order.uuid);
+        recv_count += 1;
+    }
 }
