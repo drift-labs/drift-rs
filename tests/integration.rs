@@ -191,11 +191,11 @@ async fn client_subscribe_swift_orders() {
         .await
         .unwrap();
     let mut recv_count = 0;
-    while let Some((taker_authority, order)) = swift_order_stream.next().await {
+    while let Some(swift_message) = swift_order_stream.next().await {
         if recv_count > 5 {
             break;
         }
-        dbg!(taker_authority, order.uuid);
+        dbg!(swift_message.order_uuid());
         recv_count += 1;
     }
 }

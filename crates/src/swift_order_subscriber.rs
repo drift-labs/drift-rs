@@ -1,7 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anchor_lang::{AnchorDeserialize, AnchorSerialize};
-use base64::{engine::general_purpose::STANDARD as base64, Engine};
+use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -12,7 +12,7 @@ use tokio_tungstenite::{connect_async, tungstenite::Message};
 pub use crate::types::SwiftOrderParamsMessage as SwiftOrder;
 use crate::{
     constants::MarketExt,
-    types::{Context, MarketId, OrderParams, SdkError, SdkResult},
+    types::{Context, MarketId, MarketType, OrderParams, SdkError, SdkResult},
     DriftClient,
 };
 
@@ -20,6 +20,11 @@ pub const SWIFT_DEVNET_WS_URL: &str = "wss://master.swift.drift.trade";
 pub const SWIFT_MAINNET_WS_URL: &str = "wss://swift.drift.trade";
 
 const LOG_TARGET: &str = "swift";
+
+#[derive(Clone, Deserialize)]
+pub struct SwiftMessageWrapped {
+    order: SwiftMessage,
+}
 
 /// Swift (taker) order and metadata fresh from the Websocket
 #[derive(Clone, Deserialize)]
@@ -113,7 +118,8 @@ pub async fn subscribe_swift_orders(
                     .wallet()
                     .sign_message(nonce.as_bytes())
                     .expect("infallible");
-                let signature_b64 = base64.encode(signature.as_ref());
+                let signature_b64 =
+                    base64::engine::general_purpose::STANDARD.encode(signature.as_ref());
 
                 let auth_message = json!({
                     "pubkey": maker_pubkey,
@@ -158,20 +164,23 @@ pub async fn subscribe_swift_orders(
     tokio::spawn(async move {
         while let Some(msg) = incoming.next().await {
             match msg {
-                Ok(Message::Text(ref text)) => match serde_json::from_str::<SwiftMessage>(text) {
-                    Ok(swift_message) => {
-                        log::debug!(target: LOG_TARGET, "uuid: {}, latency: {}ms", swift_message.uuid, unix_now_ms().saturating_sub(swift_message.ts));
+                Ok(Message::Text(ref text)) => {
+                    match serde_json::from_str::<SwiftMessageWrapped>(text) {
+                        Ok(wrapper) => {
+                            let swift_message = wrapper.order;
+                            log::debug!(target: LOG_TARGET, "uuid: {}, latency: {}ms", swift_message.uuid, unix_now_ms().saturating_sub(swift_message.ts));
 
-                        if let Err(err) = tx.try_send(swift_message) {
-                            log::error!(target: LOG_TARGET, "order chan failed: {err:?}");
+                            if let Err(err) = tx.try_send(swift_message) {
+                                log::error!(target: LOG_TARGET, "order chan failed: {err:?}");
+                                break;
+                            }
+                        }
+                        Err(err) => {
+                            log::error!(target: LOG_TARGET, "{text}. invalid json: {err:?}");
                             break;
                         }
                     }
-                    Err(err) => {
-                        log::error!(target: LOG_TARGET, "{text}. invalid json: {err:?}");
-                        break;
-                    }
-                },
+                }
                 Ok(Message::Close(_)) => {
                     log::error!(target: LOG_TARGET, "server closed connection");
                     break;
@@ -208,7 +217,7 @@ where
     D: serde::de::Deserializer<'de>,
 {
     let s: &str = serde::de::Deserialize::deserialize(deserializer)?;
-    Ok(s.parse().expect("base64 signature"))
+    Ok(Signature::try_from(base64::engine::general_purpose::STANDARD.decode(s).unwrap()).unwrap())
 }
 
 fn deser_order_message<'de, D>(deserializer: D) -> Result<SwiftOrder, D::Error>
@@ -225,17 +234,33 @@ where
 fn test_swift_order_deser() {
     let msg = r#"{
         "channel":"swift_orders_perp_1",
-        "order":"{
-            \"market_index\":1,
-            \"market_type\":\"perp\",
-            \"order_message\":\"b9c165ffdf70594d0001010080841e00000000000000000000000000010000000000000000013201a4e99abc16000000011ab2f982160000000300900f84150000000072753959424c52740000\",
-            \"order_signature\":\"FIgxWlW+C0abvtE8esSko7At1YGM8h66T0u5lJpwXirW63CuvEllVWZ68NNVFsaqcj4jqgQInXUnLPjIf/PQDA==\",
-            \"signing_authority\":\"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE\",
-            \"taker_authority\":\"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE\",
-            \"ts\":1739518796400,
-            \"uuid\":\"ru9YBLRt\"
-        }"
+        "order":{
+            "market_index":1,
+            "market_type":"perp",
+            "order_message":"b9c165ffdf70594d0001010080841e00000000000000000000000000010000000000000000013201a4e99abc16000000011ab2f982160000000300900f84150000000072753959424c52740000",
+            "order_signature":"FIgxWlW+C0abvtE8esSko7At1YGM8h66T0u5lJpwXirW63CuvEllVWZ68NNVFsaqcj4jqgQInXUnLPjIf/PQDA==",
+            "signing_authority":"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE",
+            "taker_authority":"DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2",
+            "ts":1739518796400,
+            "uuid":"ru9YBLRt"
+        }
     }"#;
-    let s: SwiftMessage = serde_json::from_str(&msg).unwrap();
-    serde_json::from_str::<SwiftOrder>(s.order.unwrap().as_str()).unwrap();
+    let swift_message: SwiftMessageWrapped = serde_json::from_str(&msg).unwrap();
+    let swift_message = swift_message.order;
+    assert_eq!(
+        swift_message.signer,
+        "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"
+            .parse()
+            .unwrap()
+    );
+    assert_eq!(
+        swift_message.taker_authority,
+        "DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"
+            .parse()
+            .unwrap()
+    );
+    assert_eq!(swift_message.ts, 1739518796400);
+    assert_eq!(swift_message.uuid, "ru9YBLRt");
+    assert_eq!(swift_message.order_params().market_index, 1);
+    assert_eq!(swift_message.order_params().market_type, MarketType::Perp);
 }
