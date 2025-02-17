@@ -21,7 +21,8 @@ use crate::{
     build_accounts,
     constants::{self, state_account, JIT_PROXY_ID},
     drift_idl,
-    types::{PositionDirection, SwiftOrderParamsMessage},
+    swift_order_subscriber::SwiftMessage,
+    types::PositionDirection,
     DriftClient, MarketId, MarketType, PostOnlyParam, ReferrerInfo, SdkError, SdkResult,
     TransactionBuilder, Wallet,
 };
@@ -58,24 +59,21 @@ impl JitTakerParams {
 
 /// Parameters for building a jit maker order
 pub struct JitIxParams {
-    max_position: i64,
-    min_position: i64,
-    bid: i64,
-    ask: i64,
-    price_type: PriceType,
-    referrer_info: Option<ReferrerInfo>,
-    post_only: Option<PostOnlyParam>,
+    pub max_position: i64,
+    pub min_position: i64,
+    pub bid: i64,
+    pub ask: i64,
+    pub price_type: PriceType,
+    pub post_only: Option<PostOnlyParam>,
 }
 
 impl JitIxParams {
     pub fn new(
-        taker_order_id: u32,
         max_position: i64,
         min_position: i64,
         bid: i64,
         ask: i64,
         price_type: PriceType,
-        referrer_info: Option<ReferrerInfo>,
         post_only: Option<PostOnlyParam>,
     ) -> Self {
         Self {
@@ -84,25 +82,7 @@ impl JitIxParams {
             bid,
             ask,
             price_type,
-            referrer_info,
             post_only,
-        }
-    }
-}
-
-/// Parameters for the taker side of a Swift order
-pub struct SwiftTakerParams {
-    taker_key: Pubkey,
-    taker_stats_key: Pubkey,
-    taker: User,
-}
-
-impl SwiftTakerParams {
-    pub fn new(taker_key: Pubkey, taker_stats_key: Pubkey, taker: User) -> Self {
-        Self {
-            taker_key,
-            taker_stats_key,
-            taker,
         }
     }
 }
@@ -249,7 +229,7 @@ impl JitProxyClient {
 
     /// Build a swift fill tx against a taker order given by `taker_params`
     ///
-    /// `swift_taker_order` swift order to place-and-make against
+    /// `swift_message` swift (order) message to place-and-make against
     /// `taker_params` taker account params
     /// `jit_params` config for the JIT proxy
     /// `maker_pubkey` address of the maker's subaccount
@@ -258,7 +238,7 @@ impl JitProxyClient {
     /// Returns a Solana `VersionedMessage` ready for signing
     pub async fn build_swift_tx(
         &self,
-        swift_taker_order: SwiftOrderParamsMessage,
+        swift_message: SwiftMessage,
         taker_params: JitTakerParams,
         jit_ix_params: JitIxParams,
         maker_pubkey: &Pubkey,
@@ -267,9 +247,10 @@ impl JitProxyClient {
         let maker_authority = maker_account_data.authority;
         // build swift JIT ix
         let program_data = self.drift_client.program_data();
+        let swift_order_params = swift_message.order_params();
         let account_data = maker_account_data;
-        let market_index = swift_taker_order.swift_order_params.market_index;
-        let market_type = swift_taker_order.swift_order_params.market_type;
+        let market_index = swift_order_params.market_index;
+        let market_type = swift_order_params.market_type;
 
         let writable_markets = match market_type {
             MarketType::Perp => {
@@ -318,7 +299,7 @@ impl JitProxyClient {
         }
 
         let jit_params = self::instruction::JitSwiftParams {
-            swift_order_uuid: swift_taker_order.uuid,
+            swift_order_uuid: swift_message.order_uuid(),
             max_position: jit_ix_params.max_position,
             min_position: jit_ix_params.min_position,
             bid: jit_ix_params.bid,
@@ -339,7 +320,7 @@ impl JitProxyClient {
             Cow::Borrowed(maker_account_data),
             false,
         )
-        .place_swift_taker_order(swift_taker_order, &taker_params.taker)
+        .place_taker_order_swift(&swift_message, &taker_params.taker)
         .add_ix(swift_jit_make_ix)
         .build();
 
@@ -386,7 +367,7 @@ impl JitProxyClient {
     /// `sub_account_id` the maker's sub-account for the fill
     pub async fn try_swift_fill(
         &self,
-        swift_order: SwiftOrderParamsMessage,
+        swift_message: SwiftMessage,
         taker_params: JitTakerParams,
         jit_params: JitIxParams,
         maker_authority: &Pubkey,
@@ -397,7 +378,7 @@ impl JitProxyClient {
         let sub_account_data = self.drift_client.get_user_account(&sub_account).await?;
         let tx = self
             .build_swift_tx(
-                swift_order,
+                swift_message,
                 taker_params,
                 jit_params,
                 &sub_account,

@@ -2,7 +2,7 @@
 
 use std::{borrow::Cow, collections::BTreeSet, sync::Arc, time::Duration};
 
-use anchor_lang::{AccountDeserialize, AnchorSerialize, InstructionData};
+use anchor_lang::{AccountDeserialize, InstructionData};
 use constants::SYSVAR_INSTRUCTIONS_PUBKEY;
 use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
@@ -12,7 +12,6 @@ use solana_sdk::{
     account::Account,
     clock::Slot,
     compute_budget::ComputeBudgetInstruction,
-    ed25519_instruction,
     hash::Hash,
     instruction::{AccountMeta, Instruction},
     message::{v0, Message, VersionedMessage},
@@ -21,7 +20,7 @@ use solana_sdk::{
     transaction::VersionedTransaction,
 };
 pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
-use swift_order_subscriber::SwiftOrderStream;
+use swift_order_subscriber::{SwiftMessage, SwiftOrderStream};
 use utils::get_ws_url;
 
 use crate::{
@@ -1567,31 +1566,30 @@ impl<'a> TransactionBuilder<'a> {
     /// Place and try to fill (make) against a swift order (Perps only)
     pub fn place_and_make_swift(
         mut self,
-        swift_taker_order: SwiftOrderParamsMessage,
+        swift_message: &SwiftMessage,
         taker_account: &User,
         taker_account_referrer: &Pubkey,
     ) -> Self {
+        let order_params = swift_message.order_params();
         assert!(
-            swift_taker_order.swift_order_params.market_type == MarketType::Perp,
+            order_params.market_type == MarketType::Perp,
             "only swift perps are supported"
         );
-        self = self.place_swift_taker_order(swift_taker_order, taker_account);
+        self = self.place_taker_order_swift(swift_message, taker_account);
 
-        let perp_writable = [MarketId::perp(
-            swift_taker_order.swift_order_params.market_index,
-        )];
+        let perp_writable = [MarketId::perp(order_params.market_index)];
         let mut accounts = build_accounts(
             self.program_data,
             types::accounts::PlaceAndMakeSwiftPerpOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
+                user_stats: Wallet::derive_stats_account(&self.authority),
                 taker: taker_account.authority,
+                taker_stats: Wallet::derive_stats_account(&taker_account.authority),
                 taker_swift_user_orders: Wallet::derive_swift_taker_account(
                     &taker_account.authority,
                 ),
-                user_stats: Wallet::derive_stats_account(&self.authority),
-                taker_stats: Wallet::derive_stats_account(&taker_account.authority),
             },
             &[self.account_data.as_ref(), taker_account],
             self.force_markets.readable.iter(),
@@ -1612,8 +1610,8 @@ impl<'a> TransactionBuilder<'a> {
             program_id: constants::PROGRAM_ID,
             accounts,
             data: InstructionData::data(&drift_idl::instructions::PlaceAndMakeSwiftPerpOrder {
-                params: swift_taker_order.swift_order_params,
-                swift_order_uuid: swift_taker_order.uuid,
+                params: order_params,
+                swift_order_uuid: swift_message.order_uuid(),
             }),
         });
 
@@ -1624,27 +1622,26 @@ impl<'a> TransactionBuilder<'a> {
     ///
     /// ☢️ this Ix will not fill by itself. The caller should add a subsequent Ix
     /// e.g. with JIT proxy, to atomically place and fill the order
-    pub fn place_swift_taker_order(
+    pub fn place_taker_order_swift(
         mut self,
-        swift_taker_order: SwiftOrderParamsMessage,
+        swift_message: &SwiftMessage,
         taker_account: &User,
     ) -> Self {
+        let swift_order_params = swift_message.order_params();
         assert!(
-            swift_taker_order.swift_order_params.market_type == MarketType::Perp,
+            swift_order_params.market_type == MarketType::Perp,
             "only swift perps are supported"
         );
 
-        let perp_writable = [MarketId::perp(
-            swift_taker_order.swift_order_params.market_index,
-        )];
-        let mut accounts = build_accounts(
+        let perp_writable = [MarketId::perp(swift_order_params.market_index)];
+        let accounts = build_accounts(
             self.program_data,
             types::accounts::PlaceSwiftTakerOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: Wallet::derive_user_account(
                     &taker_account.authority,
-                    swift_taker_order.sub_account_id,
+                    swift_message.taker_subaccount_id(),
                 ),
                 user_stats: Wallet::derive_stats_account(&taker_account.authority),
                 swift_user_orders: Wallet::derive_swift_taker_account(&taker_account.authority),
@@ -1657,28 +1654,25 @@ impl<'a> TransactionBuilder<'a> {
                 .chain(self.force_markets.writeable.iter()),
         );
 
+        let swift_order_message = swift_message.encode_for_signing();
         let place_swift_ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
             data: InstructionData::data(&drift_idl::instructions::PlaceSwiftTakerOrder {
-                swift_order_params_message_bytes: hex::encode(
-                    swift_taker_order.swift_order_params.try_to_vec().unwrap(),
-                )
-                .into_bytes(),
+                swift_order_params_message_bytes: swift_order_message.clone(),
             }),
         };
 
-        let order_message =
-            hex::encode(swift_taker_order.swift_order_params.try_to_vec().unwrap()).into_bytes();
+        let ed25519_verify_ix = crate::utils::new_ed25519_instruction(
+            &swift_message.signer,
+            &swift_message.signature,
+            swift_order_message.as_slice(),
+        );
 
-        // TODO: need to implement this
-        // we should already have the signature.
-        // pubkey and signature should be checked in case of delegate status
-        let ed25519_verify_ix =
-            ed25519_instruction::new_ed25519_instruction(&Keypair::new(), order_message.as_slice());
+        assert!(ed25519_verify_ix.is_ok(), "swift signature verifies");
 
         self.ixs
-            .extend_from_slice(&[ed25519_verify_ix, place_swift_ix]);
+            .extend_from_slice(&[ed25519_verify_ix.unwrap(), place_swift_ix]);
         self
     }
 

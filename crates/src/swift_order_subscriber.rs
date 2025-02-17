@@ -1,18 +1,18 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use anchor_lang::AnchorDeserialize;
+use anchor_lang::{AnchorDeserialize, AnchorSerialize};
 use base64::{engine::general_purpose::STANDARD as base64, Engine};
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use solana_sdk::pubkey::Pubkey;
+use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
 pub use crate::types::SwiftOrderParamsMessage as SwiftOrder;
 use crate::{
     constants::MarketExt,
-    types::{Context, MarketId, SdkError, SdkResult},
+    types::{Context, MarketId, OrderParams, SdkError, SdkResult},
     DriftClient,
 };
 
@@ -21,24 +21,49 @@ pub const SWIFT_MAINNET_WS_URL: &str = "wss://swift.drift.trade";
 
 const LOG_TARGET: &str = "swift";
 
-#[derive(Deserialize)]
-struct SwiftOrderMessageJson<'a> {
-    #[serde(borrow)]
-    uuid: &'a str,
-    ts: u64,
-    taker_authority: &'a str,
-    #[serde(borrow)]
-    order_message: &'a str,
+/// Swift (taker) order and metadata fresh from the Websocket
+#[derive(Clone, Deserialize)]
+pub struct SwiftMessage {
+    /// stringified order uuid
+    uuid: String,
+    /// Order creation timestamp
+    pub ts: u64,
+    /// The taker authority pubkey
+    #[serde(deserialize_with = "deser_pubkey")]
+    pub taker_authority: Pubkey,
+    /// The authority pubkey that verifies `signature`
+    /// it is either the taker authority or a sub-account delegate
+    #[serde(rename = "signing_authority", deserialize_with = "deser_pubkey")]
+    pub signer: Pubkey,
+    /// hexified, borsh encoded swift order message
+    /// this is the signed/verified payload for onchain use
+    #[serde(rename = "order_message", deserialize_with = "deser_order_message")]
+    order: SwiftOrder,
+    #[serde(rename = "order_signature", deserialize_with = "deser_signature")]
+    pub signature: Signature,
 }
 
-#[derive(Deserialize)]
-struct SwiftMessage {
-    #[serde(default)] // TODO: should be `SwiftOrderMessage` not a string
-    order: Option<String>,
+impl SwiftMessage {
+    /// The Swift order's UUID
+    pub fn order_uuid(&self) -> [u8; 8] {
+        self.order.uuid
+    }
+    /// The drift order params of this swift message
+    pub fn order_params(&self) -> OrderParams {
+        self.order.swift_order_params
+    }
+    /// The taker sub-account_id of the order
+    pub fn taker_subaccount_id(&self) -> u16 {
+        self.order.sub_account_id
+    }
+    /// serialize the order message for onchain use e.g. signature verification
+    pub fn encode_for_signing(&self) -> Vec<u8> {
+        hex::encode(&self.order.try_to_vec().unwrap()).into_bytes()
+    }
 }
 
 /// Emits `SwiftOrder` from the Ws server
-pub type SwiftOrderStream = ReceiverStream<(Pubkey, SwiftOrder)>;
+pub type SwiftOrderStream = ReceiverStream<SwiftMessage>;
 
 /// Subscribe to the Swift WebSocket server, authenticate, and listen to new orders
 ///
@@ -134,24 +159,12 @@ pub async fn subscribe_swift_orders(
         while let Some(msg) = incoming.next().await {
             match msg {
                 Ok(Message::Text(ref text)) => match serde_json::from_str::<SwiftMessage>(text) {
-                    Ok(msg) => {
-                        if let Some(ref order_json) = msg.order {
-                            let order_json =
-                                serde_json::from_str::<SwiftOrderMessageJson>(order_json).unwrap();
-                            log::debug!(target: LOG_TARGET, "uuid: {}, latency: {}ms", order_json.uuid, unix_now_ms().saturating_sub(order_json.ts));
-                            let order_message_buf =
-                                hex::decode(order_json.order_message).expect("valid hex");
-                            let swift_order_params: SwiftOrder =
-                                AnchorDeserialize::deserialize(&mut &order_message_buf[8..])
-                                    .expect("valid swift borsh");
+                    Ok(swift_message) => {
+                        log::debug!(target: LOG_TARGET, "uuid: {}, latency: {}ms", swift_message.uuid, unix_now_ms().saturating_sub(swift_message.ts));
 
-                            if let Err(err) = tx.try_send((
-                                order_json.taker_authority.parse().expect("valid pubkey"),
-                                swift_order_params,
-                            )) {
-                                log::error!(target: LOG_TARGET, "order chan failed: {err:?}");
-                                break;
-                            }
+                        if let Err(err) = tx.try_send(swift_message) {
+                            log::error!(target: LOG_TARGET, "order chan failed: {err:?}");
+                            break;
                         }
                     }
                     Err(err) => {
@@ -182,12 +195,40 @@ fn unix_now_ms() -> u64 {
         .as_millis() as u64
 }
 
+fn deser_pubkey<'de, D>(deserializer: D) -> Result<Pubkey, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let s: &str = serde::de::Deserialize::deserialize(deserializer)?;
+    Ok(s.parse().expect("base58 pubkey"))
+}
+
+fn deser_signature<'de, D>(deserializer: D) -> Result<Signature, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let s: &str = serde::de::Deserialize::deserialize(deserializer)?;
+    Ok(s.parse().expect("base64 signature"))
+}
+
+fn deser_order_message<'de, D>(deserializer: D) -> Result<SwiftOrder, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let order_message: &str = serde::de::Deserialize::deserialize(deserializer)?;
+    let order_message_buf = hex::decode(&order_message).expect("valid hex");
+    Ok(AnchorDeserialize::deserialize(&mut &order_message_buf[8..])
+        .expect("SwiftOrderMessageParams deser"))
+}
+
 #[test]
 fn test_swift_order_deser() {
     let msg = r#"{
         "channel":"swift_orders_perp_1",
         "order":"{
-            \"market_index\":1,\"market_type\":\"perp\",\"order_message\":\"b9c165ffdf70594d0001010080841e00000000000000000000000000010000000000000000013201a4e99abc16000000011ab2f982160000000300900f84150000000072753959424c52740000\",
+            \"market_index\":1,
+            \"market_type\":\"perp\",
+            \"order_message\":\"b9c165ffdf70594d0001010080841e00000000000000000000000000010000000000000000013201a4e99abc16000000011ab2f982160000000300900f84150000000072753959424c52740000\",
             \"order_signature\":\"FIgxWlW+C0abvtE8esSko7At1YGM8h66T0u5lJpwXirW63CuvEllVWZ68NNVFsaqcj4jqgQInXUnLPjIf/PQDA==\",
             \"signing_authority\":\"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE\",
             \"taker_authority\":\"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE\",
