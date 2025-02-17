@@ -2,7 +2,8 @@
 
 use std::{borrow::Cow, collections::BTreeSet, sync::Arc, time::Duration};
 
-use anchor_lang::{AccountDeserialize, InstructionData};
+use anchor_lang::{AccountDeserialize, AnchorSerialize, InstructionData};
+use constants::SYSVAR_INSTRUCTIONS_PUBKEY;
 use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
 use log::debug;
@@ -11,6 +12,7 @@ use solana_sdk::{
     account::Account,
     clock::Slot,
     compute_budget::ComputeBudgetInstruction,
+    ed25519_instruction,
     hash::Hash,
     instruction::{AccountMeta, Instruction},
     message::{v0, Message, VersionedMessage},
@@ -208,25 +210,41 @@ impl DriftClient {
         swift_order_subscriber::subscribe_swift_orders(self, markets).await
     }
 
-    /// Returns the MarketIds for all spot markets
+    /// Returns the MarketIds for all active spot markets (ignores delisted and settled markets)
     ///
     /// Useful for iterating over all spot markets
     pub fn get_all_spot_market_ids(&self) -> Vec<MarketId> {
-        (0..self.backend.spot_market_map.len())
-            .map(|x| MarketId::spot(x as u16))
+        self.program_data()
+            .spot_market_configs()
+            .iter()
+            .filter_map(|m| match m.status {
+                MarketStatus::Settlement | MarketStatus::Delisted => {
+                    log::debug!("ignoring settled/delisted spot market: {}", m.market_index);
+                    None
+                }
+                _ => Some(MarketId::spot(m.market_index)),
+            })
             .collect()
     }
 
-    /// Returns the MarketIds for all perp markets
+    /// Returns the MarketIds for all active perp markets (ignores delisted and settled markets)
     ///
     /// Useful for iterating over all perp markets
     pub fn get_all_perp_market_ids(&self) -> Vec<MarketId> {
-        (0..self.backend.perp_market_map.len())
-            .map(|x| MarketId::perp(x as u16))
+        self.program_data()
+            .perp_market_configs()
+            .iter()
+            .filter_map(|m| match m.status {
+                MarketStatus::Settlement | MarketStatus::Delisted => {
+                    log::debug!("ignoring settled/delisted perp market: {}", m.market_index);
+                    None
+                }
+                _ => Some(MarketId::perp(m.market_index)),
+            })
             .collect()
     }
 
-    /// Returns the MarketIds for all markets
+    /// Returns the `MarketId`s for all active markets (ignores delisted and settled markets)
     ///
     /// Useful for iterating over all markets
     pub fn get_all_market_ids(&self) -> Vec<MarketId> {
@@ -1106,6 +1124,11 @@ impl<'a> TransactionBuilder<'a> {
 
         self
     }
+    /// Append an ix to the Tx
+    pub fn add_ix(mut self, ix: Instruction) -> Self {
+        self.ixs.push(ix);
+        self
+    }
 
     /// Deposit collateral into account
     pub fn deposit(
@@ -1541,17 +1564,18 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
-    /// Make against a `swift_taker_order` (Perps only)
+    /// Place and try to fill (make) against a swift order (Perps only)
     pub fn place_and_make_swift(
         mut self,
         swift_taker_order: SwiftOrderParamsMessage,
         taker_account: &User,
-        taker_account_stats: &UserStats,
+        taker_account_referrer: &Pubkey,
     ) -> Self {
         assert!(
             swift_taker_order.swift_order_params.market_type == MarketType::Perp,
             "only swift perps are supported"
         );
+        self = self.place_swift_taker_order(swift_taker_order, taker_account);
 
         let perp_writable = [MarketId::perp(
             swift_taker_order.swift_order_params.market_index,
@@ -1576,24 +1600,85 @@ impl<'a> TransactionBuilder<'a> {
                 .chain(self.force_markets.writeable.iter()),
         );
 
-        if taker_account_stats.referrer != Pubkey::default() {
+        if taker_account_referrer != &Pubkey::default() {
             accounts.push(AccountMeta::new(
-                Wallet::derive_stats_account(&taker_account_stats.referrer),
+                Wallet::derive_stats_account(taker_account_referrer),
                 true,
             ));
-            accounts.push(AccountMeta::new(taker_account_stats.referrer, true));
+            accounts.push(AccountMeta::new(*taker_account_referrer, true));
         }
 
-        let ix = Instruction {
+        self.ixs.push(Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
             data: InstructionData::data(&drift_idl::instructions::PlaceAndMakeSwiftPerpOrder {
                 params: swift_taker_order.swift_order_params,
                 swift_order_uuid: swift_taker_order.uuid,
             }),
+        });
+
+        self
+    }
+
+    /// Place a `swift_taker_order` (Perps only)
+    ///
+    /// ☢️ this Ix will not fill by itself. The caller should add a subsequent Ix
+    /// e.g. with JIT proxy, to atomically place and fill the order
+    pub fn place_swift_taker_order(
+        mut self,
+        swift_taker_order: SwiftOrderParamsMessage,
+        taker_account: &User,
+    ) -> Self {
+        assert!(
+            swift_taker_order.swift_order_params.market_type == MarketType::Perp,
+            "only swift perps are supported"
+        );
+
+        let perp_writable = [MarketId::perp(
+            swift_taker_order.swift_order_params.market_index,
+        )];
+        let mut accounts = build_accounts(
+            self.program_data,
+            types::accounts::PlaceSwiftTakerOrder {
+                state: *state_account(),
+                authority: self.authority,
+                user: Wallet::derive_user_account(
+                    &taker_account.authority,
+                    swift_taker_order.sub_account_id,
+                ),
+                user_stats: Wallet::derive_stats_account(&taker_account.authority),
+                swift_user_orders: Wallet::derive_swift_taker_account(&taker_account.authority),
+                ix_sysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+            },
+            &[self.account_data.as_ref(), taker_account],
+            self.force_markets.readable.iter(),
+            perp_writable
+                .iter()
+                .chain(self.force_markets.writeable.iter()),
+        );
+
+        let place_swift_ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::PlaceSwiftTakerOrder {
+                swift_order_params_message_bytes: hex::encode(
+                    swift_taker_order.swift_order_params.try_to_vec().unwrap(),
+                )
+                .into_bytes(),
+            }),
         };
 
-        self.ixs.push(ix);
+        let order_message =
+            hex::encode(swift_taker_order.swift_order_params.try_to_vec().unwrap()).into_bytes();
+
+        // TODO: need to implement this
+        // we should already have the signature.
+        // pubkey and signature should be checked in case of delegate status
+        let ed25519_verify_ix =
+            ed25519_instruction::new_ed25519_instruction(&Keypair::new(), order_message.as_slice());
+
+        self.ixs
+            .extend_from_slice(&[ed25519_verify_ix, place_swift_ix]);
         self
     }
 

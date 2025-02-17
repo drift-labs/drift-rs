@@ -5,12 +5,14 @@ use base64::{engine::general_purpose::STANDARD as base64, Engine};
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use serde_json::{json, Value};
+use solana_sdk::pubkey::Pubkey;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
+pub use crate::types::SwiftOrderParamsMessage as SwiftOrder;
 use crate::{
     constants::MarketExt,
-    types::{Context, MarketId, SdkError, SdkResult, SwiftOrderParamsMessage},
+    types::{Context, MarketId, SdkError, SdkResult},
     DriftClient,
 };
 
@@ -20,10 +22,11 @@ pub const SWIFT_MAINNET_WS_URL: &str = "wss://swift.drift.trade";
 const LOG_TARGET: &str = "swift";
 
 #[derive(Deserialize)]
-struct SwiftOrderMessage<'a> {
+struct SwiftOrderMessageJson<'a> {
     #[serde(borrow)]
     uuid: &'a str,
     ts: u64,
+    taker_authority: &'a str,
     #[serde(borrow)]
     order_message: &'a str,
 }
@@ -34,8 +37,8 @@ struct SwiftMessage {
     order: Option<String>,
 }
 
-/// Emits `SwiftOrderParamsMessage` from the Ws server
-pub type SwiftOrderStream = ReceiverStream<SwiftOrderParamsMessage>;
+/// Emits `SwiftOrder` from the Ws server
+pub type SwiftOrderStream = ReceiverStream<(Pubkey, SwiftOrder)>;
 
 /// Subscribe to the Swift WebSocket server, authenticate, and listen to new orders
 ///
@@ -134,15 +137,18 @@ pub async fn subscribe_swift_orders(
                     Ok(msg) => {
                         if let Some(ref order_json) = msg.order {
                             let order_json =
-                                serde_json::from_str::<SwiftOrderMessage>(order_json).unwrap();
+                                serde_json::from_str::<SwiftOrderMessageJson>(order_json).unwrap();
                             log::debug!(target: LOG_TARGET, "uuid: {}, latency: {}ms", order_json.uuid, unix_now_ms().saturating_sub(order_json.ts));
                             let order_message_buf =
                                 hex::decode(order_json.order_message).expect("valid hex");
-                            let swift_order_params: SwiftOrderParamsMessage =
+                            let swift_order_params: SwiftOrder =
                                 AnchorDeserialize::deserialize(&mut &order_message_buf[8..])
                                     .expect("valid swift borsh");
 
-                            if let Err(err) = tx.try_send(swift_order_params) {
+                            if let Err(err) = tx.try_send((
+                                order_json.taker_authority.parse().expect("valid pubkey"),
+                                swift_order_params,
+                            )) {
                                 log::error!(target: LOG_TARGET, "order chan failed: {err:?}");
                                 break;
                             }
@@ -190,5 +196,5 @@ fn test_swift_order_deser() {
         }"
     }"#;
     let s: SwiftMessage = serde_json::from_str(&msg).unwrap();
-    serde_json::from_str::<SwiftOrderMessage>(s.order.unwrap().as_str()).unwrap();
+    serde_json::from_str::<SwiftOrder>(s.order.unwrap().as_str()).unwrap();
 }
