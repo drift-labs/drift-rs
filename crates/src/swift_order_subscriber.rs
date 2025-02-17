@@ -58,7 +58,7 @@ impl SwiftMessage {
     }
     /// serialize the order message for onchain use e.g. signature verification
     pub fn encode_for_signing(&self) -> Vec<u8> {
-        hex::encode(&self.order.try_to_vec().unwrap()).into_bytes()
+        hex::encode(self.order.try_to_vec().unwrap()).into_bytes()
     }
 }
 
@@ -216,7 +216,7 @@ where
     D: serde::de::Deserializer<'de>,
 {
     let order_message: &str = serde::de::Deserialize::deserialize(deserializer)?;
-    let order_message_buf = hex::decode(&order_message).expect("valid hex");
+    let order_message_buf = hex::decode(order_message).expect("valid hex");
     Ok(AnchorDeserialize::deserialize(&mut &order_message_buf[8..])
         .expect("SwiftOrderMessageParams deser"))
 }
