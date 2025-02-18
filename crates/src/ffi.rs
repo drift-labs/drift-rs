@@ -295,7 +295,6 @@ pub mod abi_types {
     //! cross-boundary FFI types
     use abi_stable::std_types::RResult;
     use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
-    use type_layout::TypeLayout;
 
     use crate::{drift_idl::types::MarginRequirementType, OracleGuardRails};
 
@@ -355,7 +354,7 @@ pub mod abi_types {
     // TODO: simplified version of MarginCalculation
     // can pipe through fill struct if needed
     #[repr(C, align(16))]
-    #[derive(Copy, Clone, Debug, PartialEq, TypeLayout)]
+    #[derive(Copy, Clone, Debug, PartialEq)]
     pub struct MarginCalculation {
         pub total_collateral: i128,
         pub margin_requirement: u128,
@@ -400,7 +399,6 @@ pub trait IntoFfi {
 mod tests {
     use anchor_lang::Discriminator;
     use solana_sdk::{account::Account, pubkey::Pubkey};
-    use type_layout::TypeLayout;
 
     use super::{
         simulate_place_perp_order, AccountWithKey, AccountsList, MarginCalculation,
@@ -972,11 +970,5 @@ mod tests {
             false,
         );
         assert!(price.is_ok_and(|p| p > 0));
-    }
-
-    #[ignore]
-    #[test]
-    fn layouts() {
-        dbg!(MarginCalculation::type_layout());
     }
 }

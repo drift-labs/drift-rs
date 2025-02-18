@@ -8,6 +8,10 @@ use crate::{
     MarketId, MarketType, OracleSource,
 };
 
+/// https://github.com/solana-labs/solana-web3.js/blob/4e9988cfc561f3ed11f4c5016a29090a61d129a8/src/sysvar.ts#L11
+pub const SYSVAR_INSTRUCTIONS_PUBKEY: Pubkey =
+    solana_sdk::pubkey!("Sysvar1nstructions1111111111111111111111111");
+
 /// Drift program address
 pub const PROGRAM_ID: Pubkey = solana_sdk::pubkey!("dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH");
 /// JIT proxy program address

@@ -3,7 +3,9 @@
 use std::{borrow::Cow, collections::BTreeSet, sync::Arc, time::Duration};
 
 use anchor_lang::{AccountDeserialize, InstructionData};
+use constants::SYSVAR_INSTRUCTIONS_PUBKEY;
 use drift_pubsub_client::PubsubClient;
+use fastlane_order_subscriber::{FastlaneOrderStream, SignedOrderInfo};
 use futures_util::TryFutureExt;
 use log::debug;
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_response::Response};
@@ -59,6 +61,7 @@ pub mod websocket_program_account_subscriber;
 pub mod auction_subscriber;
 pub mod blockhash_subscriber;
 pub mod event_subscriber;
+pub mod fastlane_order_subscriber;
 pub mod priority_fee_subscriber;
 
 pub mod jit_client;
@@ -196,25 +199,51 @@ impl DriftClient {
         self.backend.subscribe_oracles(&markets).await
     }
 
-    /// Returns the MarketIds for all spot markets
+    /// Subscribe to fastlane order feed(s) for given `markets`
+    ///
+    /// Returns a stream of fastlane orders
+    pub async fn subscribe_fastlane_orders(
+        &self,
+        markets: &[MarketId],
+    ) -> SdkResult<FastlaneOrderStream> {
+        fastlane_order_subscriber::subscribe_fastlane_orders(self, markets).await
+    }
+
+    /// Returns the MarketIds for all active spot markets (ignores delisted and settled markets)
     ///
     /// Useful for iterating over all spot markets
     pub fn get_all_spot_market_ids(&self) -> Vec<MarketId> {
-        (0..self.backend.spot_market_map.len())
-            .map(|x| MarketId::spot(x as u16))
+        self.program_data()
+            .spot_market_configs()
+            .iter()
+            .filter_map(|m| match m.status {
+                MarketStatus::Settlement | MarketStatus::Delisted => {
+                    log::debug!("ignoring settled/delisted spot market: {}", m.market_index);
+                    None
+                }
+                _ => Some(MarketId::spot(m.market_index)),
+            })
             .collect()
     }
 
-    /// Returns the MarketIds for all perp markets
+    /// Returns the MarketIds for all active perp markets (ignores delisted and settled markets)
     ///
     /// Useful for iterating over all perp markets
     pub fn get_all_perp_market_ids(&self) -> Vec<MarketId> {
-        (0..self.backend.perp_market_map.len())
-            .map(|x| MarketId::perp(x as u16))
+        self.program_data()
+            .perp_market_configs()
+            .iter()
+            .filter_map(|m| match m.status {
+                MarketStatus::Settlement | MarketStatus::Delisted => {
+                    log::debug!("ignoring settled/delisted perp market: {}", m.market_index);
+                    None
+                }
+                _ => Some(MarketId::perp(m.market_index)),
+            })
             .collect()
     }
 
-    /// Returns the MarketIds for all markets
+    /// Returns the `MarketId`s for all active markets (ignores delisted and settled markets)
     ///
     /// Useful for iterating over all markets
     pub fn get_all_market_ids(&self) -> Vec<MarketId> {
@@ -1093,6 +1122,11 @@ impl<'a> TransactionBuilder<'a> {
 
         self
     }
+    /// Append an ix to the Tx
+    pub fn add_ix(mut self, ix: Instruction) -> Self {
+        self.ixs.push(ix);
+        self
+    }
 
     /// Deposit collateral into account
     pub fn deposit(
@@ -1386,7 +1420,7 @@ impl<'a> TransactionBuilder<'a> {
     /// * `order` - the order to place
     /// * `taker_info` - taker account address and data
     /// * `taker_order_id` - the id of the taker's order to match with
-    /// * `referrer` - pukey of the taker's referrer account, if any
+    /// * `referrer` - pubkey of the taker's referrer account, if any
     /// * `fulfillment_type` - type of fill for spot orders, ignored for perp orders
     pub fn place_and_make(
         mut self,
@@ -1528,6 +1562,132 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
+    /// Place and try to fill (make) against the fastlane order (Perps only)
+    ///
+    /// * `signed_order_info` - the signed fastlane order info
+    /// * `taker_account` - taker account data
+    /// * `taker_account_referrer` - taker account referrer data
+    ///
+    pub fn place_and_make_fastlane_order(
+        mut self,
+        signed_order_info: &SignedOrderInfo,
+        taker_account: &User,
+        taker_account_referrer: &Pubkey,
+    ) -> Self {
+        let order_params = signed_order_info.order_params();
+        assert!(
+            order_params.market_type == MarketType::Perp,
+            "only fastlane perps are supported"
+        );
+        self = self.place_fastlane_order(signed_order_info, taker_account);
+
+        let perp_writable = [MarketId::perp(order_params.market_index)];
+        let mut accounts = build_accounts(
+            self.program_data,
+            types::accounts::PlaceAndMakeSignedMsgPerpOrder {
+                state: *state_account(),
+                authority: self.authority,
+                user: self.sub_account,
+                user_stats: Wallet::derive_stats_account(&self.authority),
+                taker: taker_account.authority,
+                taker_stats: Wallet::derive_stats_account(&taker_account.authority),
+                taker_signed_msg_user_orders: Wallet::derive_fastlane_order_account(
+                    &taker_account.authority,
+                ),
+            },
+            &[self.account_data.as_ref(), taker_account],
+            self.force_markets.readable.iter(),
+            perp_writable
+                .iter()
+                .chain(self.force_markets.writeable.iter()),
+        );
+
+        if taker_account_referrer != &Pubkey::default() {
+            accounts.push(AccountMeta::new(
+                Wallet::derive_stats_account(taker_account_referrer),
+                true,
+            ));
+            accounts.push(AccountMeta::new(*taker_account_referrer, true));
+        }
+
+        self.ixs.push(Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::PlaceAndMakeSignedMsgPerpOrder {
+                params: order_params,
+                signed_msg_order_uuid: signed_order_info.order_uuid(),
+            }),
+        });
+
+        self
+    }
+
+    /// Place a fastlane order (Perps only)
+    ///
+    /// ☢️ this Ix will not fill by itself. The caller should add a subsequent Ix
+    /// e.g. with JIT proxy, to atomically place and fill the order
+    /// or see `place_and_make_fastlane_order`
+    ///
+    /// * `signed_order_info` - the signed fastlane order info
+    /// * `taker_account` - taker account data (authority of the fatlane order)
+    ///
+    pub fn place_fastlane_order(
+        mut self,
+        signed_order_info: &SignedOrderInfo,
+        taker_account: &User,
+    ) -> Self {
+        let order_params = signed_order_info.order_params();
+        assert!(
+            order_params.market_type == MarketType::Perp,
+            "only fastlane perps are supported"
+        );
+
+        let perp_writable = [MarketId::perp(order_params.market_index)];
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::PlaceSignedMsgTakerOrder {
+                state: *state_account(),
+                authority: self.authority,
+                user: Wallet::derive_user_account(
+                    &taker_account.authority,
+                    signed_order_info.taker_subaccount_id(),
+                ),
+                user_stats: Wallet::derive_stats_account(&taker_account.authority),
+                signed_msg_user_orders: Wallet::derive_fastlane_order_account(
+                    &taker_account.authority,
+                ),
+                ix_sysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+            },
+            &[self.account_data.as_ref(), taker_account],
+            self.force_markets.readable.iter(),
+            perp_writable
+                .iter()
+                .chain(self.force_markets.writeable.iter()),
+        );
+
+        let fastlane_message = signed_order_info.encode_for_signing();
+        let place_fastlane_ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::PlaceSignedMsgTakerOrder {
+                signed_msg_order_params_message_bytes: fastlane_message.clone(),
+                is_delegate_signer: signed_order_info.using_delegate_signing(),
+            }),
+        };
+
+        let ed25519_verify_ix = crate::utils::new_ed25519_instruction(
+            &signed_order_info.signer,
+            &signed_order_info.signature,
+            fastlane_message.as_slice(),
+        );
+
+        assert!(ed25519_verify_ix.is_ok(), "fastlane signature verifies");
+
+        self.ixs
+            .extend_from_slice(&[ed25519_verify_ix.unwrap(), place_fastlane_ix]);
+        self
+    }
+
     /// Build the transaction message ready for signing and sending
     pub fn build(self) -> VersionedMessage {
         if self.legacy {
@@ -1557,7 +1717,7 @@ impl<'a> TransactionBuilder<'a> {
 /// Builds a set of required accounts from a user's open positions and additional given accounts
 ///
 /// * `base_accounts` - base anchor accounts
-/// * `user` - Drift user account data
+/// * `users` - Drift user account data
 /// * `markets_readable` - IDs of markets to include as readable
 /// * `markets_writable` - IDs of markets to include as writable (takes priority over readable)
 ///
@@ -1709,6 +1869,15 @@ impl Wallet {
     pub fn derive_stats_account(account: &Pubkey) -> Pubkey {
         let (account_drift_pda, _seed) = Pubkey::find_program_address(
             &[&b"user_stats"[..], account.as_ref()],
+            &constants::PROGRAM_ID,
+        );
+        account_drift_pda
+    }
+
+    /// Calculate the address of `authority`s fastlane (taker) order account
+    pub fn derive_fastlane_order_account(authority: &Pubkey) -> Pubkey {
+        let (account_drift_pda, _seed) = Pubkey::find_program_address(
+            &[&b"SIGNED_MSG"[..], authority.as_ref()],
             &constants::PROGRAM_ID,
         );
         account_drift_pda

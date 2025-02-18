@@ -36,8 +36,37 @@ fn generate_idl_types(
 }
 
 fn should_build_from_source() -> bool {
-    std::env::var("CARGO_DRIFT_FFI_STATIC").is_ok()
-        || std::env::var("CARGO_DRIFT_FFI_PATH").is_err()
+    if std::env::var("CARGO_DRIFT_FFI_STATIC").is_ok() {
+        println!("cargo:warning=CARGO_DRIFT_FFI_STATIC on");
+        return true;
+    }
+
+    match std::env::var("CARGO_DRIFT_FFI_PATH") {
+        Err(_) => {
+            println!("cargo:warning=CARGO_DRIFT_FFI_PATH not set");
+            true
+        }
+        Ok(ref path) => {
+            println!("cargo:warning=CARGO_DRIFT_FFI_PATH set: {path}");
+            false
+            // check version
+            // if let Some(soname) = extract_soname(&format!("{path}/{LIB}")) {
+            //     if soname.contains(LIB_VERSION.as_str()) {
+            //         println!("cargo:warning=compatible {LIB} version detected ✅");
+            //         return false;
+            //     } else {
+            //         println!("cargo:warning=incompatible {LIB} version detected ❌: {soname}");
+            //         println!(
+            //             "cargo:warning=update {LIB} to latest release: {}",
+            //             LIB_VERSION.as_str()
+            //         );
+            //         return true;
+            //     }
+            // }
+            // println!("cargo:warning=no compatible {LIB} detected");
+            // true
+        }
+    }
 }
 
 fn build_ffi_lib(current_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
@@ -171,3 +200,26 @@ fn link_library() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
     Ok(())
 }
+
+// try to pull the SONAME from drift_ffi_sys lib
+// fn extract_soname(path: &str) -> Option<String> {
+//     use std::{fs::File, io::Read};
+//     use goblin::{elf::Elf, mach::MachO};
+//     let mut buffer = Vec::new();
+
+//     // try linux
+//     let _ = File::open(format!("{path}.so")).and_then(|mut f| f.read_to_end(&mut buffer));
+//     if let Ok(elf) = Elf::parse(&buffer) {
+//         return elf.soname.map(|s| s.to_string());
+//     }
+
+//     // try mac OS
+//     buffer.clear();
+//     let _ = File::open(format!("{path}.dylib")).and_then(|mut f| f.read_to_end(&mut buffer));
+//     // Parse the macho file
+//     if let Ok(macho) = MachO::parse(&buffer, 0) {
+//         return macho.name.map(|n| n.to_string());
+//     }
+
+//     None
+// }

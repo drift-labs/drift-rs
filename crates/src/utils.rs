@@ -1,10 +1,15 @@
 //! SDK utility functions
 
 use base64::Engine;
+use bytemuck::{bytes_of, Pod, Zeroable};
 use serde_json::json;
 use solana_sdk::{
-    account::Account, address_lookup_table::AddressLookupTableAccount, bs58, pubkey::Pubkey,
-    signature::Keypair,
+    account::Account,
+    address_lookup_table::AddressLookupTableAccount,
+    bs58,
+    instruction::Instruction,
+    pubkey::Pubkey,
+    signature::{Keypair, Signature},
 };
 
 use crate::types::{SdkError, SdkResult};
@@ -153,6 +158,75 @@ pub mod test_envs {
         let private_key = std::env::var("TEST_PRIVATE_KEY").expect("TEST_PRIVATE_KEY set");
         Keypair::from_base58_string(private_key.as_str())
     }
+}
+
+/// copy of `solana_sdk::ed25519_instruction::Ed25519SignatureOffsets`
+/// it is missing useful constructors and public fields
+#[derive(Default, Debug, Copy, Clone, Zeroable, Pod, Eq, PartialEq)]
+#[repr(C)]
+struct Ed25519SignatureOffsets {
+    pub signature_offset: u16, // offset to ed25519 signature of 64 bytes
+    pub signature_instruction_index: u16, // instruction index to find signature
+    pub public_key_offset: u16, // offset to public key of 32 bytes
+    pub public_key_instruction_index: u16, // instruction index to find public key
+    pub message_data_offset: u16, // offset to start of message data
+    pub message_data_size: u16, // size of message data
+    pub message_instruction_index: u16, // index of instruction data to get message data
+}
+
+/// Bulid a new ed25519 verify ix
+pub fn new_ed25519_instruction(
+    pubkey: &Pubkey,
+    signature: &Signature,
+    message: &[u8],
+) -> Result<Instruction, ()> {
+    if !signature.verify(pubkey.as_ref(), signature.as_ref()) {
+        return Err(());
+    }
+
+    let mut instruction_data = Vec::with_capacity(
+        solana_sdk::ed25519_instruction::DATA_START
+            .saturating_add(solana_sdk::ed25519_instruction::SIGNATURE_SERIALIZED_SIZE)
+            .saturating_add(solana_sdk::ed25519_instruction::PUBKEY_SERIALIZED_SIZE)
+            .saturating_add(message.len()),
+    );
+
+    let num_signatures: u8 = 1;
+    let public_key_offset = solana_sdk::ed25519_instruction::DATA_START;
+    let signature_offset =
+        public_key_offset.saturating_add(solana_sdk::ed25519_instruction::PUBKEY_SERIALIZED_SIZE);
+    let message_data_offset =
+        signature_offset.saturating_add(solana_sdk::ed25519_instruction::SIGNATURE_SERIALIZED_SIZE);
+
+    // add padding byte so that offset structure is aligned
+    instruction_data.extend_from_slice(bytes_of(&[num_signatures, 0]));
+
+    let offsets = Ed25519SignatureOffsets {
+        signature_offset: signature_offset as u16,
+        signature_instruction_index: u16::MAX,
+        public_key_offset: public_key_offset as u16,
+        public_key_instruction_index: u16::MAX,
+        message_data_offset: message_data_offset as u16,
+        message_data_size: message.len() as u16,
+        message_instruction_index: u16::MAX,
+    };
+
+    instruction_data.extend_from_slice(bytes_of(&offsets));
+
+    debug_assert_eq!(instruction_data.len(), public_key_offset);
+    instruction_data.extend_from_slice(pubkey.as_ref());
+
+    debug_assert_eq!(instruction_data.len(), signature_offset);
+    instruction_data.extend_from_slice(signature.as_ref());
+
+    debug_assert_eq!(instruction_data.len(), message_data_offset);
+    instruction_data.extend_from_slice(message);
+
+    Ok(Instruction {
+        program_id: solana_sdk::ed25519_program::id(),
+        accounts: vec![],
+        data: instruction_data,
+    })
 }
 
 #[cfg(test)]
