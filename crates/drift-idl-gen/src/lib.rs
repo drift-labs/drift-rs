@@ -667,7 +667,8 @@ fn format_rust_code(code: &str) -> String {
 }
 
 /// Generate rust types from IDL json
-/// Output is emitted to `<NAME>_idl.rs`
+///
+/// Returns (IDL Version, IDL rs code)
 pub fn generate_rust_types(idl_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
     // Load the JSON file
     let data = fs::read_to_string(idl_path)?;

@@ -195,7 +195,7 @@ async fn client_subscribe_fastlane_orders() {
         if recv_count > 5 {
             break;
         }
-        dbg!(order_info.order_uuid());
+        dbg!(fastlane_order.order_uuid());
         recv_count += 1;
     }
 }

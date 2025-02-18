@@ -23,6 +23,7 @@ const LOG_TARGET: &str = "fastlane";
 
 #[derive(Clone, Deserialize)]
 pub struct OrderNotification<'a> {
+    #[allow(dead_code)]
     channel: &'a str,
     order: SignedOrderInfo,
 }

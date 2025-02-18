@@ -22,7 +22,6 @@ use crate::{
 // which are equivalent to the drift-ffi exported types directly from drift program crate
 // the result is that this code can use its own solana-program/* crates without restriction from the version used by drift program
 extern "C" {
-    pub fn ffi_version() -> String;
     #[allow(improper_ctypes)]
     pub fn math_calculate_auction_price(
         order: &types::Order,
@@ -122,11 +121,6 @@ extern "C" {
         order_params: &types::OrderParams,
         accounts: &mut AccountsList,
     ) -> FfiResult<bool>;
-}
-
-/// Return the drift-ffi-sys version
-pub fn check_ffi_version() -> String {
-    unsafe { ffi_version() }
 }
 
 //

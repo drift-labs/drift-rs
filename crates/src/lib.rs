@@ -650,7 +650,6 @@ pub struct DriftClientBackend {
 impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
     async fn new(context: Context, rpc_client: Arc<RpcClient>) -> SdkResult<Self> {
-        log::info!("drift-ffi-sys: {}", ffi::check_ffi_version());
         let pubsub_client =
             Arc::new(PubsubClient::new(&get_ws_url(rpc_client.url().as_str())?).await?);
 
