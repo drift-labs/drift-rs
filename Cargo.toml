@@ -54,4 +54,4 @@ hex-literal = "0.4"
 [build-dependencies]
 cargo_toml = "0.21.0"
 drift-idl-gen = { version = "0.1.3", path = "crates/drift-idl-gen" }
-goblin = "0.5"
+goblin = "0.8"
