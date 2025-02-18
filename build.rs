@@ -221,7 +221,7 @@ fn extract_soname(path: &str) -> Option<String> {
     if let Ok(elf) = Elf::parse(&buffer) {
         // Look through dynamic entries for SONAME
         for dyn_entry in elf.dynstrtab.to_vec().ok()? {
-            if dyn_entry.contains(".so") {
+            if dyn_entry.contains(LIB) {
                 return Some(dyn_entry.to_string());
             }
         }
