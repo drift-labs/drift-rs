@@ -33,7 +33,7 @@ async fn client_sync_subscribe_all_devnet() {
 
 #[tokio::test]
 async fn client_sync_subscribe_devnet() {
-    env_logger::init();
+    let _ = env_logger::try_init();
     let client = DriftClient::new(
         Context::DevNet,
         RpcClient::new(devnet_endpoint()),
