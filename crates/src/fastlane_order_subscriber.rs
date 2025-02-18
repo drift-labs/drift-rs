@@ -9,27 +9,32 @@ use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-pub use crate::types::SwiftOrderParamsMessage as SwiftOrder;
+pub use crate::types::SignedMsgOrderParamsMessage as SignedOrder;
 use crate::{
     constants::MarketExt,
-    types::{Context, MarketId, MarketType, OrderParams, SdkError, SdkResult},
+    types::{Context, MarketId, OrderParams, SdkError, SdkResult},
     DriftClient,
 };
 
-pub const SWIFT_DEVNET_WS_URL: &str = "wss://master.swift.drift.trade";
-pub const SWIFT_MAINNET_WS_URL: &str = "wss://swift.drift.trade";
+pub const FASTLANE_DEVNET_WS_URL: &str = "wss://master.fastlane.drift.trade";
+pub const FASTLANE_MAINNET_WS_URL: &str = "wss://fastlane.drift.trade";
 
-const LOG_TARGET: &str = "swift";
+const LOG_TARGET: &str = "fastlane";
 
 #[derive(Clone, Deserialize)]
-pub struct SwiftMessageWrapped {
-    order: SwiftMessage,
+pub struct OrderNotification<'a> {
+    channel: &'a str,
+    order: SignedOrderInfo,
 }
 
-/// Swift (taker) order and metadata fresh from the Websocket
+/// Fastlane order and metadata fresh from the Websocket
+///
+/// This is an offchain authorization for a taker order.
+/// It may be placed and filled by any willing counter-party, ensuring the time-price bounds
+/// are respected.
 #[derive(Clone, Deserialize)]
-pub struct SwiftMessage {
-    /// stringified order uuid
+pub struct SignedOrderInfo {
+    /// Fastlane order uuid
     uuid: String,
     /// Order creation timestamp
     pub ts: u64,
@@ -40,22 +45,23 @@ pub struct SwiftMessage {
     /// it is either the taker authority or a sub-account delegate
     #[serde(rename = "signing_authority", deserialize_with = "deser_pubkey")]
     pub signer: Pubkey,
-    /// hexified, borsh encoded swift order message
+    /// hexified, borsh encoded signed order message
     /// this is the signed/verified payload for onchain use
     #[serde(rename = "order_message", deserialize_with = "deser_order_message")]
-    order: SwiftOrder,
+    order: SignedOrder,
+    /// Signature over the serialized `order` payload
     #[serde(rename = "order_signature", deserialize_with = "deser_signature")]
     pub signature: Signature,
 }
 
-impl SwiftMessage {
+impl SignedOrderInfo {
     /// The Swift order's UUID
     pub fn order_uuid(&self) -> [u8; 8] {
         self.order.uuid
     }
-    /// The drift order params of this swift message
+    /// The drift order params of the message
     pub fn order_params(&self) -> OrderParams {
-        self.order.swift_order_params
+        self.order.signed_msg_order_params
     }
     /// The taker sub-account_id of the order
     pub fn taker_subaccount_id(&self) -> u16 {
@@ -65,28 +71,32 @@ impl SwiftMessage {
     pub fn encode_for_signing(&self) -> Vec<u8> {
         hex::encode(self.order.try_to_vec().unwrap()).into_bytes()
     }
+    /// True if the message was signed by an identity other than the authority i.e a delegated
+    pub fn using_delegate_signing(&self) -> bool {
+        self.taker_authority != self.signer
+    }
 }
 
-/// Emits `SwiftOrder` from the Ws server
-pub type SwiftOrderStream = ReceiverStream<SwiftMessage>;
+/// Emits fastlane orders from the Ws server
+pub type FastlaneOrderStream = ReceiverStream<SignedOrderInfo>;
 
-/// Subscribe to the Swift WebSocket server, authenticate, and listen to new orders
+/// Subscribe to the Fastlane WebSocket server, authenticate, and listen to new orders
 ///
 /// `client` Drift client instance
-/// `markets` markets to subscribe for new swift orders
+/// `markets` markets to listen on for new fastlane orders
 ///
-/// Returns a stream of new Swift order messages
-pub async fn subscribe_swift_orders(
+/// Returns a stream of new Fastlane order messages
+pub async fn subscribe_fastlane_orders(
     client: &DriftClient,
     markets: &[MarketId],
-) -> SdkResult<SwiftOrderStream> {
-    let swift_base_url = if client.context == Context::MainNet {
-        SWIFT_MAINNET_WS_URL
+) -> SdkResult<FastlaneOrderStream> {
+    let base_url = if client.context == Context::MainNet {
+        FASTLANE_MAINNET_WS_URL
     } else {
-        SWIFT_DEVNET_WS_URL
+        FASTLANE_DEVNET_WS_URL
     };
     let maker_pubkey = client.wallet().authority().to_string();
-    let (ws_stream, _) = connect_async(format!("{swift_base_url}/ws?pubkey={maker_pubkey}"))
+    let (ws_stream, _) = connect_async(format!("{base_url}/ws?pubkey={maker_pubkey}"))
         .await
         .map_err(|err| {
             log::error!(target: LOG_TARGET, "couldn't connect to server: {err:?}");
@@ -98,7 +108,7 @@ pub async fn subscribe_swift_orders(
     // handle authentication and subscription
     while let Some(msg) = incoming.next().await {
         let msg = msg.map_err(|err| {
-            log::error!(target: LOG_TARGET, "failed reading swift msg: {err:?}");
+            log::error!(target: LOG_TARGET, "failed reading fastlane msg: {err:?}");
             SdkError::WsClient(err)
         })?;
 
@@ -107,7 +117,7 @@ pub async fn subscribe_swift_orders(
             let message: Value = serde_json::from_str(&text).expect("Failed to parse message");
 
             if let Some(err) = message.get("error") {
-                log::error!(target: LOG_TARGET, "swift server error: {err:?}");
+                log::error!(target: LOG_TARGET, "fastlane server error: {err:?}");
                 return Err(SdkError::WebsocketError);
             }
 
@@ -160,17 +170,17 @@ pub async fn subscribe_swift_orders(
 
     let (tx, rx) = tokio::sync::mpsc::channel(256);
 
-    // handle swift orders
+    // handle fastlane orders
     tokio::spawn(async move {
         while let Some(msg) = incoming.next().await {
             match msg {
                 Ok(Message::Text(ref text)) => {
-                    match serde_json::from_str::<SwiftMessageWrapped>(text) {
-                        Ok(wrapper) => {
-                            let swift_message = wrapper.order;
-                            log::debug!(target: LOG_TARGET, "uuid: {}, latency: {}ms", swift_message.uuid, unix_now_ms().saturating_sub(swift_message.ts));
+                    match serde_json::from_str::<OrderNotification>(text) {
+                        Ok(notif) => {
+                            let order_info = notif.order;
+                            log::debug!(target: LOG_TARGET, "uuid: {}, latency: {}ms", order_info.uuid, unix_now_ms().saturating_sub(order_info.ts));
 
-                            if let Err(err) = tx.try_send(swift_message) {
+                            if let Err(err) = tx.try_send(order_info) {
                                 log::error!(target: LOG_TARGET, "order chan failed: {err:?}");
                                 break;
                             }
@@ -187,7 +197,7 @@ pub async fn subscribe_swift_orders(
                 }
                 Ok(_) => continue,
                 Err(err) => {
-                    log::error!(target: LOG_TARGET, "failed reading swift msg: {err:?}");
+                    log::error!(target: LOG_TARGET, "failed reading fastlane msg: {err:?}");
                     break;
                 }
             }
@@ -220,47 +230,53 @@ where
     Ok(Signature::try_from(base64::engine::general_purpose::STANDARD.decode(s).unwrap()).unwrap())
 }
 
-fn deser_order_message<'de, D>(deserializer: D) -> Result<SwiftOrder, D::Error>
+fn deser_order_message<'de, D>(deserializer: D) -> Result<SignedOrder, D::Error>
 where
     D: serde::de::Deserializer<'de>,
 {
     let order_message: &str = serde::de::Deserialize::deserialize(deserializer)?;
     let order_message_buf = hex::decode(order_message).expect("valid hex");
     Ok(AnchorDeserialize::deserialize(&mut &order_message_buf[8..])
-        .expect("SwiftOrderMessageParams deser"))
+        .expect("SignedMsgOrderParams deser"))
 }
 
-#[test]
-fn test_swift_order_deser() {
-    let msg = r#"{
-        "channel":"swift_orders_perp_1",
-        "order":{
-            "market_index":1,
-            "market_type":"perp",
-            "order_message":"b9c165ffdf70594d0001010080841e00000000000000000000000000010000000000000000013201a4e99abc16000000011ab2f982160000000300900f84150000000072753959424c52740000",
-            "order_signature":"FIgxWlW+C0abvtE8esSko7At1YGM8h66T0u5lJpwXirW63CuvEllVWZ68NNVFsaqcj4jqgQInXUnLPjIf/PQDA==",
-            "signing_authority":"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE",
-            "taker_authority":"DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2",
-            "ts":1739518796400,
-            "uuid":"ru9YBLRt"
-        }
-    }"#;
-    let swift_message: SwiftMessageWrapped = serde_json::from_str(&msg).unwrap();
-    let swift_message = swift_message.order;
-    assert_eq!(
-        swift_message.signer,
-        "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"
-            .parse()
-            .unwrap()
-    );
-    assert_eq!(
-        swift_message.taker_authority,
-        "DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"
-            .parse()
-            .unwrap()
-    );
-    assert_eq!(swift_message.ts, 1739518796400);
-    assert_eq!(swift_message.uuid, "ru9YBLRt");
-    assert_eq!(swift_message.order_params().market_index, 1);
-    assert_eq!(swift_message.order_params().market_type, MarketType::Perp);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::types::MarketType;
+
+    #[test]
+    fn test_fastlane_order_deser() {
+        let msg = r#"{
+            "channel":"signed_orders_perp_1",
+            "order":{
+                "market_index":1,
+                "market_type":"perp",
+                "order_message":"b9c165ffdf70594d0001010080841e00000000000000000000000000010000000000000000013201a4e99abc16000000011ab2f982160000000300900f84150000000072753959424c52740000",
+                "order_signature":"FIgxWlW+C0abvtE8esSko7At1YGM8h66T0u5lJpwXirW63CuvEllVWZ68NNVFsaqcj4jqgQInXUnLPjIf/PQDA==",
+                "signing_authority":"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE",
+                "taker_authority":"DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2",
+                "ts":1739518796400,
+                "uuid":"ru9YBLRt"
+            }
+        }"#;
+        let order_notification: OrderNotification = serde_json::from_str(&msg).unwrap();
+        let signed_message = order_notification.order;
+        assert_eq!(
+            signed_message.signer,
+            "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"
+                .parse()
+                .unwrap()
+        );
+        assert_eq!(
+            signed_message.taker_authority,
+            "DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"
+                .parse()
+                .unwrap()
+        );
+        assert_eq!(signed_message.ts, 1739518796400);
+        assert_eq!(signed_message.uuid, "ru9YBLRt");
+        assert_eq!(signed_message.order_params().market_index, 1);
+        assert_eq!(signed_message.order_params().market_type, MarketType::Perp);
+    }
 }

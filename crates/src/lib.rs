@@ -5,6 +5,7 @@ use std::{borrow::Cow, collections::BTreeSet, sync::Arc, time::Duration};
 use anchor_lang::{AccountDeserialize, InstructionData};
 use constants::SYSVAR_INSTRUCTIONS_PUBKEY;
 use drift_pubsub_client::PubsubClient;
+use fastlane_order_subscriber::{FastlaneOrderStream, SignedOrderInfo};
 use futures_util::TryFutureExt;
 use log::debug;
 use solana_client::{nonblocking::rpc_client::RpcClient, rpc_response::Response};
@@ -20,7 +21,6 @@ use solana_sdk::{
     transaction::VersionedTransaction,
 };
 pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
-use swift_order_subscriber::{SwiftMessage, SwiftOrderStream};
 use utils::get_ws_url;
 
 use crate::{
@@ -61,8 +61,8 @@ pub mod websocket_program_account_subscriber;
 pub mod auction_subscriber;
 pub mod blockhash_subscriber;
 pub mod event_subscriber;
+pub mod fastlane_order_subscriber;
 pub mod priority_fee_subscriber;
-pub mod swift_order_subscriber;
 
 pub mod jit_client;
 
@@ -199,14 +199,14 @@ impl DriftClient {
         self.backend.subscribe_oracles(&markets).await
     }
 
-    /// Subscribe to swift order feed for given `markets`
+    /// Subscribe to fastlane order feed(s) for given `markets`
     ///
-    /// Returns a stream of swift orders
-    pub async fn subscribe_swift_orders(
+    /// Returns a stream of fastlane orders
+    pub async fn subscribe_fastlane_orders(
         &self,
         markets: &[MarketId],
-    ) -> SdkResult<SwiftOrderStream> {
-        swift_order_subscriber::subscribe_swift_orders(self, markets).await
+    ) -> SdkResult<FastlaneOrderStream> {
+        fastlane_order_subscriber::subscribe_fastlane_orders(self, markets).await
     }
 
     /// Returns the MarketIds for all active spot markets (ignores delisted and settled markets)
@@ -1563,31 +1563,36 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
-    /// Place and try to fill (make) against a swift order (Perps only)
-    pub fn place_and_make_swift(
+    /// Place and try to fill (make) against the fastlane order (Perps only)
+    ///
+    /// * `signed_order_info` - the signed fastlane order info
+    /// * `taker_account` - taker account data
+    /// * `taker_account_referrer` - taker account referrer data
+    ///
+    pub fn place_and_make_fastlane_order(
         mut self,
-        swift_message: &SwiftMessage,
+        signed_order_info: &SignedOrderInfo,
         taker_account: &User,
         taker_account_referrer: &Pubkey,
     ) -> Self {
-        let order_params = swift_message.order_params();
+        let order_params = signed_order_info.order_params();
         assert!(
             order_params.market_type == MarketType::Perp,
-            "only swift perps are supported"
+            "only fastlane perps are supported"
         );
-        self = self.place_taker_order_swift(swift_message, taker_account);
+        self = self.place_fastlane_order(signed_order_info, taker_account);
 
         let perp_writable = [MarketId::perp(order_params.market_index)];
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::PlaceAndMakeSwiftPerpOrder {
+            types::accounts::PlaceAndMakeSignedMsgPerpOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.authority),
                 taker: taker_account.authority,
                 taker_stats: Wallet::derive_stats_account(&taker_account.authority),
-                taker_swift_user_orders: Wallet::derive_swift_taker_account(
+                taker_signed_msg_user_orders: Wallet::derive_fastlane_order_account(
                     &taker_account.authority,
                 ),
             },
@@ -1609,42 +1614,49 @@ impl<'a> TransactionBuilder<'a> {
         self.ixs.push(Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::PlaceAndMakeSwiftPerpOrder {
+            data: InstructionData::data(&drift_idl::instructions::PlaceAndMakeSignedMsgPerpOrder {
                 params: order_params,
-                swift_order_uuid: swift_message.order_uuid(),
+                signed_msg_order_uuid: signed_order_info.order_uuid(),
             }),
         });
 
         self
     }
 
-    /// Place a `swift_taker_order` (Perps only)
+    /// Place a fastlane order (Perps only)
     ///
     /// ☢️ this Ix will not fill by itself. The caller should add a subsequent Ix
     /// e.g. with JIT proxy, to atomically place and fill the order
-    pub fn place_taker_order_swift(
+    /// or see `place_and_make_fastlane_order`
+    ///
+    /// * `signed_order_info` - the signed fastlane order info
+    /// * `taker_account` - taker account data (authority of the fatlane order)
+    ///
+    pub fn place_fastlane_order(
         mut self,
-        swift_message: &SwiftMessage,
+        signed_order_info: &SignedOrderInfo,
         taker_account: &User,
     ) -> Self {
-        let swift_order_params = swift_message.order_params();
+        let order_params = signed_order_info.order_params();
         assert!(
-            swift_order_params.market_type == MarketType::Perp,
-            "only swift perps are supported"
+            order_params.market_type == MarketType::Perp,
+            "only fastlane perps are supported"
         );
 
-        let perp_writable = [MarketId::perp(swift_order_params.market_index)];
+        let perp_writable = [MarketId::perp(order_params.market_index)];
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::PlaceSwiftTakerOrder {
+            types::accounts::PlaceSignedMsgTakerOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: Wallet::derive_user_account(
                     &taker_account.authority,
-                    swift_message.taker_subaccount_id(),
+                    signed_order_info.taker_subaccount_id(),
                 ),
                 user_stats: Wallet::derive_stats_account(&taker_account.authority),
-                swift_user_orders: Wallet::derive_swift_taker_account(&taker_account.authority),
+                signed_msg_user_orders: Wallet::derive_fastlane_order_account(
+                    &taker_account.authority,
+                ),
                 ix_sysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
             },
             &[self.account_data.as_ref(), taker_account],
@@ -1654,25 +1666,26 @@ impl<'a> TransactionBuilder<'a> {
                 .chain(self.force_markets.writeable.iter()),
         );
 
-        let swift_order_message = swift_message.encode_for_signing();
-        let place_swift_ix = Instruction {
+        let fastlane_message = signed_order_info.encode_for_signing();
+        let place_fastlane_ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::PlaceSwiftTakerOrder {
-                swift_order_params_message_bytes: swift_order_message.clone(),
+            data: InstructionData::data(&drift_idl::instructions::PlaceSignedMsgTakerOrder {
+                signed_msg_order_params_message_bytes: fastlane_message.clone(),
+                is_delegate_signer: signed_order_info.using_delegate_signing(),
             }),
         };
 
         let ed25519_verify_ix = crate::utils::new_ed25519_instruction(
-            &swift_message.signer,
-            &swift_message.signature,
-            swift_order_message.as_slice(),
+            &signed_order_info.signer,
+            &signed_order_info.signature,
+            fastlane_message.as_slice(),
         );
 
-        assert!(ed25519_verify_ix.is_ok(), "swift signature verifies");
+        assert!(ed25519_verify_ix.is_ok(), "fastlane signature verifies");
 
         self.ixs
-            .extend_from_slice(&[ed25519_verify_ix.unwrap(), place_swift_ix]);
+            .extend_from_slice(&[ed25519_verify_ix.unwrap(), place_fastlane_ix]);
         self
     }
 
@@ -1862,10 +1875,10 @@ impl Wallet {
         account_drift_pda
     }
 
-    /// Calculate the address of `authority`s Swift taker order account
-    pub fn derive_swift_taker_account(authority: &Pubkey) -> Pubkey {
+    /// Calculate the address of `authority`s fastlane (taker) order account
+    pub fn derive_fastlane_order_account(authority: &Pubkey) -> Pubkey {
         let (account_drift_pda, _seed) = Pubkey::find_program_address(
-            &[&b"SWIFT"[..], authority.as_ref()],
+            &[&b"SIGNED_MSG"[..], authority.as_ref()],
             &constants::PROGRAM_ID,
         );
         account_drift_pda

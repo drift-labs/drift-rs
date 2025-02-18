@@ -175,7 +175,7 @@ async fn place_and_take() {
 }
 
 #[tokio::test]
-async fn client_subscribe_swift_orders() {
+async fn client_subscribe_fastlane_orders() {
     let _ = env_logger::try_init();
     let client = DriftClient::new(
         Context::DevNet,
@@ -186,16 +186,16 @@ async fn client_subscribe_swift_orders() {
     .expect("connects");
 
     let all_markets = client.get_all_perp_market_ids();
-    let mut swift_order_stream = client
-        .subscribe_swift_orders(all_markets.as_slice())
+    let mut order_stream = client
+        .subscribe_fastlane_orders(all_markets.as_slice())
         .await
         .unwrap();
     let mut recv_count = 0;
-    while let Some(swift_message) = swift_order_stream.next().await {
+    while let Some(fastlane_order) = order_stream.next().await {
         if recv_count > 5 {
             break;
         }
-        dbg!(swift_message.order_uuid());
+        dbg!(order_info.order_uuid());
         recv_count += 1;
     }
 }

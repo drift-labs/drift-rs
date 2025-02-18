@@ -21,7 +21,7 @@ use crate::{
     build_accounts,
     constants::{self, state_account, JIT_PROXY_ID},
     drift_idl,
-    swift_order_subscriber::SwiftMessage,
+    fastlane_order_subscriber::SignedOrderInfo,
     types::PositionDirection,
     DriftClient, MarketId, MarketType, PostOnlyParam, ReferrerInfo, SdkError, SdkResult,
     TransactionBuilder, Wallet,
@@ -227,30 +227,29 @@ impl JitProxyClient {
         Ok(VersionedMessage::V0(message))
     }
 
-    /// Build a swift fill tx against a taker order given by `taker_params`
+    /// Build a fastlane fill tx against a taker order given by `taker_params`
     ///
-    /// `swift_message` swift (order) message to place-and-make against
+    /// `signed_order_info` Fastlane (order) message to place-and-make against
     /// `taker_params` taker account params
     /// `jit_params` config for the JIT proxy
     /// `maker_pubkey` address of the maker's subaccount
     /// `maker_account_data` Maker's (User) account data corresponding with the `maker_pubkey`
     ///
     /// Returns a Solana `VersionedMessage` ready for signing
-    pub async fn build_swift_tx(
+    pub async fn build_fastlane_ix(
         &self,
-        swift_message: SwiftMessage,
+        signed_order_info: SignedOrderInfo,
         taker_params: JitTakerParams,
         jit_ix_params: JitIxParams,
         maker_pubkey: &Pubkey,
         maker_account_data: &User,
     ) -> SdkResult<VersionedMessage> {
         let maker_authority = maker_account_data.authority;
-        // build swift JIT ix
         let program_data = self.drift_client.program_data();
-        let swift_order_params = swift_message.order_params();
+        let signed_order_info_params = signed_order_info.order_params();
         let account_data = maker_account_data;
-        let market_index = swift_order_params.market_index;
-        let market_type = swift_order_params.market_type;
+        let market_index = signed_order_info_params.market_index;
+        let market_type = signed_order_info_params.market_type;
 
         let writable_markets = match market_type {
             MarketType::Perp => {
@@ -263,14 +262,14 @@ impl JitProxyClient {
 
         let mut accounts = build_accounts(
             program_data,
-            self::accounts::JitSwift {
+            self::accounts::JitSignedMsg {
                 state: *state_account(),
                 authority: maker_authority,
                 user: *maker_pubkey,
                 user_stats: Wallet::derive_stats_account(&maker_authority),
                 taker: taker_params.taker_key,
                 taker_stats: taker_params.taker_stats_key,
-                taker_swift_user_orders: Wallet::derive_swift_taker_account(
+                taker_signed_msg_user_orders: Wallet::derive_fastlane_order_account(
                     &taker_params.taker.authority,
                 ),
                 drift_program: constants::PROGRAM_ID,
@@ -298,8 +297,8 @@ impl JitProxyClient {
             accounts.push(AccountMeta::new_readonly(quote_spot_market_vault, false));
         }
 
-        let jit_params = self::instruction::JitSwiftParams {
-            swift_order_uuid: swift_message.order_uuid(),
+        let jit_params = self::instruction::JitSignedMsgParams {
+            signed_order_info_uuid: signed_order_info.order_uuid(),
             max_position: jit_ix_params.max_position,
             min_position: jit_ix_params.min_position,
             bid: jit_ix_params.bid,
@@ -308,10 +307,10 @@ impl JitProxyClient {
             post_only: jit_ix_params.post_only,
         };
 
-        let swift_jit_make_ix = Instruction {
+        let fill_ix = Instruction {
             program_id: JIT_PROXY_ID,
             accounts,
-            data: instruction::JitSwift { params: jit_params }.data(),
+            data: instruction::JitSignedMsg { params: jit_params }.data(),
         };
 
         let message = TransactionBuilder::new(
@@ -320,8 +319,8 @@ impl JitProxyClient {
             Cow::Borrowed(maker_account_data),
             false,
         )
-        .place_taker_order_swift(&swift_message, &taker_params.taker)
-        .add_ix(swift_jit_make_ix)
+        .place_fastlane_order(&signed_order_info, &taker_params.taker)
+        .add_ix(fill_ix)
         .build();
 
         Ok(message)
@@ -358,16 +357,16 @@ impl JitProxyClient {
             .await
     }
 
-    /// Try fill against a swift tx with JIT-proxy protetcion
+    /// Try fill against a fastlane order with JIT-proxy protection
     ///
-    /// `swift_order` the swift taker order info
+    /// `signed_order_info` the fastlane order info
     /// `taker_params` taker account data for the tx
     /// `jit_params` bounds for the JIT fill
     /// `maker_authority` the maker's authority key
     /// `sub_account_id` the maker's sub-account for the fill
-    pub async fn try_swift_fill(
+    pub async fn try_fastlane_fill(
         &self,
-        swift_message: SwiftMessage,
+        signed_order_info: SignedOrderInfo,
         taker_params: JitTakerParams,
         jit_params: JitIxParams,
         maker_authority: &Pubkey,
@@ -377,8 +376,8 @@ impl JitProxyClient {
             Wallet::derive_user_account(maker_authority, sub_account_id.unwrap_or_default());
         let sub_account_data = self.drift_client.get_user_account(&sub_account).await?;
         let tx = self
-            .build_swift_tx(
-                swift_message,
+            .build_fastlane_ix(
+                signed_order_info,
                 taker_params,
                 jit_params,
                 &sub_account,
@@ -416,7 +415,7 @@ impl ComputeBudgetParams {
 
 #[derive(Debug, Clone, Copy, AnchorSerialize, AnchorDeserialize, PartialEq)]
 pub struct JitSwiftParams {
-    pub swift_order_uuid: [u8; 8],
+    pub signed_order_info_uuid: [u8; 8],
     pub max_position: i64,
     pub min_position: i64,
     pub bid: i64,
@@ -428,7 +427,7 @@ pub struct JitSwiftParams {
 impl Default for JitSwiftParams {
     fn default() -> Self {
         Self {
-            swift_order_uuid: [0; 8],
+            signed_order_info_uuid: [0; 8],
             max_position: 0,
             min_position: 0,
             bid: 0,
@@ -460,6 +459,7 @@ impl JitSwiftParams {
 
 pub mod instruction {
     //! copied from jit-proxy program
+    //! simplifies dependency graph, unlikely to change frequently
     use super::*;
     use crate::PostOnlyParam;
     #[derive(BorshDeserialize, BorshSerialize)]
@@ -483,17 +483,17 @@ pub mod instruction {
     }
 
     #[derive(BorshDeserialize, BorshSerialize)]
-    pub struct JitSwift {
-        pub params: JitSwiftParams,
+    pub struct JitSignedMsg {
+        pub params: JitSignedMsgParams,
     }
-    impl anchor_lang::Discriminator for JitSwift {
-        const DISCRIMINATOR: [u8; 8] = [145, 186, 123, 78, 70, 205, 7, 95];
+    impl anchor_lang::Discriminator for JitSignedMsg {
+        const DISCRIMINATOR: [u8; 8] = [134, 130, 156, 72, 37, 120, 153, 21];
     }
-    impl anchor_lang::InstructionData for JitSwift {}
+    impl anchor_lang::InstructionData for JitSignedMsg {}
 
     #[derive(Debug, Clone, Copy, AnchorSerialize, AnchorDeserialize)]
-    pub struct JitSwiftParams {
-        pub swift_order_uuid: [u8; 8],
+    pub struct JitSignedMsgParams {
+        pub signed_order_info_uuid: [u8; 8],
         pub max_position: i64,
         pub min_position: i64,
         pub bid: i64,
@@ -505,6 +505,7 @@ pub mod instruction {
 
 pub mod accounts {
     //! copied from jit-proxy program
+    //! simplifies dependency graph, unlikely to change frequently
     use solana_sdk::instruction::AccountMeta;
 
     use super::*;
@@ -536,18 +537,18 @@ pub mod accounts {
         }
     }
 
-    pub struct JitSwift {
+    pub struct JitSignedMsg {
         pub state: Pubkey,
         pub user: Pubkey,
         pub user_stats: Pubkey,
         pub taker: Pubkey,
         pub taker_stats: Pubkey,
-        pub taker_swift_user_orders: Pubkey,
+        pub taker_signed_msg_user_orders: Pubkey,
         pub authority: Pubkey,
         pub drift_program: Pubkey,
     }
     #[automatically_derived]
-    impl ToAccountMetas for JitSwift {
+    impl ToAccountMetas for JitSignedMsg {
         fn to_account_metas(&self) -> Vec<AccountMeta> {
             vec![
                 AccountMeta::new_readonly(self.state, false),
@@ -555,7 +556,7 @@ pub mod accounts {
                 AccountMeta::new(self.user_stats, false),
                 AccountMeta::new(self.taker, false),
                 AccountMeta::new(self.taker_stats, false),
-                AccountMeta::new(self.taker_swift_user_orders, false),
+                AccountMeta::new(self.taker_signed_msg_user_orders, false),
                 AccountMeta::new_readonly(self.authority, true),
                 AccountMeta::new_readonly(self.drift_program, false),
             ]
