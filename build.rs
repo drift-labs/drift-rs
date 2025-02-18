@@ -5,8 +5,10 @@ use goblin::{elf::Elf, mach::MachO};
 /// latest compatible version of libdrift-ffi-sys
 /// nb: semver doesn't apply to drift-program changes and may break
 const LIB_VERSION: LazyCell<String> = LazyCell::new(|| {
-    let drift_ffi_sys_toml = cargo_toml::Manifest::from_path("crates/drift-ffi-sys/Cargo.toml")
-        .expect("drift-ffi-sys crate found");
+    let current_dir = std::env::current_dir().unwrap().canonicalize().unwrap();
+    let drift_ffi_sys_toml =
+        cargo_toml::Manifest::from_path(current_dir.join("crates/drift-ffi-sys/Cargo.toml"))
+            .expect("drift-ffi-sys crate found");
     drift_ffi_sys_toml.package().version().to_string()
 });
 
