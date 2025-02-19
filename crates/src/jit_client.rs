@@ -57,6 +57,7 @@ impl JitTakerParams {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
 /// Parameters for building a jit maker order
 pub struct JitIxParams {
     pub max_position: i64,
@@ -124,7 +125,7 @@ impl JitProxyClient {
     pub async fn build_jit_tx(
         &self,
         taker_order_id: u32,
-        taker_params: JitTakerParams,
+        taker_params: &JitTakerParams,
         jit_ix_params: JitIxParams,
         maker_params: (&Pubkey, &User),
     ) -> SdkResult<VersionedMessage> {
@@ -238,9 +239,9 @@ impl JitProxyClient {
     /// Returns a Solana `VersionedMessage` ready for signing
     pub async fn build_fastlane_ix(
         &self,
-        signed_order_info: SignedOrderInfo,
-        taker_params: JitTakerParams,
-        jit_ix_params: JitIxParams,
+        signed_order_info: &SignedOrderInfo,
+        taker_params: &JitTakerParams,
+        jit_ix_params: &JitIxParams,
         maker_pubkey: &Pubkey,
         maker_account_data: &User,
     ) -> SdkResult<VersionedMessage> {
@@ -336,7 +337,7 @@ impl JitProxyClient {
     pub async fn jit(
         &self,
         taker_order_id: u32,
-        taker_params: JitTakerParams,
+        taker_params: &JitTakerParams,
         jit_params: JitIxParams,
         maker_authority: &Pubkey,
         sub_account_id: Option<u16>,
@@ -366,9 +367,9 @@ impl JitProxyClient {
     /// `sub_account_id` the maker's sub-account for the fill
     pub async fn try_fastlane_fill(
         &self,
-        signed_order_info: SignedOrderInfo,
-        taker_params: JitTakerParams,
-        jit_params: JitIxParams,
+        signed_order_info: &SignedOrderInfo,
+        taker_params: &JitTakerParams,
+        jit_params: &JitIxParams,
         maker_authority: &Pubkey,
         sub_account_id: Option<u16>,
     ) -> SdkResult<Signature> {

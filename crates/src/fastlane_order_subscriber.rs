@@ -56,7 +56,11 @@ pub struct SignedOrderInfo {
 }
 
 impl SignedOrderInfo {
-    /// The Swift order's UUID
+    /// The order's UUID (stringified)
+    pub fn order_uuid_str(&self) -> &str {
+        self.uuid.as_ref()
+    }
+    /// The order's UUID (raw)
     pub fn order_uuid(&self) -> [u8; 8] {
         self.order.uuid
     }
