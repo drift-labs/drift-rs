@@ -500,7 +500,7 @@ impl PubsubClient {
                                         };
 
                                         if let Err(err) = response_sender.send(json_result_value) {
-                                            log::warn!("Ws request failed: {err:?}");
+                                            log::warn!(target: "ws", "Ws request failed: {err:?}");
                                             break 'manager;
                                         }
                                     }
@@ -534,7 +534,7 @@ impl PubsubClient {
                                         if response_sender.send(Ok((notifications_receiver, unsubscribe))).is_err() {
                                             break 'manager;
                                         }
-                                        info!(target: "ws", "subscription added: {sid:?}");
+                                        log::debug!(target: "ws", "subscription added: {sid:?}");
                                         request_id_to_sid.insert(id, sid);
                                         subscriptions.insert(sid, SubscriptionInfo {
                                             sender: notifications_sender,
