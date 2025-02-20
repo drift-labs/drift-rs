@@ -175,7 +175,6 @@ async fn place_and_take() {
 }
 
 #[tokio::test]
-#[ignore]
 async fn client_subscribe_fastlane_orders() {
     let _ = env_logger::try_init();
     let client = DriftClient::new(
