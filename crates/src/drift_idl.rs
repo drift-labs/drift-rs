@@ -133,6 +133,21 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for TransferDeposit {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct TransferPools {
+        pub deposit_from_market_index: u16,
+        pub deposit_to_market_index: u16,
+        pub borrow_from_market_index: u16,
+        pub borrow_to_market_index: u16,
+        pub deposit_amount: Option<u64>,
+        pub borrow_amount: Option<u64>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for TransferPools {
+        const DISCRIMINATOR: [u8; 8] = [197, 103, 154, 25, 107, 90, 60, 94];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for TransferPools {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct PlacePerpOrder {
         pub params: OrderParams,
     }
@@ -1447,6 +1462,7 @@ pub mod instructions {
     pub struct UpdateSpotMarketOracle {
         pub oracle: Pubkey,
         pub oracle_source: OracleSource,
+        pub skip_invariant_check: bool,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketOracle {
@@ -1701,6 +1717,7 @@ pub mod instructions {
     pub struct UpdatePerpMarketOracle {
         pub oracle: Pubkey,
         pub oracle_source: OracleSource,
+        pub skip_invariant_check: bool,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketOracle {
@@ -6007,6 +6024,118 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for TransferDeposit {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct TransferPools {
+        pub from_user: Pubkey,
+        pub to_user: Pubkey,
+        pub user_stats: Pubkey,
+        pub authority: Pubkey,
+        pub state: Pubkey,
+        pub deposit_from_spot_market_vault: Pubkey,
+        pub deposit_to_spot_market_vault: Pubkey,
+        pub borrow_from_spot_market_vault: Pubkey,
+        pub borrow_to_spot_market_vault: Pubkey,
+        pub drift_signer: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for TransferPools {
+        const DISCRIMINATOR: [u8; 8] = [95, 222, 82, 35, 146, 141, 77, 239];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for TransferPools {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for TransferPools {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for TransferPools {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for TransferPools {}
+    #[automatically_derived]
+    impl ToAccountMetas for TransferPools {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.from_user,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.to_user,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.deposit_from_spot_market_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.deposit_to_spot_market_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.borrow_from_spot_market_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.borrow_to_spot_market_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.drift_signer,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for TransferPools {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for TransferPools {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -15952,6 +16081,7 @@ pub mod accounts {
         pub state: Pubkey,
         pub spot_market: Pubkey,
         pub oracle: Pubkey,
+        pub old_oracle: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketOracle {
@@ -15986,6 +16116,11 @@ pub mod accounts {
                 },
                 AccountMeta {
                     pubkey: self.oracle,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.old_oracle,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -17647,10 +17782,11 @@ pub mod accounts {
     #[repr(C)]
     #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketOracle {
+        pub admin: Pubkey,
         pub state: Pubkey,
         pub perp_market: Pubkey,
         pub oracle: Pubkey,
-        pub admin: Pubkey,
+        pub old_oracle: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketOracle {
@@ -17669,6 +17805,11 @@ pub mod accounts {
         fn to_account_metas(&self) -> Vec<AccountMeta> {
             vec![
                 AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
                     pubkey: self.state,
                     is_signer: false,
                     is_writable: false,
@@ -17684,8 +17825,8 @@ pub mod accounts {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.admin,
-                    is_signer: true,
+                    pubkey: self.old_oracle,
+                    is_signer: false,
                     is_writable: false,
                 },
             ]
