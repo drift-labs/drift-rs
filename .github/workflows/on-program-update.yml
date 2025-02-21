@@ -1,0 +1,60 @@
+name: Bump program IDL
+on:
+  repository_dispatch:
+    types: ['sdk-update']
+
+jobs:
+  update-sdk:
+    runs-on: ubicloud
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Check update version
+      run: |
+        VERSION="${{ github.event.client_payload.version }}"
+        echo "IDL_VERSION=$VERSION" >> $GITHUB_ENV
+        
+        # Check if version contains beta, alpha, or rc tags
+        if echo "$VERSION" | grep -qE "beta|alpha|rc"; then
+          echo "SKIP_PR=true" >> $GITHUB_ENV
+          echo "Skipping PR creation for pre-release version: $VERSION"
+        else
+          echo "SKIP_PR=false" >> $GITHUB_ENV
+        fi
+
+    - name: Update IDL
+      if: env.SKIP_PR == 'false'
+      run: |
+        curl -H 'Accept: application/vnd.github.v3.raw' \
+          'https://api.github.com/repos/drift-labs/protocol-v2/contents/sdk/src/idl/drift.json?ref=tags/v$IDL_VERSION' > res/drift.json
+
+    - name: Cargo check
+      if: env.SKIP_PR == 'false'
+      run: |
+        cargo check
+
+    - name: Create PR
+      if: env.SKIP_PR == 'false'
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Configure git
+        git config user.name "GitHub Actions"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        
+        # Create branch and commit changes
+        git checkout -b bump/idl-v$IDL_VERSION
+        git add -A
+        git commit -m "chore: bump IDL to v$IDL_VERSION"
+        git push origin bump/idl-v$IDL_VERSION
+
+        gh pr create \
+          --title "Bump IDL to v$IDL_VERSION" \
+          --body "Automatic IDL update for program v$IDL_VERSION" \
+          --label "idl" \
+          --base main \
+          --head bump/idl-v$IDL_VERSION
