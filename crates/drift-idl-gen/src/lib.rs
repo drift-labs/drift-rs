@@ -163,6 +163,7 @@ fn generate_idl_types(idl: &Idl) -> String {
     let mut accounts_tokens = quote! {};
     let mut errors_tokens = quote! {};
     let mut events_tokens = quote! {};
+    let idl_version = syn::LitStr::new(&idl.version, proc_macro2::Span::call_site());
 
     // Generate enums and structs from the types section
     for type_def in &idl.types {
@@ -559,6 +560,8 @@ fn generate_idl_types(idl: &Idl) -> String {
         // use solana-sdk Pubkey, the vendored anchor-lang Pubkey maybe behind
         use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
         use serde::{Serialize, Deserialize};
+
+        pub const IDL_VERSION: &str = #idl_version;
 
         use self::traits::ToAccountMetas;
         pub mod traits {

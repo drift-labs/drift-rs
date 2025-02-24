@@ -632,6 +632,25 @@ impl DriftClient {
         self.backend.account_map.unsubscribe_account(account);
         Ok(())
     }
+
+    /// Check IDL and libdrift_ffi_sys version
+    ///
+    /// panics if there's a mismatch
+    pub fn check_libs() -> SdkResult<()> {
+        let libdrift_version = ffi::check_ffi_version();
+        let idl_version = drift_idl::IDL_VERSION;
+
+        if libdrift_version != idl_version {
+            log::warn!(
+                "libdrift_ffi_sys: {} does not match IDL: {}",
+                libdrift_version,
+                drift_idl::IDL_VERSION
+            );
+            return Err(SdkError::LibDriftVersion);
+        }
+
+        Ok(())
+    }
 }
 
 /// Provides the heavy-lifting and network facing features of the SDK
