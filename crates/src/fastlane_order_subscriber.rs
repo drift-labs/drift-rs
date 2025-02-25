@@ -1,6 +1,9 @@
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    cell::LazyCell,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use anchor_lang::{AnchorDeserialize, AnchorSerialize};
+use anchor_lang::{AnchorDeserialize, AnchorSerialize, Space};
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -16,6 +19,13 @@ use crate::{
     DriftClient,
 };
 
+/// Fastlane message discriminator (Anchor)
+const FASTLANE_MSG_PREFIX: LazyCell<[u8; 8]> = LazyCell::new(|| {
+    solana_sdk::hash::hash(b"global:SignedMsgOrderParamsMessage").to_bytes()[..8]
+        .try_into()
+        .unwrap()
+});
+
 pub const FASTLANE_DEVNET_WS_URL: &str = "wss://master.fastlane.drift.trade";
 pub const FASTLANE_MAINNET_WS_URL: &str = "wss://fastlane.drift.trade";
 
@@ -30,10 +40,10 @@ pub struct OrderNotification<'a> {
 
 /// Fastlane order and metadata fresh from the Websocket
 ///
-/// This is an offchain authorization for a taker order.
+/// This is an off-chain authorization for a taker order.
 /// It may be placed and filled by any willing counter-party, ensuring the time-price bounds
 /// are respected.
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct SignedOrderInfo {
     /// Fastlane order uuid
     uuid: String,
@@ -46,7 +56,7 @@ pub struct SignedOrderInfo {
     /// it is either the taker authority or a sub-account delegate
     #[serde(rename = "signing_authority", deserialize_with = "deser_pubkey")]
     pub signer: Pubkey,
-    /// hexified, borsh encoded signed order message
+    /// hex-ified, borsh encoded signed order message
     /// this is the signed/verified payload for onchain use
     #[serde(rename = "order_message", deserialize_with = "deser_order_message")]
     order: SignedOrder,
@@ -74,7 +84,24 @@ impl SignedOrderInfo {
     }
     /// serialize the order message for onchain use e.g. signature verification
     pub fn encode_for_signing(&self) -> Vec<u8> {
-        hex::encode(self.order.try_to_vec().unwrap()).into_bytes()
+        let mut buf = Vec::with_capacity(SignedOrder::INIT_SPACE + 8);
+        buf.extend_from_slice(FASTLANE_MSG_PREFIX.as_slice());
+        let _ = self
+            .order
+            .serialize(&mut buf)
+            .expect("fastlane msg serialized");
+        hex::encode(buf).into_bytes()
+    }
+    /// convert fastlane order into anchor ix data
+    pub fn to_ix_data(&self) -> Vec<u8> {
+        let signed_msg = self.encode_for_signing();
+        [
+            self.signature.as_ref(),
+            self.signer.as_ref(),
+            &(signed_msg.len() as u16).to_le_bytes(),
+            signed_msg.as_ref(),
+        ]
+        .concat()
     }
     /// True if the message was signed by an identity other than the authority i.e a delegated
     pub fn using_delegate_signing(&self) -> bool {
@@ -283,5 +310,16 @@ mod tests {
         assert_eq!(signed_message.uuid, "ru9YBLRt");
         assert_eq!(signed_message.order_params().market_index, 1);
         assert_eq!(signed_message.order_params().market_type, MarketType::Perp);
+    }
+
+    #[test]
+    fn test_fastlane_order_encode_for_signing() {
+        let msg = "{\"channel\":\"fastlane_orders_perp_2\",\"order\":{\"market_index\":2,\"market_type\":\"perp\",\"order_message\":\"c8d5a65e2234f55d0001010080841e0000000000000000000000000002000000000000000001320124c6aa950000000001786b2f94000000000000bb64a9150000000074735730364f6d380000\",\"order_signature\":\"SaOaLJ1i0MqZ2cXdp00jGe2EJFa32eOfiQynFU7mclhT86yhIa4/tWXq7r6l7QPN0Jl6frfsZl0nNOvKZxZpAA==\",\"signing_authority\":\"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE\",\"taker_authority\":\"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE\",\"ts\":1740456840770,\"uuid\":\"tsW06Om8\"}}";
+        let order_notification: OrderNotification = serde_json::from_str(&msg).unwrap();
+        let signed_message = order_notification.order;
+        assert_eq!(
+            signed_message.encode_for_signing().as_slice(),
+            b"c8d5a65e2234f55d0001010080841e0000000000000000000000000002000000000000000001320124c6aa950000000001786b2f94000000000000bb64a9150000000074735730364f6d380000"
+        );
     }
 }
