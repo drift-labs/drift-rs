@@ -38,6 +38,12 @@ pub struct OrderNotification<'a> {
     order: SignedOrderInfo,
 }
 
+#[derive(Deserialize)]
+pub struct Heartbeat {
+    #[serde(deserialize_with = "deser_int_str", rename = "message")]
+    ts: u64,
+}
+
 /// Fastlane order and metadata fresh from the Websocket
 ///
 /// This is an off-chain authorization for a taker order.
@@ -47,7 +53,7 @@ pub struct OrderNotification<'a> {
 pub struct SignedOrderInfo {
     /// Fastlane order uuid
     uuid: String,
-    /// Order creation timestamp
+    /// Order creation timestamp (unix ms)
     pub ts: u64,
     /// The taker authority pubkey
     #[serde(deserialize_with = "deser_pubkey")]
@@ -208,16 +214,25 @@ pub async fn subscribe_fastlane_orders(
             match msg {
                 Ok(Message::Text(ref text)) => {
                     match serde_json::from_str::<OrderNotification>(text) {
-                        Ok(notif) => {
-                            let order_info = notif.order;
-                            log::debug!(target: LOG_TARGET, "uuid: {}, latency: {}ms", order_info.uuid, unix_now_ms().saturating_sub(order_info.ts));
+                        Ok(OrderNotification { channel: _, order }) => {
+                            log::debug!(target: LOG_TARGET, "uuid: {}, latency: {}ms", order.uuid, unix_now_ms().saturating_sub(order.ts));
 
-                            if let Err(err) = tx.try_send(order_info) {
+                            if let Err(err) = tx.try_send(order) {
                                 log::error!(target: LOG_TARGET, "order chan failed: {err:?}");
                                 break;
                             }
                         }
                         Err(err) => {
+                            if text.contains("heartbeat") {
+                                if let Ok(heartbeat) = serde_json::from_str::<Heartbeat>(text) {
+                                    log::debug!(
+                                        target: LOG_TARGET,
+                                        "heartbeat latency: {}",
+                                        unix_now_ms().saturating_sub(heartbeat.ts)
+                                    );
+                                    continue;
+                                }
+                            }
                             log::error!(target: LOG_TARGET, "{text}. invalid json: {err:?}");
                             break;
                         }
@@ -270,6 +285,14 @@ where
     let order_message_buf = hex::decode(order_message).expect("valid hex");
     Ok(AnchorDeserialize::deserialize(&mut &order_message_buf[8..])
         .expect("SignedMsgOrderParams deser"))
+}
+
+fn deser_int_str<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let s: &str = serde::de::Deserialize::deserialize(deserializer)?;
+    Ok(s.parse().unwrap())
 }
 
 #[cfg(test)]

@@ -12,6 +12,7 @@ use solana_sdk::signature::Keypair;
 
 #[tokio::main]
 async fn main() {
+    let _ = env_logger::init();
     let wallet: Wallet =
         Keypair::from_base58_string(&std::env::var("PRIVATE_KEY").expect("base58 PRIVATE_KEY set"))
             .into();
@@ -26,6 +27,10 @@ async fn main() {
     )
     .await
     .expect("initialized client");
+    let _ = drift
+        .subscribe_blockhashes()
+        .await
+        .expect("subscribed blockhashes");
 
     // choose some markets by symbol
     let market_ids: Vec<MarketId> = ["sui-perp", "eth-perp", "xrp-perp"]
@@ -41,6 +46,11 @@ async fn main() {
     // watch orders
     loop {
         tokio::select! {
+            biased;
+            _ = tokio::signal::ctrl_c() => {
+                println!("fastlane maker shutting down...");
+                break;
+            }
             fastlane_order = fastlane_order_stream.next() => {
                 match fastlane_order {
                     Some(order) => {
@@ -51,10 +61,6 @@ async fn main() {
                         break;
                     }
                 }
-            }
-            _ = tokio::signal::ctrl_c() => {
-                println!("fastlane maker shutting down");
-                break;
             }
         }
     }
@@ -97,7 +103,7 @@ async fn try_fill(drift: DriftClient, filler_subaccount: Pubkey, fastlane_order:
                     .auction_start_price
                     .expect("start price set")
                     .unsigned_abs(),
-                // try fill the whole order
+                // try fill the whole order amount
                 base_asset_amount: taker_order.base_asset_amount,
                 post_only: PostOnlyParam::MustPostOnly,
                 immediate_or_cancel: true,
