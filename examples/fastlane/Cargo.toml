@@ -1,0 +1,10 @@
+[package]
+name = "fastlane-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+drift-rs = { path = "../../../drift-rs" }
+futures-util = "0.3.31"
+solana-sdk = "2"
+tokio = "*"
