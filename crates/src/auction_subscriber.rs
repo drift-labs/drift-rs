@@ -20,6 +20,8 @@ pub struct AuctionSubscriberConfig {
 }
 
 /// Subscribes to all user auction events across all markets
+///
+/// DEV: take care it is not dropped or the Auction stream will unsubscribe
 pub struct AuctionSubscriber {
     subscriber: WebsocketProgramAccountSubscriber,
     unsub: Mutex<Option<UnsubHandle>>,
@@ -43,7 +45,7 @@ impl AuctionSubscriber {
     }
 
     /// Start the auction subscription task
-    pub fn subscribe<F>(self, handler_fn: F)
+    pub fn subscribe<F>(&self, handler_fn: F)
     where
         F: 'static + Send + Fn(&ProgramAccountUpdate<User>),
     {

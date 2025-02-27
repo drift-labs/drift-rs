@@ -8,7 +8,7 @@ use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 pub use self::abi_types::*;
 use crate::{
     drift_idl::{
-        self, accounts,
+        accounts,
         errors::ErrorCode,
         types::{self, ContractType, MarginRequirementType, OracleSource},
     },
