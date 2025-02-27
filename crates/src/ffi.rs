@@ -8,7 +8,7 @@ use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 pub use self::abi_types::*;
 use crate::{
     drift_idl::{
-        accounts,
+        self, accounts,
         errors::ErrorCode,
         types::{self, ContractType, MarginRequirementType, OracleSource},
     },
@@ -22,6 +22,8 @@ use crate::{
 // which are equivalent to the drift-ffi exported types directly from drift program crate
 // the result is that this code can use its own solana-program/* crates without restriction from the version used by drift program
 extern "C" {
+    #[allow(improper_ctypes)]
+    pub fn ffi_version() -> String;
     #[allow(improper_ctypes)]
     pub fn math_calculate_auction_price(
         order: &types::Order,
@@ -126,6 +128,12 @@ extern "C" {
 //
 // Shims for SDK
 //
+
+/// Returns the linked libdrift_ffi version
+pub fn check_ffi_version() -> String {
+    unsafe { ffi_version() }
+}
+
 pub fn get_oracle_price(
     orace_source: OracleSource,
     oracle_account: &mut (Pubkey, Account),
@@ -388,22 +396,12 @@ pub mod abi_types {
     pub type FfiResult<T> = RResult<T, u32>;
 }
 
-/// Defines an upgrade from plain IDL generated type into an FFI version with drift program functionality available
-pub trait IntoFfi {
-    type Output;
-    /// Convert self into an FFI type with drift-program functionality
-    fn ffi(&self) -> Self::Output;
-}
-
 #[cfg(test)]
 mod tests {
     use anchor_lang::Discriminator;
     use solana_sdk::{account::Account, pubkey::Pubkey};
 
-    use super::{
-        simulate_place_perp_order, AccountWithKey, AccountsList, MarginCalculation,
-        MarginContextMode,
-    };
+    use super::{simulate_place_perp_order, AccountWithKey, AccountsList, MarginContextMode};
     use crate::{
         accounts::State,
         constants::{self, ids::pyth_program},
@@ -417,7 +415,8 @@ mod tests {
         },
         ffi::{
             calculate_auction_price,
-            calculate_margin_requirement_and_total_collateral_and_liability_info, get_oracle_price,
+            calculate_margin_requirement_and_total_collateral_and_liability_info,
+            check_ffi_version, get_oracle_price,
         },
         math::constants::{
             BASE_PRECISION, BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, MARGIN_PRECISION,
@@ -471,6 +470,14 @@ mod tests {
             },
             ..SpotMarket::default()
         }
+    }
+
+    #[test]
+    fn ffi_check_version() {
+        let drift_ffi_sys = include_str!("../drift-ffi-sys/Cargo.toml");
+        let cargo_toml: toml::Value = drift_ffi_sys.parse().unwrap();
+        let expected_version = cargo_toml["package"]["version"].as_str();
+        assert_eq!(&check_ffi_version(), expected_version.unwrap());
     }
 
     #[test]

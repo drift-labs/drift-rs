@@ -325,6 +325,8 @@ pub enum SdkError {
     InvalidUrl,
     #[error("{0}")]
     WsClient(#[from] tungstenite::Error),
+    #[error("libdrift_ffi_sys out-of-date")]
+    LibDriftVersion,
 }
 
 impl SdkError {

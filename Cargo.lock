@@ -1523,6 +1523,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-tungstenite",
+ "toml",
 ]
 
 [[package]]

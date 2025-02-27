@@ -1,0 +1,80 @@
+name: Bump program IDL
+on:
+  repository_dispatch:
+    types: ['sdk-update']
+
+jobs:
+  check-version:
+    runs-on: ubicloud
+    outputs:
+      idl_version: ${{ steps.version-check.outputs.idl_version }}
+      proceed: ${{ steps.version-check.outputs.proceed }}
+    steps:
+      - name: Check update version
+        id: version-check
+        run: |
+          VERSION="${{ github.event.client_payload.version }}"
+          echo "idl_version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Check if version contains beta, alpha, or rc tags
+          if echo "$VERSION" | grep -qE "beta|alpha|rc"; then
+            echo "proceed=false" >> $GITHUB_OUTPUT
+            echo "Skipping PR creation for pre-release version: $VERSION"
+          else
+            echo "proceed=true" >> $GITHUB_OUTPUT
+          fi
+
+  update-idl:
+    needs: check-version
+    if: needs.check-version.outputs.proceed == 'true'
+    runs-on: ubicloud
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Update IDL
+        run: |
+          curl -H 'Accept: application/vnd.github.v3.raw' \
+            'https://api.github.com/repos/drift-labs/protocol-v2/contents/sdk/src/idl/drift.json?ref=tags/v${{ needs.check-version.outputs.idl_version }}' > res/drift.json
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+
+      - name: Generate Rust types
+        run: |
+          cargo check
+
+      - name: Git config
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Commit changes
+        run: |
+          # Create branch and commit changes (don't fail if it exists)
+          git checkout -b bump/idl-v${{ needs.check-version.outputs.idl_version }} || true
+          git add -A
+          git commit -m "chore: bump IDL to v${{ needs.check-version.outputs.idl_version }}"
+          git push origin bump/idl-v${{ needs.check-version.outputs.idl_version }}
+
+      - name: Create PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_EXISTS=$(gh pr list --head "bump/idl-v${{ needs.check-version.outputs.idl_version }}" --json number | jq 'length')
+          if [ "$PR_EXISTS" -gt 0 ]; then
+            echo "PR for version ${{ needs.check-version.outputs.idl_version }} already exists, skipping PR creation"
+          else
+            gh pr create \
+            --title "Bump IDL to v${{ needs.check-version.outputs.idl_version }}" \
+            --body "Automatic IDL update for program v${{ needs.check-version.outputs.idl_version }}" \
+            --label "idl" \
+            --base main \
+            --head bump/idl-v${{ needs.check-version.outputs.idl_version }}
+          fi
