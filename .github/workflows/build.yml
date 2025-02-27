@@ -46,9 +46,13 @@ jobs:
         run: |
           rustup show active-toolchain
           rustup component add clippy rustfmt
-      - name: install libdrift_ffi_sys
+      - name: install latest libdrift_ffi_sys
         run: |
-          curl -L https://github.com/drift-labs/drift-ffi-sys/releases/download/v2.110.0/libdrift_ffi_sys.so > libdrift_ffi_sys.so
+          # NB: this will break historic CI jobs (if breaking program changes happen)
+          # better to ensure latest version works
+          SO_URL=$(curl -s https://api.github.com/repos/drift-labs/drift-ffi-sys/releases/latest | jq -r '.assets[] | select(.name=="libdrift_ffi_sys.so") | .browser_download_url')
+          echo "downloading libdrift: $SO_URL"
+          curl -L -o libdrift_ffi_sys.so "$SO_URL"
           sudo cp libdrift_ffi_sys.so $CARGO_DRIFT_FFI_PATH
       - name: Format
         run: cargo fmt --all -- --check
