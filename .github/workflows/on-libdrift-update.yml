@@ -14,7 +14,7 @@ on:
 jobs:
   update-submodule:
     runs-on: ubicloud
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'push' ||  (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,8 +29,10 @@ jobs:
       
       - name: Update submodule
         run: |
-          cd crates/drift-ffi-sys && git pull
-          cd ../.. && git pull
+          cd crates/drift-ffi-sys
+          git checkout master
+          git pull origin master
+          cd ../..
           git add -u
 
       - name: Commit and push changes
