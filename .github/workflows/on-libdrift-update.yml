@@ -21,6 +21,7 @@ jobs:
         with:
           submodules: true
           token: ${{ secrets.GITHUB_TOKEN }}
+          branch: main
 
       - name: Configure Git
         run: |
