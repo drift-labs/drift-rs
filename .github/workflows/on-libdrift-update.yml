@@ -6,7 +6,6 @@ on:
       - completed
     repositories:
       - drift-labs/drift-ffi-sys
-  # TODO: remove test trigger
   push:
     branches:
       - tmp-dispatch
@@ -14,7 +13,7 @@ on:
 jobs:
   update-submodule:
     runs-on: ubicloud
-    if: ${{ github.event_name == 'push' ||  (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
+    if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,20 +27,34 @@ jobs:
           git config --global user.name "GitHub Actions"
           git config --global user.email "github-actions@github.com"
       
-      - name: Update submodule
+      - name: Update submodule and create PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Update submodule
           cd crates/drift-ffi-sys
           git checkout master
           git pull origin master
+          
+          # Get the short commit hash
+          COMMIT_HASH=$(git rev-parse --short=6 HEAD)
           cd ../..
           git add -u
-
-      - name: Commit and push changes
-        run: |
+          
+          # Check for changes
           if git diff --staged --quiet; then
-            echo "No changes to submodule, skipping commit"
+            echo "No changes to submodule, skipping PR"
             exit 0
           fi
 
-          git commit -m "chore: bump drift-ffi-sys to latest version 🤖"
-          git push origin main
+          # Create branch with commit hash
+          BRANCH_NAME="chore/bump-ffi-${COMMIT_HASH}"
+          git checkout -b $BRANCH_NAME
+          git commit -m "chore: bump drift-ffi-sys: $COMMIT_HASH 🤖"
+          git push -u origin $BRANCH_NAME
+          
+          # Create PR
+          gh pr create \
+            --title "chore: bump drift-ffi-sys $COMMIT_HASH 🤖" \
+            --body "Update drift-ffi-sys: $COMMIT_HASH" \
+            --base main
