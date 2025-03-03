@@ -1,0 +1,44 @@
+name: "Bump libdrift"
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types:
+      - completed
+    repositories:
+      - drift-labs/drift-ffi-sys
+  # TODO: remove test trigger
+  push:
+    branches:
+      - tmp-dispatch
+
+jobs:
+  update-submodule:
+    runs-on: ubicloud
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "github-actions@github.com"
+      
+      - name: Update submodule
+        run: |
+          cd crates/drift-ffi-sys && git pull
+          cd ../.. && git pull
+          git add -u
+
+      - name: Commit and push changes
+        run: |
+          if git diff --staged --quiet; then
+            echo "No changes to submodule, skipping commit"
+            exit 0
+          fi
+
+          git commit -m "chore: bump drift-ffi-sys to latest version 🤖"
+          git push origin main
