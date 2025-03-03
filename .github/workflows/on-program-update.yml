@@ -31,6 +31,8 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    env:
+      CARGO_DRIFT_FFI_PATH: /usr/lib
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,6 +50,12 @@ jobs:
 
       - name: Generate Rust types
         run: |
+          # libdrift install
+          SO_URL=$(curl -s https://api.github.com/repos/drift-labs/drift-ffi-sys/releases/latest | jq -r '.assets[] | select(.name=="libdrift_ffi_sys.so") | .browser_download_url')
+          echo "downloading libdrift: $SO_URL"
+          curl -L -o libdrift_ffi_sys.so "$SO_URL"
+          sudo cp libdrift_ffi_sys.so $CARGO_DRIFT_FFI_PATH && rm libdrift_ffi_sys.so
+
           cargo check
 
       - name: Git config
@@ -59,9 +67,9 @@ jobs:
         run: |
           # Create branch and commit changes (don't fail if it exists)
           git checkout -b bump/idl-v${{ needs.check-version.outputs.idl_version }} || true
-          git add -A
+          git add -u
           git commit -m "chore: bump IDL to v${{ needs.check-version.outputs.idl_version }}"
-          git push origin bump/idl-v${{ needs.check-version.outputs.idl_version }}
+          git push origin bump/idl-v${{ needs.check-version.outputs.idl_version }} -f
 
       - name: Create PR
         env:
