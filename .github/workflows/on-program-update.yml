@@ -13,9 +13,9 @@ jobs:
       - name: Check update version
         id: version-check
         run: |
-          VERSION="${{ github.event.client_payload.version }}"
+          VERSION=$(curl -s "https://api.github.com/repos/drift-labs/protocol-v2/tags" | grep -m 1 "name" | cut -d '"' -f 4)
           echo "idl_version=$VERSION" >> $GITHUB_OUTPUT
-          
+
           # Check if version contains beta, alpha, or rc tags
           if echo "$VERSION" | grep -qE "beta|alpha|rc"; then
             echo "proceed=false" >> $GITHUB_OUTPUT
@@ -39,8 +39,7 @@ jobs:
 
       - name: Update IDL
         run: |
-          curl -H 'Accept: application/vnd.github.v3.raw' \
-            'https://api.github.com/repos/drift-labs/protocol-v2/contents/sdk/src/idl/drift.json?ref=tags/v${{ needs.check-version.outputs.idl_version }}' > res/drift.json
+          curl -H 'Accept: application/vnd.github.v3.raw' 'https://api.github.com/repos/drift-labs/protocol-v2/contents/sdk/src/idl/drift.json?ref=tags/v${{ needs.check-version.outputs.idl_version }}' > res/drift.json
 
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
