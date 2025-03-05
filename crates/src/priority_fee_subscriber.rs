@@ -4,7 +4,7 @@ use std::{
 };
 
 use log::warn;
-use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use tokio::sync::oneshot;
 
@@ -157,9 +157,8 @@ impl PriorityFeeSubscriber {
 #[cfg(test)]
 mod tests {
     use serde_json::json;
-    use solana_client::{
-        rpc_client::Mocks, rpc_request::RpcRequest, rpc_response::RpcPrioritizationFee,
-    };
+    use solana_rpc_client::rpc_client::Mocks;
+    use solana_rpc_client_api::{request::RpcRequest, response::RpcPrioritizationFee};
 
     use super::*;
 

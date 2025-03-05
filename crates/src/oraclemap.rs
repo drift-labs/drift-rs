@@ -8,7 +8,7 @@ use dashmap::{DashMap, ReadOnlyView};
 use drift_pubsub_client::PubsubClient;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use log::warn;
-use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
     account::Account, clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey,
 };

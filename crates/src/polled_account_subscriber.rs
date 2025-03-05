@@ -4,7 +4,7 @@ use std::{
 };
 
 use log::error;
-use solana_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{account::Account, pubkey::Pubkey};
 use tokio::sync::oneshot;
 
@@ -120,7 +120,8 @@ mod tests {
     use anchor_lang::AccountSerialize;
     use serde_json::json;
     use solana_account_decoder::{UiAccount, UiAccountEncoding};
-    use solana_client::{rpc_client::Mocks, rpc_request::RpcRequest};
+    use solana_rpc_client::rpc_client::Mocks;
+    use solana_rpc_client_api::request::RpcRequest;
 
     use super::*;
     use crate::{accounts::User, SpotPosition};

@@ -1,5 +1,5 @@
 use anchor_lang::Discriminator;
-use solana_client::rpc_filter::{Memcmp, RpcFilterType};
+use solana_rpc_client_api::filter::{Memcmp, RpcFilterType};
 
 use crate::types::{
     accounts::{PerpMarket, SpotMarket, User},

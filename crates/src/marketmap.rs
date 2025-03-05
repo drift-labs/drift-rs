@@ -12,11 +12,11 @@ use drift_pubsub_client::PubsubClient;
 use futures_util::{stream::FuturesUnordered, StreamExt};
 use serde_json::json;
 use solana_account_decoder::UiAccountEncoding;
-use solana_client::{
-    nonblocking::rpc_client::RpcClient,
-    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
-    rpc_request::RpcRequest,
-    rpc_response::{OptionalContext, RpcKeyedAccount},
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client_api::{
+    config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+    request::RpcRequest,
+    response::{OptionalContext, RpcKeyedAccount},
 };
 use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
 
@@ -354,7 +354,7 @@ mod tests {
     use std::sync::Arc;
 
     use drift_pubsub_client::PubsubClient;
-    use solana_client::nonblocking::rpc_client::RpcClient;
+    use solana_rpc_client::nonblocking::rpc_client::RpcClient;
     use solana_sdk::commitment_config::CommitmentConfig;
 
     use super::{get_market_accounts_with_fallback, MarketMap};
