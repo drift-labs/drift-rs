@@ -13,10 +13,11 @@ pub use drift_pubsub_client::PubsubClient;
 use futures_util::{future::BoxFuture, stream::FuturesOrdered, FutureExt, Stream, StreamExt};
 use log::{debug, info, warn};
 use regex::Regex;
-pub use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_client::{
-    rpc_client::GetConfirmedSignaturesForAddress2Config, rpc_config::RpcTransactionLogsConfig,
-    rpc_response::RpcLogsResponse,
+pub use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client::rpc_client::GetConfirmedSignaturesForAddress2Config;
+use solana_rpc_client_api::{
+    config::{RpcTransactionConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter},
+    response::RpcLogsResponse,
 };
 pub use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::{pubkey::Pubkey, signature::Signature, transaction::VersionedTransaction};
@@ -52,7 +53,7 @@ impl EventRpcProvider for RpcClient {
             let result = self
                 .get_transaction_with_config(
                     &signature,
-                    solana_client::rpc_config::RpcTransactionConfig {
+                    RpcTransactionConfig {
                         encoding: Some(UiTransactionEncoding::Base64),
                         max_supported_transaction_version: Some(0),
                         ..Default::default()
@@ -144,9 +145,7 @@ impl LogEventStream {
         let subscribe_result = self
             .provider
             .logs_subscribe(
-                solana_client::rpc_config::RpcTransactionLogsFilter::Mentions(vec![self
-                    .sub_account
-                    .to_string()]),
+                RpcTransactionLogsFilter::Mentions(vec![self.sub_account.to_string()]),
                 RpcTransactionLogsConfig {
                     commitment: Some(self.commitment),
                 },

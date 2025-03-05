@@ -8,8 +8,8 @@ use drift_pubsub_client::PubsubClient;
 use fastlane_order_subscriber::{FastlaneOrderStream, SignedOrderInfo};
 use futures_util::TryFutureExt;
 use log::debug;
-pub use solana_client::nonblocking::rpc_client::RpcClient;
-use solana_client::rpc_response::Response;
+pub use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client_api::response::Response;
 use solana_sdk::{
     account::Account,
     clock::Slot,
@@ -1956,10 +1956,10 @@ mod tests {
 
     use serde_json::json;
     use solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding};
-    use solana_client::{
-        rpc_client::Mocks,
-        rpc_request::RpcRequest,
-        rpc_response::{Response, RpcResponseContext},
+    use solana_rpc_client::rpc_client::Mocks;
+    use solana_rpc_client_api::{
+        request::RpcRequest,
+        response::{Response, RpcResponseContext},
     };
     use types::accounts::PerpMarket;
 

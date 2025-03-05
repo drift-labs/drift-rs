@@ -10,12 +10,12 @@ use anchor_lang::{AccountDeserialize, AnchorDeserialize};
 use dashmap::DashMap;
 use serde_json::json;
 use solana_account_decoder::UiAccountEncoding;
-use solana_client::{
-    nonblocking::rpc_client::RpcClient,
-    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
-    rpc_filter::RpcFilterType,
-    rpc_request::RpcRequest,
-    rpc_response::{OptionalContext, RpcKeyedAccount},
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client_api::{
+    config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+    filter::RpcFilterType,
+    request::RpcRequest,
+    response::{OptionalContext, RpcKeyedAccount},
 };
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 

@@ -4,7 +4,7 @@ use std::{
     str::FromStr,
 };
 
-pub use solana_client::rpc_config::RpcSendTransactionConfig;
+pub use solana_rpc_client_api::config::RpcSendTransactionConfig;
 pub use solana_sdk::{
     commitment_config::CommitmentConfig, message::VersionedMessage,
     transaction::VersionedTransaction,
@@ -270,7 +270,7 @@ impl NewOrder {
 #[derive(Debug, Error)]
 pub enum SdkError {
     #[error("{0}")]
-    Rpc(#[from] solana_client::client_error::ClientError),
+    Rpc(#[from] solana_rpc_client_api::client_error::Error),
     #[error("{0}")]
     Ws(#[from] drift_pubsub_client::PubsubClientError),
     #[error("{0}")]
@@ -537,10 +537,10 @@ impl FromStr for MarketType {
 mod tests {
     use std::str::FromStr;
 
-    use solana_client::{
-        client_error::{ClientError, ClientErrorKind},
-        rpc_request::{RpcError, RpcRequest},
-        rpc_response::RpcSimulateTransactionResult,
+    use solana_rpc_client_api::{
+        client_error::{Error as ClientError, ErrorKind as ClientErrorKind},
+        request::{RpcError, RpcRequest, RpcResponseErrorData},
+        response::RpcSimulateTransactionResult,
     };
     use solana_sdk::{
         instruction::InstructionError, pubkey::Pubkey, transaction::TransactionError,
@@ -566,7 +566,7 @@ mod tests {
                     RpcError::RpcResponseError {
                         code: -32002,
                         message: "Transaction simulation failed: Error processing Instruction 0: custom program error: 0x17b7".to_string(),
-                        data: solana_client::rpc_request::RpcResponseErrorData::SendTransactionPreflightFailure(
+                        data: RpcResponseErrorData::SendTransactionPreflightFailure(
                             RpcSimulateTransactionResult {
                                 err: Some(TransactionError::InstructionError(0, InstructionError::Custom(6071))),
                                 logs: None,

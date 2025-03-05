@@ -7,7 +7,7 @@ use anchor_lang::{
     prelude::borsh::{self, BorshDeserialize, BorshSerialize},
     AnchorDeserialize, AnchorSerialize, InstructionData,
 };
-use solana_client::rpc_config::RpcSendTransactionConfig;
+use solana_rpc_client_api::config::RpcSendTransactionConfig;
 use solana_sdk::{
     compute_budget::ComputeBudgetInstruction,
     instruction::{AccountMeta, Instruction},

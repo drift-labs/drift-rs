@@ -5,9 +5,9 @@ use drift_pubsub_client::PubsubClient;
 use futures_util::StreamExt;
 use log::warn;
 use solana_account_decoder::UiAccountEncoding;
-use solana_client::{
-    rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
-    rpc_filter::RpcFilterType,
+use solana_rpc_client_api::{
+    config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+    filter::RpcFilterType,
 };
 use solana_sdk::commitment_config::CommitmentConfig;
 use tokio::sync::oneshot;
