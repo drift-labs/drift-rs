@@ -53,7 +53,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        repo: ['gateway', 'fastlane-server']
+        repo: ['gateway', 'swift']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
