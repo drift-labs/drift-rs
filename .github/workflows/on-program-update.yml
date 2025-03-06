@@ -39,7 +39,7 @@ jobs:
 
       - name: Update IDL
         run: |
-          curl -H 'Accept: application/vnd.github.v3.raw' 'https://api.github.com/repos/drift-labs/protocol-v2/contents/sdk/src/idl/drift.json?ref=tags/v${{ needs.check-version.outputs.idl_version }}' > res/drift.json
+          curl -H 'Accept: application/vnd.github.v3.raw' 'https://api.github.com/repos/drift-labs/protocol-v2/contents/sdk/src/idl/drift.json?ref=tags/${{ needs.check-version.outputs.idl_version }}' > res/drift.json
 
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
@@ -65,23 +65,23 @@ jobs:
       - name: Commit changes
         run: |
           # Create branch and commit changes (don't fail if it exists)
-          git checkout -b bump/idl-v${{ needs.check-version.outputs.idl_version }} || true
+          git checkout -b bump/idl-${{ needs.check-version.outputs.idl_version }} || true
           git add -u
-          git commit -m "chore: bump IDL to v${{ needs.check-version.outputs.idl_version }}"
-          git push origin bump/idl-v${{ needs.check-version.outputs.idl_version }} -f
+          git commit -m "chore: bump IDL to ${{ needs.check-version.outputs.idl_version }}"
+          git push origin bump/idl-${{ needs.check-version.outputs.idl_version }} -f
 
       - name: Create PR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PR_EXISTS=$(gh pr list --head "bump/idl-v${{ needs.check-version.outputs.idl_version }}" --json number | jq 'length')
+          PR_EXISTS=$(gh pr list --head "bump/idl-${{ needs.check-version.outputs.idl_version }}" --json number | jq 'length')
           if [ "$PR_EXISTS" -gt 0 ]; then
             echo "PR for version ${{ needs.check-version.outputs.idl_version }} already exists, skipping PR creation"
           else
             gh pr create \
-            --title "Bump IDL to v${{ needs.check-version.outputs.idl_version }}" \
-            --body "Automatic IDL update for program v${{ needs.check-version.outputs.idl_version }}" \
+            --title "Bump IDL to ${{ needs.check-version.outputs.idl_version }}" \
+            --body "Automatic IDL update for program ${{ needs.check-version.outputs.idl_version }}" \
             --label "idl" \
             --base main \
-            --head bump/idl-v${{ needs.check-version.outputs.idl_version }}
+            --head bump/idl-${{ needs.check-version.outputs.idl_version }}
           fi
