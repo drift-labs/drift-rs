@@ -5,6 +5,8 @@ on:
 
 jobs:
   update-libdrift-submodule:
+    permissions:
+      contents: write
     runs-on: ubicloud
     steps:
       - name: Checkout
@@ -27,6 +29,8 @@ jobs:
           git add -u
 
       - name: Commit and push changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if git diff --staged --quiet; then
             echo "No changes to submodule, skipping commit"
@@ -34,4 +38,4 @@ jobs:
           fi
 
           git commit -m "chore: bump drift-ffi-sys to latest version 🤖"
-          git push origin main
+          git push origin main -f
