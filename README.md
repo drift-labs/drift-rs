@@ -19,29 +19,30 @@ Experimental, high performance Rust SDK for building offchain clients for [Drift
 ## Install
 ```toml
 # crates.io
-drift-rs = "1.0.0-alpha.10"
+drift-rs = "1.0.0-alpha.11"
 
 # build from source
-drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.10" }
+drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.11" }
 ```
 
 ## Use
 ```rust
 use drift_rs::{DriftClient, Wallet};
-use solana_sdk::signature::KeyPair;
+use solana_sdk::signature::Keypair;
 
 async fn main() {
     let client = DriftClient::new(
         Context::MainNet,
         RpcClient::new("https://rpc-provider.com"),
-        KeyPair::new().into(),
+        Keypair::new().into(),
     )
     .await
     .expect("connects");
 
-    /// Subscribe to Ws-based live prices, blockhashes, and oracle updates
+    // Subscribe to Ws-based live market and price changes
     let markets = [MarketId::spot(1), MarketId::perp(0)];
     client.subscribe_markets(&markets).await.unwrap();
+    client.subscribe_oracles(&markets).await.unwrap();
 }
 ```
 ## Setup
@@ -73,6 +74,9 @@ CARGO_DRIFT_FFI_PATH="/path/to/libdrift_ffi_sys"
 `git tag v<MAJOR.MINOR.PATCH> && git push`
 
 ## Updating IDL types
-1) copy the updated IDL to `res/drift.json` from protocol-v2 branch
-2) `cargo check`
-3) commit changes
+from repo root dir:
+```shell
+./scripts/idl-update.sh
+cargo check # build new IDL types
+# commit changes...
+```
