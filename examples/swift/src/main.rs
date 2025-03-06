@@ -13,6 +13,7 @@ use solana_sdk::signature::Keypair;
 #[tokio::main]
 async fn main() {
     let _ = env_logger::init();
+    let _ = dotenv::dotenv();
     let wallet: Wallet =
         Keypair::from_base58_string(&std::env::var("PRIVATE_KEY").expect("base58 PRIVATE_KEY set"))
             .into();
@@ -20,13 +21,17 @@ async fn main() {
     // choose a sub-account for order placement
     let filler_subaccount = wallet.default_sub_account();
 
-    let drift = DriftClient::new(
-        drift_rs::types::Context::DevNet,
-        RpcClient::new("https://api.devnet.solana.com".into()),
-        wallet,
-    )
-    .await
-    .expect("initialized client");
+    let use_mainnet = std::env::var("MAINNET").is_ok();
+    let context = if use_mainnet {
+        drift_rs::types::Context::MainNet
+    } else {
+        drift_rs::types::Context::DevNet
+    };
+    let rpc_url =
+        std::env::var("RPC_URL").unwrap_or_else(|_| "https://api.devnet.solana.com".to_string());
+    let drift = DriftClient::new(context, RpcClient::new(rpc_url), wallet)
+        .await
+        .expect("initialized client");
     let _ = drift
         .subscribe_blockhashes()
         .await
