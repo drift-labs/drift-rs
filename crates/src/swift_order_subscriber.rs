@@ -19,17 +19,17 @@ use crate::{
     DriftClient,
 };
 
-/// Fastlane message discriminator (Anchor)
-const FASTLANE_MSG_PREFIX: LazyCell<[u8; 8]> = LazyCell::new(|| {
+/// Swift message discriminator (Anchor)
+const SWIFT_MSG_PREFIX: LazyCell<[u8; 8]> = LazyCell::new(|| {
     solana_sdk::hash::hash(b"global:SignedMsgOrderParamsMessage").to_bytes()[..8]
         .try_into()
         .unwrap()
 });
 
-pub const FASTLANE_DEVNET_WS_URL: &str = "wss://master.fastlane.drift.trade";
-pub const FASTLANE_MAINNET_WS_URL: &str = "wss://fastlane.drift.trade";
+pub const SWIFT_DEVNET_WS_URL: &str = "wss://master.swift.drift.trade";
+pub const SWIFT_MAINNET_WS_URL: &str = "wss://swift.drift.trade";
 
-const LOG_TARGET: &str = "fastlane";
+const LOG_TARGET: &str = "swift";
 
 #[derive(Clone, Deserialize)]
 pub struct OrderNotification<'a> {
@@ -44,14 +44,14 @@ pub struct Heartbeat {
     ts: u64,
 }
 
-/// Fastlane order and metadata fresh from the Websocket
+/// Swift order and metadata fresh from the Websocket
 ///
 /// This is an off-chain authorization for a taker order.
 /// It may be placed and filled by any willing counter-party, ensuring the time-price bounds
 /// are respected.
 #[derive(Clone, Debug, Deserialize)]
 pub struct SignedOrderInfo {
-    /// Fastlane order uuid
+    /// Swift order uuid
     uuid: String,
     /// Order creation timestamp (unix ms)
     pub ts: u64,
@@ -91,14 +91,14 @@ impl SignedOrderInfo {
     /// serialize the order message for onchain use e.g. signature verification
     pub fn encode_for_signing(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(SignedOrder::INIT_SPACE + 8);
-        buf.extend_from_slice(FASTLANE_MSG_PREFIX.as_slice());
+        buf.extend_from_slice(SWIFT_MSG_PREFIX.as_slice());
         let _ = self
             .order
             .serialize(&mut buf)
-            .expect("fastlane msg serialized");
+            .expect("swift msg serialized");
         hex::encode(buf).into_bytes()
     }
-    /// convert fastlane order into anchor ix data
+    /// convert swift order into anchor ix data
     pub fn to_ix_data(&self) -> Vec<u8> {
         let signed_msg = self.encode_for_signing();
         [
@@ -115,23 +115,23 @@ impl SignedOrderInfo {
     }
 }
 
-/// Emits fastlane orders from the Ws server
-pub type FastlaneOrderStream = ReceiverStream<SignedOrderInfo>;
+/// Emits swift orders from the Ws server
+pub type SwiftOrderStream = ReceiverStream<SignedOrderInfo>;
 
-/// Subscribe to the Fastlane WebSocket server, authenticate, and listen to new orders
+/// Subscribe to the Swift WebSocket server, authenticate, and listen to new orders
 ///
 /// `client` Drift client instance
-/// `markets` markets to listen on for new fastlane orders
+/// `markets` markets to listen on for new swift orders
 ///
-/// Returns a stream of new Fastlane order messages
-pub async fn subscribe_fastlane_orders(
+/// Returns a stream of new Swift order messages
+pub async fn subscribe_swift_orders(
     client: &DriftClient,
     markets: &[MarketId],
-) -> SdkResult<FastlaneOrderStream> {
+) -> SdkResult<SwiftOrderStream> {
     let base_url = if client.context == Context::MainNet {
-        FASTLANE_MAINNET_WS_URL
+        SWIFT_MAINNET_WS_URL
     } else {
-        FASTLANE_DEVNET_WS_URL
+        SWIFT_DEVNET_WS_URL
     };
     let maker_pubkey = client.wallet().authority().to_string();
     let (ws_stream, _) = connect_async(format!("{base_url}/ws?pubkey={maker_pubkey}"))
@@ -146,7 +146,7 @@ pub async fn subscribe_fastlane_orders(
     // handle authentication and subscription
     while let Some(msg) = incoming.next().await {
         let msg = msg.map_err(|err| {
-            log::error!(target: LOG_TARGET, "failed reading fastlane msg: {err:?}");
+            log::error!(target: LOG_TARGET, "failed reading swift msg: {err:?}");
             SdkError::WsClient(err)
         })?;
 
@@ -155,7 +155,7 @@ pub async fn subscribe_fastlane_orders(
             let message: Value = serde_json::from_str(&text).expect("Failed to parse message");
 
             if let Some(err) = message.get("error") {
-                log::error!(target: LOG_TARGET, "fastlane server error: {err:?}");
+                log::error!(target: LOG_TARGET, "swift server error: {err:?}");
                 return Err(SdkError::WebsocketError);
             }
 
@@ -208,7 +208,7 @@ pub async fn subscribe_fastlane_orders(
 
     let (tx, rx) = tokio::sync::mpsc::channel(256);
 
-    // handle fastlane orders
+    // handle swift orders
     tokio::spawn(async move {
         while let Some(msg) = incoming.next().await {
             match msg {
@@ -244,7 +244,7 @@ pub async fn subscribe_fastlane_orders(
                 }
                 Ok(_) => continue,
                 Err(err) => {
-                    log::error!(target: LOG_TARGET, "failed reading fastlane msg: {err:?}");
+                    log::error!(target: LOG_TARGET, "failed reading swift msg: {err:?}");
                     break;
                 }
             }
@@ -301,7 +301,7 @@ mod tests {
     use crate::types::MarketType;
 
     #[test]
-    fn test_fastlane_order_deser() {
+    fn test_swift_order_deser() {
         let msg = r#"{
             "channel":"signed_orders_perp_1",
             "order":{
@@ -336,8 +336,8 @@ mod tests {
     }
 
     #[test]
-    fn test_fastlane_order_encode_for_signing() {
-        let msg = "{\"channel\":\"fastlane_orders_perp_2\",\"order\":{\"market_index\":2,\"market_type\":\"perp\",\"order_message\":\"c8d5a65e2234f55d0001010080841e0000000000000000000000000002000000000000000001320124c6aa950000000001786b2f94000000000000bb64a9150000000074735730364f6d380000\",\"order_signature\":\"SaOaLJ1i0MqZ2cXdp00jGe2EJFa32eOfiQynFU7mclhT86yhIa4/tWXq7r6l7QPN0Jl6frfsZl0nNOvKZxZpAA==\",\"signing_authority\":\"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE\",\"taker_authority\":\"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE\",\"ts\":1740456840770,\"uuid\":\"tsW06Om8\"}}";
+    fn test_swift_order_encode_for_signing() {
+        let msg = "{\"channel\":\"swift_orders_perp_2\",\"order\":{\"market_index\":2,\"market_type\":\"perp\",\"order_message\":\"c8d5a65e2234f55d0001010080841e0000000000000000000000000002000000000000000001320124c6aa950000000001786b2f94000000000000bb64a9150000000074735730364f6d380000\",\"order_signature\":\"SaOaLJ1i0MqZ2cXdp00jGe2EJFa32eOfiQynFU7mclhT86yhIa4/tWXq7r6l7QPN0Jl6frfsZl0nNOvKZxZpAA==\",\"signing_authority\":\"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE\",\"taker_authority\":\"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE\",\"ts\":1740456840770,\"uuid\":\"tsW06Om8\"}}";
         let order_notification: OrderNotification = serde_json::from_str(&msg).unwrap();
         let signed_message = order_notification.order;
         assert_eq!(

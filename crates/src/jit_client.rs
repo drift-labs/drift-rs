@@ -21,7 +21,7 @@ use crate::{
     build_accounts,
     constants::{self, state_account, JIT_PROXY_ID},
     drift_idl,
-    fastlane_order_subscriber::SignedOrderInfo,
+    swift_order_subscriber::SignedOrderInfo,
     types::PositionDirection,
     DriftClient, MarketId, MarketType, PostOnlyParam, ReferrerInfo, SdkError, SdkResult,
     TransactionBuilder, Wallet,
@@ -228,7 +228,7 @@ impl JitProxyClient {
         Ok(VersionedMessage::V0(message))
     }
 
-    /// Build a fastlane fill tx against a taker order given by `taker_params`
+    /// Build a swift fill tx against a taker order given by `taker_params`
     ///
     /// `signed_order_info` Fastlane (order) message to place-and-make against
     /// `taker_params` taker account params
@@ -237,7 +237,7 @@ impl JitProxyClient {
     /// `maker_account_data` Maker's (User) account data corresponding with the `maker_pubkey`
     ///
     /// Returns a Solana `VersionedMessage` ready for signing
-    pub async fn build_fastlane_ix(
+    pub async fn build_swift_ix(
         &self,
         signed_order_info: &SignedOrderInfo,
         taker_params: &JitTakerParams,
@@ -270,7 +270,7 @@ impl JitProxyClient {
                 user_stats: Wallet::derive_stats_account(&maker_authority),
                 taker: taker_params.taker_key,
                 taker_stats: taker_params.taker_stats_key,
-                taker_signed_msg_user_orders: Wallet::derive_fastlane_order_account(
+                taker_signed_msg_user_orders: Wallet::derive_swift_order_account(
                     &taker_params.taker.authority,
                 ),
                 drift_program: constants::PROGRAM_ID,
@@ -320,7 +320,7 @@ impl JitProxyClient {
             Cow::Borrowed(maker_account_data),
             false,
         )
-        .place_fastlane_order(&signed_order_info, &taker_params.taker)
+        .place_swift_order(&signed_order_info, &taker_params.taker)
         .add_ix(fill_ix)
         .build();
 
@@ -358,14 +358,14 @@ impl JitProxyClient {
             .await
     }
 
-    /// Try fill against a fastlane order with JIT-proxy protection
+    /// Try fill against a swift order with JIT-proxy protection
     ///
-    /// `signed_order_info` the fastlane order info
+    /// `signed_order_info` the swift order info
     /// `taker_params` taker account data for the tx
     /// `jit_params` bounds for the JIT fill
     /// `maker_authority` the maker's authority key
     /// `sub_account_id` the maker's sub-account for the fill
-    pub async fn try_fastlane_fill(
+    pub async fn try_swift_fill(
         &self,
         signed_order_info: &SignedOrderInfo,
         taker_params: &JitTakerParams,
@@ -377,7 +377,7 @@ impl JitProxyClient {
             Wallet::derive_user_account(maker_authority, sub_account_id.unwrap_or_default());
         let sub_account_data = self.drift_client.get_user_account(&sub_account).await?;
         let tx = self
-            .build_fastlane_ix(
+            .build_swift_ix(
                 signed_order_info,
                 taker_params,
                 jit_params,
