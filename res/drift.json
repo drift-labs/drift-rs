@@ -1,5 +1,5 @@
 {
-  "version": "2.111.0",
+  "version": "2.112.0",
   "name": "drift",
   "instructions": [
     {
@@ -10913,11 +10913,19 @@
             "type": "u8"
           },
           {
+            "name": "bitFlags",
+            "docs": [
+              "Bitflags for further classification",
+              "0: is_signed_message"
+            ],
+            "type": "u8"
+          },
+          {
             "name": "padding",
             "type": {
               "array": [
                 "u8",
-                2
+                1
               ]
             }
           }

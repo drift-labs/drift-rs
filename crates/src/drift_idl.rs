@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.111.0";
+pub const IDL_VERSION: &str = "2.112.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -2920,7 +2920,8 @@ pub mod types {
         pub trigger_condition: OrderTriggerCondition,
         pub auction_duration: u8,
         pub posted_slot_tail: u8,
-        pub padding: [u8; 2],
+        pub bit_flags: u8,
+        pub padding: [u8; 1],
     }
     #[derive(
         AnchorSerialize,
