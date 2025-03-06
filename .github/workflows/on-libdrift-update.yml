@@ -4,30 +4,8 @@ on:
     types: ['libdrift-update']
 
 jobs:
-  check-version:
+  update-libdrift-submodule:
     runs-on: ubicloud
-    outputs:
-      idl_version: ${{ steps.version-check.outputs.idl_version }}
-      proceed: ${{ steps.version-check.outputs.proceed }}
-    steps:
-      - name: Check update version
-        id: version-check
-        run: |
-          VERSION=$(curl -s "https://api.github.com/repos/drift-labs/protocol-v2/tags" | grep -m 1 "name" | cut -d '"' -f 4)
-          echo "idl_version=$VERSION" >> $GITHUB_OUTPUT
-
-          # Check if version contains beta, alpha, or rc tags
-          if echo "$VERSION" | grep -qE "beta|alpha|rc"; then
-            echo "proceed=false" >> $GITHUB_OUTPUT
-            echo "Skipping PR creation for pre-release version: $VERSION"
-          else
-            echo "proceed=true" >> $GITHUB_OUTPUT
-          fi
-
-  update-submodule:
-    runs-on: ubicloud
-    needs: ["check-version"]
-    if: ${{ github.event_name == 'push' ||  (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
