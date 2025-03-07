@@ -65,27 +65,6 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for ResizeSignedMsgUserOrders {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct InitializeSignedMsgWsDelegates {
-        pub delegates: Vec<Pubkey>,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for InitializeSignedMsgWsDelegates {
-        const DISCRIMINATOR: [u8; 8] = [40, 132, 96, 219, 184, 193, 80, 8];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for InitializeSignedMsgWsDelegates {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct ChangeSignedMsgWsDelegateStatus {
-        pub delegate: Pubkey,
-        pub add: bool,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for ChangeSignedMsgWsDelegateStatus {
-        const DISCRIMINATOR: [u8; 8] = [252, 202, 252, 219, 179, 27, 84, 138];
-    }
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for ChangeSignedMsgWsDelegateStatus {}
-    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct InitializeFuelOverflow {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeFuelOverflow {
@@ -2083,7 +2062,6 @@ pub mod instructions {
     pub struct UpdateProtectedMakerModeConfig {
         pub max_users: u32,
         pub reduce_only: bool,
-        pub current_users: Option<u32>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateProtectedMakerModeConfig {
@@ -4626,46 +4604,6 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(
-        AnchorSerialize, AnchorDeserialize, Serialize, Deserialize, Clone, Default, Debug, PartialEq,
-    )]
-    pub struct SignedMsgWsDelegates {
-        pub delegates: Vec<Pubkey>,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for SignedMsgWsDelegates {
-        const DISCRIMINATOR: [u8; 8] = [190, 115, 111, 44, 216, 252, 108, 85];
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for SignedMsgWsDelegates {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for SignedMsgWsDelegates {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(
         AnchorSerialize,
         AnchorDeserialize,
         InitSpace,
@@ -5472,152 +5410,6 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for ResizeSignedMsgUserOrders {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct InitializeSignedMsgWsDelegates {
-        pub signed_msg_ws_delegates: Pubkey,
-        pub authority: Pubkey,
-        pub rent: Pubkey,
-        pub system_program: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for InitializeSignedMsgWsDelegates {
-        const DISCRIMINATOR: [u8; 8] = [171, 35, 226, 71, 228, 189, 130, 139];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeSignedMsgWsDelegates {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for InitializeSignedMsgWsDelegates {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for InitializeSignedMsgWsDelegates {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for InitializeSignedMsgWsDelegates {}
-    #[automatically_derived]
-    impl ToAccountMetas for InitializeSignedMsgWsDelegates {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.signed_msg_ws_delegates,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.rent,
-                    is_signer: false,
-                    is_writable: false,
-                },
-                AccountMeta {
-                    pubkey: self.system_program,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for InitializeSignedMsgWsDelegates {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for InitializeSignedMsgWsDelegates {
-        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let given_disc = &buf[..8];
-            if Self::DISCRIMINATOR != given_disc {
-                return Err(anchor_lang::error!(
-                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
-                ));
-            }
-            Self::try_deserialize_unchecked(buf)
-        }
-        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
-            let mut data: &[u8] = &buf[8..];
-            AnchorDeserialize::deserialize(&mut data)
-                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
-        }
-    }
-    #[repr(C)]
-    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct ChangeSignedMsgWsDelegateStatus {
-        pub signed_msg_ws_delegates: Pubkey,
-        pub authority: Pubkey,
-        pub system_program: Pubkey,
-    }
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for ChangeSignedMsgWsDelegateStatus {
-        const DISCRIMINATOR: [u8; 8] = [115, 165, 130, 151, 247, 6, 159, 9];
-    }
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for ChangeSignedMsgWsDelegateStatus {}
-    #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ChangeSignedMsgWsDelegateStatus {}
-    #[automatically_derived]
-    impl anchor_lang::ZeroCopy for ChangeSignedMsgWsDelegateStatus {}
-    #[automatically_derived]
-    impl anchor_lang::InstructionData for ChangeSignedMsgWsDelegateStatus {}
-    #[automatically_derived]
-    impl ToAccountMetas for ChangeSignedMsgWsDelegateStatus {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
-            vec![
-                AccountMeta {
-                    pubkey: self.signed_msg_ws_delegates,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.authority,
-                    is_signer: true,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.system_program,
-                    is_signer: false,
-                    is_writable: false,
-                },
-            ]
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountSerialize for ChangeSignedMsgWsDelegateStatus {
-        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            if AnchorSerialize::serialize(self, writer).is_err() {
-                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
-            }
-            Ok(())
-        }
-    }
-    #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for ChangeSignedMsgWsDelegateStatus {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
