@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use solana_account_decoder::UiAccountEncoding;
+use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_sdk::commitment_config::CommitmentConfig;
 
 use crate::{

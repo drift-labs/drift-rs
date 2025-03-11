@@ -320,7 +320,7 @@ impl JitProxyClient {
             Cow::Borrowed(maker_account_data),
             false,
         )
-        .place_swift_order(&signed_order_info, &taker_params.taker)
+        .place_swift_order(signed_order_info, &taker_params.taker)
         .add_ix(fill_ix)
         .build();
 

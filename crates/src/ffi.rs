@@ -760,7 +760,7 @@ mod tests {
             account: Account {
                 owner: crate::constants::PROGRAM_ID,
                 data: [
-                    PerpMarket::DISCRIMINATOR.as_slice(),
+                    PerpMarket::DISCRIMINATOR,
                     bytemuck::bytes_of(&PerpMarket {
                         market_index: btc_perp_index,
                         ..Default::default()
@@ -776,12 +776,9 @@ mod tests {
             key: Pubkey::new_unique(),
             account: Account {
                 owner: crate::constants::PROGRAM_ID,
-                data: [
-                    SpotMarket::DISCRIMINATOR.as_slice(),
-                    bytemuck::bytes_of(&spot_market),
-                ]
-                .concat()
-                .to_vec(),
+                data: [SpotMarket::DISCRIMINATOR, bytemuck::bytes_of(&spot_market)]
+                    .concat()
+                    .to_vec(),
                 ..Default::default()
             },
         }];
@@ -843,7 +840,7 @@ mod tests {
                 account: Account {
                     owner: crate::constants::PROGRAM_ID,
                     data: [
-                        PerpMarket::DISCRIMINATOR.as_slice(),
+                        PerpMarket::DISCRIMINATOR,
                         bytemuck::bytes_of(&PerpMarket {
                             market_index: btc_perp_index,
                             status: MarketStatus::Active,
@@ -865,7 +862,7 @@ mod tests {
                 account: Account {
                     owner: crate::constants::PROGRAM_ID,
                     data: [
-                        PerpMarket::DISCRIMINATOR.as_slice(),
+                        PerpMarket::DISCRIMINATOR,
                         bytemuck::bytes_of(&PerpMarket {
                             market_index: 0,
                             status: MarketStatus::Active,
@@ -889,7 +886,7 @@ mod tests {
                 account: Account {
                     owner: crate::constants::PROGRAM_ID,
                     data: [
-                        SpotMarket::DISCRIMINATOR.as_slice(),
+                        SpotMarket::DISCRIMINATOR,
                         bytemuck::bytes_of(&sol_spot_market()),
                     ]
                     .concat()
@@ -902,7 +899,7 @@ mod tests {
                 account: Account {
                     owner: crate::constants::PROGRAM_ID,
                     data: [
-                        SpotMarket::DISCRIMINATOR.as_slice(),
+                        SpotMarket::DISCRIMINATOR,
                         bytemuck::bytes_of(&usdc_spot_market()),
                     ]
                     .concat()

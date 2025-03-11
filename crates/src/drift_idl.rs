@@ -3965,7 +3965,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for OpenbookV2FulfillmentConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -4030,7 +4030,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PhoenixV1FulfillmentConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -4100,7 +4100,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SerumV3FulfillmentConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -4159,7 +4159,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for HighLeverageModeConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -4224,7 +4224,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InsuranceFundStake {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -4284,7 +4284,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ProtocolIfSharesTransferConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -4346,7 +4346,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PrelaunchOracle {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -4436,7 +4436,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PerpMarket {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -4495,7 +4495,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ProtectedMakerModeConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -4556,7 +4556,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PythLazerOracle {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -4598,7 +4598,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SignedMsgUserOrders {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -4638,7 +4638,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SignedMsgWsDelegates {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -4757,7 +4757,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SpotMarket {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -4837,7 +4837,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for State {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -4923,7 +4923,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for User {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -5004,7 +5004,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UserStats {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -5062,7 +5062,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ReferrerName {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -5127,7 +5127,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for FuelOverflow {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -5221,7 +5221,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializeUser {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -5309,7 +5309,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializeUserStats {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -5391,7 +5391,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializeSignedMsgUserOrders {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -5461,7 +5461,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ResizeSignedMsgUserOrders {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -5537,7 +5537,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializeSignedMsgWsDelegates {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -5607,7 +5607,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ChangeSignedMsgWsDelegateStatus {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -5695,7 +5695,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializeFuelOverflow {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -5771,7 +5771,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SweepFuel {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -5847,7 +5847,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ResetFuelSeason {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -5941,7 +5941,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializeReferrerName {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -6035,7 +6035,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for Deposit {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -6135,7 +6135,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for Withdraw {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -6223,7 +6223,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for TransferDeposit {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -6335,7 +6335,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for TransferPools {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -6405,7 +6405,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PlacePerpOrder {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -6475,7 +6475,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for CancelOrder {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -6545,7 +6545,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for CancelOrderByUserId {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -6615,7 +6615,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for CancelOrders {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -6685,7 +6685,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for CancelOrdersByIds {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -6755,7 +6755,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ModifyOrder {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -6825,7 +6825,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ModifyOrderByUserId {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -6901,7 +6901,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PlaceAndTakePerpOrder {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -6989,7 +6989,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PlaceAndMakePerpOrder {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -7083,7 +7083,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PlaceAndMakeSignedMsgPerpOrder {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -7171,7 +7171,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PlaceSignedMsgTakerOrder {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -7241,7 +7241,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PlaceSpotOrder {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -7317,7 +7317,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PlaceAndTakeSpotOrder {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -7405,7 +7405,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PlaceAndMakeSpotOrder {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -7475,7 +7475,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PlaceOrders {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -7593,7 +7593,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for BeginSwap {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -7711,7 +7711,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for EndSwap {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -7781,7 +7781,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for AddPerpLpShares {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -7851,7 +7851,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for RemovePerpLpShares {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -7915,7 +7915,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for RemovePerpLpSharesInExpiringMarket {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -7979,7 +7979,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserName {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -8043,7 +8043,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserCustomMarginRatio {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -8107,7 +8107,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserMarginTradingEnabled {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -8171,7 +8171,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserPoolId {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -8235,7 +8235,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserDelegate {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -8299,7 +8299,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserReduceOnly {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -8363,7 +8363,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserAdvancedLp {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -8439,7 +8439,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserProtectedMakerOrders {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -8515,7 +8515,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for DeleteUser {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -8603,7 +8603,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ForceDeleteUser {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -8673,7 +8673,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for DeleteSignedMsgUserOrders {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -8755,7 +8755,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ReclaimRent {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -8831,7 +8831,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for EnableUserHighLeverageMode {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -8919,7 +8919,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for FillPerpOrder {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -8995,7 +8995,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for RevertFill {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -9083,7 +9083,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for FillSpotOrder {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -9159,7 +9159,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for TriggerOrder {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -9235,7 +9235,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ForceCancelOrders {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -9311,7 +9311,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserIdle {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -9381,7 +9381,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for LogUserBalances {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -9457,7 +9457,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for DisableUserHighLeverageMode {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -9533,7 +9533,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserFuelBonus {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -9603,7 +9603,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserStatsReferrerStatus {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -9679,7 +9679,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserOpenOrdersCount {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -9749,7 +9749,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for AdminDisableUpdatePerpBidAskTwap {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -9825,7 +9825,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SettlePnl {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -9901,7 +9901,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SettleMultiplePnls {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -9965,7 +9965,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SettleFundingPayment {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -10029,7 +10029,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SettleLp {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -10099,7 +10099,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SettleExpiredMarket {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -10187,7 +10187,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for LiquidatePerp {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -10275,7 +10275,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for LiquidatePerpWithFill {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -10363,7 +10363,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for LiquidateSpot {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -10493,7 +10493,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for LiquidateSpotWithSwapBegin {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -10623,7 +10623,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for LiquidateSpotWithSwapEnd {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -10711,7 +10711,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for LiquidateBorrowForPerpPnl {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -10799,7 +10799,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for LiquidatePerpPnlForDeposit {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -10869,7 +10869,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SetUserStatusToBeingLiquidated {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -10957,7 +10957,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ResolvePerpPnlDeficit {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -11069,7 +11069,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ResolvePerpBankruptcy {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -11181,7 +11181,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ResolveSpotBankruptcy {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -11269,7 +11269,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SettleRevenueToInsuranceFund {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -11339,7 +11339,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateFundingRate {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -11409,7 +11409,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePrelaunchOracle {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -11491,7 +11491,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpBidAskTwap {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -11567,7 +11567,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketCumulativeInterest {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -11631,7 +11631,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateAmms {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -11701,7 +11701,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketExpiry {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -11789,7 +11789,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserQuoteAssetInsuranceStake {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -11877,7 +11877,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserGovTokenInsuranceStake {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -11941,7 +11941,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateUserGovTokenInsuranceStakeDevnet {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -12041,7 +12041,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializeInsuranceFundStake {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -12153,7 +12153,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for AddInsuranceFundStake {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -12235,7 +12235,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for RequestRemoveInsuranceFundStake {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -12317,7 +12317,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for CancelRequestRemoveInsuranceFundStake {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -12423,7 +12423,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for RemoveInsuranceFundStake {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -12523,7 +12523,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for TransferProtocolIfShares {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -12599,7 +12599,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePythPullOracle {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -12675,7 +12675,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PostPythPullOracleUpdateAtomic {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -12745,7 +12745,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PostMultiPythPullOracleUpdatesAtomic {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -12821,7 +12821,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PauseSpotMarketDepositWithdraw {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -12915,7 +12915,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for Initialize {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -13033,7 +13033,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializeSpotMarket {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -13127,7 +13127,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for DeleteInitializedSpotMarket {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -13245,7 +13245,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializeSerumFulfillmentConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -13315,7 +13315,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSerumFulfillmentConfigStatus {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -13427,7 +13427,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializeOpenbookV2FulfillmentConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -13497,7 +13497,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for OpenbookV2FulfillmentConfigStatus {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -13609,7 +13609,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializePhoenixFulfillmentConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -13679,7 +13679,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PhoenixFulfillmentConfigStatus {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -13749,7 +13749,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSerumVault {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -13837,7 +13837,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializePerpMarket {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -13907,7 +13907,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializePredictionMarket {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -13977,7 +13977,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for DeleteInitializedPerpMarket {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -14047,7 +14047,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for MoveAmmPrice {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -14117,7 +14117,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for RecenterPerpMarketAmm {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -14199,7 +14199,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketAmmSummaryStats {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -14269,7 +14269,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketExpiry {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -14345,7 +14345,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SettleExpiredMarketPoolsToRevenuePool {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -14445,7 +14445,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for DepositIntoPerpMarketFeePool {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -14533,7 +14533,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for DepositIntoSpotMarketVault {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -14621,7 +14621,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for DepositIntoSpotMarketRevenuePool {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -14697,7 +14697,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for RepegAmmCurve {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -14773,7 +14773,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketAmmOracleTwap {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -14849,7 +14849,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for ResetPerpMarketAmmOracleTwap {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -14925,7 +14925,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateK {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -14995,7 +14995,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketMarginRatio {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -15065,7 +15065,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketHighLeverageMarginRatio {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -15135,7 +15135,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketFundingPeriod {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -15205,7 +15205,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketMaxImbalances {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -15275,7 +15275,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketLiquidationFee {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -15345,7 +15345,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateInsuranceFundUnstakingPeriod {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -15415,7 +15415,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketPoolId {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -15485,7 +15485,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketLiquidationFee {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -15555,7 +15555,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateWithdrawGuardThreshold {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -15625,7 +15625,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketIfFactor {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -15695,7 +15695,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketRevenueSettlePeriod {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -15765,7 +15765,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketStatus {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -15835,7 +15835,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketPausedOperations {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -15905,7 +15905,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketAssetTier {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -15975,7 +15975,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketMarginWeights {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -16045,7 +16045,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketBorrowRate {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -16115,7 +16115,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketMaxTokenDeposits {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -16185,7 +16185,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketMaxTokenBorrows {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -16258,7 +16258,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketScaleInitialAssetWeightStart {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -16340,7 +16340,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketOracle {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -16410,7 +16410,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketStepSizeAndTickSize {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -16480,7 +16480,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketMinOrderSize {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -16550,7 +16550,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketOrdersEnabled {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -16620,7 +16620,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketIfPausedOperations {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -16690,7 +16690,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketName {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -16760,7 +16760,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketStatus {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -16830,7 +16830,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketPausedOperations {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -16900,7 +16900,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketContractTier {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -16970,7 +16970,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketImfFactor {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17040,7 +17040,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketUnrealizedAssetWeight {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17110,7 +17110,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketConcentrationCoef {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17180,7 +17180,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketCurveUpdateIntensity {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17253,7 +17253,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketTargetBaseAssetAmountPerLp {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17323,7 +17323,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketPerLpBase {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17387,7 +17387,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateLpCooldownTime {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17451,7 +17451,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpFeeStructure {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17515,7 +17515,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotFeeStructure {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17579,7 +17579,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateInitialPctToLiquidate {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17643,7 +17643,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateLiquidationDuration {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17707,7 +17707,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateLiquidationMarginBufferRatio {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17771,7 +17771,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateOracleGuardRails {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17835,7 +17835,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateStateSettlementDuration {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17899,7 +17899,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateStateMaxNumberOfSubAccounts {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -17963,7 +17963,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateStateMaxInitializeUserFee {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -18045,7 +18045,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketOracle {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -18115,7 +18115,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketBaseSpread {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -18185,7 +18185,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateAmmJitIntensity {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -18255,7 +18255,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketMaxSpread {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -18325,7 +18325,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketStepSizeAndTickSize {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -18395,7 +18395,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketName {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -18465,7 +18465,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketMinOrderSize {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -18535,7 +18535,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketMaxSlippageRatio {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -18605,7 +18605,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketMaxFillReserveFraction {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -18675,7 +18675,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketMaxOpenInterest {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -18745,7 +18745,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketNumberOfUsers {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -18815,7 +18815,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketFeeAdjustment {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -18885,7 +18885,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketFeeAdjustment {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -18955,7 +18955,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpMarketFuel {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -19025,7 +19025,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotMarketFuel {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -19101,7 +19101,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitUserFuel {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -19165,7 +19165,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateAdmin {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -19229,7 +19229,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateWhitelistMint {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -19293,7 +19293,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateDiscountMint {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -19357,7 +19357,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateExchangeStatus {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -19421,7 +19421,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePerpAuctionDuration {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -19485,7 +19485,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateSpotAuctionDuration {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -19570,7 +19570,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializeProtocolIfSharesTransferConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -19640,7 +19640,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateProtocolIfSharesTransferConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -19722,7 +19722,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializePrelaunchOracle {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -19798,7 +19798,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdatePrelaunchOracleParams {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -19874,7 +19874,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for DeletePrelaunchOracle {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -19956,7 +19956,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializePythPullOracle {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -20038,7 +20038,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializePythLazerOracle {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -20108,7 +20108,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for PostPythLazerOracleUpdate {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -20190,7 +20190,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializeHighLeverageModeConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -20260,7 +20260,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateHighLeverageModeConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -20342,7 +20342,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for InitializeProtectedMakerModeConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {
@@ -20412,7 +20412,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for UpdateProtectedMakerModeConfig {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {

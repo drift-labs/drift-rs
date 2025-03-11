@@ -13,7 +13,7 @@ gjson = "0.8.1"
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
-solana-account-decoder = "2.1"
+solana-account-decoder-client-types = "2.1"
 solana-sdk = "2.1"
 solana-rpc-client-api = "2.1"
 thiserror = "1"

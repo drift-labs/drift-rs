@@ -8,7 +8,7 @@ use futures_util::{
 use log::*;
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
-use solana_account_decoder::UiAccount;
+use solana_account_decoder_client_types::UiAccount;
 use solana_rpc_client_api::{
     config::{
         RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,

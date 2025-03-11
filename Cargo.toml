@@ -36,7 +36,7 @@ rayon = { version = "1.9.0", optional = true }
 regex = "1.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-solana-account-decoder = "2.1"
+solana-account-decoder-client-types = "2.1"
 solana-rpc-client = "2.1"
 solana-rpc-client-api = "2.1"
 solana-sdk = "2.1"
@@ -51,6 +51,7 @@ drift-pubsub-client = { version = "0.1.0", path = "crates/pubsub-client" }
 [dev-dependencies]
 bytes = "1"
 hex-literal = "0.4"
+solana-account-decoder = "2.1"
 toml = "0.8"
 
 [build-dependencies]

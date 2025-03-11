@@ -119,7 +119,8 @@ impl PolledAccountSubscriber<Subscribed> {
 mod tests {
     use anchor_lang::AccountSerialize;
     use serde_json::json;
-    use solana_account_decoder::{UiAccount, UiAccountEncoding};
+    use solana_account_decoder::encode_ui_account;
+    use solana_account_decoder_client_types::UiAccountEncoding;
     use solana_rpc_client::rpc_client::Mocks;
     use solana_rpc_client_api::request::RpcRequest;
 
@@ -155,7 +156,7 @@ mod tests {
             "context": {
                 "slot": 12_345,
             },
-            "value": UiAccount::encode(&sub_account, &account, UiAccountEncoding::Base64Zstd, None, None),
+            "value": encode_ui_account(&sub_account, &account, UiAccountEncoding::Base64Zstd, None, None),
         });
         response_mocks.insert(RpcRequest::GetAccountInfo, account_response);
 

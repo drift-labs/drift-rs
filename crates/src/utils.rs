@@ -131,7 +131,7 @@ pub(crate) fn zero_account_to_bytes<T: bytemuck::Pod + anchor_lang::Discriminato
     account: T,
 ) -> Vec<u8> {
     let mut account_data = vec![0; 8 + std::mem::size_of::<T>()];
-    account_data[0..8].copy_from_slice(&T::DISCRIMINATOR);
+    account_data[0..8].copy_from_slice(T::DISCRIMINATOR);
     account_data[8..].copy_from_slice(bytemuck::bytes_of(&account));
     account_data
 }
@@ -323,7 +323,7 @@ pub mod test_utils {
 
     pub fn get_anchor_account_bytes<T: bytemuck::Pod + Discriminator>(account: &mut T) -> BytesMut {
         let mut bytes = BytesMut::new();
-        bytes.extend_from_slice(&T::discriminator());
+        bytes.extend_from_slice(T::DISCRIMINATOR);
         let data = bytemuck::bytes_of_mut(account);
         bytes.extend_from_slice(data);
         bytes

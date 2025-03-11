@@ -341,7 +341,7 @@ fn generate_idl_types(idl: &Idl) -> String {
             #[automatically_derived]
             impl anchor_lang::AccountSerialize for #struct_name {
                 fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-                    if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                    if writer.write_all(Self::DISCRIMINATOR).is_err() {
                         return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
                     }
 
@@ -462,7 +462,7 @@ fn generate_idl_types(idl: &Idl) -> String {
             #[automatically_derived]
             impl anchor_lang::AccountSerialize for #struct_name {
                 fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-                    if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                    if writer.write_all(Self::DISCRIMINATOR).is_err() {
                         return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
                     }
 
