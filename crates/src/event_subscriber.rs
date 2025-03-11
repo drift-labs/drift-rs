@@ -535,7 +535,7 @@ impl DriftEvent {
         signature: &str,
         tx_idx: usize,
     ) -> Option<Self> {
-        match disc {
+        match disc.as_slice() {
             // deser should only fail on a breaking protocol changes
             OrderActionRecord::DISCRIMINATOR => Self::from_oar(
                 OrderActionRecord::deserialize(data).expect("deserializes"),

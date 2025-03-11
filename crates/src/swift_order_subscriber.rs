@@ -172,10 +172,9 @@ pub async fn subscribe_swift_orders(
                 let auth_message = json!({
                     "pubkey": maker_pubkey,
                     "signature": signature_b64,
-                });
-                outgoing
-                    .send(Message::Text(auth_message.to_string()))
-                    .await?;
+                })
+                .to_string();
+                outgoing.send(Message::Text(auth_message.into())).await?;
                 continue;
             }
 
@@ -193,8 +192,9 @@ pub async fn subscribe_swift_orders(
                           "action": "subscribe",
                           "market_type": "perp",
                           "market_name": market.symbol(),
-                        });
-                        Ok(Message::Text(subscribe_msg.to_string()))
+                        })
+                        .to_string();
+                        Ok(Message::Text(subscribe_msg.into()))
                     })
                     .collect();
 

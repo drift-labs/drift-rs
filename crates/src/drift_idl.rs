@@ -32,7 +32,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeUser {
-        const DISCRIMINATOR: [u8; 8] = [111, 17, 185, 250, 60, 122, 38, 254];
+        const DISCRIMINATOR: &[u8] = &[111, 17, 185, 250, 60, 122, 38, 254];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeUser {}
@@ -40,7 +40,7 @@ pub mod instructions {
     pub struct InitializeUserStats {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeUserStats {
-        const DISCRIMINATOR: [u8; 8] = [254, 243, 72, 98, 251, 130, 168, 213];
+        const DISCRIMINATOR: &[u8] = &[254, 243, 72, 98, 251, 130, 168, 213];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeUserStats {}
@@ -50,7 +50,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeSignedMsgUserOrders {
-        const DISCRIMINATOR: [u8; 8] = [164, 99, 156, 126, 156, 57, 99, 180];
+        const DISCRIMINATOR: &[u8] = &[164, 99, 156, 126, 156, 57, 99, 180];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeSignedMsgUserOrders {}
@@ -60,7 +60,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ResizeSignedMsgUserOrders {
-        const DISCRIMINATOR: [u8; 8] = [137, 10, 87, 150, 18, 115, 79, 168];
+        const DISCRIMINATOR: &[u8] = &[137, 10, 87, 150, 18, 115, 79, 168];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for ResizeSignedMsgUserOrders {}
@@ -70,7 +70,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeSignedMsgWsDelegates {
-        const DISCRIMINATOR: [u8; 8] = [40, 132, 96, 219, 184, 193, 80, 8];
+        const DISCRIMINATOR: &[u8] = &[40, 132, 96, 219, 184, 193, 80, 8];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeSignedMsgWsDelegates {}
@@ -81,7 +81,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ChangeSignedMsgWsDelegateStatus {
-        const DISCRIMINATOR: [u8; 8] = [252, 202, 252, 219, 179, 27, 84, 138];
+        const DISCRIMINATOR: &[u8] = &[252, 202, 252, 219, 179, 27, 84, 138];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for ChangeSignedMsgWsDelegateStatus {}
@@ -89,7 +89,7 @@ pub mod instructions {
     pub struct InitializeFuelOverflow {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeFuelOverflow {
-        const DISCRIMINATOR: [u8; 8] = [88, 223, 132, 161, 208, 88, 142, 42];
+        const DISCRIMINATOR: &[u8] = &[88, 223, 132, 161, 208, 88, 142, 42];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeFuelOverflow {}
@@ -97,7 +97,7 @@ pub mod instructions {
     pub struct SweepFuel {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for SweepFuel {
-        const DISCRIMINATOR: [u8; 8] = [175, 107, 19, 56, 165, 241, 43, 69];
+        const DISCRIMINATOR: &[u8] = &[175, 107, 19, 56, 165, 241, 43, 69];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for SweepFuel {}
@@ -105,7 +105,7 @@ pub mod instructions {
     pub struct ResetFuelSeason {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for ResetFuelSeason {
-        const DISCRIMINATOR: [u8; 8] = [199, 122, 192, 255, 32, 99, 63, 200];
+        const DISCRIMINATOR: &[u8] = &[199, 122, 192, 255, 32, 99, 63, 200];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for ResetFuelSeason {}
@@ -115,7 +115,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeReferrerName {
-        const DISCRIMINATOR: [u8; 8] = [235, 126, 231, 10, 42, 164, 26, 61];
+        const DISCRIMINATOR: &[u8] = &[235, 126, 231, 10, 42, 164, 26, 61];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeReferrerName {}
@@ -127,7 +127,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for Deposit {
-        const DISCRIMINATOR: [u8; 8] = [242, 35, 198, 137, 82, 225, 242, 182];
+        const DISCRIMINATOR: &[u8] = &[242, 35, 198, 137, 82, 225, 242, 182];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for Deposit {}
@@ -139,7 +139,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for Withdraw {
-        const DISCRIMINATOR: [u8; 8] = [183, 18, 70, 156, 148, 109, 161, 34];
+        const DISCRIMINATOR: &[u8] = &[183, 18, 70, 156, 148, 109, 161, 34];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for Withdraw {}
@@ -150,7 +150,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for TransferDeposit {
-        const DISCRIMINATOR: [u8; 8] = [20, 20, 147, 223, 41, 63, 204, 111];
+        const DISCRIMINATOR: &[u8] = &[20, 20, 147, 223, 41, 63, 204, 111];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for TransferDeposit {}
@@ -165,7 +165,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for TransferPools {
-        const DISCRIMINATOR: [u8; 8] = [197, 103, 154, 25, 107, 90, 60, 94];
+        const DISCRIMINATOR: &[u8] = &[197, 103, 154, 25, 107, 90, 60, 94];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for TransferPools {}
@@ -175,7 +175,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlacePerpOrder {
-        const DISCRIMINATOR: [u8; 8] = [69, 161, 93, 202, 120, 126, 76, 185];
+        const DISCRIMINATOR: &[u8] = &[69, 161, 93, 202, 120, 126, 76, 185];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PlacePerpOrder {}
@@ -185,7 +185,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for CancelOrder {
-        const DISCRIMINATOR: [u8; 8] = [95, 129, 237, 240, 8, 49, 223, 132];
+        const DISCRIMINATOR: &[u8] = &[95, 129, 237, 240, 8, 49, 223, 132];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for CancelOrder {}
@@ -195,7 +195,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for CancelOrderByUserId {
-        const DISCRIMINATOR: [u8; 8] = [107, 211, 250, 133, 18, 37, 57, 100];
+        const DISCRIMINATOR: &[u8] = &[107, 211, 250, 133, 18, 37, 57, 100];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for CancelOrderByUserId {}
@@ -207,7 +207,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for CancelOrders {
-        const DISCRIMINATOR: [u8; 8] = [238, 225, 95, 158, 227, 103, 8, 194];
+        const DISCRIMINATOR: &[u8] = &[238, 225, 95, 158, 227, 103, 8, 194];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for CancelOrders {}
@@ -217,7 +217,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for CancelOrdersByIds {
-        const DISCRIMINATOR: [u8; 8] = [134, 19, 144, 165, 94, 240, 210, 94];
+        const DISCRIMINATOR: &[u8] = &[134, 19, 144, 165, 94, 240, 210, 94];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for CancelOrdersByIds {}
@@ -228,7 +228,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ModifyOrder {
-        const DISCRIMINATOR: [u8; 8] = [47, 124, 117, 255, 201, 197, 130, 94];
+        const DISCRIMINATOR: &[u8] = &[47, 124, 117, 255, 201, 197, 130, 94];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for ModifyOrder {}
@@ -239,7 +239,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ModifyOrderByUserId {
-        const DISCRIMINATOR: [u8; 8] = [158, 77, 4, 253, 252, 194, 161, 179];
+        const DISCRIMINATOR: &[u8] = &[158, 77, 4, 253, 252, 194, 161, 179];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for ModifyOrderByUserId {}
@@ -250,7 +250,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceAndTakePerpOrder {
-        const DISCRIMINATOR: [u8; 8] = [213, 51, 1, 187, 108, 220, 230, 224];
+        const DISCRIMINATOR: &[u8] = &[213, 51, 1, 187, 108, 220, 230, 224];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PlaceAndTakePerpOrder {}
@@ -261,7 +261,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceAndMakePerpOrder {
-        const DISCRIMINATOR: [u8; 8] = [149, 117, 11, 237, 47, 95, 89, 237];
+        const DISCRIMINATOR: &[u8] = &[149, 117, 11, 237, 47, 95, 89, 237];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PlaceAndMakePerpOrder {}
@@ -272,7 +272,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceAndMakeSignedMsgPerpOrder {
-        const DISCRIMINATOR: [u8; 8] = [16, 26, 123, 131, 94, 29, 175, 98];
+        const DISCRIMINATOR: &[u8] = &[16, 26, 123, 131, 94, 29, 175, 98];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PlaceAndMakeSignedMsgPerpOrder {}
@@ -283,7 +283,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceSignedMsgTakerOrder {
-        const DISCRIMINATOR: [u8; 8] = [32, 79, 101, 139, 25, 6, 98, 15];
+        const DISCRIMINATOR: &[u8] = &[32, 79, 101, 139, 25, 6, 98, 15];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PlaceSignedMsgTakerOrder {}
@@ -293,7 +293,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceSpotOrder {
-        const DISCRIMINATOR: [u8; 8] = [45, 79, 81, 160, 248, 90, 91, 220];
+        const DISCRIMINATOR: &[u8] = &[45, 79, 81, 160, 248, 90, 91, 220];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PlaceSpotOrder {}
@@ -305,7 +305,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceAndTakeSpotOrder {
-        const DISCRIMINATOR: [u8; 8] = [191, 3, 138, 71, 114, 198, 202, 100];
+        const DISCRIMINATOR: &[u8] = &[191, 3, 138, 71, 114, 198, 202, 100];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PlaceAndTakeSpotOrder {}
@@ -317,7 +317,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceAndMakeSpotOrder {
-        const DISCRIMINATOR: [u8; 8] = [149, 158, 85, 66, 239, 9, 243, 98];
+        const DISCRIMINATOR: &[u8] = &[149, 158, 85, 66, 239, 9, 243, 98];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PlaceAndMakeSpotOrder {}
@@ -327,7 +327,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceOrders {
-        const DISCRIMINATOR: [u8; 8] = [60, 63, 50, 123, 12, 197, 60, 190];
+        const DISCRIMINATOR: &[u8] = &[60, 63, 50, 123, 12, 197, 60, 190];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PlaceOrders {}
@@ -339,7 +339,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for BeginSwap {
-        const DISCRIMINATOR: [u8; 8] = [174, 109, 228, 1, 242, 105, 232, 105];
+        const DISCRIMINATOR: &[u8] = &[174, 109, 228, 1, 242, 105, 232, 105];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for BeginSwap {}
@@ -352,7 +352,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for EndSwap {
-        const DISCRIMINATOR: [u8; 8] = [177, 184, 27, 193, 34, 13, 210, 145];
+        const DISCRIMINATOR: &[u8] = &[177, 184, 27, 193, 34, 13, 210, 145];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for EndSwap {}
@@ -363,7 +363,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for AddPerpLpShares {
-        const DISCRIMINATOR: [u8; 8] = [56, 209, 56, 197, 119, 254, 188, 117];
+        const DISCRIMINATOR: &[u8] = &[56, 209, 56, 197, 119, 254, 188, 117];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for AddPerpLpShares {}
@@ -374,7 +374,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for RemovePerpLpShares {
-        const DISCRIMINATOR: [u8; 8] = [213, 89, 217, 18, 160, 55, 53, 141];
+        const DISCRIMINATOR: &[u8] = &[213, 89, 217, 18, 160, 55, 53, 141];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for RemovePerpLpShares {}
@@ -385,7 +385,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for RemovePerpLpSharesInExpiringMarket {
-        const DISCRIMINATOR: [u8; 8] = [83, 254, 253, 137, 59, 122, 68, 156];
+        const DISCRIMINATOR: &[u8] = &[83, 254, 253, 137, 59, 122, 68, 156];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for RemovePerpLpSharesInExpiringMarket {}
@@ -396,7 +396,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserName {
-        const DISCRIMINATOR: [u8; 8] = [135, 25, 185, 56, 165, 53, 34, 136];
+        const DISCRIMINATOR: &[u8] = &[135, 25, 185, 56, 165, 53, 34, 136];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserName {}
@@ -407,7 +407,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserCustomMarginRatio {
-        const DISCRIMINATOR: [u8; 8] = [21, 221, 140, 187, 32, 129, 11, 123];
+        const DISCRIMINATOR: &[u8] = &[21, 221, 140, 187, 32, 129, 11, 123];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserCustomMarginRatio {}
@@ -418,7 +418,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserMarginTradingEnabled {
-        const DISCRIMINATOR: [u8; 8] = [194, 92, 204, 223, 246, 188, 31, 203];
+        const DISCRIMINATOR: &[u8] = &[194, 92, 204, 223, 246, 188, 31, 203];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserMarginTradingEnabled {}
@@ -429,7 +429,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserPoolId {
-        const DISCRIMINATOR: [u8; 8] = [219, 86, 73, 106, 56, 218, 128, 109];
+        const DISCRIMINATOR: &[u8] = &[219, 86, 73, 106, 56, 218, 128, 109];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserPoolId {}
@@ -440,7 +440,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserDelegate {
-        const DISCRIMINATOR: [u8; 8] = [139, 205, 141, 141, 113, 36, 94, 187];
+        const DISCRIMINATOR: &[u8] = &[139, 205, 141, 141, 113, 36, 94, 187];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserDelegate {}
@@ -451,7 +451,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserReduceOnly {
-        const DISCRIMINATOR: [u8; 8] = [199, 71, 42, 67, 144, 19, 86, 109];
+        const DISCRIMINATOR: &[u8] = &[199, 71, 42, 67, 144, 19, 86, 109];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserReduceOnly {}
@@ -462,7 +462,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserAdvancedLp {
-        const DISCRIMINATOR: [u8; 8] = [66, 80, 107, 186, 27, 242, 66, 95];
+        const DISCRIMINATOR: &[u8] = &[66, 80, 107, 186, 27, 242, 66, 95];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserAdvancedLp {}
@@ -473,7 +473,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserProtectedMakerOrders {
-        const DISCRIMINATOR: [u8; 8] = [114, 39, 123, 198, 187, 25, 90, 219];
+        const DISCRIMINATOR: &[u8] = &[114, 39, 123, 198, 187, 25, 90, 219];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserProtectedMakerOrders {}
@@ -481,7 +481,7 @@ pub mod instructions {
     pub struct DeleteUser {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for DeleteUser {
-        const DISCRIMINATOR: [u8; 8] = [186, 85, 17, 249, 219, 231, 98, 251];
+        const DISCRIMINATOR: &[u8] = &[186, 85, 17, 249, 219, 231, 98, 251];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for DeleteUser {}
@@ -489,7 +489,7 @@ pub mod instructions {
     pub struct ForceDeleteUser {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for ForceDeleteUser {
-        const DISCRIMINATOR: [u8; 8] = [2, 241, 195, 172, 227, 24, 254, 158];
+        const DISCRIMINATOR: &[u8] = &[2, 241, 195, 172, 227, 24, 254, 158];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for ForceDeleteUser {}
@@ -497,7 +497,7 @@ pub mod instructions {
     pub struct DeleteSignedMsgUserOrders {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for DeleteSignedMsgUserOrders {
-        const DISCRIMINATOR: [u8; 8] = [221, 247, 128, 253, 212, 254, 46, 153];
+        const DISCRIMINATOR: &[u8] = &[221, 247, 128, 253, 212, 254, 46, 153];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for DeleteSignedMsgUserOrders {}
@@ -505,7 +505,7 @@ pub mod instructions {
     pub struct ReclaimRent {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for ReclaimRent {
-        const DISCRIMINATOR: [u8; 8] = [218, 200, 19, 197, 227, 89, 192, 22];
+        const DISCRIMINATOR: &[u8] = &[218, 200, 19, 197, 227, 89, 192, 22];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for ReclaimRent {}
@@ -515,7 +515,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for EnableUserHighLeverageMode {
-        const DISCRIMINATOR: [u8; 8] = [231, 24, 230, 112, 201, 173, 73, 184];
+        const DISCRIMINATOR: &[u8] = &[231, 24, 230, 112, 201, 173, 73, 184];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for EnableUserHighLeverageMode {}
@@ -526,7 +526,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for FillPerpOrder {
-        const DISCRIMINATOR: [u8; 8] = [13, 188, 248, 103, 134, 217, 106, 240];
+        const DISCRIMINATOR: &[u8] = &[13, 188, 248, 103, 134, 217, 106, 240];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for FillPerpOrder {}
@@ -534,7 +534,7 @@ pub mod instructions {
     pub struct RevertFill {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for RevertFill {
-        const DISCRIMINATOR: [u8; 8] = [236, 238, 176, 69, 239, 10, 181, 193];
+        const DISCRIMINATOR: &[u8] = &[236, 238, 176, 69, 239, 10, 181, 193];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for RevertFill {}
@@ -546,7 +546,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for FillSpotOrder {
-        const DISCRIMINATOR: [u8; 8] = [212, 206, 130, 173, 21, 34, 199, 40];
+        const DISCRIMINATOR: &[u8] = &[212, 206, 130, 173, 21, 34, 199, 40];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for FillSpotOrder {}
@@ -556,7 +556,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for TriggerOrder {
-        const DISCRIMINATOR: [u8; 8] = [63, 112, 51, 233, 232, 47, 240, 199];
+        const DISCRIMINATOR: &[u8] = &[63, 112, 51, 233, 232, 47, 240, 199];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for TriggerOrder {}
@@ -564,7 +564,7 @@ pub mod instructions {
     pub struct ForceCancelOrders {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for ForceCancelOrders {
-        const DISCRIMINATOR: [u8; 8] = [64, 181, 196, 63, 222, 72, 64, 232];
+        const DISCRIMINATOR: &[u8] = &[64, 181, 196, 63, 222, 72, 64, 232];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for ForceCancelOrders {}
@@ -572,7 +572,7 @@ pub mod instructions {
     pub struct UpdateUserIdle {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserIdle {
-        const DISCRIMINATOR: [u8; 8] = [253, 133, 67, 22, 103, 161, 20, 100];
+        const DISCRIMINATOR: &[u8] = &[253, 133, 67, 22, 103, 161, 20, 100];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserIdle {}
@@ -580,7 +580,7 @@ pub mod instructions {
     pub struct LogUserBalances {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for LogUserBalances {
-        const DISCRIMINATOR: [u8; 8] = [162, 21, 35, 251, 32, 57, 161, 210];
+        const DISCRIMINATOR: &[u8] = &[162, 21, 35, 251, 32, 57, 161, 210];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for LogUserBalances {}
@@ -588,7 +588,7 @@ pub mod instructions {
     pub struct DisableUserHighLeverageMode {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for DisableUserHighLeverageMode {
-        const DISCRIMINATOR: [u8; 8] = [183, 155, 45, 0, 226, 85, 213, 69];
+        const DISCRIMINATOR: &[u8] = &[183, 155, 45, 0, 226, 85, 213, 69];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for DisableUserHighLeverageMode {}
@@ -596,7 +596,7 @@ pub mod instructions {
     pub struct UpdateUserFuelBonus {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserFuelBonus {
-        const DISCRIMINATOR: [u8; 8] = [88, 175, 201, 190, 222, 100, 143, 57];
+        const DISCRIMINATOR: &[u8] = &[88, 175, 201, 190, 222, 100, 143, 57];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserFuelBonus {}
@@ -604,7 +604,7 @@ pub mod instructions {
     pub struct UpdateUserStatsReferrerStatus {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserStatsReferrerStatus {
-        const DISCRIMINATOR: [u8; 8] = [174, 154, 72, 42, 191, 148, 145, 205];
+        const DISCRIMINATOR: &[u8] = &[174, 154, 72, 42, 191, 148, 145, 205];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserStatsReferrerStatus {}
@@ -612,7 +612,7 @@ pub mod instructions {
     pub struct UpdateUserOpenOrdersCount {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserOpenOrdersCount {
-        const DISCRIMINATOR: [u8; 8] = [104, 39, 65, 210, 250, 163, 100, 134];
+        const DISCRIMINATOR: &[u8] = &[104, 39, 65, 210, 250, 163, 100, 134];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserOpenOrdersCount {}
@@ -622,7 +622,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for AdminDisableUpdatePerpBidAskTwap {
-        const DISCRIMINATOR: [u8; 8] = [17, 164, 82, 45, 183, 86, 191, 199];
+        const DISCRIMINATOR: &[u8] = &[17, 164, 82, 45, 183, 86, 191, 199];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for AdminDisableUpdatePerpBidAskTwap {}
@@ -632,7 +632,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettlePnl {
-        const DISCRIMINATOR: [u8; 8] = [43, 61, 234, 45, 15, 95, 152, 153];
+        const DISCRIMINATOR: &[u8] = &[43, 61, 234, 45, 15, 95, 152, 153];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for SettlePnl {}
@@ -643,7 +643,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettleMultiplePnls {
-        const DISCRIMINATOR: [u8; 8] = [127, 66, 117, 57, 40, 50, 152, 127];
+        const DISCRIMINATOR: &[u8] = &[127, 66, 117, 57, 40, 50, 152, 127];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for SettleMultiplePnls {}
@@ -651,7 +651,7 @@ pub mod instructions {
     pub struct SettleFundingPayment {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettleFundingPayment {
-        const DISCRIMINATOR: [u8; 8] = [222, 90, 202, 94, 28, 45, 115, 183];
+        const DISCRIMINATOR: &[u8] = &[222, 90, 202, 94, 28, 45, 115, 183];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for SettleFundingPayment {}
@@ -661,7 +661,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettleLp {
-        const DISCRIMINATOR: [u8; 8] = [155, 231, 116, 113, 97, 229, 139, 141];
+        const DISCRIMINATOR: &[u8] = &[155, 231, 116, 113, 97, 229, 139, 141];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for SettleLp {}
@@ -671,7 +671,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettleExpiredMarket {
-        const DISCRIMINATOR: [u8; 8] = [120, 89, 11, 25, 122, 77, 72, 193];
+        const DISCRIMINATOR: &[u8] = &[120, 89, 11, 25, 122, 77, 72, 193];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for SettleExpiredMarket {}
@@ -683,7 +683,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidatePerp {
-        const DISCRIMINATOR: [u8; 8] = [75, 35, 119, 247, 191, 18, 139, 2];
+        const DISCRIMINATOR: &[u8] = &[75, 35, 119, 247, 191, 18, 139, 2];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for LiquidatePerp {}
@@ -693,7 +693,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidatePerpWithFill {
-        const DISCRIMINATOR: [u8; 8] = [95, 111, 124, 105, 86, 169, 187, 34];
+        const DISCRIMINATOR: &[u8] = &[95, 111, 124, 105, 86, 169, 187, 34];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for LiquidatePerpWithFill {}
@@ -706,7 +706,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidateSpot {
-        const DISCRIMINATOR: [u8; 8] = [107, 0, 128, 41, 35, 229, 251, 18];
+        const DISCRIMINATOR: &[u8] = &[107, 0, 128, 41, 35, 229, 251, 18];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for LiquidateSpot {}
@@ -718,7 +718,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidateSpotWithSwapBegin {
-        const DISCRIMINATOR: [u8; 8] = [12, 43, 176, 83, 156, 251, 117, 13];
+        const DISCRIMINATOR: &[u8] = &[12, 43, 176, 83, 156, 251, 117, 13];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for LiquidateSpotWithSwapBegin {}
@@ -729,7 +729,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidateSpotWithSwapEnd {
-        const DISCRIMINATOR: [u8; 8] = [142, 88, 163, 160, 223, 75, 55, 225];
+        const DISCRIMINATOR: &[u8] = &[142, 88, 163, 160, 223, 75, 55, 225];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for LiquidateSpotWithSwapEnd {}
@@ -742,7 +742,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidateBorrowForPerpPnl {
-        const DISCRIMINATOR: [u8; 8] = [169, 17, 32, 90, 207, 148, 209, 27];
+        const DISCRIMINATOR: &[u8] = &[169, 17, 32, 90, 207, 148, 209, 27];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for LiquidateBorrowForPerpPnl {}
@@ -755,7 +755,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidatePerpPnlForDeposit {
-        const DISCRIMINATOR: [u8; 8] = [237, 75, 198, 235, 233, 186, 75, 35];
+        const DISCRIMINATOR: &[u8] = &[237, 75, 198, 235, 233, 186, 75, 35];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for LiquidatePerpPnlForDeposit {}
@@ -763,7 +763,7 @@ pub mod instructions {
     pub struct SetUserStatusToBeingLiquidated {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for SetUserStatusToBeingLiquidated {
-        const DISCRIMINATOR: [u8; 8] = [106, 133, 160, 206, 193, 171, 192, 194];
+        const DISCRIMINATOR: &[u8] = &[106, 133, 160, 206, 193, 171, 192, 194];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for SetUserStatusToBeingLiquidated {}
@@ -774,7 +774,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ResolvePerpPnlDeficit {
-        const DISCRIMINATOR: [u8; 8] = [168, 204, 68, 150, 159, 126, 95, 148];
+        const DISCRIMINATOR: &[u8] = &[168, 204, 68, 150, 159, 126, 95, 148];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for ResolvePerpPnlDeficit {}
@@ -785,7 +785,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ResolvePerpBankruptcy {
-        const DISCRIMINATOR: [u8; 8] = [224, 16, 176, 214, 162, 213, 183, 222];
+        const DISCRIMINATOR: &[u8] = &[224, 16, 176, 214, 162, 213, 183, 222];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for ResolvePerpBankruptcy {}
@@ -795,7 +795,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ResolveSpotBankruptcy {
-        const DISCRIMINATOR: [u8; 8] = [124, 194, 240, 254, 198, 213, 52, 122];
+        const DISCRIMINATOR: &[u8] = &[124, 194, 240, 254, 198, 213, 52, 122];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for ResolveSpotBankruptcy {}
@@ -805,7 +805,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettleRevenueToInsuranceFund {
-        const DISCRIMINATOR: [u8; 8] = [200, 120, 93, 136, 69, 38, 199, 159];
+        const DISCRIMINATOR: &[u8] = &[200, 120, 93, 136, 69, 38, 199, 159];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for SettleRevenueToInsuranceFund {}
@@ -815,7 +815,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateFundingRate {
-        const DISCRIMINATOR: [u8; 8] = [201, 178, 116, 212, 166, 144, 72, 238];
+        const DISCRIMINATOR: &[u8] = &[201, 178, 116, 212, 166, 144, 72, 238];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateFundingRate {}
@@ -823,7 +823,7 @@ pub mod instructions {
     pub struct UpdatePrelaunchOracle {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePrelaunchOracle {
-        const DISCRIMINATOR: [u8; 8] = [220, 132, 27, 27, 233, 220, 61, 219];
+        const DISCRIMINATOR: &[u8] = &[220, 132, 27, 27, 233, 220, 61, 219];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePrelaunchOracle {}
@@ -831,7 +831,7 @@ pub mod instructions {
     pub struct UpdatePerpBidAskTwap {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpBidAskTwap {
-        const DISCRIMINATOR: [u8; 8] = [247, 23, 255, 65, 212, 90, 221, 194];
+        const DISCRIMINATOR: &[u8] = &[247, 23, 255, 65, 212, 90, 221, 194];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpBidAskTwap {}
@@ -839,7 +839,7 @@ pub mod instructions {
     pub struct UpdateSpotMarketCumulativeInterest {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketCumulativeInterest {
-        const DISCRIMINATOR: [u8; 8] = [39, 166, 139, 243, 158, 165, 155, 225];
+        const DISCRIMINATOR: &[u8] = &[39, 166, 139, 243, 158, 165, 155, 225];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketCumulativeInterest {}
@@ -849,7 +849,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateAmms {
-        const DISCRIMINATOR: [u8; 8] = [201, 106, 217, 253, 4, 175, 228, 97];
+        const DISCRIMINATOR: &[u8] = &[201, 106, 217, 253, 4, 175, 228, 97];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateAmms {}
@@ -859,7 +859,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketExpiry {
-        const DISCRIMINATOR: [u8; 8] = [208, 11, 211, 159, 226, 24, 11, 247];
+        const DISCRIMINATOR: &[u8] = &[208, 11, 211, 159, 226, 24, 11, 247];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketExpiry {}
@@ -867,7 +867,7 @@ pub mod instructions {
     pub struct UpdateUserQuoteAssetInsuranceStake {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserQuoteAssetInsuranceStake {
-        const DISCRIMINATOR: [u8; 8] = [251, 101, 156, 7, 2, 63, 30, 23];
+        const DISCRIMINATOR: &[u8] = &[251, 101, 156, 7, 2, 63, 30, 23];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserQuoteAssetInsuranceStake {}
@@ -875,7 +875,7 @@ pub mod instructions {
     pub struct UpdateUserGovTokenInsuranceStake {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserGovTokenInsuranceStake {
-        const DISCRIMINATOR: [u8; 8] = [143, 99, 235, 187, 20, 159, 184, 84];
+        const DISCRIMINATOR: &[u8] = &[143, 99, 235, 187, 20, 159, 184, 84];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserGovTokenInsuranceStake {}
@@ -885,7 +885,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserGovTokenInsuranceStakeDevnet {
-        const DISCRIMINATOR: [u8; 8] = [129, 185, 243, 183, 228, 111, 64, 175];
+        const DISCRIMINATOR: &[u8] = &[129, 185, 243, 183, 228, 111, 64, 175];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserGovTokenInsuranceStakeDevnet {}
@@ -895,7 +895,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeInsuranceFundStake {
-        const DISCRIMINATOR: [u8; 8] = [187, 179, 243, 70, 248, 90, 92, 147];
+        const DISCRIMINATOR: &[u8] = &[187, 179, 243, 70, 248, 90, 92, 147];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeInsuranceFundStake {}
@@ -906,7 +906,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for AddInsuranceFundStake {
-        const DISCRIMINATOR: [u8; 8] = [251, 144, 115, 11, 222, 47, 62, 236];
+        const DISCRIMINATOR: &[u8] = &[251, 144, 115, 11, 222, 47, 62, 236];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for AddInsuranceFundStake {}
@@ -917,7 +917,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for RequestRemoveInsuranceFundStake {
-        const DISCRIMINATOR: [u8; 8] = [142, 70, 204, 92, 73, 106, 180, 52];
+        const DISCRIMINATOR: &[u8] = &[142, 70, 204, 92, 73, 106, 180, 52];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for RequestRemoveInsuranceFundStake {}
@@ -927,7 +927,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for CancelRequestRemoveInsuranceFundStake {
-        const DISCRIMINATOR: [u8; 8] = [97, 235, 78, 62, 212, 42, 241, 127];
+        const DISCRIMINATOR: &[u8] = &[97, 235, 78, 62, 212, 42, 241, 127];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for CancelRequestRemoveInsuranceFundStake {}
@@ -937,7 +937,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for RemoveInsuranceFundStake {
-        const DISCRIMINATOR: [u8; 8] = [128, 166, 142, 9, 254, 187, 143, 174];
+        const DISCRIMINATOR: &[u8] = &[128, 166, 142, 9, 254, 187, 143, 174];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for RemoveInsuranceFundStake {}
@@ -948,7 +948,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for TransferProtocolIfShares {
-        const DISCRIMINATOR: [u8; 8] = [94, 93, 226, 240, 195, 201, 184, 109];
+        const DISCRIMINATOR: &[u8] = &[94, 93, 226, 240, 195, 201, 184, 109];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for TransferProtocolIfShares {}
@@ -959,7 +959,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePythPullOracle {
-        const DISCRIMINATOR: [u8; 8] = [230, 191, 189, 94, 108, 59, 74, 197];
+        const DISCRIMINATOR: &[u8] = &[230, 191, 189, 94, 108, 59, 74, 197];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePythPullOracle {}
@@ -970,7 +970,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PostPythPullOracleUpdateAtomic {
-        const DISCRIMINATOR: [u8; 8] = [116, 122, 137, 158, 224, 195, 173, 119];
+        const DISCRIMINATOR: &[u8] = &[116, 122, 137, 158, 224, 195, 173, 119];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PostPythPullOracleUpdateAtomic {}
@@ -980,7 +980,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PostMultiPythPullOracleUpdatesAtomic {
-        const DISCRIMINATOR: [u8; 8] = [243, 79, 204, 228, 227, 208, 100, 244];
+        const DISCRIMINATOR: &[u8] = &[243, 79, 204, 228, 227, 208, 100, 244];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PostMultiPythPullOracleUpdatesAtomic {}
@@ -988,7 +988,7 @@ pub mod instructions {
     pub struct PauseSpotMarketDepositWithdraw {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for PauseSpotMarketDepositWithdraw {
-        const DISCRIMINATOR: [u8; 8] = [183, 119, 59, 170, 137, 35, 242, 86];
+        const DISCRIMINATOR: &[u8] = &[183, 119, 59, 170, 137, 35, 242, 86];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PauseSpotMarketDepositWithdraw {}
@@ -996,7 +996,7 @@ pub mod instructions {
     pub struct Initialize {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for Initialize {
-        const DISCRIMINATOR: [u8; 8] = [175, 175, 109, 31, 13, 152, 155, 237];
+        const DISCRIMINATOR: &[u8] = &[175, 175, 109, 31, 13, 152, 155, 237];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for Initialize {}
@@ -1024,7 +1024,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeSpotMarket {
-        const DISCRIMINATOR: [u8; 8] = [234, 196, 128, 44, 94, 15, 48, 201];
+        const DISCRIMINATOR: &[u8] = &[234, 196, 128, 44, 94, 15, 48, 201];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeSpotMarket {}
@@ -1034,7 +1034,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DeleteInitializedSpotMarket {
-        const DISCRIMINATOR: [u8; 8] = [31, 140, 67, 191, 189, 20, 101, 221];
+        const DISCRIMINATOR: &[u8] = &[31, 140, 67, 191, 189, 20, 101, 221];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for DeleteInitializedSpotMarket {}
@@ -1044,7 +1044,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeSerumFulfillmentConfig {
-        const DISCRIMINATOR: [u8; 8] = [193, 211, 132, 172, 70, 171, 7, 94];
+        const DISCRIMINATOR: &[u8] = &[193, 211, 132, 172, 70, 171, 7, 94];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeSerumFulfillmentConfig {}
@@ -1054,7 +1054,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSerumFulfillmentConfigStatus {
-        const DISCRIMINATOR: [u8; 8] = [171, 109, 240, 251, 95, 1, 149, 89];
+        const DISCRIMINATOR: &[u8] = &[171, 109, 240, 251, 95, 1, 149, 89];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSerumFulfillmentConfigStatus {}
@@ -1064,7 +1064,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeOpenbookV2FulfillmentConfig {
-        const DISCRIMINATOR: [u8; 8] = [7, 221, 103, 153, 107, 57, 27, 197];
+        const DISCRIMINATOR: &[u8] = &[7, 221, 103, 153, 107, 57, 27, 197];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeOpenbookV2FulfillmentConfig {}
@@ -1074,7 +1074,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for OpenbookV2FulfillmentConfigStatus {
-        const DISCRIMINATOR: [u8; 8] = [25, 173, 19, 189, 4, 211, 64, 238];
+        const DISCRIMINATOR: &[u8] = &[25, 173, 19, 189, 4, 211, 64, 238];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for OpenbookV2FulfillmentConfigStatus {}
@@ -1084,7 +1084,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializePhoenixFulfillmentConfig {
-        const DISCRIMINATOR: [u8; 8] = [135, 132, 110, 107, 185, 160, 169, 154];
+        const DISCRIMINATOR: &[u8] = &[135, 132, 110, 107, 185, 160, 169, 154];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializePhoenixFulfillmentConfig {}
@@ -1094,7 +1094,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PhoenixFulfillmentConfigStatus {
-        const DISCRIMINATOR: [u8; 8] = [96, 31, 113, 32, 12, 203, 7, 154];
+        const DISCRIMINATOR: &[u8] = &[96, 31, 113, 32, 12, 203, 7, 154];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PhoenixFulfillmentConfigStatus {}
@@ -1102,7 +1102,7 @@ pub mod instructions {
     pub struct UpdateSerumVault {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSerumVault {
-        const DISCRIMINATOR: [u8; 8] = [219, 8, 246, 96, 169, 121, 91, 110];
+        const DISCRIMINATOR: &[u8] = &[219, 8, 246, 96, 169, 121, 91, 110];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSerumVault {}
@@ -1136,7 +1136,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializePerpMarket {
-        const DISCRIMINATOR: [u8; 8] = [132, 9, 229, 118, 117, 118, 117, 62];
+        const DISCRIMINATOR: &[u8] = &[132, 9, 229, 118, 117, 118, 117, 62];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializePerpMarket {}
@@ -1144,7 +1144,7 @@ pub mod instructions {
     pub struct InitializePredictionMarket {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializePredictionMarket {
-        const DISCRIMINATOR: [u8; 8] = [248, 70, 198, 224, 224, 105, 125, 195];
+        const DISCRIMINATOR: &[u8] = &[248, 70, 198, 224, 224, 105, 125, 195];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializePredictionMarket {}
@@ -1154,7 +1154,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DeleteInitializedPerpMarket {
-        const DISCRIMINATOR: [u8; 8] = [91, 154, 24, 87, 106, 59, 190, 66];
+        const DISCRIMINATOR: &[u8] = &[91, 154, 24, 87, 106, 59, 190, 66];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for DeleteInitializedPerpMarket {}
@@ -1166,7 +1166,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for MoveAmmPrice {
-        const DISCRIMINATOR: [u8; 8] = [235, 109, 2, 82, 219, 118, 6, 159];
+        const DISCRIMINATOR: &[u8] = &[235, 109, 2, 82, 219, 118, 6, 159];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for MoveAmmPrice {}
@@ -1177,7 +1177,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for RecenterPerpMarketAmm {
-        const DISCRIMINATOR: [u8; 8] = [24, 87, 10, 115, 165, 190, 80, 139];
+        const DISCRIMINATOR: &[u8] = &[24, 87, 10, 115, 165, 190, 80, 139];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for RecenterPerpMarketAmm {}
@@ -1187,7 +1187,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketAmmSummaryStats {
-        const DISCRIMINATOR: [u8; 8] = [122, 101, 249, 238, 209, 9, 241, 245];
+        const DISCRIMINATOR: &[u8] = &[122, 101, 249, 238, 209, 9, 241, 245];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketAmmSummaryStats {}
@@ -1197,7 +1197,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketExpiry {
-        const DISCRIMINATOR: [u8; 8] = [44, 221, 227, 151, 131, 140, 22, 110];
+        const DISCRIMINATOR: &[u8] = &[44, 221, 227, 151, 131, 140, 22, 110];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketExpiry {}
@@ -1205,7 +1205,7 @@ pub mod instructions {
     pub struct SettleExpiredMarketPoolsToRevenuePool {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettleExpiredMarketPoolsToRevenuePool {
-        const DISCRIMINATOR: [u8; 8] = [55, 19, 238, 169, 227, 90, 200, 184];
+        const DISCRIMINATOR: &[u8] = &[55, 19, 238, 169, 227, 90, 200, 184];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for SettleExpiredMarketPoolsToRevenuePool {}
@@ -1215,7 +1215,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DepositIntoPerpMarketFeePool {
-        const DISCRIMINATOR: [u8; 8] = [34, 58, 57, 68, 97, 80, 244, 6];
+        const DISCRIMINATOR: &[u8] = &[34, 58, 57, 68, 97, 80, 244, 6];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for DepositIntoPerpMarketFeePool {}
@@ -1225,7 +1225,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DepositIntoSpotMarketVault {
-        const DISCRIMINATOR: [u8; 8] = [48, 252, 119, 73, 255, 205, 174, 247];
+        const DISCRIMINATOR: &[u8] = &[48, 252, 119, 73, 255, 205, 174, 247];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for DepositIntoSpotMarketVault {}
@@ -1235,7 +1235,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DepositIntoSpotMarketRevenuePool {
-        const DISCRIMINATOR: [u8; 8] = [92, 40, 151, 42, 122, 254, 139, 246];
+        const DISCRIMINATOR: &[u8] = &[92, 40, 151, 42, 122, 254, 139, 246];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for DepositIntoSpotMarketRevenuePool {}
@@ -1245,7 +1245,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for RepegAmmCurve {
-        const DISCRIMINATOR: [u8; 8] = [3, 36, 102, 89, 180, 128, 120, 213];
+        const DISCRIMINATOR: &[u8] = &[3, 36, 102, 89, 180, 128, 120, 213];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for RepegAmmCurve {}
@@ -1253,7 +1253,7 @@ pub mod instructions {
     pub struct UpdatePerpMarketAmmOracleTwap {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketAmmOracleTwap {
-        const DISCRIMINATOR: [u8; 8] = [241, 74, 114, 123, 206, 153, 24, 202];
+        const DISCRIMINATOR: &[u8] = &[241, 74, 114, 123, 206, 153, 24, 202];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketAmmOracleTwap {}
@@ -1261,7 +1261,7 @@ pub mod instructions {
     pub struct ResetPerpMarketAmmOracleTwap {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for ResetPerpMarketAmmOracleTwap {
-        const DISCRIMINATOR: [u8; 8] = [127, 10, 55, 164, 123, 226, 47, 24];
+        const DISCRIMINATOR: &[u8] = &[127, 10, 55, 164, 123, 226, 47, 24];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for ResetPerpMarketAmmOracleTwap {}
@@ -1271,7 +1271,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateK {
-        const DISCRIMINATOR: [u8; 8] = [72, 98, 9, 139, 129, 229, 172, 56];
+        const DISCRIMINATOR: &[u8] = &[72, 98, 9, 139, 129, 229, 172, 56];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateK {}
@@ -1282,7 +1282,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketMarginRatio {
-        const DISCRIMINATOR: [u8; 8] = [130, 173, 107, 45, 119, 105, 26, 113];
+        const DISCRIMINATOR: &[u8] = &[130, 173, 107, 45, 119, 105, 26, 113];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketMarginRatio {}
@@ -1293,7 +1293,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketHighLeverageMarginRatio {
-        const DISCRIMINATOR: [u8; 8] = [88, 112, 86, 49, 24, 116, 74, 157];
+        const DISCRIMINATOR: &[u8] = &[88, 112, 86, 49, 24, 116, 74, 157];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketHighLeverageMarginRatio {}
@@ -1303,7 +1303,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketFundingPeriod {
-        const DISCRIMINATOR: [u8; 8] = [171, 161, 69, 91, 129, 139, 161, 28];
+        const DISCRIMINATOR: &[u8] = &[171, 161, 69, 91, 129, 139, 161, 28];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketFundingPeriod {}
@@ -1315,7 +1315,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketMaxImbalances {
-        const DISCRIMINATOR: [u8; 8] = [15, 206, 73, 133, 60, 8, 86, 89];
+        const DISCRIMINATOR: &[u8] = &[15, 206, 73, 133, 60, 8, 86, 89];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketMaxImbalances {}
@@ -1326,7 +1326,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketLiquidationFee {
-        const DISCRIMINATOR: [u8; 8] = [90, 137, 9, 145, 41, 8, 148, 117];
+        const DISCRIMINATOR: &[u8] = &[90, 137, 9, 145, 41, 8, 148, 117];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketLiquidationFee {}
@@ -1336,7 +1336,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateInsuranceFundUnstakingPeriod {
-        const DISCRIMINATOR: [u8; 8] = [44, 69, 43, 226, 204, 223, 202, 52];
+        const DISCRIMINATOR: &[u8] = &[44, 69, 43, 226, 204, 223, 202, 52];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateInsuranceFundUnstakingPeriod {}
@@ -1346,7 +1346,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketPoolId {
-        const DISCRIMINATOR: [u8; 8] = [22, 213, 197, 160, 139, 193, 81, 149];
+        const DISCRIMINATOR: &[u8] = &[22, 213, 197, 160, 139, 193, 81, 149];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketPoolId {}
@@ -1357,7 +1357,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketLiquidationFee {
-        const DISCRIMINATOR: [u8; 8] = [11, 13, 255, 53, 56, 136, 104, 177];
+        const DISCRIMINATOR: &[u8] = &[11, 13, 255, 53, 56, 136, 104, 177];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketLiquidationFee {}
@@ -1367,7 +1367,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateWithdrawGuardThreshold {
-        const DISCRIMINATOR: [u8; 8] = [56, 18, 39, 61, 155, 211, 44, 133];
+        const DISCRIMINATOR: &[u8] = &[56, 18, 39, 61, 155, 211, 44, 133];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateWithdrawGuardThreshold {}
@@ -1379,7 +1379,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketIfFactor {
-        const DISCRIMINATOR: [u8; 8] = [147, 30, 224, 34, 18, 230, 105, 4];
+        const DISCRIMINATOR: &[u8] = &[147, 30, 224, 34, 18, 230, 105, 4];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketIfFactor {}
@@ -1389,7 +1389,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketRevenueSettlePeriod {
-        const DISCRIMINATOR: [u8; 8] = [81, 92, 126, 41, 250, 225, 156, 219];
+        const DISCRIMINATOR: &[u8] = &[81, 92, 126, 41, 250, 225, 156, 219];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketRevenueSettlePeriod {}
@@ -1399,7 +1399,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketStatus {
-        const DISCRIMINATOR: [u8; 8] = [78, 94, 16, 188, 193, 110, 231, 31];
+        const DISCRIMINATOR: &[u8] = &[78, 94, 16, 188, 193, 110, 231, 31];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketStatus {}
@@ -1409,7 +1409,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketPausedOperations {
-        const DISCRIMINATOR: [u8; 8] = [100, 61, 153, 81, 180, 12, 6, 248];
+        const DISCRIMINATOR: &[u8] = &[100, 61, 153, 81, 180, 12, 6, 248];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketPausedOperations {}
@@ -1419,7 +1419,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketAssetTier {
-        const DISCRIMINATOR: [u8; 8] = [253, 209, 231, 14, 242, 208, 243, 130];
+        const DISCRIMINATOR: &[u8] = &[253, 209, 231, 14, 242, 208, 243, 130];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketAssetTier {}
@@ -1433,7 +1433,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketMarginWeights {
-        const DISCRIMINATOR: [u8; 8] = [109, 33, 87, 195, 255, 36, 6, 81];
+        const DISCRIMINATOR: &[u8] = &[109, 33, 87, 195, 255, 36, 6, 81];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketMarginWeights {}
@@ -1446,7 +1446,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketBorrowRate {
-        const DISCRIMINATOR: [u8; 8] = [71, 239, 236, 153, 210, 62, 254, 76];
+        const DISCRIMINATOR: &[u8] = &[71, 239, 236, 153, 210, 62, 254, 76];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketBorrowRate {}
@@ -1456,7 +1456,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketMaxTokenDeposits {
-        const DISCRIMINATOR: [u8; 8] = [56, 191, 79, 18, 26, 121, 80, 208];
+        const DISCRIMINATOR: &[u8] = &[56, 191, 79, 18, 26, 121, 80, 208];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketMaxTokenDeposits {}
@@ -1466,7 +1466,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketMaxTokenBorrows {
-        const DISCRIMINATOR: [u8; 8] = [57, 102, 204, 212, 253, 95, 13, 199];
+        const DISCRIMINATOR: &[u8] = &[57, 102, 204, 212, 253, 95, 13, 199];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketMaxTokenBorrows {}
@@ -1476,7 +1476,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketScaleInitialAssetWeightStart {
-        const DISCRIMINATOR: [u8; 8] = [217, 204, 204, 118, 204, 130, 225, 147];
+        const DISCRIMINATOR: &[u8] = &[217, 204, 204, 118, 204, 130, 225, 147];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketScaleInitialAssetWeightStart {}
@@ -1488,7 +1488,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketOracle {
-        const DISCRIMINATOR: [u8; 8] = [114, 184, 102, 37, 246, 186, 180, 99];
+        const DISCRIMINATOR: &[u8] = &[114, 184, 102, 37, 246, 186, 180, 99];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketOracle {}
@@ -1499,7 +1499,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketStepSizeAndTickSize {
-        const DISCRIMINATOR: [u8; 8] = [238, 153, 137, 80, 206, 59, 250, 61];
+        const DISCRIMINATOR: &[u8] = &[238, 153, 137, 80, 206, 59, 250, 61];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketStepSizeAndTickSize {}
@@ -1509,7 +1509,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketMinOrderSize {
-        const DISCRIMINATOR: [u8; 8] = [93, 128, 11, 119, 26, 20, 181, 50];
+        const DISCRIMINATOR: &[u8] = &[93, 128, 11, 119, 26, 20, 181, 50];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketMinOrderSize {}
@@ -1519,7 +1519,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketOrdersEnabled {
-        const DISCRIMINATOR: [u8; 8] = [190, 79, 206, 15, 26, 229, 229, 43];
+        const DISCRIMINATOR: &[u8] = &[190, 79, 206, 15, 26, 229, 229, 43];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketOrdersEnabled {}
@@ -1529,7 +1529,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketIfPausedOperations {
-        const DISCRIMINATOR: [u8; 8] = [101, 215, 79, 74, 59, 41, 79, 12];
+        const DISCRIMINATOR: &[u8] = &[101, 215, 79, 74, 59, 41, 79, 12];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketIfPausedOperations {}
@@ -1539,7 +1539,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketName {
-        const DISCRIMINATOR: [u8; 8] = [17, 208, 1, 1, 162, 211, 188, 224];
+        const DISCRIMINATOR: &[u8] = &[17, 208, 1, 1, 162, 211, 188, 224];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketName {}
@@ -1549,7 +1549,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketStatus {
-        const DISCRIMINATOR: [u8; 8] = [71, 201, 175, 122, 255, 207, 196, 207];
+        const DISCRIMINATOR: &[u8] = &[71, 201, 175, 122, 255, 207, 196, 207];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketStatus {}
@@ -1559,7 +1559,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketPausedOperations {
-        const DISCRIMINATOR: [u8; 8] = [53, 16, 136, 132, 30, 220, 121, 85];
+        const DISCRIMINATOR: &[u8] = &[53, 16, 136, 132, 30, 220, 121, 85];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketPausedOperations {}
@@ -1569,7 +1569,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketContractTier {
-        const DISCRIMINATOR: [u8; 8] = [236, 128, 15, 95, 203, 214, 68, 117];
+        const DISCRIMINATOR: &[u8] = &[236, 128, 15, 95, 203, 214, 68, 117];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketContractTier {}
@@ -1580,7 +1580,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketImfFactor {
-        const DISCRIMINATOR: [u8; 8] = [207, 194, 56, 132, 35, 67, 71, 244];
+        const DISCRIMINATOR: &[u8] = &[207, 194, 56, 132, 35, 67, 71, 244];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketImfFactor {}
@@ -1591,7 +1591,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketUnrealizedAssetWeight {
-        const DISCRIMINATOR: [u8; 8] = [135, 132, 205, 165, 109, 150, 166, 106];
+        const DISCRIMINATOR: &[u8] = &[135, 132, 205, 165, 109, 150, 166, 106];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketUnrealizedAssetWeight {}
@@ -1601,7 +1601,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketConcentrationCoef {
-        const DISCRIMINATOR: [u8; 8] = [24, 78, 232, 126, 169, 176, 230, 16];
+        const DISCRIMINATOR: &[u8] = &[24, 78, 232, 126, 169, 176, 230, 16];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketConcentrationCoef {}
@@ -1611,7 +1611,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketCurveUpdateIntensity {
-        const DISCRIMINATOR: [u8; 8] = [50, 131, 6, 156, 226, 231, 189, 72];
+        const DISCRIMINATOR: &[u8] = &[50, 131, 6, 156, 226, 231, 189, 72];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketCurveUpdateIntensity {}
@@ -1621,7 +1621,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketTargetBaseAssetAmountPerLp {
-        const DISCRIMINATOR: [u8; 8] = [62, 87, 68, 115, 29, 150, 150, 165];
+        const DISCRIMINATOR: &[u8] = &[62, 87, 68, 115, 29, 150, 150, 165];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketTargetBaseAssetAmountPerLp {}
@@ -1631,7 +1631,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketPerLpBase {
-        const DISCRIMINATOR: [u8; 8] = [103, 152, 103, 102, 89, 144, 193, 71];
+        const DISCRIMINATOR: &[u8] = &[103, 152, 103, 102, 89, 144, 193, 71];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketPerLpBase {}
@@ -1641,7 +1641,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateLpCooldownTime {
-        const DISCRIMINATOR: [u8; 8] = [198, 133, 88, 41, 241, 119, 61, 14];
+        const DISCRIMINATOR: &[u8] = &[198, 133, 88, 41, 241, 119, 61, 14];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateLpCooldownTime {}
@@ -1651,7 +1651,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpFeeStructure {
-        const DISCRIMINATOR: [u8; 8] = [23, 178, 111, 203, 73, 22, 140, 75];
+        const DISCRIMINATOR: &[u8] = &[23, 178, 111, 203, 73, 22, 140, 75];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpFeeStructure {}
@@ -1661,7 +1661,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotFeeStructure {
-        const DISCRIMINATOR: [u8; 8] = [97, 216, 105, 131, 113, 246, 142, 141];
+        const DISCRIMINATOR: &[u8] = &[97, 216, 105, 131, 113, 246, 142, 141];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotFeeStructure {}
@@ -1671,7 +1671,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateInitialPctToLiquidate {
-        const DISCRIMINATOR: [u8; 8] = [210, 133, 225, 128, 194, 50, 13, 109];
+        const DISCRIMINATOR: &[u8] = &[210, 133, 225, 128, 194, 50, 13, 109];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateInitialPctToLiquidate {}
@@ -1681,7 +1681,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateLiquidationDuration {
-        const DISCRIMINATOR: [u8; 8] = [28, 154, 20, 249, 102, 192, 73, 71];
+        const DISCRIMINATOR: &[u8] = &[28, 154, 20, 249, 102, 192, 73, 71];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateLiquidationDuration {}
@@ -1691,7 +1691,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateLiquidationMarginBufferRatio {
-        const DISCRIMINATOR: [u8; 8] = [132, 224, 243, 160, 154, 82, 97, 215];
+        const DISCRIMINATOR: &[u8] = &[132, 224, 243, 160, 154, 82, 97, 215];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateLiquidationMarginBufferRatio {}
@@ -1701,7 +1701,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateOracleGuardRails {
-        const DISCRIMINATOR: [u8; 8] = [131, 112, 10, 59, 32, 54, 40, 164];
+        const DISCRIMINATOR: &[u8] = &[131, 112, 10, 59, 32, 54, 40, 164];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateOracleGuardRails {}
@@ -1711,7 +1711,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateStateSettlementDuration {
-        const DISCRIMINATOR: [u8; 8] = [97, 68, 199, 235, 131, 80, 61, 173];
+        const DISCRIMINATOR: &[u8] = &[97, 68, 199, 235, 131, 80, 61, 173];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateStateSettlementDuration {}
@@ -1721,7 +1721,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateStateMaxNumberOfSubAccounts {
-        const DISCRIMINATOR: [u8; 8] = [155, 123, 214, 2, 221, 166, 204, 85];
+        const DISCRIMINATOR: &[u8] = &[155, 123, 214, 2, 221, 166, 204, 85];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateStateMaxNumberOfSubAccounts {}
@@ -1731,7 +1731,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateStateMaxInitializeUserFee {
-        const DISCRIMINATOR: [u8; 8] = [237, 225, 25, 237, 193, 45, 77, 97];
+        const DISCRIMINATOR: &[u8] = &[237, 225, 25, 237, 193, 45, 77, 97];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateStateMaxInitializeUserFee {}
@@ -1743,7 +1743,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketOracle {
-        const DISCRIMINATOR: [u8; 8] = [182, 113, 111, 160, 67, 174, 89, 191];
+        const DISCRIMINATOR: &[u8] = &[182, 113, 111, 160, 67, 174, 89, 191];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketOracle {}
@@ -1753,7 +1753,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketBaseSpread {
-        const DISCRIMINATOR: [u8; 8] = [71, 95, 84, 168, 9, 157, 198, 65];
+        const DISCRIMINATOR: &[u8] = &[71, 95, 84, 168, 9, 157, 198, 65];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketBaseSpread {}
@@ -1763,7 +1763,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateAmmJitIntensity {
-        const DISCRIMINATOR: [u8; 8] = [181, 191, 53, 109, 166, 249, 55, 142];
+        const DISCRIMINATOR: &[u8] = &[181, 191, 53, 109, 166, 249, 55, 142];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateAmmJitIntensity {}
@@ -1773,7 +1773,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketMaxSpread {
-        const DISCRIMINATOR: [u8; 8] = [80, 252, 122, 62, 40, 218, 91, 100];
+        const DISCRIMINATOR: &[u8] = &[80, 252, 122, 62, 40, 218, 91, 100];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketMaxSpread {}
@@ -1784,7 +1784,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketStepSizeAndTickSize {
-        const DISCRIMINATOR: [u8; 8] = [231, 255, 97, 25, 146, 139, 174, 4];
+        const DISCRIMINATOR: &[u8] = &[231, 255, 97, 25, 146, 139, 174, 4];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketStepSizeAndTickSize {}
@@ -1794,7 +1794,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketName {
-        const DISCRIMINATOR: [u8; 8] = [211, 31, 21, 210, 64, 108, 66, 201];
+        const DISCRIMINATOR: &[u8] = &[211, 31, 21, 210, 64, 108, 66, 201];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketName {}
@@ -1804,7 +1804,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketMinOrderSize {
-        const DISCRIMINATOR: [u8; 8] = [226, 74, 5, 89, 108, 223, 46, 141];
+        const DISCRIMINATOR: &[u8] = &[226, 74, 5, 89, 108, 223, 46, 141];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketMinOrderSize {}
@@ -1814,7 +1814,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketMaxSlippageRatio {
-        const DISCRIMINATOR: [u8; 8] = [235, 37, 40, 196, 70, 146, 54, 201];
+        const DISCRIMINATOR: &[u8] = &[235, 37, 40, 196, 70, 146, 54, 201];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketMaxSlippageRatio {}
@@ -1824,7 +1824,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketMaxFillReserveFraction {
-        const DISCRIMINATOR: [u8; 8] = [19, 172, 114, 154, 42, 135, 161, 133];
+        const DISCRIMINATOR: &[u8] = &[19, 172, 114, 154, 42, 135, 161, 133];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketMaxFillReserveFraction {}
@@ -1834,7 +1834,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketMaxOpenInterest {
-        const DISCRIMINATOR: [u8; 8] = [194, 79, 149, 224, 246, 102, 186, 140];
+        const DISCRIMINATOR: &[u8] = &[194, 79, 149, 224, 246, 102, 186, 140];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketMaxOpenInterest {}
@@ -1845,7 +1845,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketNumberOfUsers {
-        const DISCRIMINATOR: [u8; 8] = [35, 62, 144, 177, 180, 62, 215, 196];
+        const DISCRIMINATOR: &[u8] = &[35, 62, 144, 177, 180, 62, 215, 196];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketNumberOfUsers {}
@@ -1855,7 +1855,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketFeeAdjustment {
-        const DISCRIMINATOR: [u8; 8] = [194, 174, 87, 102, 43, 148, 32, 112];
+        const DISCRIMINATOR: &[u8] = &[194, 174, 87, 102, 43, 148, 32, 112];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketFeeAdjustment {}
@@ -1865,7 +1865,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketFeeAdjustment {
-        const DISCRIMINATOR: [u8; 8] = [148, 182, 3, 126, 157, 114, 220, 99];
+        const DISCRIMINATOR: &[u8] = &[148, 182, 3, 126, 157, 114, 220, 99];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketFeeAdjustment {}
@@ -1877,7 +1877,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketFuel {
-        const DISCRIMINATOR: [u8; 8] = [252, 141, 110, 101, 27, 99, 182, 21];
+        const DISCRIMINATOR: &[u8] = &[252, 141, 110, 101, 27, 99, 182, 21];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketFuel {}
@@ -1891,7 +1891,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketFuel {
-        const DISCRIMINATOR: [u8; 8] = [226, 253, 76, 71, 17, 2, 171, 169];
+        const DISCRIMINATOR: &[u8] = &[226, 253, 76, 71, 17, 2, 171, 169];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotMarketFuel {}
@@ -1905,7 +1905,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitUserFuel {
-        const DISCRIMINATOR: [u8; 8] = [132, 191, 228, 141, 201, 138, 60, 48];
+        const DISCRIMINATOR: &[u8] = &[132, 191, 228, 141, 201, 138, 60, 48];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitUserFuel {}
@@ -1915,7 +1915,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateAdmin {
-        const DISCRIMINATOR: [u8; 8] = [161, 176, 40, 213, 60, 184, 179, 228];
+        const DISCRIMINATOR: &[u8] = &[161, 176, 40, 213, 60, 184, 179, 228];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateAdmin {}
@@ -1925,7 +1925,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateWhitelistMint {
-        const DISCRIMINATOR: [u8; 8] = [161, 15, 162, 19, 148, 120, 144, 151];
+        const DISCRIMINATOR: &[u8] = &[161, 15, 162, 19, 148, 120, 144, 151];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateWhitelistMint {}
@@ -1935,7 +1935,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateDiscountMint {
-        const DISCRIMINATOR: [u8; 8] = [32, 252, 122, 211, 66, 31, 47, 241];
+        const DISCRIMINATOR: &[u8] = &[32, 252, 122, 211, 66, 31, 47, 241];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateDiscountMint {}
@@ -1945,7 +1945,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateExchangeStatus {
-        const DISCRIMINATOR: [u8; 8] = [83, 160, 252, 250, 129, 116, 49, 223];
+        const DISCRIMINATOR: &[u8] = &[83, 160, 252, 250, 129, 116, 49, 223];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateExchangeStatus {}
@@ -1955,7 +1955,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpAuctionDuration {
-        const DISCRIMINATOR: [u8; 8] = [126, 110, 52, 174, 30, 206, 215, 90];
+        const DISCRIMINATOR: &[u8] = &[126, 110, 52, 174, 30, 206, 215, 90];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpAuctionDuration {}
@@ -1965,7 +1965,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotAuctionDuration {
-        const DISCRIMINATOR: [u8; 8] = [182, 178, 203, 72, 187, 143, 157, 107];
+        const DISCRIMINATOR: &[u8] = &[182, 178, 203, 72, 187, 143, 157, 107];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateSpotAuctionDuration {}
@@ -1973,7 +1973,7 @@ pub mod instructions {
     pub struct InitializeProtocolIfSharesTransferConfig {}
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeProtocolIfSharesTransferConfig {
-        const DISCRIMINATOR: [u8; 8] = [89, 131, 239, 200, 178, 141, 106, 194];
+        const DISCRIMINATOR: &[u8] = &[89, 131, 239, 200, 178, 141, 106, 194];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeProtocolIfSharesTransferConfig {}
@@ -1984,7 +1984,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateProtocolIfSharesTransferConfig {
-        const DISCRIMINATOR: [u8; 8] = [34, 135, 47, 91, 220, 24, 212, 53];
+        const DISCRIMINATOR: &[u8] = &[34, 135, 47, 91, 220, 24, 212, 53];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateProtocolIfSharesTransferConfig {}
@@ -1994,7 +1994,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializePrelaunchOracle {
-        const DISCRIMINATOR: [u8; 8] = [169, 178, 84, 25, 175, 62, 29, 247];
+        const DISCRIMINATOR: &[u8] = &[169, 178, 84, 25, 175, 62, 29, 247];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializePrelaunchOracle {}
@@ -2004,7 +2004,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePrelaunchOracleParams {
-        const DISCRIMINATOR: [u8; 8] = [98, 205, 147, 243, 18, 75, 83, 207];
+        const DISCRIMINATOR: &[u8] = &[98, 205, 147, 243, 18, 75, 83, 207];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePrelaunchOracleParams {}
@@ -2014,7 +2014,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DeletePrelaunchOracle {
-        const DISCRIMINATOR: [u8; 8] = [59, 169, 100, 49, 69, 17, 173, 253];
+        const DISCRIMINATOR: &[u8] = &[59, 169, 100, 49, 69, 17, 173, 253];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for DeletePrelaunchOracle {}
@@ -2024,7 +2024,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializePythPullOracle {
-        const DISCRIMINATOR: [u8; 8] = [249, 140, 253, 243, 248, 74, 240, 238];
+        const DISCRIMINATOR: &[u8] = &[249, 140, 253, 243, 248, 74, 240, 238];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializePythPullOracle {}
@@ -2034,7 +2034,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializePythLazerOracle {
-        const DISCRIMINATOR: [u8; 8] = [140, 107, 33, 214, 235, 219, 103, 20];
+        const DISCRIMINATOR: &[u8] = &[140, 107, 33, 214, 235, 219, 103, 20];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializePythLazerOracle {}
@@ -2044,7 +2044,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PostPythLazerOracleUpdate {
-        const DISCRIMINATOR: [u8; 8] = [218, 237, 170, 245, 39, 143, 166, 33];
+        const DISCRIMINATOR: &[u8] = &[218, 237, 170, 245, 39, 143, 166, 33];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for PostPythLazerOracleUpdate {}
@@ -2054,7 +2054,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeHighLeverageModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [213, 167, 93, 246, 208, 130, 90, 248];
+        const DISCRIMINATOR: &[u8] = &[213, 167, 93, 246, 208, 130, 90, 248];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeHighLeverageModeConfig {}
@@ -2065,7 +2065,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateHighLeverageModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [64, 122, 212, 93, 141, 217, 202, 55];
+        const DISCRIMINATOR: &[u8] = &[64, 122, 212, 93, 141, 217, 202, 55];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateHighLeverageModeConfig {}
@@ -2075,7 +2075,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeProtectedMakerModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [67, 103, 220, 67, 88, 32, 252, 8];
+        const DISCRIMINATOR: &[u8] = &[67, 103, 220, 67, 88, 32, 252, 8];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeProtectedMakerModeConfig {}
@@ -2087,7 +2087,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateProtectedMakerModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [86, 166, 235, 253, 67, 202, 223, 17];
+        const DISCRIMINATOR: &[u8] = &[86, 166, 235, 253, 67, 202, 223, 17];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateProtectedMakerModeConfig {}
@@ -3954,7 +3954,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for OpenbookV2FulfillmentConfig {
-        const DISCRIMINATOR: [u8; 8] = [3, 43, 58, 106, 131, 132, 199, 171];
+        const DISCRIMINATOR: &[u8] = &[3, 43, 58, 106, 131, 132, 199, 171];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for OpenbookV2FulfillmentConfig {}
@@ -4019,7 +4019,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PhoenixV1FulfillmentConfig {
-        const DISCRIMINATOR: [u8; 8] = [233, 45, 62, 40, 35, 129, 48, 72];
+        const DISCRIMINATOR: &[u8] = &[233, 45, 62, 40, 35, 129, 48, 72];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PhoenixV1FulfillmentConfig {}
@@ -4089,7 +4089,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SerumV3FulfillmentConfig {
-        const DISCRIMINATOR: [u8; 8] = [65, 160, 197, 112, 239, 168, 103, 185];
+        const DISCRIMINATOR: &[u8] = &[65, 160, 197, 112, 239, 168, 103, 185];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for SerumV3FulfillmentConfig {}
@@ -4148,7 +4148,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for HighLeverageModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [3, 196, 90, 189, 193, 64, 228, 234];
+        const DISCRIMINATOR: &[u8] = &[3, 196, 90, 189, 193, 64, 228, 234];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for HighLeverageModeConfig {}
@@ -4213,7 +4213,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InsuranceFundStake {
-        const DISCRIMINATOR: [u8; 8] = [110, 202, 14, 42, 95, 73, 90, 95];
+        const DISCRIMINATOR: &[u8] = &[110, 202, 14, 42, 95, 73, 90, 95];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InsuranceFundStake {}
@@ -4273,7 +4273,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ProtocolIfSharesTransferConfig {
-        const DISCRIMINATOR: [u8; 8] = [188, 1, 213, 98, 23, 148, 30, 1];
+        const DISCRIMINATOR: &[u8] = &[188, 1, 213, 98, 23, 148, 30, 1];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ProtocolIfSharesTransferConfig {}
@@ -4335,7 +4335,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PrelaunchOracle {
-        const DISCRIMINATOR: [u8; 8] = [92, 14, 139, 234, 72, 244, 68, 26];
+        const DISCRIMINATOR: &[u8] = &[92, 14, 139, 234, 72, 244, 68, 26];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PrelaunchOracle {}
@@ -4425,7 +4425,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PerpMarket {
-        const DISCRIMINATOR: [u8; 8] = [10, 223, 12, 44, 107, 245, 55, 247];
+        const DISCRIMINATOR: &[u8] = &[10, 223, 12, 44, 107, 245, 55, 247];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PerpMarket {}
@@ -4484,7 +4484,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ProtectedMakerModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [47, 86, 90, 9, 224, 255, 10, 69];
+        const DISCRIMINATOR: &[u8] = &[47, 86, 90, 9, 224, 255, 10, 69];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ProtectedMakerModeConfig {}
@@ -4545,7 +4545,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PythLazerOracle {
-        const DISCRIMINATOR: [u8; 8] = [159, 7, 161, 249, 34, 81, 121, 133];
+        const DISCRIMINATOR: &[u8] = &[159, 7, 161, 249, 34, 81, 121, 133];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PythLazerOracle {}
@@ -4593,7 +4593,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SignedMsgUserOrders {
-        const DISCRIMINATOR: [u8; 8] = [70, 6, 50, 248, 222, 1, 143, 49];
+        const DISCRIMINATOR: &[u8] = &[70, 6, 50, 248, 222, 1, 143, 49];
     }
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SignedMsgUserOrders {
@@ -4633,7 +4633,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SignedMsgWsDelegates {
-        const DISCRIMINATOR: [u8; 8] = [190, 115, 111, 44, 216, 252, 108, 85];
+        const DISCRIMINATOR: &[u8] = &[190, 115, 111, 44, 216, 252, 108, 85];
     }
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for SignedMsgWsDelegates {
@@ -4746,7 +4746,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SpotMarket {
-        const DISCRIMINATOR: [u8; 8] = [100, 177, 8, 107, 168, 65, 65, 39];
+        const DISCRIMINATOR: &[u8] = &[100, 177, 8, 107, 168, 65, 65, 39];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for SpotMarket {}
@@ -4826,7 +4826,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for State {
-        const DISCRIMINATOR: [u8; 8] = [216, 146, 107, 94, 104, 75, 182, 177];
+        const DISCRIMINATOR: &[u8] = &[216, 146, 107, 94, 104, 75, 182, 177];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for State {}
@@ -4912,7 +4912,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for User {
-        const DISCRIMINATOR: [u8; 8] = [159, 117, 95, 227, 239, 151, 58, 236];
+        const DISCRIMINATOR: &[u8] = &[159, 117, 95, 227, 239, 151, 58, 236];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for User {}
@@ -4993,7 +4993,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UserStats {
-        const DISCRIMINATOR: [u8; 8] = [176, 223, 136, 27, 122, 79, 32, 227];
+        const DISCRIMINATOR: &[u8] = &[176, 223, 136, 27, 122, 79, 32, 227];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UserStats {}
@@ -5051,7 +5051,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ReferrerName {
-        const DISCRIMINATOR: [u8; 8] = [105, 133, 170, 110, 52, 42, 28, 182];
+        const DISCRIMINATOR: &[u8] = &[105, 133, 170, 110, 52, 42, 28, 182];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ReferrerName {}
@@ -5116,7 +5116,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for FuelOverflow {
-        const DISCRIMINATOR: [u8; 8] = [182, 64, 231, 177, 226, 142, 69, 58];
+        const DISCRIMINATOR: &[u8] = &[182, 64, 231, 177, 226, 142, 69, 58];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for FuelOverflow {}
@@ -5166,7 +5166,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeUser {
-        const DISCRIMINATOR: [u8; 8] = [203, 62, 186, 181, 109, 250, 240, 193];
+        const DISCRIMINATOR: &[u8] = &[203, 62, 186, 181, 109, 250, 240, 193];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeUser {}
@@ -5259,7 +5259,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeUserStats {
-        const DISCRIMINATOR: [u8; 8] = [193, 37, 127, 56, 10, 44, 65, 13];
+        const DISCRIMINATOR: &[u8] = &[193, 37, 127, 56, 10, 44, 65, 13];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeUserStats {}
@@ -5346,7 +5346,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeSignedMsgUserOrders {
-        const DISCRIMINATOR: [u8; 8] = [49, 255, 141, 186, 72, 235, 186, 237];
+        const DISCRIMINATOR: &[u8] = &[49, 255, 141, 186, 72, 235, 186, 237];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeSignedMsgUserOrders {}
@@ -5426,7 +5426,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ResizeSignedMsgUserOrders {
-        const DISCRIMINATOR: [u8; 8] = [125, 177, 239, 3, 35, 33, 152, 87];
+        const DISCRIMINATOR: &[u8] = &[125, 177, 239, 3, 35, 33, 152, 87];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ResizeSignedMsgUserOrders {}
@@ -5497,7 +5497,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeSignedMsgWsDelegates {
-        const DISCRIMINATOR: [u8; 8] = [171, 35, 226, 71, 228, 189, 130, 139];
+        const DISCRIMINATOR: &[u8] = &[171, 35, 226, 71, 228, 189, 130, 139];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeSignedMsgWsDelegates {}
@@ -5572,7 +5572,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ChangeSignedMsgWsDelegateStatus {
-        const DISCRIMINATOR: [u8; 8] = [115, 165, 130, 151, 247, 6, 159, 9];
+        const DISCRIMINATOR: &[u8] = &[115, 165, 130, 151, 247, 6, 159, 9];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ChangeSignedMsgWsDelegateStatus {}
@@ -5645,7 +5645,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeFuelOverflow {
-        const DISCRIMINATOR: [u8; 8] = [87, 122, 96, 232, 83, 190, 67, 60];
+        const DISCRIMINATOR: &[u8] = &[87, 122, 96, 232, 83, 190, 67, 60];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeFuelOverflow {}
@@ -5731,7 +5731,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SweepFuel {
-        const DISCRIMINATOR: [u8; 8] = [213, 69, 211, 253, 19, 221, 144, 63];
+        const DISCRIMINATOR: &[u8] = &[213, 69, 211, 253, 19, 221, 144, 63];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for SweepFuel {}
@@ -5807,7 +5807,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ResetFuelSeason {
-        const DISCRIMINATOR: [u8; 8] = [1, 202, 193, 87, 106, 234, 121, 179];
+        const DISCRIMINATOR: &[u8] = &[1, 202, 193, 87, 106, 234, 121, 179];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ResetFuelSeason {}
@@ -5886,7 +5886,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeReferrerName {
-        const DISCRIMINATOR: [u8; 8] = [162, 6, 98, 89, 149, 201, 160, 208];
+        const DISCRIMINATOR: &[u8] = &[162, 6, 98, 89, 149, 201, 160, 208];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeReferrerName {}
@@ -5980,7 +5980,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for Deposit {
-        const DISCRIMINATOR: [u8; 8] = [148, 146, 121, 66, 207, 173, 21, 227];
+        const DISCRIMINATOR: &[u8] = &[148, 146, 121, 66, 207, 173, 21, 227];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for Deposit {}
@@ -6075,7 +6075,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for Withdraw {
-        const DISCRIMINATOR: [u8; 8] = [250, 14, 222, 36, 223, 62, 75, 248];
+        const DISCRIMINATOR: &[u8] = &[250, 14, 222, 36, 223, 62, 75, 248];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for Withdraw {}
@@ -6173,7 +6173,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for TransferDeposit {
-        const DISCRIMINATOR: [u8; 8] = [71, 147, 10, 190, 58, 115, 100, 21];
+        const DISCRIMINATOR: &[u8] = &[71, 147, 10, 190, 58, 115, 100, 21];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for TransferDeposit {}
@@ -6265,7 +6265,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for TransferPools {
-        const DISCRIMINATOR: [u8; 8] = [95, 222, 82, 35, 146, 141, 77, 239];
+        const DISCRIMINATOR: &[u8] = &[95, 222, 82, 35, 146, 141, 77, 239];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for TransferPools {}
@@ -6370,7 +6370,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlacePerpOrder {
-        const DISCRIMINATOR: [u8; 8] = [246, 108, 77, 100, 111, 83, 209, 236];
+        const DISCRIMINATOR: &[u8] = &[246, 108, 77, 100, 111, 83, 209, 236];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PlacePerpOrder {}
@@ -6440,7 +6440,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for CancelOrder {
-        const DISCRIMINATOR: [u8; 8] = [113, 49, 205, 244, 82, 104, 158, 85];
+        const DISCRIMINATOR: &[u8] = &[113, 49, 205, 244, 82, 104, 158, 85];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for CancelOrder {}
@@ -6510,7 +6510,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for CancelOrderByUserId {
-        const DISCRIMINATOR: [u8; 8] = [242, 196, 53, 34, 121, 232, 149, 144];
+        const DISCRIMINATOR: &[u8] = &[242, 196, 53, 34, 121, 232, 149, 144];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for CancelOrderByUserId {}
@@ -6580,7 +6580,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for CancelOrders {
-        const DISCRIMINATOR: [u8; 8] = [91, 217, 110, 30, 16, 2, 55, 83];
+        const DISCRIMINATOR: &[u8] = &[91, 217, 110, 30, 16, 2, 55, 83];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for CancelOrders {}
@@ -6650,7 +6650,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for CancelOrdersByIds {
-        const DISCRIMINATOR: [u8; 8] = [111, 71, 138, 14, 8, 97, 11, 44];
+        const DISCRIMINATOR: &[u8] = &[111, 71, 138, 14, 8, 97, 11, 44];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for CancelOrdersByIds {}
@@ -6720,7 +6720,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ModifyOrder {
-        const DISCRIMINATOR: [u8; 8] = [123, 5, 147, 45, 173, 23, 156, 131];
+        const DISCRIMINATOR: &[u8] = &[123, 5, 147, 45, 173, 23, 156, 131];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ModifyOrder {}
@@ -6790,7 +6790,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ModifyOrderByUserId {
-        const DISCRIMINATOR: [u8; 8] = [87, 55, 202, 75, 9, 179, 204, 73];
+        const DISCRIMINATOR: &[u8] = &[87, 55, 202, 75, 9, 179, 204, 73];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ModifyOrderByUserId {}
@@ -6861,7 +6861,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceAndTakePerpOrder {
-        const DISCRIMINATOR: [u8; 8] = [106, 246, 39, 196, 36, 127, 12, 84];
+        const DISCRIMINATOR: &[u8] = &[106, 246, 39, 196, 36, 127, 12, 84];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PlaceAndTakePerpOrder {}
@@ -6939,7 +6939,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceAndMakePerpOrder {
-        const DISCRIMINATOR: [u8; 8] = [139, 129, 243, 60, 209, 20, 25, 195];
+        const DISCRIMINATOR: &[u8] = &[139, 129, 243, 60, 209, 20, 25, 195];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PlaceAndMakePerpOrder {}
@@ -7028,7 +7028,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceAndMakeSignedMsgPerpOrder {
-        const DISCRIMINATOR: [u8; 8] = [240, 219, 156, 22, 147, 139, 152, 165];
+        const DISCRIMINATOR: &[u8] = &[240, 219, 156, 22, 147, 139, 152, 165];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PlaceAndMakeSignedMsgPerpOrder {}
@@ -7121,7 +7121,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceSignedMsgTakerOrder {
-        const DISCRIMINATOR: [u8; 8] = [202, 134, 30, 82, 84, 234, 248, 40];
+        const DISCRIMINATOR: &[u8] = &[202, 134, 30, 82, 84, 234, 248, 40];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PlaceSignedMsgTakerOrder {}
@@ -7206,7 +7206,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceSpotOrder {
-        const DISCRIMINATOR: [u8; 8] = [174, 248, 135, 120, 62, 178, 165, 88];
+        const DISCRIMINATOR: &[u8] = &[174, 248, 135, 120, 62, 178, 165, 88];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PlaceSpotOrder {}
@@ -7277,7 +7277,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceAndTakeSpotOrder {
-        const DISCRIMINATOR: [u8; 8] = [114, 201, 131, 176, 15, 188, 94, 123];
+        const DISCRIMINATOR: &[u8] = &[114, 201, 131, 176, 15, 188, 94, 123];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PlaceAndTakeSpotOrder {}
@@ -7355,7 +7355,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceAndMakeSpotOrder {
-        const DISCRIMINATOR: [u8; 8] = [136, 102, 203, 251, 133, 233, 3, 195];
+        const DISCRIMINATOR: &[u8] = &[136, 102, 203, 251, 133, 233, 3, 195];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PlaceAndMakeSpotOrder {}
@@ -7440,7 +7440,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PlaceOrders {
-        const DISCRIMINATOR: [u8; 8] = [124, 246, 105, 210, 163, 120, 252, 61];
+        const DISCRIMINATOR: &[u8] = &[124, 246, 105, 210, 163, 120, 252, 61];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PlaceOrders {}
@@ -7518,7 +7518,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for BeginSwap {
-        const DISCRIMINATOR: [u8; 8] = [219, 64, 214, 146, 204, 171, 39, 63];
+        const DISCRIMINATOR: &[u8] = &[219, 64, 214, 146, 204, 171, 39, 63];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for BeginSwap {}
@@ -7636,7 +7636,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for EndSwap {
-        const DISCRIMINATOR: [u8; 8] = [169, 78, 41, 75, 127, 169, 211, 205];
+        const DISCRIMINATOR: &[u8] = &[169, 78, 41, 75, 127, 169, 211, 205];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for EndSwap {}
@@ -7746,7 +7746,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for AddPerpLpShares {
-        const DISCRIMINATOR: [u8; 8] = [136, 244, 213, 15, 170, 246, 138, 57];
+        const DISCRIMINATOR: &[u8] = &[136, 244, 213, 15, 170, 246, 138, 57];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for AddPerpLpShares {}
@@ -7816,7 +7816,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for RemovePerpLpShares {
-        const DISCRIMINATOR: [u8; 8] = [28, 42, 13, 175, 57, 117, 166, 250];
+        const DISCRIMINATOR: &[u8] = &[28, 42, 13, 175, 57, 117, 166, 250];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for RemovePerpLpShares {}
@@ -7885,7 +7885,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for RemovePerpLpSharesInExpiringMarket {
-        const DISCRIMINATOR: [u8; 8] = [117, 16, 76, 236, 145, 84, 112, 103];
+        const DISCRIMINATOR: &[u8] = &[117, 16, 76, 236, 145, 84, 112, 103];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for RemovePerpLpSharesInExpiringMarket {}
@@ -7949,7 +7949,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserName {
-        const DISCRIMINATOR: [u8; 8] = [110, 237, 80, 83, 89, 231, 185, 154];
+        const DISCRIMINATOR: &[u8] = &[110, 237, 80, 83, 89, 231, 185, 154];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserName {}
@@ -8013,7 +8013,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserCustomMarginRatio {
-        const DISCRIMINATOR: [u8; 8] = [102, 94, 49, 231, 23, 142, 117, 224];
+        const DISCRIMINATOR: &[u8] = &[102, 94, 49, 231, 23, 142, 117, 224];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserCustomMarginRatio {}
@@ -8077,7 +8077,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserMarginTradingEnabled {
-        const DISCRIMINATOR: [u8; 8] = [89, 5, 206, 157, 104, 243, 243, 104];
+        const DISCRIMINATOR: &[u8] = &[89, 5, 206, 157, 104, 243, 243, 104];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserMarginTradingEnabled {}
@@ -8141,7 +8141,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserPoolId {
-        const DISCRIMINATOR: [u8; 8] = [215, 193, 254, 33, 60, 226, 249, 100];
+        const DISCRIMINATOR: &[u8] = &[215, 193, 254, 33, 60, 226, 249, 100];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserPoolId {}
@@ -8205,7 +8205,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserDelegate {
-        const DISCRIMINATOR: [u8; 8] = [32, 244, 37, 163, 236, 179, 10, 208];
+        const DISCRIMINATOR: &[u8] = &[32, 244, 37, 163, 236, 179, 10, 208];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserDelegate {}
@@ -8269,7 +8269,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserReduceOnly {
-        const DISCRIMINATOR: [u8; 8] = [213, 230, 138, 228, 171, 118, 20, 105];
+        const DISCRIMINATOR: &[u8] = &[213, 230, 138, 228, 171, 118, 20, 105];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserReduceOnly {}
@@ -8333,7 +8333,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserAdvancedLp {
-        const DISCRIMINATOR: [u8; 8] = [227, 146, 68, 197, 45, 160, 163, 72];
+        const DISCRIMINATOR: &[u8] = &[227, 146, 68, 197, 45, 160, 163, 72];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserAdvancedLp {}
@@ -8399,7 +8399,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserProtectedMakerOrders {
-        const DISCRIMINATOR: [u8; 8] = [220, 255, 63, 84, 125, 9, 84, 92];
+        const DISCRIMINATOR: &[u8] = &[220, 255, 63, 84, 125, 9, 84, 92];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserProtectedMakerOrders {}
@@ -8475,7 +8475,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DeleteUser {
-        const DISCRIMINATOR: [u8; 8] = [138, 7, 216, 138, 241, 248, 199, 228];
+        const DISCRIMINATOR: &[u8] = &[138, 7, 216, 138, 241, 248, 199, 228];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for DeleteUser {}
@@ -8553,7 +8553,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ForceDeleteUser {
-        const DISCRIMINATOR: [u8; 8] = [224, 206, 23, 192, 99, 164, 175, 251];
+        const DISCRIMINATOR: &[u8] = &[224, 206, 23, 192, 99, 164, 175, 251];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ForceDeleteUser {}
@@ -8638,7 +8638,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DeleteSignedMsgUserOrders {
-        const DISCRIMINATOR: [u8; 8] = [134, 162, 251, 123, 234, 231, 227, 119];
+        const DISCRIMINATOR: &[u8] = &[134, 162, 251, 123, 234, 231, 227, 119];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for DeleteSignedMsgUserOrders {}
@@ -8710,7 +8710,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ReclaimRent {
-        const DISCRIMINATOR: [u8; 8] = [245, 126, 60, 211, 102, 85, 171, 126];
+        const DISCRIMINATOR: &[u8] = &[245, 126, 60, 211, 102, 85, 171, 126];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ReclaimRent {}
@@ -8791,7 +8791,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for EnableUserHighLeverageMode {
-        const DISCRIMINATOR: [u8; 8] = [87, 74, 202, 252, 83, 254, 102, 158];
+        const DISCRIMINATOR: &[u8] = &[87, 74, 202, 252, 83, 254, 102, 158];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for EnableUserHighLeverageMode {}
@@ -8869,7 +8869,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for FillPerpOrder {
-        const DISCRIMINATOR: [u8; 8] = [196, 125, 144, 95, 242, 149, 179, 234];
+        const DISCRIMINATOR: &[u8] = &[196, 125, 144, 95, 242, 149, 179, 234];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for FillPerpOrder {}
@@ -8955,7 +8955,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for RevertFill {
-        const DISCRIMINATOR: [u8; 8] = [119, 31, 174, 155, 246, 22, 28, 126];
+        const DISCRIMINATOR: &[u8] = &[119, 31, 174, 155, 246, 22, 28, 126];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for RevertFill {}
@@ -9033,7 +9033,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for FillSpotOrder {
-        const DISCRIMINATOR: [u8; 8] = [105, 64, 114, 55, 230, 90, 153, 28];
+        const DISCRIMINATOR: &[u8] = &[105, 64, 114, 55, 230, 90, 153, 28];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for FillSpotOrder {}
@@ -9119,7 +9119,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for TriggerOrder {
-        const DISCRIMINATOR: [u8; 8] = [236, 61, 42, 190, 152, 12, 106, 116];
+        const DISCRIMINATOR: &[u8] = &[236, 61, 42, 190, 152, 12, 106, 116];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for TriggerOrder {}
@@ -9195,7 +9195,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ForceCancelOrders {
-        const DISCRIMINATOR: [u8; 8] = [108, 153, 180, 51, 37, 158, 99, 93];
+        const DISCRIMINATOR: &[u8] = &[108, 153, 180, 51, 37, 158, 99, 93];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ForceCancelOrders {}
@@ -9271,7 +9271,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserIdle {
-        const DISCRIMINATOR: [u8; 8] = [229, 30, 7, 22, 26, 184, 224, 191];
+        const DISCRIMINATOR: &[u8] = &[229, 30, 7, 22, 26, 184, 224, 191];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserIdle {}
@@ -9346,7 +9346,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LogUserBalances {
-        const DISCRIMINATOR: [u8; 8] = [121, 191, 93, 132, 153, 217, 15, 171];
+        const DISCRIMINATOR: &[u8] = &[121, 191, 93, 132, 153, 217, 15, 171];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for LogUserBalances {}
@@ -9417,7 +9417,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DisableUserHighLeverageMode {
-        const DISCRIMINATOR: [u8; 8] = [126, 242, 88, 155, 81, 152, 143, 68];
+        const DISCRIMINATOR: &[u8] = &[126, 242, 88, 155, 81, 152, 143, 68];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for DisableUserHighLeverageMode {}
@@ -9493,7 +9493,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserFuelBonus {
-        const DISCRIMINATOR: [u8; 8] = [179, 14, 130, 214, 107, 254, 33, 235];
+        const DISCRIMINATOR: &[u8] = &[179, 14, 130, 214, 107, 254, 33, 235];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserFuelBonus {}
@@ -9568,7 +9568,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserStatsReferrerStatus {
-        const DISCRIMINATOR: [u8; 8] = [88, 125, 77, 90, 13, 11, 141, 158];
+        const DISCRIMINATOR: &[u8] = &[88, 125, 77, 90, 13, 11, 141, 158];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserStatsReferrerStatus {}
@@ -9639,7 +9639,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserOpenOrdersCount {
-        const DISCRIMINATOR: [u8; 8] = [21, 201, 16, 50, 34, 238, 126, 254];
+        const DISCRIMINATOR: &[u8] = &[21, 201, 16, 50, 34, 238, 126, 254];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserOpenOrdersCount {}
@@ -9714,7 +9714,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for AdminDisableUpdatePerpBidAskTwap {
-        const DISCRIMINATOR: [u8; 8] = [253, 223, 202, 93, 246, 209, 209, 26];
+        const DISCRIMINATOR: &[u8] = &[253, 223, 202, 93, 246, 209, 209, 26];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for AdminDisableUpdatePerpBidAskTwap {}
@@ -9785,7 +9785,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettlePnl {
-        const DISCRIMINATOR: [u8; 8] = [216, 232, 154, 114, 103, 217, 85, 46];
+        const DISCRIMINATOR: &[u8] = &[216, 232, 154, 114, 103, 217, 85, 46];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for SettlePnl {}
@@ -9861,7 +9861,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettleMultiplePnls {
-        const DISCRIMINATOR: [u8; 8] = [6, 98, 112, 180, 76, 44, 249, 23];
+        const DISCRIMINATOR: &[u8] = &[6, 98, 112, 180, 76, 44, 249, 23];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for SettleMultiplePnls {}
@@ -9935,7 +9935,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettleFundingPayment {
-        const DISCRIMINATOR: [u8; 8] = [138, 197, 211, 110, 76, 124, 91, 34];
+        const DISCRIMINATOR: &[u8] = &[138, 197, 211, 110, 76, 124, 91, 34];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for SettleFundingPayment {}
@@ -9999,7 +9999,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettleLp {
-        const DISCRIMINATOR: [u8; 8] = [204, 189, 123, 14, 253, 251, 199, 239];
+        const DISCRIMINATOR: &[u8] = &[204, 189, 123, 14, 253, 251, 199, 239];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for SettleLp {}
@@ -10064,7 +10064,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettleExpiredMarket {
-        const DISCRIMINATOR: [u8; 8] = [208, 148, 90, 99, 162, 85, 158, 236];
+        const DISCRIMINATOR: &[u8] = &[208, 148, 90, 99, 162, 85, 158, 236];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for SettleExpiredMarket {}
@@ -10137,7 +10137,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidatePerp {
-        const DISCRIMINATOR: [u8; 8] = [167, 66, 155, 127, 112, 246, 147, 196];
+        const DISCRIMINATOR: &[u8] = &[167, 66, 155, 127, 112, 246, 147, 196];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for LiquidatePerp {}
@@ -10225,7 +10225,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidatePerpWithFill {
-        const DISCRIMINATOR: [u8; 8] = [236, 199, 136, 156, 22, 138, 41, 225];
+        const DISCRIMINATOR: &[u8] = &[236, 199, 136, 156, 22, 138, 41, 225];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for LiquidatePerpWithFill {}
@@ -10313,7 +10313,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidateSpot {
-        const DISCRIMINATOR: [u8; 8] = [89, 79, 84, 154, 215, 7, 211, 253];
+        const DISCRIMINATOR: &[u8] = &[89, 79, 84, 154, 215, 7, 211, 253];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for LiquidateSpot {}
@@ -10408,7 +10408,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidateSpotWithSwapBegin {
-        const DISCRIMINATOR: [u8; 8] = [58, 245, 239, 110, 253, 194, 212, 67];
+        const DISCRIMINATOR: &[u8] = &[58, 245, 239, 110, 253, 194, 212, 67];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for LiquidateSpotWithSwapBegin {}
@@ -10538,7 +10538,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidateSpotWithSwapEnd {
-        const DISCRIMINATOR: [u8; 8] = [157, 1, 82, 217, 233, 241, 137, 175];
+        const DISCRIMINATOR: &[u8] = &[157, 1, 82, 217, 233, 241, 137, 175];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for LiquidateSpotWithSwapEnd {}
@@ -10661,7 +10661,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidateBorrowForPerpPnl {
-        const DISCRIMINATOR: [u8; 8] = [188, 143, 170, 71, 28, 50, 50, 50];
+        const DISCRIMINATOR: &[u8] = &[188, 143, 170, 71, 28, 50, 50, 50];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for LiquidateBorrowForPerpPnl {}
@@ -10749,7 +10749,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidatePerpPnlForDeposit {
-        const DISCRIMINATOR: [u8; 8] = [66, 46, 37, 140, 100, 242, 118, 224];
+        const DISCRIMINATOR: &[u8] = &[66, 46, 37, 140, 100, 242, 118, 224];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for LiquidatePerpPnlForDeposit {}
@@ -10834,7 +10834,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SetUserStatusToBeingLiquidated {
-        const DISCRIMINATOR: [u8; 8] = [150, 171, 70, 240, 192, 22, 158, 128];
+        const DISCRIMINATOR: &[u8] = &[150, 171, 70, 240, 192, 22, 158, 128];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for SetUserStatusToBeingLiquidated {}
@@ -10907,7 +10907,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ResolvePerpPnlDeficit {
-        const DISCRIMINATOR: [u8; 8] = [11, 51, 56, 223, 39, 129, 129, 31];
+        const DISCRIMINATOR: &[u8] = &[11, 51, 56, 223, 39, 129, 129, 31];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ResolvePerpPnlDeficit {}
@@ -10999,7 +10999,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ResolvePerpBankruptcy {
-        const DISCRIMINATOR: [u8; 8] = [232, 117, 49, 236, 173, 89, 78, 52];
+        const DISCRIMINATOR: &[u8] = &[232, 117, 49, 236, 173, 89, 78, 52];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ResolvePerpBankruptcy {}
@@ -11111,7 +11111,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ResolveSpotBankruptcy {
-        const DISCRIMINATOR: [u8; 8] = [186, 115, 37, 134, 49, 132, 252, 139];
+        const DISCRIMINATOR: &[u8] = &[186, 115, 37, 134, 49, 132, 252, 139];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ResolveSpotBankruptcy {}
@@ -11219,7 +11219,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettleRevenueToInsuranceFund {
-        const DISCRIMINATOR: [u8; 8] = [49, 54, 211, 157, 180, 157, 182, 14];
+        const DISCRIMINATOR: &[u8] = &[49, 54, 211, 157, 180, 157, 182, 14];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for SettleRevenueToInsuranceFund {}
@@ -11304,7 +11304,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateFundingRate {
-        const DISCRIMINATOR: [u8; 8] = [147, 129, 170, 235, 221, 137, 139, 160];
+        const DISCRIMINATOR: &[u8] = &[147, 129, 170, 235, 221, 137, 139, 160];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateFundingRate {}
@@ -11374,7 +11374,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePrelaunchOracle {
-        const DISCRIMINATOR: [u8; 8] = [246, 29, 3, 127, 200, 172, 45, 171];
+        const DISCRIMINATOR: &[u8] = &[246, 29, 3, 127, 200, 172, 45, 171];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePrelaunchOracle {}
@@ -11446,7 +11446,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpBidAskTwap {
-        const DISCRIMINATOR: [u8; 8] = [75, 78, 22, 179, 238, 41, 216, 90];
+        const DISCRIMINATOR: &[u8] = &[75, 78, 22, 179, 238, 41, 216, 90];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpBidAskTwap {}
@@ -11527,7 +11527,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketCumulativeInterest {
-        const DISCRIMINATOR: [u8; 8] = [103, 124, 233, 228, 65, 182, 52, 216];
+        const DISCRIMINATOR: &[u8] = &[103, 124, 233, 228, 65, 182, 52, 216];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketCumulativeInterest {}
@@ -11601,7 +11601,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateAmms {
-        const DISCRIMINATOR: [u8; 8] = [199, 237, 7, 202, 212, 96, 167, 243];
+        const DISCRIMINATOR: &[u8] = &[199, 237, 7, 202, 212, 96, 167, 243];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateAmms {}
@@ -11666,7 +11666,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketExpiry {
-        const DISCRIMINATOR: [u8; 8] = [124, 96, 183, 195, 2, 49, 222, 97];
+        const DISCRIMINATOR: &[u8] = &[124, 96, 183, 195, 2, 49, 222, 97];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketExpiry {}
@@ -11739,7 +11739,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserQuoteAssetInsuranceStake {
-        const DISCRIMINATOR: [u8; 8] = [78, 21, 169, 183, 105, 218, 162, 67];
+        const DISCRIMINATOR: &[u8] = &[78, 21, 169, 183, 105, 218, 162, 67];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserQuoteAssetInsuranceStake {}
@@ -11827,7 +11827,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserGovTokenInsuranceStake {
-        const DISCRIMINATOR: [u8; 8] = [43, 203, 49, 187, 213, 150, 189, 95];
+        const DISCRIMINATOR: &[u8] = &[43, 203, 49, 187, 213, 150, 189, 95];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserGovTokenInsuranceStake {}
@@ -11911,7 +11911,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateUserGovTokenInsuranceStakeDevnet {
-        const DISCRIMINATOR: [u8; 8] = [7, 243, 156, 21, 134, 61, 166, 81];
+        const DISCRIMINATOR: &[u8] = &[7, 243, 156, 21, 134, 61, 166, 81];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserGovTokenInsuranceStakeDevnet {}
@@ -11981,7 +11981,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeInsuranceFundStake {
-        const DISCRIMINATOR: [u8; 8] = [99, 171, 38, 232, 118, 110, 9, 182];
+        const DISCRIMINATOR: &[u8] = &[99, 171, 38, 232, 118, 110, 9, 182];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeInsuranceFundStake {}
@@ -12083,7 +12083,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for AddInsuranceFundStake {
-        const DISCRIMINATOR: [u8; 8] = [0, 49, 78, 210, 146, 42, 143, 8];
+        const DISCRIMINATOR: &[u8] = &[0, 49, 78, 210, 146, 42, 143, 8];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for AddInsuranceFundStake {}
@@ -12190,7 +12190,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for RequestRemoveInsuranceFundStake {
-        const DISCRIMINATOR: [u8; 8] = [19, 15, 248, 88, 171, 187, 152, 24];
+        const DISCRIMINATOR: &[u8] = &[19, 15, 248, 88, 171, 187, 152, 24];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for RequestRemoveInsuranceFundStake {}
@@ -12272,7 +12272,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for CancelRequestRemoveInsuranceFundStake {
-        const DISCRIMINATOR: [u8; 8] = [143, 95, 196, 57, 1, 17, 40, 153];
+        const DISCRIMINATOR: &[u8] = &[143, 95, 196, 57, 1, 17, 40, 153];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for CancelRequestRemoveInsuranceFundStake {}
@@ -12358,7 +12358,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for RemoveInsuranceFundStake {
-        const DISCRIMINATOR: [u8; 8] = [64, 21, 182, 166, 31, 13, 139, 114];
+        const DISCRIMINATOR: &[u8] = &[64, 21, 182, 166, 31, 13, 139, 114];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for RemoveInsuranceFundStake {}
@@ -12463,7 +12463,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for TransferProtocolIfShares {
-        const DISCRIMINATOR: [u8; 8] = [113, 16, 209, 191, 115, 24, 39, 146];
+        const DISCRIMINATOR: &[u8] = &[113, 16, 209, 191, 115, 24, 39, 146];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for TransferProtocolIfShares {}
@@ -12559,7 +12559,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePythPullOracle {
-        const DISCRIMINATOR: [u8; 8] = [163, 16, 49, 37, 171, 99, 61, 60];
+        const DISCRIMINATOR: &[u8] = &[163, 16, 49, 37, 171, 99, 61, 60];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePythPullOracle {}
@@ -12635,7 +12635,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PostPythPullOracleUpdateAtomic {
-        const DISCRIMINATOR: [u8; 8] = [14, 125, 28, 5, 52, 143, 144, 18];
+        const DISCRIMINATOR: &[u8] = &[14, 125, 28, 5, 52, 143, 144, 18];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PostPythPullOracleUpdateAtomic {}
@@ -12710,7 +12710,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PostMultiPythPullOracleUpdatesAtomic {
-        const DISCRIMINATOR: [u8; 8] = [110, 234, 167, 14, 68, 55, 110, 122];
+        const DISCRIMINATOR: &[u8] = &[110, 234, 167, 14, 68, 55, 110, 122];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PostMultiPythPullOracleUpdatesAtomic {}
@@ -12781,7 +12781,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PauseSpotMarketDepositWithdraw {
-        const DISCRIMINATOR: [u8; 8] = [229, 56, 238, 247, 130, 249, 245, 152];
+        const DISCRIMINATOR: &[u8] = &[229, 56, 238, 247, 130, 249, 245, 152];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PauseSpotMarketDepositWithdraw {}
@@ -12860,7 +12860,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for Initialize {
-        const DISCRIMINATOR: [u8; 8] = [131, 246, 167, 36, 232, 249, 207, 142];
+        const DISCRIMINATOR: &[u8] = &[131, 246, 167, 36, 232, 249, 207, 142];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for Initialize {}
@@ -12958,7 +12958,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeSpotMarket {
-        const DISCRIMINATOR: [u8; 8] = [71, 64, 197, 212, 23, 44, 156, 75];
+        const DISCRIMINATOR: &[u8] = &[71, 64, 197, 212, 23, 44, 156, 75];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeSpotMarket {}
@@ -13072,7 +13072,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DeleteInitializedSpotMarket {
-        const DISCRIMINATOR: [u8; 8] = [239, 247, 78, 81, 92, 141, 135, 107];
+        const DISCRIMINATOR: &[u8] = &[239, 247, 78, 81, 92, 141, 135, 107];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for DeleteInitializedSpotMarket {}
@@ -13170,7 +13170,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeSerumFulfillmentConfig {
-        const DISCRIMINATOR: [u8; 8] = [19, 53, 42, 248, 46, 49, 92, 179];
+        const DISCRIMINATOR: &[u8] = &[19, 53, 42, 248, 46, 49, 92, 179];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeSerumFulfillmentConfig {}
@@ -13280,7 +13280,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSerumFulfillmentConfigStatus {
-        const DISCRIMINATOR: [u8; 8] = [132, 84, 50, 193, 9, 204, 122, 230];
+        const DISCRIMINATOR: &[u8] = &[132, 84, 50, 193, 9, 204, 122, 230];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSerumFulfillmentConfigStatus {}
@@ -13357,7 +13357,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeOpenbookV2FulfillmentConfig {
-        const DISCRIMINATOR: [u8; 8] = [22, 199, 68, 220, 120, 204, 78, 80];
+        const DISCRIMINATOR: &[u8] = &[22, 199, 68, 220, 120, 204, 78, 80];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeOpenbookV2FulfillmentConfig {}
@@ -13462,7 +13462,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for OpenbookV2FulfillmentConfigStatus {
-        const DISCRIMINATOR: [u8; 8] = [165, 142, 230, 255, 126, 234, 45, 16];
+        const DISCRIMINATOR: &[u8] = &[165, 142, 230, 255, 126, 234, 45, 16];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for OpenbookV2FulfillmentConfigStatus {}
@@ -13539,7 +13539,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializePhoenixFulfillmentConfig {
-        const DISCRIMINATOR: [u8; 8] = [62, 152, 127, 242, 21, 146, 146, 126];
+        const DISCRIMINATOR: &[u8] = &[62, 152, 127, 242, 21, 146, 146, 126];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializePhoenixFulfillmentConfig {}
@@ -13644,7 +13644,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PhoenixFulfillmentConfigStatus {
-        const DISCRIMINATOR: [u8; 8] = [220, 133, 48, 129, 233, 8, 182, 172];
+        const DISCRIMINATOR: &[u8] = &[220, 133, 48, 129, 233, 8, 182, 172];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PhoenixFulfillmentConfigStatus {}
@@ -13714,7 +13714,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSerumVault {
-        const DISCRIMINATOR: [u8; 8] = [156, 242, 103, 240, 181, 141, 22, 33];
+        const DISCRIMINATOR: &[u8] = &[156, 242, 103, 240, 181, 141, 22, 33];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSerumVault {}
@@ -13787,7 +13787,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializePerpMarket {
-        const DISCRIMINATOR: [u8; 8] = [25, 16, 69, 186, 57, 158, 209, 76];
+        const DISCRIMINATOR: &[u8] = &[25, 16, 69, 186, 57, 158, 209, 76];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializePerpMarket {}
@@ -13872,7 +13872,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializePredictionMarket {
-        const DISCRIMINATOR: [u8; 8] = [20, 122, 255, 2, 124, 75, 145, 6];
+        const DISCRIMINATOR: &[u8] = &[20, 122, 255, 2, 124, 75, 145, 6];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializePredictionMarket {}
@@ -13942,7 +13942,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DeleteInitializedPerpMarket {
-        const DISCRIMINATOR: [u8; 8] = [40, 7, 193, 147, 191, 12, 100, 252];
+        const DISCRIMINATOR: &[u8] = &[40, 7, 193, 147, 191, 12, 100, 252];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for DeleteInitializedPerpMarket {}
@@ -14012,7 +14012,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for MoveAmmPrice {
-        const DISCRIMINATOR: [u8; 8] = [236, 153, 176, 246, 97, 108, 58, 10];
+        const DISCRIMINATOR: &[u8] = &[236, 153, 176, 246, 97, 108, 58, 10];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for MoveAmmPrice {}
@@ -14082,7 +14082,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for RecenterPerpMarketAmm {
-        const DISCRIMINATOR: [u8; 8] = [152, 45, 182, 137, 52, 102, 161, 100];
+        const DISCRIMINATOR: &[u8] = &[152, 45, 182, 137, 52, 102, 161, 100];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for RecenterPerpMarketAmm {}
@@ -14154,7 +14154,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketAmmSummaryStats {
-        const DISCRIMINATOR: [u8; 8] = [99, 157, 213, 53, 50, 43, 173, 112];
+        const DISCRIMINATOR: &[u8] = &[99, 157, 213, 53, 50, 43, 173, 112];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketAmmSummaryStats {}
@@ -14234,7 +14234,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketExpiry {
-        const DISCRIMINATOR: [u8; 8] = [0, 190, 50, 234, 33, 65, 89, 123];
+        const DISCRIMINATOR: &[u8] = &[0, 190, 50, 234, 33, 65, 89, 123];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketExpiry {}
@@ -14305,7 +14305,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettleExpiredMarketPoolsToRevenuePool {
-        const DISCRIMINATOR: [u8; 8] = [94, 227, 127, 9, 147, 38, 93, 45];
+        const DISCRIMINATOR: &[u8] = &[94, 227, 127, 9, 147, 38, 93, 45];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for SettleExpiredMarketPoolsToRevenuePool {}
@@ -14385,7 +14385,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DepositIntoPerpMarketFeePool {
-        const DISCRIMINATOR: [u8; 8] = [135, 163, 183, 80, 184, 65, 88, 104];
+        const DISCRIMINATOR: &[u8] = &[135, 163, 183, 80, 184, 65, 88, 104];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for DepositIntoPerpMarketFeePool {}
@@ -14483,7 +14483,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DepositIntoSpotMarketVault {
-        const DISCRIMINATOR: [u8; 8] = [56, 123, 23, 107, 140, 39, 66, 245];
+        const DISCRIMINATOR: &[u8] = &[56, 123, 23, 107, 140, 39, 66, 245];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for DepositIntoSpotMarketVault {}
@@ -14571,7 +14571,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DepositIntoSpotMarketRevenuePool {
-        const DISCRIMINATOR: [u8; 8] = [120, 221, 129, 235, 106, 205, 195, 210];
+        const DISCRIMINATOR: &[u8] = &[120, 221, 129, 235, 106, 205, 195, 210];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for DepositIntoSpotMarketRevenuePool {}
@@ -14657,7 +14657,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for RepegAmmCurve {
-        const DISCRIMINATOR: [u8; 8] = [183, 96, 186, 13, 27, 52, 226, 194];
+        const DISCRIMINATOR: &[u8] = &[183, 96, 186, 13, 27, 52, 226, 194];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for RepegAmmCurve {}
@@ -14733,7 +14733,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketAmmOracleTwap {
-        const DISCRIMINATOR: [u8; 8] = [4, 62, 151, 214, 85, 102, 165, 154];
+        const DISCRIMINATOR: &[u8] = &[4, 62, 151, 214, 85, 102, 165, 154];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketAmmOracleTwap {}
@@ -14809,7 +14809,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ResetPerpMarketAmmOracleTwap {
-        const DISCRIMINATOR: [u8; 8] = [31, 97, 152, 72, 18, 20, 35, 195];
+        const DISCRIMINATOR: &[u8] = &[31, 97, 152, 72, 18, 20, 35, 195];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for ResetPerpMarketAmmOracleTwap {}
@@ -14885,7 +14885,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateK {
-        const DISCRIMINATOR: [u8; 8] = [173, 8, 27, 196, 81, 191, 36, 109];
+        const DISCRIMINATOR: &[u8] = &[173, 8, 27, 196, 81, 191, 36, 109];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateK {}
@@ -14960,7 +14960,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketMarginRatio {
-        const DISCRIMINATOR: [u8; 8] = [221, 168, 98, 81, 42, 207, 199, 104];
+        const DISCRIMINATOR: &[u8] = &[221, 168, 98, 81, 42, 207, 199, 104];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketMarginRatio {}
@@ -15030,7 +15030,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketHighLeverageMarginRatio {
-        const DISCRIMINATOR: [u8; 8] = [94, 44, 114, 224, 250, 149, 47, 90];
+        const DISCRIMINATOR: &[u8] = &[94, 44, 114, 224, 250, 149, 47, 90];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketHighLeverageMarginRatio {}
@@ -15100,7 +15100,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketFundingPeriod {
-        const DISCRIMINATOR: [u8; 8] = [143, 196, 48, 65, 237, 226, 95, 77];
+        const DISCRIMINATOR: &[u8] = &[143, 196, 48, 65, 237, 226, 95, 77];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketFundingPeriod {}
@@ -15170,7 +15170,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketMaxImbalances {
-        const DISCRIMINATOR: [u8; 8] = [166, 19, 134, 181, 163, 163, 221, 128];
+        const DISCRIMINATOR: &[u8] = &[166, 19, 134, 181, 163, 163, 221, 128];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketMaxImbalances {}
@@ -15240,7 +15240,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketLiquidationFee {
-        const DISCRIMINATOR: [u8; 8] = [12, 91, 76, 183, 11, 62, 192, 215];
+        const DISCRIMINATOR: &[u8] = &[12, 91, 76, 183, 11, 62, 192, 215];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketLiquidationFee {}
@@ -15310,7 +15310,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateInsuranceFundUnstakingPeriod {
-        const DISCRIMINATOR: [u8; 8] = [221, 191, 114, 7, 101, 250, 31, 201];
+        const DISCRIMINATOR: &[u8] = &[221, 191, 114, 7, 101, 250, 31, 201];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateInsuranceFundUnstakingPeriod {}
@@ -15380,7 +15380,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketPoolId {
-        const DISCRIMINATOR: [u8; 8] = [221, 222, 116, 19, 147, 70, 109, 228];
+        const DISCRIMINATOR: &[u8] = &[221, 222, 116, 19, 147, 70, 109, 228];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketPoolId {}
@@ -15450,7 +15450,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketLiquidationFee {
-        const DISCRIMINATOR: [u8; 8] = [233, 115, 0, 78, 143, 75, 33, 75];
+        const DISCRIMINATOR: &[u8] = &[233, 115, 0, 78, 143, 75, 33, 75];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketLiquidationFee {}
@@ -15520,7 +15520,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateWithdrawGuardThreshold {
-        const DISCRIMINATOR: [u8; 8] = [164, 77, 57, 122, 175, 179, 81, 84];
+        const DISCRIMINATOR: &[u8] = &[164, 77, 57, 122, 175, 179, 81, 84];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateWithdrawGuardThreshold {}
@@ -15590,7 +15590,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketIfFactor {
-        const DISCRIMINATOR: [u8; 8] = [235, 61, 57, 159, 24, 10, 159, 53];
+        const DISCRIMINATOR: &[u8] = &[235, 61, 57, 159, 24, 10, 159, 53];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketIfFactor {}
@@ -15660,7 +15660,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketRevenueSettlePeriod {
-        const DISCRIMINATOR: [u8; 8] = [251, 114, 78, 11, 27, 117, 179, 21];
+        const DISCRIMINATOR: &[u8] = &[251, 114, 78, 11, 27, 117, 179, 21];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketRevenueSettlePeriod {}
@@ -15730,7 +15730,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketStatus {
-        const DISCRIMINATOR: [u8; 8] = [39, 227, 245, 172, 81, 243, 74, 239];
+        const DISCRIMINATOR: &[u8] = &[39, 227, 245, 172, 81, 243, 74, 239];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketStatus {}
@@ -15800,7 +15800,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketPausedOperations {
-        const DISCRIMINATOR: [u8; 8] = [177, 42, 203, 86, 124, 85, 32, 39];
+        const DISCRIMINATOR: &[u8] = &[177, 42, 203, 86, 124, 85, 32, 39];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketPausedOperations {}
@@ -15870,7 +15870,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketAssetTier {
-        const DISCRIMINATOR: [u8; 8] = [216, 218, 15, 206, 208, 164, 24, 163];
+        const DISCRIMINATOR: &[u8] = &[216, 218, 15, 206, 208, 164, 24, 163];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketAssetTier {}
@@ -15940,7 +15940,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketMarginWeights {
-        const DISCRIMINATOR: [u8; 8] = [32, 75, 107, 180, 16, 197, 1, 38];
+        const DISCRIMINATOR: &[u8] = &[32, 75, 107, 180, 16, 197, 1, 38];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketMarginWeights {}
@@ -16010,7 +16010,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketBorrowRate {
-        const DISCRIMINATOR: [u8; 8] = [216, 47, 114, 248, 0, 78, 173, 186];
+        const DISCRIMINATOR: &[u8] = &[216, 47, 114, 248, 0, 78, 173, 186];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketBorrowRate {}
@@ -16080,7 +16080,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketMaxTokenDeposits {
-        const DISCRIMINATOR: [u8; 8] = [89, 241, 13, 153, 229, 206, 230, 40];
+        const DISCRIMINATOR: &[u8] = &[89, 241, 13, 153, 229, 206, 230, 40];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketMaxTokenDeposits {}
@@ -16150,7 +16150,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketMaxTokenBorrows {
-        const DISCRIMINATOR: [u8; 8] = [76, 222, 78, 65, 19, 17, 10, 26];
+        const DISCRIMINATOR: &[u8] = &[76, 222, 78, 65, 19, 17, 10, 26];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketMaxTokenBorrows {}
@@ -16220,7 +16220,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketScaleInitialAssetWeightStart {
-        const DISCRIMINATOR: [u8; 8] = [154, 211, 71, 7, 119, 171, 98, 72];
+        const DISCRIMINATOR: &[u8] = &[154, 211, 71, 7, 119, 171, 98, 72];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketScaleInitialAssetWeightStart {}
@@ -16295,7 +16295,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketOracle {
-        const DISCRIMINATOR: [u8; 8] = [36, 174, 101, 206, 244, 70, 211, 189];
+        const DISCRIMINATOR: &[u8] = &[36, 174, 101, 206, 244, 70, 211, 189];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketOracle {}
@@ -16375,7 +16375,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketStepSizeAndTickSize {
-        const DISCRIMINATOR: [u8; 8] = [129, 204, 160, 151, 133, 198, 153, 119];
+        const DISCRIMINATOR: &[u8] = &[129, 204, 160, 151, 133, 198, 153, 119];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketStepSizeAndTickSize {}
@@ -16445,7 +16445,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketMinOrderSize {
-        const DISCRIMINATOR: [u8; 8] = [7, 136, 27, 144, 153, 150, 80, 125];
+        const DISCRIMINATOR: &[u8] = &[7, 136, 27, 144, 153, 150, 80, 125];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketMinOrderSize {}
@@ -16515,7 +16515,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketOrdersEnabled {
-        const DISCRIMINATOR: [u8; 8] = [19, 211, 29, 85, 150, 174, 176, 255];
+        const DISCRIMINATOR: &[u8] = &[19, 211, 29, 85, 150, 174, 176, 255];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketOrdersEnabled {}
@@ -16585,7 +16585,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketIfPausedOperations {
-        const DISCRIMINATOR: [u8; 8] = [198, 225, 237, 109, 145, 233, 119, 66];
+        const DISCRIMINATOR: &[u8] = &[198, 225, 237, 109, 145, 233, 119, 66];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketIfPausedOperations {}
@@ -16655,7 +16655,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketName {
-        const DISCRIMINATOR: [u8; 8] = [132, 15, 105, 156, 160, 4, 62, 223];
+        const DISCRIMINATOR: &[u8] = &[132, 15, 105, 156, 160, 4, 62, 223];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketName {}
@@ -16725,7 +16725,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketStatus {
-        const DISCRIMINATOR: [u8; 8] = [224, 52, 220, 78, 238, 167, 101, 138];
+        const DISCRIMINATOR: &[u8] = &[224, 52, 220, 78, 238, 167, 101, 138];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketStatus {}
@@ -16795,7 +16795,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketPausedOperations {
-        const DISCRIMINATOR: [u8; 8] = [51, 168, 150, 68, 102, 63, 155, 3];
+        const DISCRIMINATOR: &[u8] = &[51, 168, 150, 68, 102, 63, 155, 3];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketPausedOperations {}
@@ -16865,7 +16865,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketContractTier {
-        const DISCRIMINATOR: [u8; 8] = [222, 107, 185, 64, 127, 171, 165, 198];
+        const DISCRIMINATOR: &[u8] = &[222, 107, 185, 64, 127, 171, 165, 198];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketContractTier {}
@@ -16935,7 +16935,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketImfFactor {
-        const DISCRIMINATOR: [u8; 8] = [225, 32, 202, 238, 175, 168, 66, 111];
+        const DISCRIMINATOR: &[u8] = &[225, 32, 202, 238, 175, 168, 66, 111];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketImfFactor {}
@@ -17005,7 +17005,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketUnrealizedAssetWeight {
-        const DISCRIMINATOR: [u8; 8] = [96, 83, 120, 200, 98, 169, 198, 236];
+        const DISCRIMINATOR: &[u8] = &[96, 83, 120, 200, 98, 169, 198, 236];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketUnrealizedAssetWeight {}
@@ -17075,7 +17075,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketConcentrationCoef {
-        const DISCRIMINATOR: [u8; 8] = [216, 212, 111, 9, 250, 64, 121, 75];
+        const DISCRIMINATOR: &[u8] = &[216, 212, 111, 9, 250, 64, 121, 75];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketConcentrationCoef {}
@@ -17145,7 +17145,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketCurveUpdateIntensity {
-        const DISCRIMINATOR: [u8; 8] = [174, 119, 97, 13, 217, 130, 136, 102];
+        const DISCRIMINATOR: &[u8] = &[174, 119, 97, 13, 217, 130, 136, 102];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketCurveUpdateIntensity {}
@@ -17215,7 +17215,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketTargetBaseAssetAmountPerLp {
-        const DISCRIMINATOR: [u8; 8] = [140, 252, 191, 7, 247, 96, 68, 225];
+        const DISCRIMINATOR: &[u8] = &[140, 252, 191, 7, 247, 96, 68, 225];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketTargetBaseAssetAmountPerLp {}
@@ -17288,7 +17288,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketPerLpBase {
-        const DISCRIMINATOR: [u8; 8] = [223, 224, 23, 54, 113, 122, 152, 77];
+        const DISCRIMINATOR: &[u8] = &[223, 224, 23, 54, 113, 122, 152, 77];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketPerLpBase {}
@@ -17357,7 +17357,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateLpCooldownTime {
-        const DISCRIMINATOR: [u8; 8] = [176, 192, 230, 203, 208, 6, 140, 65];
+        const DISCRIMINATOR: &[u8] = &[176, 192, 230, 203, 208, 6, 140, 65];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateLpCooldownTime {}
@@ -17421,7 +17421,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpFeeStructure {
-        const DISCRIMINATOR: [u8; 8] = [200, 56, 109, 180, 172, 159, 143, 220];
+        const DISCRIMINATOR: &[u8] = &[200, 56, 109, 180, 172, 159, 143, 220];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpFeeStructure {}
@@ -17485,7 +17485,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotFeeStructure {
-        const DISCRIMINATOR: [u8; 8] = [24, 12, 37, 124, 132, 63, 160, 6];
+        const DISCRIMINATOR: &[u8] = &[24, 12, 37, 124, 132, 63, 160, 6];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotFeeStructure {}
@@ -17549,7 +17549,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateInitialPctToLiquidate {
-        const DISCRIMINATOR: [u8; 8] = [245, 97, 64, 31, 129, 51, 40, 245];
+        const DISCRIMINATOR: &[u8] = &[245, 97, 64, 31, 129, 51, 40, 245];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateInitialPctToLiquidate {}
@@ -17613,7 +17613,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateLiquidationDuration {
-        const DISCRIMINATOR: [u8; 8] = [195, 45, 228, 75, 98, 127, 63, 63];
+        const DISCRIMINATOR: &[u8] = &[195, 45, 228, 75, 98, 127, 63, 63];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateLiquidationDuration {}
@@ -17677,7 +17677,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateLiquidationMarginBufferRatio {
-        const DISCRIMINATOR: [u8; 8] = [5, 215, 155, 184, 19, 125, 142, 66];
+        const DISCRIMINATOR: &[u8] = &[5, 215, 155, 184, 19, 125, 142, 66];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateLiquidationMarginBufferRatio {}
@@ -17741,7 +17741,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateOracleGuardRails {
-        const DISCRIMINATOR: [u8; 8] = [141, 30, 9, 240, 136, 75, 69, 245];
+        const DISCRIMINATOR: &[u8] = &[141, 30, 9, 240, 136, 75, 69, 245];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateOracleGuardRails {}
@@ -17805,7 +17805,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateStateSettlementDuration {
-        const DISCRIMINATOR: [u8; 8] = [117, 8, 77, 34, 122, 119, 61, 165];
+        const DISCRIMINATOR: &[u8] = &[117, 8, 77, 34, 122, 119, 61, 165];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateStateSettlementDuration {}
@@ -17869,7 +17869,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateStateMaxNumberOfSubAccounts {
-        const DISCRIMINATOR: [u8; 8] = [105, 137, 80, 95, 51, 50, 190, 95];
+        const DISCRIMINATOR: &[u8] = &[105, 137, 80, 95, 51, 50, 190, 95];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateStateMaxNumberOfSubAccounts {}
@@ -17933,7 +17933,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateStateMaxInitializeUserFee {
-        const DISCRIMINATOR: [u8; 8] = [183, 72, 183, 217, 46, 152, 38, 41];
+        const DISCRIMINATOR: &[u8] = &[183, 72, 183, 217, 46, 152, 38, 41];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateStateMaxInitializeUserFee {}
@@ -18000,7 +18000,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketOracle {
-        const DISCRIMINATOR: [u8; 8] = [145, 236, 122, 74, 26, 16, 123, 173];
+        const DISCRIMINATOR: &[u8] = &[145, 236, 122, 74, 26, 16, 123, 173];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketOracle {}
@@ -18080,7 +18080,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketBaseSpread {
-        const DISCRIMINATOR: [u8; 8] = [103, 167, 141, 61, 192, 229, 25, 38];
+        const DISCRIMINATOR: &[u8] = &[103, 167, 141, 61, 192, 229, 25, 38];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketBaseSpread {}
@@ -18150,7 +18150,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateAmmJitIntensity {
-        const DISCRIMINATOR: [u8; 8] = [53, 216, 81, 248, 60, 1, 222, 134];
+        const DISCRIMINATOR: &[u8] = &[53, 216, 81, 248, 60, 1, 222, 134];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateAmmJitIntensity {}
@@ -18220,7 +18220,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketMaxSpread {
-        const DISCRIMINATOR: [u8; 8] = [6, 132, 169, 40, 124, 227, 156, 212];
+        const DISCRIMINATOR: &[u8] = &[6, 132, 169, 40, 124, 227, 156, 212];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketMaxSpread {}
@@ -18290,7 +18290,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketStepSizeAndTickSize {
-        const DISCRIMINATOR: [u8; 8] = [97, 22, 195, 229, 181, 121, 32, 14];
+        const DISCRIMINATOR: &[u8] = &[97, 22, 195, 229, 181, 121, 32, 14];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketStepSizeAndTickSize {}
@@ -18360,7 +18360,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketName {
-        const DISCRIMINATOR: [u8; 8] = [120, 12, 150, 158, 194, 231, 152, 183];
+        const DISCRIMINATOR: &[u8] = &[120, 12, 150, 158, 194, 231, 152, 183];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketName {}
@@ -18430,7 +18430,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketMinOrderSize {
-        const DISCRIMINATOR: [u8; 8] = [148, 182, 143, 25, 247, 254, 104, 102];
+        const DISCRIMINATOR: &[u8] = &[148, 182, 143, 25, 247, 254, 104, 102];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketMinOrderSize {}
@@ -18500,7 +18500,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketMaxSlippageRatio {
-        const DISCRIMINATOR: [u8; 8] = [56, 192, 174, 214, 217, 227, 164, 25];
+        const DISCRIMINATOR: &[u8] = &[56, 192, 174, 214, 217, 227, 164, 25];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketMaxSlippageRatio {}
@@ -18570,7 +18570,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketMaxFillReserveFraction {
-        const DISCRIMINATOR: [u8; 8] = [158, 50, 175, 240, 17, 123, 186, 41];
+        const DISCRIMINATOR: &[u8] = &[158, 50, 175, 240, 17, 123, 186, 41];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketMaxFillReserveFraction {}
@@ -18640,7 +18640,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketMaxOpenInterest {
-        const DISCRIMINATOR: [u8; 8] = [211, 243, 37, 54, 206, 192, 240, 221];
+        const DISCRIMINATOR: &[u8] = &[211, 243, 37, 54, 206, 192, 240, 221];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketMaxOpenInterest {}
@@ -18710,7 +18710,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketNumberOfUsers {
-        const DISCRIMINATOR: [u8; 8] = [221, 66, 246, 127, 23, 14, 214, 137];
+        const DISCRIMINATOR: &[u8] = &[221, 66, 246, 127, 23, 14, 214, 137];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketNumberOfUsers {}
@@ -18780,7 +18780,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketFeeAdjustment {
-        const DISCRIMINATOR: [u8; 8] = [110, 120, 82, 31, 217, 115, 121, 11];
+        const DISCRIMINATOR: &[u8] = &[110, 120, 82, 31, 217, 115, 121, 11];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketFeeAdjustment {}
@@ -18850,7 +18850,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketFeeAdjustment {
-        const DISCRIMINATOR: [u8; 8] = [124, 184, 119, 171, 139, 199, 27, 40];
+        const DISCRIMINATOR: &[u8] = &[124, 184, 119, 171, 139, 199, 27, 40];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketFeeAdjustment {}
@@ -18920,7 +18920,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketFuel {
-        const DISCRIMINATOR: [u8; 8] = [128, 34, 207, 128, 207, 145, 65, 46];
+        const DISCRIMINATOR: &[u8] = &[128, 34, 207, 128, 207, 145, 65, 46];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketFuel {}
@@ -18990,7 +18990,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotMarketFuel {
-        const DISCRIMINATOR: [u8; 8] = [169, 6, 208, 85, 23, 115, 22, 75];
+        const DISCRIMINATOR: &[u8] = &[169, 6, 208, 85, 23, 115, 22, 75];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotMarketFuel {}
@@ -19061,7 +19061,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitUserFuel {
-        const DISCRIMINATOR: [u8; 8] = [78, 54, 127, 169, 245, 179, 149, 35];
+        const DISCRIMINATOR: &[u8] = &[78, 54, 127, 169, 245, 179, 149, 35];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitUserFuel {}
@@ -19135,7 +19135,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateAdmin {
-        const DISCRIMINATOR: [u8; 8] = [226, 255, 184, 234, 67, 191, 5, 182];
+        const DISCRIMINATOR: &[u8] = &[226, 255, 184, 234, 67, 191, 5, 182];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateAdmin {}
@@ -19199,7 +19199,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateWhitelistMint {
-        const DISCRIMINATOR: [u8; 8] = [227, 158, 63, 228, 73, 69, 23, 54];
+        const DISCRIMINATOR: &[u8] = &[227, 158, 63, 228, 73, 69, 23, 54];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateWhitelistMint {}
@@ -19263,7 +19263,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateDiscountMint {
-        const DISCRIMINATOR: [u8; 8] = [26, 238, 24, 203, 91, 255, 142, 129];
+        const DISCRIMINATOR: &[u8] = &[26, 238, 24, 203, 91, 255, 142, 129];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateDiscountMint {}
@@ -19327,7 +19327,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateExchangeStatus {
-        const DISCRIMINATOR: [u8; 8] = [54, 251, 5, 25, 149, 14, 206, 156];
+        const DISCRIMINATOR: &[u8] = &[54, 251, 5, 25, 149, 14, 206, 156];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateExchangeStatus {}
@@ -19391,7 +19391,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpAuctionDuration {
-        const DISCRIMINATOR: [u8; 8] = [220, 51, 72, 247, 206, 206, 238, 110];
+        const DISCRIMINATOR: &[u8] = &[220, 51, 72, 247, 206, 206, 238, 110];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpAuctionDuration {}
@@ -19455,7 +19455,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateSpotAuctionDuration {
-        const DISCRIMINATOR: [u8; 8] = [227, 57, 154, 80, 55, 26, 182, 148];
+        const DISCRIMINATOR: &[u8] = &[227, 57, 154, 80, 55, 26, 182, 148];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateSpotAuctionDuration {}
@@ -19522,7 +19522,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeProtocolIfSharesTransferConfig {
-        const DISCRIMINATOR: [u8; 8] = [204, 47, 201, 74, 217, 201, 130, 232];
+        const DISCRIMINATOR: &[u8] = &[204, 47, 201, 74, 217, 201, 130, 232];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeProtocolIfSharesTransferConfig {}
@@ -19605,7 +19605,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateProtocolIfSharesTransferConfig {
-        const DISCRIMINATOR: [u8; 8] = [244, 48, 134, 239, 41, 44, 96, 131];
+        const DISCRIMINATOR: &[u8] = &[244, 48, 134, 239, 41, 44, 96, 131];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateProtocolIfSharesTransferConfig {}
@@ -19677,7 +19677,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializePrelaunchOracle {
-        const DISCRIMINATOR: [u8; 8] = [130, 152, 19, 253, 63, 72, 246, 220];
+        const DISCRIMINATOR: &[u8] = &[130, 152, 19, 253, 63, 72, 246, 220];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializePrelaunchOracle {}
@@ -19758,7 +19758,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePrelaunchOracleParams {
-        const DISCRIMINATOR: [u8; 8] = [197, 77, 11, 137, 115, 92, 181, 124];
+        const DISCRIMINATOR: &[u8] = &[197, 77, 11, 137, 115, 92, 181, 124];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePrelaunchOracleParams {}
@@ -19834,7 +19834,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DeletePrelaunchOracle {
-        const DISCRIMINATOR: [u8; 8] = [124, 0, 150, 210, 115, 171, 215, 202];
+        const DISCRIMINATOR: &[u8] = &[124, 0, 150, 210, 115, 171, 215, 202];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for DeletePrelaunchOracle {}
@@ -19911,7 +19911,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializePythPullOracle {
-        const DISCRIMINATOR: [u8; 8] = [11, 151, 145, 80, 21, 164, 2, 147];
+        const DISCRIMINATOR: &[u8] = &[11, 151, 145, 80, 21, 164, 2, 147];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializePythPullOracle {}
@@ -19993,7 +19993,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializePythLazerOracle {
-        const DISCRIMINATOR: [u8; 8] = [89, 72, 144, 241, 94, 171, 28, 143];
+        const DISCRIMINATOR: &[u8] = &[89, 72, 144, 241, 94, 171, 28, 143];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializePythLazerOracle {}
@@ -20073,7 +20073,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PostPythLazerOracleUpdate {
-        const DISCRIMINATOR: [u8; 8] = [168, 250, 82, 74, 96, 140, 128, 207];
+        const DISCRIMINATOR: &[u8] = &[168, 250, 82, 74, 96, 140, 128, 207];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for PostPythLazerOracleUpdate {}
@@ -20145,7 +20145,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeHighLeverageModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [125, 235, 77, 45, 130, 90, 134, 48];
+        const DISCRIMINATOR: &[u8] = &[125, 235, 77, 45, 130, 90, 134, 48];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeHighLeverageModeConfig {}
@@ -20225,7 +20225,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateHighLeverageModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [254, 192, 159, 254, 254, 74, 141, 70];
+        const DISCRIMINATOR: &[u8] = &[254, 192, 159, 254, 254, 74, 141, 70];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateHighLeverageModeConfig {}
@@ -20297,7 +20297,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializeProtectedMakerModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [71, 150, 108, 182, 19, 30, 72, 149];
+        const DISCRIMINATOR: &[u8] = &[71, 150, 108, 182, 19, 30, 72, 149];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeProtectedMakerModeConfig {}
@@ -20377,7 +20377,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateProtectedMakerModeConfig {
-        const DISCRIMINATOR: [u8; 8] = [189, 135, 186, 140, 137, 238, 182, 65];
+        const DISCRIMINATOR: &[u8] = &[189, 135, 186, 140, 137, 238, 182, 65];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateProtectedMakerModeConfig {}

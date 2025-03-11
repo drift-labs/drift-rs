@@ -335,7 +335,7 @@ fn generate_idl_types(idl: &Idl) -> String {
             }
             #[automatically_derived]
             impl anchor_lang::Discriminator for #struct_name {
-                const DISCRIMINATOR: [u8; 8] = #discriminator;
+                const DISCRIMINATOR: &[u8] = &#discriminator;
             }
             #zc_tokens
             #[automatically_derived]
@@ -399,7 +399,7 @@ fn generate_idl_types(idl: &Idl) -> String {
             }
             #[automatically_derived]
             impl anchor_lang::Discriminator for #struct_name {
-                const DISCRIMINATOR: [u8; 8] = #discriminator;
+                const DISCRIMINATOR: &[u8] = &#discriminator;
             }
             #[automatically_derived]
             impl anchor_lang::InstructionData for #struct_name {}
@@ -439,7 +439,7 @@ fn generate_idl_types(idl: &Idl) -> String {
             }
             #[automatically_derived]
             impl anchor_lang::Discriminator for #struct_name {
-                const DISCRIMINATOR: [u8; 8] = #discriminator;
+                const DISCRIMINATOR: &[u8] = &#discriminator;
             }
             #[automatically_derived]
             unsafe impl anchor_lang::__private::bytemuck::Pod for #struct_name {}
