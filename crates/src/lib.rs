@@ -1954,7 +1954,7 @@ mod tests {
     use std::str::FromStr;
 
     use serde_json::json;
-    use solana_account_decoder::{UiAccount, UiAccountData, UiAccountEncoding};
+    use solana_account_decoder_client_types::{UiAccount, UiAccountData, UiAccountEncoding};
     use solana_rpc_client::rpc_client::Mocks;
     use solana_rpc_client_api::{
         request::RpcRequest,

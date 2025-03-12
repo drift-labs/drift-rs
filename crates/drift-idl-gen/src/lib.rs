@@ -335,13 +335,13 @@ fn generate_idl_types(idl: &Idl) -> String {
             }
             #[automatically_derived]
             impl anchor_lang::Discriminator for #struct_name {
-                const DISCRIMINATOR: [u8; 8] = #discriminator;
+                const DISCRIMINATOR: &[u8] = &#discriminator;
             }
             #zc_tokens
             #[automatically_derived]
             impl anchor_lang::AccountSerialize for #struct_name {
                 fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-                    if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                    if writer.write_all(Self::DISCRIMINATOR).is_err() {
                         return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
                     }
 
@@ -399,7 +399,7 @@ fn generate_idl_types(idl: &Idl) -> String {
             }
             #[automatically_derived]
             impl anchor_lang::Discriminator for #struct_name {
-                const DISCRIMINATOR: [u8; 8] = #discriminator;
+                const DISCRIMINATOR: &[u8] = &#discriminator;
             }
             #[automatically_derived]
             impl anchor_lang::InstructionData for #struct_name {}
@@ -439,7 +439,7 @@ fn generate_idl_types(idl: &Idl) -> String {
             }
             #[automatically_derived]
             impl anchor_lang::Discriminator for #struct_name {
-                const DISCRIMINATOR: [u8; 8] = #discriminator;
+                const DISCRIMINATOR: &[u8] = &#discriminator;
             }
             #[automatically_derived]
             unsafe impl anchor_lang::__private::bytemuck::Pod for #struct_name {}
@@ -462,7 +462,7 @@ fn generate_idl_types(idl: &Idl) -> String {
             #[automatically_derived]
             impl anchor_lang::AccountSerialize for #struct_name {
                 fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-                    if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+                    if writer.write_all(Self::DISCRIMINATOR).is_err() {
                         return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
                     }
 

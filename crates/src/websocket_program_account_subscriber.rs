@@ -4,7 +4,7 @@ use anchor_lang::AnchorDeserialize;
 use drift_pubsub_client::PubsubClient;
 use futures_util::StreamExt;
 use log::warn;
-use solana_account_decoder::UiAccountEncoding;
+use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_rpc_client_api::{
     config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     filter::RpcFilterType,

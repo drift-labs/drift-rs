@@ -3,7 +3,7 @@ use std::{str::FromStr, sync::Arc};
 use drift_pubsub_client::PubsubClient;
 use futures_util::StreamExt;
 use log::warn;
-use solana_account_decoder::UiAccountEncoding;
+use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::config::RpcAccountInfoConfig;
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};

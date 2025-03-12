@@ -9,7 +9,7 @@ use std::{
 use anchor_lang::{AccountDeserialize, AnchorDeserialize};
 use dashmap::DashMap;
 use serde_json::json;
-use solana_account_decoder::UiAccountEncoding;
+use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::{
     config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},

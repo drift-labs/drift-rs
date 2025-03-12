@@ -535,7 +535,7 @@ impl DriftEvent {
         signature: &str,
         tx_idx: usize,
     ) -> Option<Self> {
-        match disc {
+        match disc.as_slice() {
             // deser should only fail on a breaking protocol changes
             OrderActionRecord::DISCRIMINATOR => Self::from_oar(
                 OrderActionRecord::deserialize(data).expect("deserializes"),
@@ -1037,7 +1037,7 @@ mod test {
 
     /// serialize event to string like Drift program log
     pub fn serialize_event<T: AnchorSerialize + Discriminator>(event: T) -> String {
-        let mut data_buf = T::discriminator().to_vec();
+        let mut data_buf = T::DISCRIMINATOR.to_vec();
         event.serialize(&mut data_buf).expect("serializes");
         base64::engine::general_purpose::STANDARD.encode(data_buf)
     }

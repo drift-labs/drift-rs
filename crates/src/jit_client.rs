@@ -320,7 +320,7 @@ impl JitProxyClient {
             Cow::Borrowed(maker_account_data),
             false,
         )
-        .place_swift_order(&signed_order_info, &taker_params.taker)
+        .place_swift_order(signed_order_info, &taker_params.taker)
         .add_ix(fill_ix)
         .build();
 
@@ -468,7 +468,7 @@ pub mod instruction {
         pub params: JitParams,
     }
     impl anchor_lang::Discriminator for Jit {
-        const DISCRIMINATOR: [u8; 8] = [99, 42, 97, 140, 152, 62, 167, 234];
+        const DISCRIMINATOR: &[u8] = &[99, 42, 97, 140, 152, 62, 167, 234];
     }
     impl anchor_lang::InstructionData for Jit {}
 
@@ -488,7 +488,7 @@ pub mod instruction {
         pub params: JitSignedMsgParams,
     }
     impl anchor_lang::Discriminator for JitSignedMsg {
-        const DISCRIMINATOR: [u8; 8] = [134, 130, 156, 72, 37, 120, 153, 21];
+        const DISCRIMINATOR: &[u8] = &[134, 130, 156, 72, 37, 120, 153, 21];
     }
     impl anchor_lang::InstructionData for JitSignedMsg {}
 

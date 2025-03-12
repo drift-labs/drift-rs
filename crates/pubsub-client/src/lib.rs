@@ -8,7 +8,7 @@ use futures_util::{
 use log::*;
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
-use solana_account_decoder::UiAccount;
+use solana_account_decoder_client_types::UiAccount;
 use solana_rpc_client_api::{
     config::{
         RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
@@ -489,14 +489,14 @@ impl PubsubClient {
                             if let Some(response_sender) = inflight_requests.remove(&id) {
                                 match err {
                                     Some(reason) => {
-                                        let _ = response_sender.send(Err(PubsubClientError::RequestFailed { reason, message: text.clone()}));
+                                        let _ = response_sender.send(Err(PubsubClientError::RequestFailed { reason, message: text.to_string()}));
                                     },
                                     None => {
                                         let json_result = gjson::get(text, "result");
                                         let json_result_value = if json_result.exists() {
                                             Ok(serde_json::from_str::<Value>(json_result.json()).unwrap())
                                         } else {
-                                            Err(PubsubClientError::RequestFailed { reason: "missing `result` field".into(), message: text.clone() })
+                                            Err(PubsubClientError::RequestFailed { reason: "missing `result` field".into(), message: text.to_string() })
                                         };
 
                                         if let Err(err) = response_sender.send(json_result_value) {
@@ -510,13 +510,13 @@ impl PubsubClient {
                             } else if let Some((operation, payload, response_sender)) = inflight_subscribes.remove(&id) {
                                 match err {
                                     Some(reason) => {
-                                        let _ = response_sender.send(Err(PubsubClientError::SubscribeFailed { reason, message: text.clone()}));
+                                        let _ = response_sender.send(Err(PubsubClientError::SubscribeFailed { reason, message: text.to_string()}));
                                     },
                                     None => {
                                         // Subscribe Id
                                         let sid = gjson::get(text, "result");
                                         if !sid.exists() {
-                                            return Err(PubsubClientError::SubscribeFailed { reason: "invalid `result` field".into(), message: text.clone() });
+                                            return Err(PubsubClientError::SubscribeFailed { reason: "invalid `result` field".into(), message: text.to_string() });
                                         }
                                         let sid = sid.u64();
 
@@ -579,8 +579,8 @@ impl PubsubClient {
                         request_id += 1;
                         let method = format!("{operation}Subscribe");
                         let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params}).to_string();
-                        if let Err(err) = ws.send(Message::Text(text.clone())).await {
-                            log::warn!(target: "ws", "sending subscribe failed: {text}, {err:?}");
+                        if let Err(ref err) = ws.send(Message::Text(text.clone().into())).await {
+                            log::warn!(target: "ws", "sending subscribe failed, {text}, {err:?}");
                             break 'manager;
                         }
                         inflight_subscribes.insert(request_id, (operation, text, response_sender));
@@ -593,7 +593,7 @@ impl PubsubClient {
                             request_id += 1;
                             let method = format!("{operation}Unsubscribe");
                             let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":[sid]}).to_string();
-                            if let Err(err) = ws.send(Message::Text(text.clone())).await {
+                            if let Err(err) = ws.send(Message::Text(text.clone().into())).await {
                                 log::warn!(target: "ws", "sending unsubscribe failed: {text}, {err:?}");
                             }
                             inflight_unsubscribes.insert(request_id, response_sender);
@@ -604,7 +604,7 @@ impl PubsubClient {
                         let (method, params, response_sender) = request.expect("request channel");
                         request_id += 1;
                         let text = json!({"jsonrpc":"2.0","id":request_id,"method":method,"params":params}).to_string();
-                        if let Err(err) = ws.send(Message::Text(text)).await {
+                        if let Err(err) = ws.send(Message::Text(text.into())).await {
                             log::warn!(target: "ws", "sending request failed. {err:?}");
                         }
                         inflight_requests.insert(request_id, response_sender);

@@ -13,12 +13,11 @@ gjson = "0.8.1"
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
-solana-account-decoder = "2"
-solana-sdk = "2"
-solana-rpc-client-api = "2"
+solana-account-decoder-client-types = "2.1"
+solana-sdk = "2.1"
+solana-rpc-client-api = "2.1"
 thiserror = "1"
 tokio = { version = "1.42", features = ["full"] }
 tokio-stream = "0.1"
-# bump after solana-sdk crate updates to 2.1.x
-tokio-tungstenite = { version = "0.20.1", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.26.0", features = ["native-tls"] }
 url = "2.5"
