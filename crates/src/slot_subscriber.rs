@@ -139,7 +139,7 @@ impl SlotSubscriber {
 
             if res.is_err() {
                 log::error!(target: LOG_TARGET, "slot subscriber failed");
-                std::process::exit(1);
+                // std::process::exit(1);
             }
         });
 
