@@ -176,7 +176,7 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for TransferPerpPosition {
-        const DISCRIMINATOR: [u8; 8] = [23, 172, 188, 168, 134, 210, 3, 108];
+        const DISCRIMINATOR: &[u8] = &[23, 172, 188, 168, 134, 210, 3, 108];
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for TransferPerpPosition {}
@@ -6384,7 +6384,7 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for TransferPerpPosition {
-        const DISCRIMINATOR: [u8; 8] = [73, 4, 221, 41, 202, 239, 84, 16];
+        const DISCRIMINATOR: &[u8] = &[73, 4, 221, 41, 202, 239, 84, 16];
     }
     #[automatically_derived]
     unsafe impl anchor_lang::__private::bytemuck::Pod for TransferPerpPosition {}
@@ -6429,7 +6429,7 @@ pub mod accounts {
     #[automatically_derived]
     impl anchor_lang::AccountSerialize for TransferPerpPosition {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
-            if writer.write_all(&Self::DISCRIMINATOR).is_err() {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
             }
             if AnchorSerialize::serialize(self, writer).is_err() {

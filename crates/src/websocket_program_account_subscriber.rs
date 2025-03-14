@@ -73,40 +73,57 @@ impl WebsocketProgramAccountSubscriber {
 
         tokio::spawn(async move {
             let mut latest_slot = 0;
-            let pubsub = PubsubClient::new(&url).await.expect("connects");
-            let (mut accounts, unsub) = pubsub
-                .program_subscribe(&constants::PROGRAM_ID, Some(config.clone()))
-                .await
-                .expect("subscribes");
-
             loop {
-                tokio::select! {
-                    biased;
-                    message = accounts.next() => {
-                        match message {
-                            Some(message) => {
-                                let slot = message.context.slot;
-                                if slot >= latest_slot {
-                                    latest_slot = slot;
-                                    let pubkey = message.value.pubkey;
-                                    let data = &message.value.account.data.decode().expect("account has data");
-                                    let data = T::deserialize(&mut &data[8..]).expect("deserializes T");
-                                    on_update(&ProgramAccountUpdate::new(pubkey, DataAndSlot::<T> { slot, data }, Instant::now()));
+                let pubsub = match PubsubClient::new(&url).await {
+                    Ok(pubsub) => pubsub,
+                    Err(err) => {
+                        log::error!("GPA stream connect failed: {err:?}");
+                        continue;
+                    }
+                };
+                let (mut accounts, unsub) = match pubsub
+                    .program_subscribe(&constants::PROGRAM_ID, Some(config.clone()))
+                    .await
+                {
+                    Ok(res) => res,
+                    Err(err) => {
+                        log::error!("GPA stream subscribe failed: {err:?}");
+                        continue;
+                    }
+                };
+
+                let res = loop {
+                    tokio::select! {
+                        biased;
+                        message = accounts.next() => {
+                            match message {
+                                Some(message) => {
+                                    let slot = message.context.slot;
+                                    if slot >= latest_slot {
+                                        latest_slot = slot;
+                                        let pubkey = message.value.pubkey;
+                                        let data = &message.value.account.data.decode().expect("account has data");
+                                        let data = T::deserialize(&mut &data[8..]).expect("deserializes T");
+                                        on_update(&ProgramAccountUpdate::new(pubkey, DataAndSlot::<T> { slot, data }, Instant::now()));
+                                    }
+                                },
+                                None => {
+                                    log::error!("{subscription_name}: Ws GPA stream ended unexpectedly");
+                                    break Err(());
                                 }
-                            },
-                            None => {
-                                log::error!("{subscription_name}: Ws GPA stream ended unexpectedly");
-                                std::process::exit(1); // tokio won't propogate a panic
                             }
                         }
+                        _ = &mut unsub_rx => {
+                            warn!("unsubscribing: {subscription_name}");
+                            unsub().await;
+                            break Ok(());
+                        }
                     }
-                    _ = &mut unsub_rx => {
-                        warn!("unsubscribing: {subscription_name}");
-                        break;
-                    }
+                };
+                if res.is_ok() {
+                    break;
                 }
             }
-            unsub().await;
         });
 
         unsub_tx

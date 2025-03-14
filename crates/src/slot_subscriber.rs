@@ -1,7 +1,4 @@
-use std::{
-    sync::{atomic::AtomicU64, Arc, Mutex},
-    time::Duration,
-};
+use std::sync::{atomic::AtomicU64, Arc, Mutex};
 
 use drift_pubsub_client::PubsubClient;
 use futures_util::StreamExt;
@@ -10,9 +7,6 @@ use solana_sdk::clock::Slot;
 use tokio::sync::oneshot;
 
 use crate::types::{SdkError, SdkResult};
-
-/// Max. time for slot subscriber to run without an update (10 slots)
-const SLOT_STALENESS_THRESHOLD: Duration = Duration::from_secs(4);
 
 const LOG_TARGET: &str = "slotsub";
 
@@ -101,45 +95,41 @@ impl SlotSubscriber {
 
         tokio::spawn(async move {
             debug!(target: LOG_TARGET, "start slot subscriber");
+            loop {
+                let (mut slot_updates, unsubscriber) = match pubsub.slot_subscribe().await {
+                    Ok(s) => s,
+                    Err(err) => {
+                        error!(target: LOG_TARGET, "slot subscribe failed: {err:?}");
+                        continue;
+                    }
+                };
 
-            let (mut slot_updates, unsubscriber) = match pubsub.slot_subscribe().await {
-                Ok(s) => s,
-                Err(err) => {
-                    debug!(target: LOG_TARGET, "subscribe failed: {err:?}");
-                    return;
-                }
-            };
-
-            let res = loop {
-                tokio::select! {
-                    biased;
-                    new_slot = tokio::time::timeout(SLOT_STALENESS_THRESHOLD, slot_updates.next()) => {
-                        match new_slot {
-                            Ok(Some(update)) => {
-                                current_slot.store(update.slot, std::sync::atomic::Ordering::Relaxed);
-                                on_slot(SlotUpdate::new(update.slot));
-                            }
-                            Ok(None) => {
-                                warn!(target: LOG_TARGET, "slot subscriber finished");
-                                break Err(());
-                            }
-                            Err(err) => {
-                                warn!(target: LOG_TARGET, "slot subscriber failed: {err:?}");
-                                break Err(());
+                let res = loop {
+                    tokio::select! {
+                        biased;
+                        new_slot = slot_updates.next() => {
+                            match new_slot {
+                                Some(update) => {
+                                    current_slot.store(update.slot, std::sync::atomic::Ordering::Relaxed);
+                                    on_slot(SlotUpdate::new(update.slot));
+                                }
+                                None => {
+                                    warn!(target: LOG_TARGET, "slot subscriber finished");
+                                    break Err(());
+                                }
                             }
                         }
+                        _ = &mut unsub_rx => {
+                            debug!(target: LOG_TARGET, "unsubscribed");
+                            unsubscriber().await;
+                            break Ok(());
+                        }
                     }
-                    _ = &mut unsub_rx => {
-                        debug!(target: LOG_TARGET, "unsubscribed");
-                        unsubscriber().await;
-                        break Ok(());
-                    }
-                }
-            };
+                };
 
-            if res.is_err() {
-                log::error!(target: LOG_TARGET, "slot subscriber failed");
-                std::process::exit(1);
+                if res.is_ok() {
+                    break;
+                }
             }
         });
 
