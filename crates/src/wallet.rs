@@ -8,9 +8,10 @@ use solana_sdk::{
     signer::Signer,
     transaction::VersionedTransaction,
 };
+use solana_transaction_status::parse_associated_token::spl_associated_token_id;
 
 use crate::{
-    constants::{self},
+    constants::{self, VAULT_PROGRAM_ID},
     types::{SdkError, SdkResult},
     utils,
 };
@@ -102,6 +103,35 @@ impl Wallet {
             &constants::PROGRAM_ID,
         );
         account_drift_pda
+    }
+
+    /// Calculate the `vault` deposit address for `authority`
+    pub fn derive_vault_depositor_account(vault: &Pubkey, authority: &Pubkey) -> Pubkey {
+        let (account_drift_pda, _seed) = Pubkey::find_program_address(
+            &[&b"vault_depositor"[..], vault.as_ref(), authority.as_ref()],
+            &constants::VAULT_PROGRAM_ID,
+        );
+        account_drift_pda
+    }
+
+    pub fn derive_vault_token_account(vault: &Pubkey) -> Pubkey {
+        let (account_drift_pda, _seed) = Pubkey::find_program_address(
+            &[&b"vault_token_account"[..], vault.as_ref()],
+            &constants::VAULT_PROGRAM_ID,
+        );
+        account_drift_pda
+    }
+
+    pub fn derive_vault_account(vault_name: &str) -> Pubkey {
+        let (account_drift_pda, _seed) = Pubkey::find_program_address(
+            &[vault_name.as_bytes()],
+            &constants::VAULT_PROGRAM_ID,
+        );
+        account_drift_pda
+    }
+
+    pub fn derive_user_token_account(account: &Pubkey, token_mint: &Pubkey) -> Pubkey {
+        spl_associated_token_account::get_associated_token_address(account, token_mint)
     }
 
     /// Signs the given tx `message` returning the tx on success

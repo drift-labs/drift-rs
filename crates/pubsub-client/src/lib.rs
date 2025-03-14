@@ -338,7 +338,7 @@ impl PubsubClient {
         mut shutdown_receiver: oneshot::Receiver<()>,
     ) -> PubsubClientResult {
         // manage Ws requests and forward subscription messages to subscribers
-        // this loop will retry indefinitely unless the consumer invokes `shutdown` or successive failures excceed maximum
+        // this loop will retry indefinitely unless the consumer invokes `shutdown` or successive failures exceed maximum
         let max_retry_count = 3;
         let mut retry_count = 0;
 
