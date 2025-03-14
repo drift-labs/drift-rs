@@ -3,7 +3,7 @@
 use std::{borrow::Cow, collections::BTreeSet, sync::Arc, time::Duration};
 
 use anchor_lang::{AccountDeserialize, InstructionData};
-use drift_pubsub_client::PubsubClient;
+pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
 use log::debug;
 pub use solana_rpc_client::nonblocking::rpc_client::RpcClient;
@@ -15,20 +15,16 @@ use solana_sdk::{
     hash::Hash,
     instruction::{AccountMeta, Instruction},
     message::{v0, Message, VersionedMessage},
-    signature::{keypair_from_seed, Keypair, Signature},
-    signer::Signer,
-    transaction::VersionedTransaction,
+    signature::Signature,
 };
 pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
-use utils::get_ws_url;
 
-pub use crate::types::Context;
 use crate::{
     account_map::AccountMap,
     blockhash_subscriber::BlockhashSubscriber,
     constants::{
         derive_perp_market_account, derive_spot_market_account, state_account, MarketExt,
-        ProgramData, DEFAULT_PUBKEY, PROGRAM_ID, SYSVAR_INSTRUCTIONS_PUBKEY,
+        ProgramData, DEFAULT_PUBKEY, SYSVAR_INSTRUCTIONS_PUBKEY,
     },
     drift_idl::traits::ToAccountMetas,
     marketmap::MarketMap,
@@ -38,8 +34,9 @@ use crate::{
         accounts::{PerpMarket, SpotMarket, State, User, UserStats},
         DataAndSlot, MarketType, *,
     },
-    utils::get_http_url,
+    utils::{get_http_url, get_ws_url},
 };
+pub use crate::{types::Context, wallet::Wallet};
 
 // utils
 pub mod async_utils;
@@ -47,6 +44,7 @@ pub mod ffi;
 pub mod math;
 pub mod memcmp;
 pub mod utils;
+pub mod wallet;
 
 // constants & types
 pub mod constants;
@@ -1816,139 +1814,6 @@ pub fn build_accounts<'a>(
     account_metas
 }
 
-/// Drift wallet
-#[derive(Clone, Debug)]
-pub struct Wallet {
-    /// The signing keypair, it could be authority or delegate
-    signer: Arc<Keypair>,
-    /// The drift 'authority' account
-    /// user (sub)accounts are derived from this
-    authority: Pubkey,
-    /// The drift 'stats' account
-    stats: Pubkey,
-}
-
-impl Wallet {
-    /// Returns true if the wallet is configured for delegated signing
-    pub fn is_delegated(&self) -> bool {
-        self.authority != self.signer.pubkey() && self.signer.pubkey().is_on_curve()
-    }
-    /// Init wallet from a string that could be either a file path or the encoded key, uses default sub-account
-    pub fn try_from_str(path_or_key: &str) -> SdkResult<Self> {
-        let authority = utils::load_keypair_multi_format(path_or_key)?;
-        Ok(Self::new(authority))
-    }
-    /// Construct a read-only wallet
-    pub fn read_only(authority: Pubkey) -> Self {
-        Self {
-            signer: Arc::new(Keypair::new()),
-            authority,
-            stats: Wallet::derive_stats_account(&authority),
-        }
-    }
-    /// Init wallet from base58 encoded seed, uses default sub-account
-    ///
-    /// # panics
-    /// if the key is invalid
-    pub fn from_seed_bs58(seed: &str) -> Self {
-        let authority = Keypair::from_base58_string(seed);
-        Self::new(authority)
-    }
-    /// Init wallet from seed bytes, uses default sub-account
-    pub fn from_seed(seed: &[u8]) -> SdkResult<Self> {
-        let authority = keypair_from_seed(seed).map_err(|_| SdkError::InvalidSeed)?;
-        Ok(Self::new(authority))
-    }
-    /// Init wallet with keypair
-    ///
-    /// * `authority` - keypair for tx signing
-    pub fn new(authority: Keypair) -> Self {
-        Self {
-            stats: Wallet::derive_stats_account(&authority.pubkey()),
-            authority: authority.pubkey(),
-            signer: Arc::new(authority),
-        }
-    }
-    /// Convert the wallet into a delegated one by providing the `authority` public key
-    pub fn to_delegated(&mut self, authority: Pubkey) {
-        self.stats = Wallet::derive_stats_account(&authority);
-        self.authority = authority;
-    }
-    /// Calculate the address of a drift user account/sub-account
-    pub fn derive_user_account(authority: &Pubkey, sub_account_id: u16) -> Pubkey {
-        let (account_drift_pda, _seed) = Pubkey::find_program_address(
-            &[
-                &b"user"[..],
-                authority.as_ref(),
-                &sub_account_id.to_le_bytes(),
-            ],
-            &PROGRAM_ID,
-        );
-        account_drift_pda
-    }
-
-    /// Calculate the address of a drift stats account
-    pub fn derive_stats_account(account: &Pubkey) -> Pubkey {
-        let (account_drift_pda, _seed) = Pubkey::find_program_address(
-            &[&b"user_stats"[..], account.as_ref()],
-            &constants::PROGRAM_ID,
-        );
-        account_drift_pda
-    }
-
-    /// Calculate the address of `authority`s swift (taker) order account
-    pub fn derive_swift_order_account(authority: &Pubkey) -> Pubkey {
-        let (account_drift_pda, _seed) = Pubkey::find_program_address(
-            &[&b"SIGNED_MSG"[..], authority.as_ref()],
-            &constants::PROGRAM_ID,
-        );
-        account_drift_pda
-    }
-
-    /// Signs the given tx `message` returning the tx on success
-    pub fn sign_tx(
-        &self,
-        mut message: VersionedMessage,
-        recent_block_hash: Hash,
-    ) -> SdkResult<VersionedTransaction> {
-        message.set_recent_blockhash(recent_block_hash);
-        let signer: &dyn Signer = self.signer.as_ref();
-        VersionedTransaction::try_new(message, &[signer]).map_err(Into::into)
-    }
-
-    /// Sign message with the wallet's signer
-    pub fn sign_message(&self, message: &[u8]) -> SdkResult<Signature> {
-        let signer: &dyn Signer = self.signer.as_ref();
-        Ok(signer.sign_message(message))
-    }
-    /// Return the wallet authority address
-    pub fn authority(&self) -> &Pubkey {
-        &self.authority
-    }
-    /// Return the wallet signing address
-    pub fn signer(&self) -> Pubkey {
-        self.signer.pubkey()
-    }
-    /// Return the drift user stats address
-    pub fn stats(&self) -> &Pubkey {
-        &self.stats
-    }
-    /// Return the address of the default sub-account (0)
-    pub fn default_sub_account(&self) -> Pubkey {
-        self.sub_account(0)
-    }
-    /// Calculate the drift user address given a `sub_account_id`
-    pub fn sub_account(&self, sub_account_id: u16) -> Pubkey {
-        Self::derive_user_account(self.authority(), sub_account_id)
-    }
-}
-
-impl From<Keypair> for Wallet {
-    fn from(value: Keypair) -> Self {
-        Self::new(value)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
@@ -1960,6 +1825,7 @@ mod tests {
         request::RpcRequest,
         response::{Response, RpcResponseContext},
     };
+    use solana_sdk::signature::Keypair;
     use types::accounts::PerpMarket;
 
     use super::*;
@@ -2103,16 +1969,5 @@ mod tests {
         let (spot, perp) = client.all_positions(&user).await.unwrap();
         assert_eq!(spot.len(), 1);
         assert_eq!(perp.len(), 1);
-    }
-
-    #[test]
-    fn wallet_read_only() {
-        let keypair = Keypair::new();
-        let ro = Wallet::read_only(keypair.pubkey());
-
-        let rw = Wallet::new(keypair);
-        assert_eq!(rw.authority, ro.authority);
-        assert_eq!(rw.stats, ro.stats);
-        assert_eq!(rw.default_sub_account(), ro.default_sub_account());
     }
 }

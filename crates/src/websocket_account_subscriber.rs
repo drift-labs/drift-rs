@@ -99,52 +99,58 @@ impl WebsocketAccountSubscriber {
         let pubsub = Arc::clone(&self.pubsub);
 
         tokio::spawn(async move {
-            log::debug!(target: LOG_TARGET, "spawn account subscriber: {subscription_name}-{:?}", pubkey);
-            let (mut account_updates, account_unsubscribe) = match pubsub
-                .account_subscribe(&pubkey, Some(account_config.clone()))
-                .await
-            {
-                Ok(res) => res,
-                Err(err) => {
-                    log::error!(target: LOG_TARGET, "account subscribe {pubkey} failed: {err:?}");
-                    std::process::exit(1);
-                }
-            };
-            log::debug!(target: LOG_TARGET, "account subscribed: {subscription_name}-{pubkey:?}");
-            let mut latest_slot = 0;
             loop {
-                tokio::select! {
-                    biased;
-                    message = account_updates.next() => {
-                        match message {
-                            Some(message) => {
-                                let slot = message.context.slot;
-                                if slot >= latest_slot {
-                                    latest_slot = slot;
-                                    let data = message.value.data.decode().expect("decoded");
-                                    let account_update = AccountUpdate {
-                                        owner: Pubkey::from_str(&message.value.owner).unwrap(),
-                                        lamports: message.value.lamports,
-                                        pubkey,
-                                        data,
-                                        slot,
-                                    };
-                                    on_update(&account_update);
+                log::debug!(target: LOG_TARGET, "spawn account subscriber: {subscription_name}-{:?}", pubkey);
+                let (mut account_updates, account_unsubscribe) = match pubsub
+                    .account_subscribe(&pubkey, Some(account_config.clone()))
+                    .await
+                {
+                    Ok(res) => res,
+                    Err(err) => {
+                        log::error!(target: LOG_TARGET, "account subscribe {pubkey} failed: {err:?}");
+                        continue;
+                    }
+                };
+                log::debug!(target: LOG_TARGET, "account subscribed: {subscription_name}-{pubkey:?}");
+                let mut latest_slot = 0;
+                let res = loop {
+                    tokio::select! {
+                        biased;
+                        message = account_updates.next() => {
+                            match message {
+                                Some(message) => {
+                                    let slot = message.context.slot;
+                                    if slot >= latest_slot {
+                                        latest_slot = slot;
+                                        let data = message.value.data.decode().expect("decoded");
+                                        let account_update = AccountUpdate {
+                                            owner: Pubkey::from_str(&message.value.owner).unwrap(),
+                                            lamports: message.value.lamports,
+                                            pubkey,
+                                            data,
+                                            slot,
+                                        };
+                                        on_update(&account_update);
+                                    }
+                                }
+                                None => {
+                                    log::error!(target: LOG_TARGET, "{subscription_name}: Ws ended unexpectedly");
+                                    break Err(());
                                 }
                             }
-                            None => {
-                                log::error!(target: LOG_TARGET, "{subscription_name}: Ws ended unexpectedly");
-                                std::process::exit(1);
-                            }
+                        }
+                        _ = &mut unsub_rx => {
+                            log::debug!(target: LOG_TARGET, "{subscription_name}: Unsubscribing from account stream: {pubkey:?}");
+                            account_unsubscribe().await;
+                            break Ok(());
                         }
                     }
-                    _ = &mut unsub_rx => {
-                        log::debug!(target: LOG_TARGET, "{}: Unsubscribing from account stream: {pubkey:?}", subscription_name);
-                        break;
-                    }
+                };
+
+                if res.is_ok() {
+                    break;
                 }
             }
-            account_unsubscribe().await;
         });
 
         Ok(unsub_tx)
