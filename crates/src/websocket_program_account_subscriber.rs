@@ -74,11 +74,23 @@ impl WebsocketProgramAccountSubscriber {
         tokio::spawn(async move {
             let mut latest_slot = 0;
             loop {
-                let pubsub = PubsubClient::new(&url).await.expect("connects");
-                let (mut accounts, unsub) = pubsub
+                let pubsub = match PubsubClient::new(&url).await {
+                    Ok(pubsub) => pubsub,
+                    Err(err) => {
+                        log::error!("GPA stream connect failed: {err:?}");
+                        continue;
+                    }
+                };
+                let (mut accounts, unsub) = match pubsub
                     .program_subscribe(&constants::PROGRAM_ID, Some(config.clone()))
                     .await
-                    .expect("subscribes");
+                {
+                    Ok(res) => res,
+                    Err(err) => {
+                        log::error!("GPA stream subscribe failed: {err:?}");
+                        continue;
+                    }
+                };
 
                 let res = loop {
                     tokio::select! {

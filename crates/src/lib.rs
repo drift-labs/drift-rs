@@ -703,8 +703,14 @@ impl DriftClientBackend {
             all_oracles.as_slice(),
             rpc_client.commitment(),
         );
-        let account_map = AccountMap::new(Arc::clone(&pubsub_client), rpc_client.commitment());
-        account_map.subscribe_account(state_account()).await?;
+        let account_map = AccountMap::new(
+            Arc::clone(&pubsub_client),
+            Arc::clone(&rpc_client),
+            rpc_client.commitment(),
+        );
+        account_map
+            .subscribe_account_polled(state_account(), None)
+            .await?;
 
         Ok(Self {
             rpc_client: Arc::clone(&rpc_client),
@@ -1863,7 +1869,11 @@ mod tests {
                 Duration::from_secs(2),
                 Arc::clone(&rpc_client),
             ),
-            account_map: AccountMap::new(Arc::clone(&pubsub_client), CommitmentConfig::processed()),
+            account_map: AccountMap::new(
+                Arc::clone(&pubsub_client),
+                Arc::clone(&rpc_client),
+                CommitmentConfig::processed(),
+            ),
         };
 
         DriftClient {

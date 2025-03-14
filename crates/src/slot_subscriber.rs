@@ -1,7 +1,4 @@
-use std::{
-    sync::{atomic::AtomicU64, Arc, Mutex},
-    time::Duration,
-};
+use std::sync::{atomic::AtomicU64, Arc, Mutex};
 
 use drift_pubsub_client::PubsubClient;
 use futures_util::StreamExt;
@@ -102,7 +99,7 @@ impl SlotSubscriber {
                 let (mut slot_updates, unsubscriber) = match pubsub.slot_subscribe().await {
                     Ok(s) => s,
                     Err(err) => {
-                        warn!(target: LOG_TARGET, "subscribe failed: {err:?}");
+                        error!(target: LOG_TARGET, "slot subscribe failed: {err:?}");
                         continue;
                     }
                 };

@@ -1,14 +1,18 @@
-use std::sync::{Arc, Mutex, RwLock};
+use std::{
+    sync::{Arc, Mutex, RwLock},
+    time::Duration,
+};
 
 use anchor_lang::AccountDeserialize;
 use dashmap::DashMap;
 use drift_pubsub_client::PubsubClient;
 use log::debug;
+use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{
-    types::DataAndSlot, websocket_account_subscriber::WebsocketAccountSubscriber, SdkResult,
-    UnsubHandle,
+    polled_account_subscriber::PolledAccountSubscriber, types::DataAndSlot,
+    websocket_account_subscriber::WebsocketAccountSubscriber, SdkResult, UnsubHandle,
 };
 
 const LOG_TARGET: &str = "accountmap";
@@ -22,19 +26,25 @@ pub struct AccountSlot {
 /// Set of subscriptions to a dynamic subset of network accounts
 pub struct AccountMap {
     pubsub: Arc<PubsubClient>,
+    rpc: Arc<RpcClient>,
     commitment: CommitmentConfig,
     inner: DashMap<Pubkey, AccountSub<Subscribed>, ahash::RandomState>,
 }
 
 impl AccountMap {
-    pub fn new(pubsub: Arc<PubsubClient>, commitment: CommitmentConfig) -> Self {
+    pub fn new(
+        pubsub: Arc<PubsubClient>,
+        rpc: Arc<RpcClient>,
+        commitment: CommitmentConfig,
+    ) -> Self {
         Self {
             pubsub,
+            rpc,
             commitment,
             inner: Default::default(),
         }
     }
-    /// Subscribe user account
+    /// Subscribe user account with Ws
     pub async fn subscribe_account(&self, account: &Pubkey) -> SdkResult<()> {
         if self.inner.contains_key(account) {
             return Ok(());
@@ -42,6 +52,28 @@ impl AccountMap {
         debug!(target: LOG_TARGET, "subscribing: {account:?}");
 
         let user = AccountSub::new(Arc::clone(&self.pubsub), self.commitment, *account);
+        let user = user.subscribe().await?;
+
+        self.inner.insert(*account, user);
+
+        Ok(())
+    }
+    /// Subscribe user account with RPC polling
+    ///
+    /// * `account` pubkey to subscribe
+    /// * `interval` to poll the account
+    ///
+    pub async fn subscribe_account_polled(
+        &self,
+        account: &Pubkey,
+        interval: Option<Duration>,
+    ) -> SdkResult<()> {
+        if self.inner.contains_key(account) {
+            return Ok(());
+        }
+        debug!(target: LOG_TARGET, "subscribing: {account:?} @ {interval:?}");
+
+        let user = AccountSub::polled(Arc::clone(&self.rpc), *account, interval);
         let user = user.subscribe().await?;
 
         self.inner.insert(*account, user);
@@ -80,8 +112,8 @@ struct Unsubscribed;
 pub struct AccountSub<S> {
     /// account pubkey
     pub pubkey: Pubkey,
-    /// underlying Ws subscription
-    subscription: WebsocketAccountSubscriber,
+    /// underlying subscription
+    subscription: SubscriptionImpl,
     /// subscription state
     state: S,
 }
@@ -89,12 +121,25 @@ pub struct AccountSub<S> {
 impl AccountSub<Unsubscribed> {
     pub const SUBSCRIPTION_ID: &'static str = "account";
 
+    /// Create a new Ws account subscriber
     pub fn new(pubsub: Arc<PubsubClient>, commitment: CommitmentConfig, pubkey: Pubkey) -> Self {
         let subscription = WebsocketAccountSubscriber::new(pubsub, pubkey, commitment);
 
         Self {
             pubkey,
-            subscription,
+            subscription: SubscriptionImpl::Ws(subscription),
+            state: Unsubscribed {},
+        }
+    }
+
+    /// Create a new polled account subscriber
+    pub fn polled(rpc: Arc<RpcClient>, pubkey: Pubkey, interval: Option<Duration>) -> Self {
+        let subscription =
+            PolledAccountSubscriber::new(pubkey, interval.unwrap_or(Duration::from_secs(5)), rpc);
+
+        Self {
+            pubkey,
+            subscription: SubscriptionImpl::Polled(subscription),
             state: Unsubscribed {},
         }
     }
@@ -102,17 +147,29 @@ impl AccountSub<Unsubscribed> {
     /// Start the subscriber task
     pub async fn subscribe(self) -> SdkResult<AccountSub<Subscribed>> {
         let data_and_slot = Arc::new(RwLock::new(AccountSlot::default()));
-        let unsub = self
-            .subscription
-            .subscribe(Self::SUBSCRIPTION_ID, true, {
+
+        let unsub = match self.subscription {
+            SubscriptionImpl::Ws(ref ws) => {
                 let data_and_slot = Arc::clone(&data_and_slot);
-                move |update| {
+                let unsub = ws
+                    .subscribe(Self::SUBSCRIPTION_ID, true, move |update| {
+                        let mut guard = data_and_slot.write().expect("acquired");
+                        guard.raw.clone_from(&update.data);
+                        guard.slot = update.slot;
+                    })
+                    .await?;
+                unsub
+            }
+            SubscriptionImpl::Polled(ref poll) => {
+                let data_and_slot = Arc::clone(&data_and_slot);
+                let unsub = poll.subscribe(move |update| {
                     let mut guard = data_and_slot.write().expect("acquired");
                     guard.raw.clone_from(&update.data);
                     guard.slot = update.slot;
-                }
-            })
-            .await?;
+                });
+                unsub
+            }
+        };
 
         Ok(AccountSub {
             pubkey: self.pubkey,
@@ -154,6 +211,11 @@ impl AccountSub<Subscribed> {
     }
 }
 
+enum SubscriptionImpl {
+    Ws(WebsocketAccountSubscriber),
+    Polled(PolledAccountSubscriber),
+}
+
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -176,7 +238,8 @@ mod tests {
                 .await
                 .expect("ws connects"),
         );
-        let account_map = AccountMap::new(pubsub, CommitmentConfig::confirmed());
+        let rpc = Arc::new(RpcClient::new(mainnet_endpoint()));
+        let account_map = AccountMap::new(pubsub, rpc, CommitmentConfig::confirmed());
         let user_1 = Wallet::derive_user_account(
             &pubkey!("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"),
             0,

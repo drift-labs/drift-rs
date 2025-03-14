@@ -1,32 +1,35 @@
-use std::{
-    sync::{Arc, Mutex, RwLock},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 
 use log::error;
+use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{account::Account, pubkey::Pubkey};
+use solana_rpc_client_api::config::RpcAccountInfoConfig;
+use solana_sdk::pubkey::Pubkey;
 use tokio::sync::oneshot;
 
-use crate::{SdkError, SdkResult, UnsubHandle};
+use crate::UnsubHandle;
 
-/// Subscribed state token
-struct Subscribed {
-    account: Arc<RwLock<Account>>,
-    unsub: Mutex<Option<UnsubHandle>>,
+#[derive(Clone, Debug)]
+pub struct AccountUpdate {
+    /// Address of the account
+    pub pubkey: Pubkey,
+    /// Owner of the account
+    pub owner: Pubkey,
+    pub lamports: u64,
+    /// Serialized account data (e.g. Anchor/Borsh)
+    pub data: Vec<u8>,
+    /// Slot retrieved
+    pub slot: u64,
 }
-/// Unsubscribed state token
-struct Unsubscribed;
 
 /// Subscribes to account updates at regular polled intervals
-pub struct PolledAccountSubscriber<S> {
+pub struct PolledAccountSubscriber {
     pubkey: Pubkey,
     interval: Duration,
     rpc_client: Arc<RpcClient>,
-    state: S,
 }
 
-impl PolledAccountSubscriber<Unsubscribed> {
+impl PolledAccountSubscriber {
     /// Create a new polling account subscriber
     ///
     /// `poll_interval` configurable polling interval
@@ -36,82 +39,66 @@ impl PolledAccountSubscriber<Unsubscribed> {
         pubkey: Pubkey,
         poll_interval: Duration,
         rpc_client: Arc<RpcClient>,
-    ) -> PolledAccountSubscriber<Unsubscribed> {
+    ) -> PolledAccountSubscriber {
         Self {
             pubkey,
             interval: poll_interval,
             rpc_client: Arc::clone(&rpc_client),
-            state: Unsubscribed {},
         }
     }
 
     /// Start the account subscriber
     ///
-    /// Returns a channel for emitted updates
-    pub fn subscribe(self) -> PolledAccountSubscriber<Subscribed> {
+    /// `on_update` callback to receive new account values
+    ///
+    /// Returns channel for unsubscribing
+    pub fn subscribe<F>(&self, on_update: F) -> UnsubHandle
+    where
+        F: 'static + Send + Fn(&AccountUpdate),
+    {
         let (unsub_tx, mut unsub_rx) = oneshot::channel();
-        let account = Arc::new(RwLock::new(Account::default()));
 
         tokio::spawn({
             let mut interval = tokio::time::interval(self.interval);
-            let account = Arc::clone(&account);
             let pubkey = self.pubkey;
             let rpc_client = Arc::clone(&self.rpc_client);
 
+            let config = RpcAccountInfoConfig {
+                encoding: Some(UiAccountEncoding::Base64Zstd),
+                commitment: Some(rpc_client.commitment()),
+                ..Default::default()
+            };
             async move {
                 loop {
-                    let _ = interval.tick().await;
-                    match rpc_client.get_account(&pubkey).await {
-                        Ok(new_account) => {
-                            let mut value = account.write().expect("acquired");
-                            *value = new_account;
+                    tokio::select! {
+                        biased;
+                        _ = interval.tick() => {
+                            match rpc_client.get_account_with_config(&pubkey, config.clone()).await {
+                                Ok(response) => {
+                                    if let Some(new_account) = response.value {
+                                        on_update(
+                                            &AccountUpdate {
+                                                owner: new_account.owner,
+                                                lamports: new_account.lamports,
+                                                pubkey,
+                                                data: new_account.data.clone(),
+                                                slot: response.context.slot,
+                                            }
+                                        );
+                                    }
+                                }
+                                Err(err) => error!("{err:?}"),
+                            }
                         }
-                        Err(err) => error!("{err:?}"),
-                    }
-
-                    if unsub_rx.try_recv().is_ok() {
-                        break;
+                        _ = &mut unsub_rx => {
+                            break;
+                        }
                     }
                 }
             }
         });
 
-        PolledAccountSubscriber {
-            pubkey: self.pubkey,
-            interval: self.interval,
-            rpc_client: self.rpc_client,
-            state: Subscribed {
-                account,
-                unsub: Mutex::new(Some(unsub_tx)),
-            },
-        }
-    }
-}
-
-impl PolledAccountSubscriber<Subscribed> {
-    /// Stop the subscriber task, if it exists
-    pub fn unsubscribe(&self) {
-        let mut guard = self.state.unsub.lock().expect("uncontested");
-        if let Some(unsub) = guard.take() {
-            if unsub.send(()).is_err() {
-                log::error!("couldn't unsubscribe");
-            }
-        }
-    }
-
-    /// Get account deserialized as a `T`
-    pub fn get_value<T>(&self) -> SdkResult<T>
-    where
-        T: anchor_lang::AccountDeserialize + Sync + Send + 'static,
-    {
-        let acc = self.state.account.read().expect("acquired");
-        T::try_deserialize_unchecked(&mut acc.data.as_slice()).map_err(|_| SdkError::Deserializing)
-    }
-
-    /// Get raw account value
-    pub fn get_account_data(&self) -> Account {
-        let acc = self.state.account.read().expect("acquired");
-        acc.clone()
+        unsub_tx
     }
 }
 
@@ -123,6 +110,7 @@ mod tests {
     use solana_account_decoder_client_types::UiAccountEncoding;
     use solana_rpc_client::rpc_client::Mocks;
     use solana_rpc_client_api::request::RpcRequest;
+    use solana_sdk::account::Account;
 
     use super::*;
     use crate::{accounts::User, SpotPosition};
@@ -146,7 +134,7 @@ mod tests {
         let mut buf = Vec::<u8>::default();
         mock_user.try_serialize(&mut buf).expect("serializes");
 
-        let account = Account {
+        let mock_account = Account {
             data: buf,
             ..Default::default()
         };
@@ -156,7 +144,7 @@ mod tests {
             "context": {
                 "slot": 12_345,
             },
-            "value": encode_ui_account(&sub_account, &account, UiAccountEncoding::Base64Zstd, None, None),
+            "value": encode_ui_account(&sub_account, &mock_account, UiAccountEncoding::Base64Zstd, None, None),
         });
         response_mocks.insert(RpcRequest::GetAccountInfo, account_response);
 
@@ -167,11 +155,10 @@ mod tests {
 
         // test
         let subscriber =
-            PolledAccountSubscriber::new(sub_account, Duration::from_secs(5), Arc::new(mock_rpc));
-        let subscriber = subscriber.subscribe();
+            PolledAccountSubscriber::new(sub_account, Duration::from_secs(1), Arc::new(mock_rpc));
+        let _unsub = subscriber.subscribe(move |user| {
+            assert_eq!(user.data, mock_account.data,);
+        });
         let _ = tokio::time::sleep(Duration::from_millis(500)).await;
-
-        let user = subscriber.get_value::<User>().expect("get account");
-        assert_eq!(user, mock_user);
     }
 }

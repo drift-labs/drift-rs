@@ -148,7 +148,7 @@ impl From<Keypair> for Wallet {
     }
 }
 
-#[cfg(tests)]
+#[cfg(test)]
 mod tests {
     use super::*;
 
