@@ -7,6 +7,7 @@ jobs:
   update-libdrift-submodule:
     permissions:
       contents: write
+      pull-requests: write
     runs-on: ubicloud
     steps:
       - name: Checkout
@@ -28,14 +29,40 @@ jobs:
           cd ../..
           git add -u
 
-      - name: Commit and push changes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check for changes
+        id: check_changes
         run: |
           if git diff --staged --quiet; then
-            echo "No changes to submodule, skipping commit"
+            echo "No changes to submodule, skipping PR creation"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
             exit 0
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
           fi
 
+      - name: Create branch
+        if: steps.check_changes.outputs.has_changes == 'true'
+        id: create_branch
+        run: |
+          BRANCH_NAME="bump-libdrift-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b $BRANCH_NAME
           git commit -m "chore: bump drift-ffi-sys to latest version 🤖"
-          git push origin main -f
+          git push origin $BRANCH_NAME
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        if: steps.check_changes.outputs.has_changes == 'true'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { repo, owner } = context.repo;
+            const result = await github.rest.pulls.create({
+              owner,
+              repo,
+              title: 'chore: bump drift-ffi-sys to latest version 🤖',
+              body: 'This PR was automatically created by the GitHub Action workflow to update the libdrift submodule.',
+              head: '${{ steps.create_branch.outputs.branch_name }}',
+              base: 'main'
+            });
+            console.log(`Pull Request created: ${result.data.html_url}`);
