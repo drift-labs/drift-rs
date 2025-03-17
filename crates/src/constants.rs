@@ -9,7 +9,8 @@ use crate::{
 };
 
 /// Drift vault program address
-pub const VAULT_PROGRAM_ID: Pubkey = solana_sdk::pubkey!("vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR");
+pub const VAULT_PROGRAM_ID: Pubkey =
+    solana_sdk::pubkey!("vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR");
 
 /// https://github.com/solana-labs/solana-web3.js/blob/4e9988cfc561f3ed11f4c5016a29090a61d129a8/src/sysvar.ts#L11
 pub const SYSVAR_INSTRUCTIONS_PUBKEY: Pubkey =

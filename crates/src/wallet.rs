@@ -114,6 +114,7 @@ impl Wallet {
         account_drift_pda
     }
 
+    /// Calculate the `vault`s token account
     pub fn derive_vault_token_account(vault: &Pubkey) -> Pubkey {
         let (account_drift_pda, _seed) = Pubkey::find_program_address(
             &[&b"vault_token_account"[..], vault.as_ref()],
@@ -122,14 +123,17 @@ impl Wallet {
         account_drift_pda
     }
 
+    /// Calculate a vault's address from `vault_name`
     pub fn derive_vault_account(vault_name: &str) -> Pubkey {
-        let (account_drift_pda, _seed) = Pubkey::find_program_address(
-            &[vault_name.as_bytes()],
-            &constants::VAULT_PROGRAM_ID,
-        );
+        let (account_drift_pda, _seed) =
+            Pubkey::find_program_address(&[vault_name.as_bytes()], &constants::VAULT_PROGRAM_ID);
         account_drift_pda
     }
 
+    /// Calculate user's ATA
+    /// - `account` wallet address
+    /// - `token_mint` mint address of the SPL token (available on the SpotMarket)
+    ///
     pub fn derive_user_token_account(account: &Pubkey, token_mint: &Pubkey) -> Pubkey {
         spl_associated_token_account::get_associated_token_address(account, token_mint)
     }
