@@ -16,7 +16,8 @@ pub const SYSVAR_INSTRUCTIONS_PUBKEY: Pubkey =
 pub const PROGRAM_ID: Pubkey = solana_sdk::pubkey!("dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH");
 
 /// Vault program address
-pub const VAULT_PROGRAM_ID: Pubkey = solana_sdk::pubkey!("vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR");
+pub const VAULT_PROGRAM_ID: Pubkey =
+    solana_sdk::pubkey!("vAuLTsyrvSfZRuRB3XgvkPwNGgYSs9YRYymVebLKoxR");
 
 /// JIT proxy program address
 pub const JIT_PROXY_ID: Pubkey =
