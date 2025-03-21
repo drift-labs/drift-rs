@@ -1,5 +1,5 @@
 {
-  "version": "2.114.0",
+  "version": "2.115.0",
   "name": "drift",
   "instructions": [
     {
@@ -104,7 +104,7 @@
         {
           "name": "authority",
           "isMut": false,
-          "isSigner": true
+          "isSigner": false
         },
         {
           "name": "payer",
@@ -139,6 +139,16 @@
         },
         {
           "name": "authority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "user",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "payer",
           "isMut": true,
           "isSigner": true
         },
@@ -7688,11 +7698,19 @@
             "type": "u16"
           },
           {
+            "name": "protectedMakerLimitPriceDivisor",
+            "type": "u8"
+          },
+          {
+            "name": "protectedMakerDynamicDivisor",
+            "type": "u8"
+          },
+          {
             "name": "padding",
             "type": {
               "array": [
                 "u8",
-                38
+                36
               ]
             }
           }
@@ -9480,6 +9498,53 @@
           {
             "name": "subAccountId",
             "type": "u16"
+          },
+          {
+            "name": "slot",
+            "type": "u64"
+          },
+          {
+            "name": "uuid",
+            "type": {
+              "array": [
+                "u8",
+                8
+              ]
+            }
+          },
+          {
+            "name": "takeProfitOrderParams",
+            "type": {
+              "option": {
+                "defined": "SignedMsgTriggerOrderParams"
+              }
+            }
+          },
+          {
+            "name": "stopLossOrderParams",
+            "type": {
+              "option": {
+                "defined": "SignedMsgTriggerOrderParams"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SignedMsgOrderParamsDelegateMessage",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "signedMsgOrderParams",
+            "type": {
+              "defined": "OrderParams"
+            }
+          },
+          {
+            "name": "takerPubkey",
+            "type": "publicKey"
           },
           {
             "name": "slot",
@@ -14986,6 +15051,11 @@
       "code": 6312,
       "name": "InvalidTransferPerpPosition",
       "msg": "Invalid Transfer Perp Position"
+    },
+    {
+      "code": 6313,
+      "name": "InvalidSignedMsgUserOrdersResize",
+      "msg": "Invalid SignedMsgUserOrders resize"
     }
   ],
   "metadata": {

@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.114.0";
+pub const IDL_VERSION: &str = "2.115.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -2498,6 +2498,27 @@ pub mod types {
         Debug,
         PartialEq,
     )]
+    pub struct SignedMsgOrderParamsDelegateMessage {
+        pub signed_msg_order_params: OrderParams,
+        pub taker_pubkey: Pubkey,
+        pub slot: u64,
+        pub uuid: [u8; 8],
+        pub take_profit_order_params: Option<SignedMsgTriggerOrderParams>,
+        pub stop_loss_order_params: Option<SignedMsgTriggerOrderParams>,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
     pub struct SignedMsgTriggerOrderParams {
         pub trigger_price: u64,
         pub base_asset_amount: u64,
@@ -4433,8 +4454,10 @@ pub mod accounts {
         pub pool_id: u8,
         pub high_leverage_margin_ratio_initial: u16,
         pub high_leverage_margin_ratio_maintenance: u16,
+        pub protected_maker_limit_price_divisor: u8,
+        pub protected_maker_dynamic_divisor: u8,
         #[serde(skip)]
-        pub padding: Padding<38>,
+        pub padding: Padding<36>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PerpMarket {
@@ -5380,7 +5403,7 @@ pub mod accounts {
                 },
                 AccountMeta {
                     pubkey: self.authority,
-                    is_signer: true,
+                    is_signer: false,
                     is_writable: false,
                 },
                 AccountMeta {
@@ -5435,6 +5458,8 @@ pub mod accounts {
     pub struct ResizeSignedMsgUserOrders {
         pub signed_msg_user_orders: Pubkey,
         pub authority: Pubkey,
+        pub user: Pubkey,
+        pub payer: Pubkey,
         pub system_program: Pubkey,
     }
     #[automatically_derived]
@@ -5460,6 +5485,16 @@ pub mod accounts {
                 },
                 AccountMeta {
                     pubkey: self.authority,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.user,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.payer,
                     is_signer: true,
                     is_writable: true,
                 },
@@ -21166,6 +21201,8 @@ pub mod errors {
         FuelOverflowAccountNotFound,
         #[msg("Invalid Transfer Perp Position")]
         InvalidTransferPerpPosition,
+        #[msg("Invalid SignedMsgUserOrders resize")]
+        InvalidSignedMsgUserOrdersResize,
     }
 }
 pub mod events {
