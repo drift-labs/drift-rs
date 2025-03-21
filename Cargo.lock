@@ -1209,7 +1209,7 @@ dependencies = [
 
 [[package]]
 name = "drift-pubsub-client"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "futures-util",
  "gjson",
@@ -1228,7 +1228,7 @@ dependencies = [
 
 [[package]]
 name = "drift-rs"
-version = "1.0.0-alpha.11"
+version = "1.0.0-alpha.12"
 dependencies = [
  "abi_stable",
  "ahash",

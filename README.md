@@ -19,10 +19,10 @@ Experimental, high performance Rust SDK for building offchain clients for [Drift
 ## Install
 ```toml
 # crates.io
-drift-rs = "1.0.0-alpha.11"
+drift-rs = "1.0.0-alpha.12"
 
 # build from source
-drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.11" }
+drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.12" }
 ```
 
 ## Use

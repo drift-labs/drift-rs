@@ -1,6 +1,6 @@
 [package]
 name = "drift-rs"
-version = "1.0.0-alpha.11"
+version = "1.0.0-alpha.12"
 edition = "2021"
 build = "build.rs"
 license = "Apache-2.0"
@@ -46,7 +46,7 @@ tokio = { version = "1.42", features = ["full"] }
 tokio-stream = "0.1.17"
 tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 
-drift-pubsub-client = { version = "0.1.0", path = "crates/pubsub-client" }
+drift-pubsub-client = { version = "0.1.1", path = "crates/pubsub-client" }
 
 [dev-dependencies]
 bytes = "1"
