@@ -65,6 +65,9 @@ drift-rs links to the drift program crate via FFI, build from source (default) o
 ```bash
 # Build from source (default)
 CARGO_DRIFT_FFI_STATIC=1
+# on linux distros may need to run `ldconfig` to link
+ldconfig
+
 # Provide a prebuilt drift_ffi_sys lib 
 CARGO_DRIFT_FFI_PATH="/path/to/libdrift_ffi_sys"
 ```
