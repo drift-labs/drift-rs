@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.113.0";
+pub const IDL_VERSION: &str = "2.114.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -2225,6 +2225,7 @@ pub mod types {
         pub quote_asset_amount_with_unsettled_lp: Option<i64>,
         pub net_unsettled_funding_pnl: Option<i64>,
         pub update_amm_summary_stats: Option<bool>,
+        pub exclude_total_liq_fee: Option<bool>,
     }
     #[repr(C)]
     #[derive(
