@@ -14,15 +14,15 @@
 # drift-rs
 
 Experimental, high performance Rust SDK for building offchain clients for [Drift V2](https://github.com/drift-labs/protocol-v2) protocol.
-
+See the offical [docs](https://docs.rs/drift-rs/latest/drift_rs/)
 
 ## Install
 ```toml
 # crates.io
-drift-rs = "1.0.0-alpha.12"
+drift-rs = "1.0.0-alpha.13"
 
 # build from source
-drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.12" }
+drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.13" }
 ```
 
 ## Use
@@ -64,12 +64,12 @@ rustup override set 1.84.0-x86_64-apple-darwin
 drift-rs links to the drift program crate via FFI, build from source (default) or dynamically link with a version from [drift-ffi-sys](https://github.com/drift-labs/drift-ffi-sys/releases)
 ```bash
 # Build from source (default)
-CARGO_DRIFT_FFI_STATIC=1
+$> CARGO_DRIFT_FFI_STATIC=1
 # on linux distros may need to run `ldconfig` to link
-ldconfig
+$> ldconfig
 
 # Provide a prebuilt drift_ffi_sys lib 
-CARGO_DRIFT_FFI_PATH="/path/to/libdrift_ffi_sys"
+$> CARGO_DRIFT_FFI_PATH="/path/to/libdrift_ffi_sys"
 ```
 ## Development
 
