@@ -82,7 +82,7 @@ pub mod dlob;
 /// It is not recommended to create multiple instances with `::new()` as this will not re-use underlying resources such
 /// as network connections or memory allocations
 ///
-/// The client can be used as is to fetch data ad-hoc over RPC or subscribed to receive live updates
+/// The client can be used as is to fetch data ad-hoc over RPC or subscribed to receive live updates (transparently)
 /// ```example(no_run)
 /// let client = DriftClient::new(
 ///     Context::MainNet,
@@ -138,6 +138,8 @@ impl DriftClient {
 
     /// Starts background subscriptions for live market account updates
     ///
+    /// * `markets` - list of markets to subscribe
+    ///
     /// This is a no-op if already subscribed
     pub async fn subscribe_markets(&self, markets: &[MarketId]) -> SdkResult<()> {
         self.backend.subscribe_markets(markets).await
@@ -169,6 +171,8 @@ impl DriftClient {
 
     /// Starts background subscriptions for live oracle account updates by market
     ///
+    /// * `markets` - list of markets to subscribe for oracle updates
+    ///
     /// This is a no-op if already subscribed
     pub async fn subscribe_oracles(&self, markets: &[MarketId]) -> SdkResult<()> {
         self.backend.subscribe_oracles(markets).await
@@ -199,6 +203,8 @@ impl DriftClient {
     }
 
     /// Subscribe to swift order feed(s) for given `markets`
+    ///
+    /// * `markets` - list of markets to watch for swift orders
     ///
     /// Returns a stream of swift orders
     pub async fn subscribe_swift_orders(
@@ -285,6 +291,9 @@ impl DriftClient {
     /// Get an account's open order by id
     ///
     /// * `account` - the drift user PDA
+    /// * `order_id` - order id to query
+    ///
+    /// Returns the `Order` if it exists
     pub async fn get_order_by_id(
         &self,
         account: &Pubkey,
@@ -298,6 +307,9 @@ impl DriftClient {
     /// Get an account's open order by user assigned id
     ///
     /// * `account` - the drift user PDA
+    /// * `user_order_id` - user defined order id to query
+    ///
+    /// Returns the `Order` if it exists
     pub async fn get_order_by_user_id(
         &self,
         account: &Pubkey,
@@ -312,9 +324,11 @@ impl DriftClient {
             .copied())
     }
 
-    /// Get all the account's open orders
+    /// Get the account's open orders
     ///
     /// * `account` - the drift user PDA
+    ///
+    /// Returns the list of open orders
     pub async fn all_orders(&self, account: &Pubkey) -> SdkResult<Vec<Order>> {
         let user = self.backend.get_user_account(account).await?;
 
@@ -326,7 +340,23 @@ impl DriftClient {
             .collect())
     }
 
-    /// Get all the account's active positions
+    /// Get the account's unsettled positions
+    ///
+    /// * `account` - the drift user PDA
+    ///
+    /// Returns the list of unsettled positions
+    pub async fn unsettled_positions(&self, account: &Pubkey) -> SdkResult<Vec<PerpPosition>> {
+        let user = self.backend.get_user_account(account).await?;
+
+        Ok(user
+            .perp_positions
+            .iter()
+            .filter(|p| p.base_asset_amount == 0 && p.quote_asset_amount != 0)
+            .copied()
+            .collect())
+    }
+
+    /// Get all the account's open positions
     ///
     /// * `account` - the drift user PDA
     pub async fn all_positions(
@@ -475,6 +505,8 @@ impl DriftClient {
 
     /// Get spot market account
     ///
+    /// * `market_index` - spot market index
+    ///
     /// uses latest cached value if subscribed, otherwise falls back to network query
     pub async fn get_spot_market_account(&self, market_index: u16) -> SdkResult<SpotMarket> {
         match self
@@ -491,6 +523,8 @@ impl DriftClient {
     }
 
     /// Get perp market account
+    ///
+    /// * `market_index` - perp market index
     ///
     /// uses latest cached value if subscribed, otherwise falls back to network query
     pub async fn get_perp_market_account(&self, market_index: u16) -> SdkResult<PerpMarket> {
@@ -509,6 +543,8 @@ impl DriftClient {
 
     /// Try to spot market account from cache
     ///
+    /// * `market_index` - spot market index
+    ///
     /// Returns error if not subscribed
     pub fn try_get_spot_market_account(&self, market_index: u16) -> SdkResult<SpotMarket> {
         if let Some(market) = self
@@ -522,6 +558,8 @@ impl DriftClient {
     }
 
     /// Try to get perp market account from cache
+    ///
+    /// * `market_index` - spot market index
     ///
     /// Returns error if not subscribed
     pub fn try_get_perp_market_account(&self, market_index: u16) -> SdkResult<PerpMarket> {
@@ -543,23 +581,17 @@ impl DriftClient {
     pub fn market_lookup(&self, symbol: &str) -> Option<MarketId> {
         if symbol.to_ascii_lowercase().ends_with("-perp") {
             let markets = self.program_data().perp_market_configs();
-            if let Some(market) = markets
+            markets
                 .iter()
                 .find(|m| m.symbol().eq_ignore_ascii_case(symbol))
-            {
-                return Some(MarketId::perp(market.market_index));
-            }
+                .map(|m| MarketId::perp(m.market_index))
         } else {
             let markets = self.program_data().spot_market_configs();
-            if let Some(market) = markets
+            markets
                 .iter()
                 .find(|m| m.symbol().eq_ignore_ascii_case(symbol))
-            {
-                return Some(MarketId::spot(market.market_index));
-            }
+                .map(|m| MarketId::spot(m.market_index))
         }
-
-        None
     }
 
     /// Get live oracle price for `market`
@@ -616,14 +648,28 @@ impl DriftClient {
         self.backend.get_oracle(market).await
     }
 
-    /// Subscribe to live updates for some `account`
-    /// The latest value may be retrieved with `get_account(..)`
+    /// Subscribe to live WebSocket updates for some `account`
+    ///
+    /// The latest value may be retrieved with `client.get_account(..)`
     /// ```example(no_run)
-    /// client.subscribe_account(Wallet::derive_subaccount(..)).await;
-    /// let subaccount = client.get_account::<User>();
+    /// let subaccount = Wallet::derive_user_account(authority, 1);
+    /// client.subscribe_account(&subaccount).await;
+    /// let subaccount_data = client.get_account::<User>(&subaccount);
     /// ```
     pub async fn subscribe_account(&self, account: &Pubkey) -> SdkResult<()> {
         self.backend.account_map.subscribe_account(account).await
+    }
+
+    /// Same as `subscribe_account` but uses RPC polling
+    pub async fn subscribe_account_polled(
+        &self,
+        account: &Pubkey,
+        interval: Duration,
+    ) -> SdkResult<()> {
+        self.backend
+            .account_map
+            .subscribe_account_polled(account, Some(interval))
+            .await
     }
 
     /// Unsubscribe from updates for `account`
@@ -709,7 +755,7 @@ impl DriftClientBackend {
             rpc_client.commitment(),
         );
         account_map
-            .subscribe_account_polled(state_account(), None)
+            .subscribe_account_polled(state_account(), Some(Duration::from_secs(180)))
             .await?;
 
         Ok(Self {
@@ -869,7 +915,7 @@ impl DriftClientBackend {
         }
     }
 
-    /// Fetch `account` as an Anchor account type `T` along with the slot
+    /// Fetch `account` as an Anchor account type `T` along with the retrieved slot
     async fn get_account_with_slot<T: AccountDeserialize>(
         &self,
         account: &Pubkey,
@@ -1044,13 +1090,13 @@ impl ForceMarkets {
 
 /// Composable Tx builder for Drift program
 ///
-/// Prefer `DriftClient::init_tx`
+/// Alternatively, use `DriftClient::init_tx` for simpler instantiation.
 ///
-/// ```ignore
+/// ```example(no_run)
 /// use drift_rs::{types::Context, TransactionBuilder, Wallet};
 ///
-/// let wallet = Wallet::from_seed_bs58(Context::Dev, "seed");
-/// let client = DriftClient::new("api.example.com").await.unwrap();
+/// let wallet = Wallet::from_seed_bs58("seed");
+/// let client = DriftClient::new(Context::DevNet, "api.example.com", wallet).await.unwrap();
 /// let account_data = client.get_account(wallet.default_sub_account()).await.unwrap();
 ///
 /// let tx = TransactionBuilder::new(client.program_data, wallet.default_sub_account(), account_data.into())
@@ -1191,6 +1237,7 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
+    /// Withdraw collateral from the account
     pub fn withdraw(
         mut self,
         amount: u64,
@@ -1233,6 +1280,8 @@ impl<'a> TransactionBuilder<'a> {
     }
 
     /// Place new orders for account
+    ///
+    /// * `orders` list of orders to place
     pub fn place_orders(mut self, orders: Vec<OrderParams>) -> Self {
         let mut readable_accounts: Vec<MarketId> = orders
             .iter()
@@ -1293,7 +1342,7 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Cancel account's orders matching some criteria
     ///
-    /// * `market` - tuple of market ID and type (spot or perp)
+    /// * `market` - tuple of market index and type (spot or perp)
     /// * `direction` - long or short
     pub fn cancel_orders(
         mut self,
@@ -1588,7 +1637,7 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Place and try to fill (make) against the swift order (Perps only)
     ///
-    /// * `maker_order` order params defined by the maker, e.g. partial or full fill
+    /// * `maker_order` - order params defined by the maker, e.g. partial or full fill
     /// * `signed_order_info` - the signed swift order info (i.e from taker)
     /// * `taker_account` - taker account data
     /// * `taker_account_referrer` - taker account referrer key
@@ -1711,6 +1760,39 @@ impl<'a> TransactionBuilder<'a> {
 
         self.ixs
             .extend_from_slice(&[ed25519_verify_ix, place_swift_ix]);
+        self
+    }
+
+    /// Set the subaccount's _max_ initial margin ratio.
+    ///
+    /// * `sub_account_id` - index of the subaccount
+    /// * `margin_ratio` - new margin ratio in MARGIN_PRECISION
+    ///
+    /// MARGIN_PRECISION => 1x leverage
+    /// MARGIN_PRECISION * 10 => .1x leverage
+    /// MARGIN_PRECISION / 10 =>  10x leverage
+    ///
+    pub fn set_max_initial_margin_ratio(mut self, margin_ratio: u32, sub_account_id: u16) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::UpdateUserCustomMarginRatio {
+                authority: self.authority,
+                user: Wallet::derive_user_account(&self.authority, sub_account_id),
+            },
+            &[self.account_data.as_ref()],
+            std::iter::empty(),
+            std::iter::empty(),
+        );
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::UpdateUserCustomMarginRatio {
+                sub_account_id,
+                margin_ratio,
+            }),
+        };
+        self.ixs.push(ix);
+
         self
     }
 
