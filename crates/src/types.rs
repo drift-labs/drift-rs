@@ -327,6 +327,8 @@ pub enum SdkError {
     WsClient(#[from] tungstenite::Error),
     #[error("libdrift_ffi_sys out-of-date")]
     LibDriftVersion,
+    #[error("wallet signing disabled")]
+    WalletSigningDisabled,
 }
 
 impl SdkError {

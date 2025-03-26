@@ -15,7 +15,29 @@ use crate::{
     utils,
 };
 
+/// Wallet operation mode
+#[derive(Clone, Debug)]
+pub enum Mode {
+    /// Normal tx signing
+    Normal,
+    /// Tx signing will fail
+    ReadOnly,
+    /// Tx signed by delegate
+    Delegated,
+}
+
 /// Drift wallet
+/// ```example(no_run)
+/// // load wallet from base58 private key or path to wallet.json
+/// let wallet = Wallet::try_from_str("PRIVATE_KEY").unwrap();
+///
+/// // construct wallet for delegated signing
+/// let delegated_keypair = solana_sdk::signature::Keypair::new();
+/// let delegated_wallet = Wallet::delegated(delegated_keypair, drift_account_key);
+///
+/// // place holder wallet for readonly apps
+/// let ro_wallet = Wallet::read_only(drift_authority);
+/// ```
 #[derive(Clone, Debug)]
 pub struct Wallet {
     /// The signing keypair, it could be authority or delegate
@@ -25,14 +47,23 @@ pub struct Wallet {
     authority: Pubkey,
     /// The drift 'stats' account
     stats: Pubkey,
+    /// Wallet operation mode
+    mode: Mode,
 }
 
 impl Wallet {
     /// Returns true if the wallet is configured for delegated signing
     pub fn is_delegated(&self) -> bool {
-        self.authority != self.signer.pubkey() && self.signer.pubkey().is_on_curve()
+        matches!(self.mode, Mode::Delegated)
     }
-    /// Init wallet from a string that could be either a file path or the encoded key, uses default sub-account
+    /// Init wallet from a string of either file path or the encoded private key
+    /// ```example(no_run)
+    /// // from private key str
+    /// let wallet = Wallet::try_from_str("PRIVATE_KEY").unwrap();
+    ///
+    /// // from file path
+    /// let wallet = Wallet::try_from_str("/path/to/wallet.json").unwrap();
+    /// ```
     pub fn try_from_str(path_or_key: &str) -> SdkResult<Self> {
         let authority = utils::load_keypair_multi_format(path_or_key)?;
         Ok(Self::new(authority))
@@ -43,9 +74,12 @@ impl Wallet {
             signer: Arc::new(Keypair::new()),
             authority,
             stats: Wallet::derive_stats_account(&authority),
+            mode: Mode::ReadOnly,
         }
     }
     /// Init wallet from base58 encoded seed, uses default sub-account
+    ///
+    /// * `seed` - base58 encoded private key
     ///
     /// # panics
     /// if the key is invalid
@@ -66,12 +100,29 @@ impl Wallet {
             stats: Wallet::derive_stats_account(&authority.pubkey()),
             authority: authority.pubkey(),
             signer: Arc::new(authority),
+            mode: Mode::Normal,
         }
     }
     /// Convert the wallet into a delegated one by providing the `authority` public key
+    ///
+    /// * `authority` - keypair for tx signing
+    #[deprecated = "use Wallet::delegated"]
     pub fn to_delegated(&mut self, authority: Pubkey) {
         self.stats = Wallet::derive_stats_account(&authority);
         self.authority = authority;
+        self.mode = Mode::Delegated;
+    }
+    /// Create a delegated wallet
+    ///
+    /// * `signer` - the delegated keypair for tx signing
+    /// * `authority` - drift account to sign for (the delegator)
+    pub fn delegated(signer: Keypair, authority: Pubkey) -> Self {
+        Self {
+            signer: Arc::new(signer),
+            stats: Wallet::derive_stats_account(&authority),
+            authority,
+            mode: Mode::Delegated,
+        }
     }
     /// Calculate the address of a drift user account/sub-account
     pub fn derive_user_account(authority: &Pubkey, sub_account_id: u16) -> Pubkey {
@@ -104,7 +155,13 @@ impl Wallet {
         account_drift_pda
     }
 
-    /// Signs the given tx `message` returning the tx on success
+    /// Signs a solana message (ixs, accounts) and builds a signed tx
+    /// ready for sending over RPC
+    ///
+    /// * `message` - solana VersionedMessage
+    /// * `recent_block_hash` blockhash for  tx longevity
+    ///
+    /// Returns `VersionedTransaction` on success
     pub fn sign_tx(
         &self,
         mut message: VersionedMessage,
@@ -112,13 +169,19 @@ impl Wallet {
     ) -> SdkResult<VersionedTransaction> {
         message.set_recent_blockhash(recent_block_hash);
         let signer: &dyn Signer = self.signer.as_ref();
-        VersionedTransaction::try_new(message, &[signer]).map_err(Into::into)
+        match self.mode {
+            Mode::ReadOnly => Err(SdkError::WalletSigningDisabled),
+            _ => VersionedTransaction::try_new(message, &[signer]).map_err(Into::into),
+        }
     }
 
     /// Sign message with the wallet's signer
     pub fn sign_message(&self, message: &[u8]) -> SdkResult<Signature> {
         let signer: &dyn Signer = self.signer.as_ref();
-        Ok(signer.sign_message(message))
+        match self.mode {
+            Mode::ReadOnly => Err(SdkError::WalletSigningDisabled),
+            _ => Ok(signer.sign_message(message)),
+        }
     }
     /// Return the wallet authority address
     pub fn authority(&self) -> &Pubkey {

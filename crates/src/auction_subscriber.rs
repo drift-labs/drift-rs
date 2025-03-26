@@ -45,6 +45,12 @@ impl AuctionSubscriber {
     }
 
     /// Start the auction subscription task
+    ///
+    /// * `handler_fn` - fn to invoke on each update
+    ///
+    /// this class sends the entire User account, the callback is required to
+    /// interpret the diff e.g orders added/removed
+    ///
     pub fn subscribe<F>(&self, handler_fn: F)
     where
         F: 'static + Send + Fn(&ProgramAccountUpdate<User>),

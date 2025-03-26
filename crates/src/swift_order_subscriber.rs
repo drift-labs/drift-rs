@@ -92,8 +92,7 @@ impl SignedOrderInfo {
     pub fn encode_for_signing(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(SignedOrder::INIT_SPACE + 8);
         buf.extend_from_slice(SWIFT_MSG_PREFIX.as_slice());
-        let _ = self
-            .order
+        self.order
             .serialize(&mut buf)
             .expect("swift msg serialized");
         hex::encode(buf).into_bytes()

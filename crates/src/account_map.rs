@@ -1,3 +1,4 @@
+//! Hybrid solana account map backed by Ws or RPC polling
 use std::{
     sync::{Arc, Mutex, RwLock},
     time::Duration,
@@ -23,7 +24,9 @@ pub struct AccountSlot {
     slot: Slot,
 }
 
-/// Set of subscriptions to a dynamic subset of network accounts
+/// Set of subscriptions to network accounts
+///
+/// Accounts are subscribed by either Ws or polling at fixed intervals
 pub struct AccountMap {
     pubsub: Arc<PubsubClient>,
     rpc: Arc<RpcClient>,
@@ -44,7 +47,10 @@ impl AccountMap {
             inner: Default::default(),
         }
     }
-    /// Subscribe user account with Ws
+    /// Subscribe account with Ws
+    ///
+    /// * `account` pubkey to subscribe
+    ///
     pub async fn subscribe_account(&self, account: &Pubkey) -> SdkResult<()> {
         if self.inner.contains_key(account) {
             return Ok(());
@@ -58,7 +64,7 @@ impl AccountMap {
 
         Ok(())
     }
-    /// Subscribe user account with RPC polling
+    /// Subscribe account with RPC polling
     ///
     /// * `account` pubkey to subscribe
     /// * `interval` to poll the account
@@ -151,23 +157,20 @@ impl AccountSub<Unsubscribed> {
         let unsub = match self.subscription {
             SubscriptionImpl::Ws(ref ws) => {
                 let data_and_slot = Arc::clone(&data_and_slot);
-                let unsub = ws
-                    .subscribe(Self::SUBSCRIPTION_ID, true, move |update| {
-                        let mut guard = data_and_slot.write().expect("acquired");
-                        guard.raw.clone_from(&update.data);
-                        guard.slot = update.slot;
-                    })
-                    .await?;
-                unsub
-            }
-            SubscriptionImpl::Polled(ref poll) => {
-                let data_and_slot = Arc::clone(&data_and_slot);
-                let unsub = poll.subscribe(move |update| {
+                ws.subscribe(Self::SUBSCRIPTION_ID, true, move |update| {
                     let mut guard = data_and_slot.write().expect("acquired");
                     guard.raw.clone_from(&update.data);
                     guard.slot = update.slot;
-                });
-                unsub
+                })
+                .await?
+            }
+            SubscriptionImpl::Polled(ref poll) => {
+                let data_and_slot = Arc::clone(&data_and_slot);
+                poll.subscribe(move |update| {
+                    let mut guard = data_and_slot.write().expect("acquired");
+                    guard.raw.clone_from(&update.data);
+                    guard.slot = update.slot;
+                })
             }
         };
 
