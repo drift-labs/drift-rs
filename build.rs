@@ -8,6 +8,10 @@ const SUPPORTED_PLATFORMS: &[(&str, &str, &str)] = &[
 const FFI_TOOLCHAIN_VERSION: &str = "1.76.0";
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::var("DOCS_RS").is_ok() {
+        println!("cargo:warning=docs.rs build detected. skipping idl-gen and libdrift build");
+        return Ok(())
+    }
     let current_dir = std::env::current_dir()?.canonicalize()?;
 
     // Generate IDL types from 'res/drift.json'
