@@ -25,13 +25,14 @@ jobs:
     env:
       CARGO_DRIFT_FFI_PATH: /usr/lib
     runs-on: ubicloud
+    timeout-minutes: 15
     steps:
       - name: Check out
         uses: actions/checkout@v4
         with:
           submodules: true
       - name: Cache Rust toolchain
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.rustup

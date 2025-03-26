@@ -56,6 +56,10 @@ impl Wallet {
     pub fn is_delegated(&self) -> bool {
         matches!(self.mode, Mode::Delegated)
     }
+    /// Returns true if the wallet is configured for read-only/emulation mode
+    pub fn is_read_only(&self) -> bool {
+        matches!(self.mode, Mode::ReadOnly)
+    }
     /// Init wallet from a string of either file path or the encoded private key
     /// ```example(no_run)
     /// // from private key str
