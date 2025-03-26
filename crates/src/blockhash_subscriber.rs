@@ -75,6 +75,9 @@ impl BlockhashSubscriber {
                         break;
                     }
                 }
+
+                let mut lock = last_twenty_hashes.write().expect("acquired");
+                lock.clear();
             }
         });
     }
@@ -163,5 +166,10 @@ mod tests {
 
         // oldest hash updated as buffer updates
         assert!(blockhash_subscriber.get_valid_blockhash().unwrap() != oldest_block_hash);
+
+        // after unsub, returns none
+        blockhash_subscriber.unsubscribe();
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        assert!(blockhash_subscriber.get_latest_blockhash().is_none());
     }
 }
