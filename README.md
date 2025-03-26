@@ -15,14 +15,15 @@
 
 Experimental, high performance Rust SDK for building offchain clients for [Drift V2](https://github.com/drift-labs/protocol-v2) protocol.
 
+See the offical [docs](https://docs.rs/drift-rs/latest/drift_rs/)
 
 ## Install
 ```toml
 # crates.io
-drift-rs = "1.0.0-alpha.12"
+drift-rs = "1.0.0-alpha.13"
 
 # build from source
-drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.12" }
+drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.13" }
 ```
 
 ## Use
