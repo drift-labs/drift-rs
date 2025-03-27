@@ -200,7 +200,17 @@ fn install_library(
 fn link_library() -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(lib_path) = std::env::var("CARGO_DRIFT_FFI_PATH") {
         println!("cargo:rustc-link-search=native={lib_path}");
+    } else {
+        // On linux need to refresh the linker cache
+        let host_target = std::env::var("TARGET")?;
+        let (lib_target, _lib_ext) = get_platform_details(&host_target)?;
+        if lib_target.contains("linux") {
+            if let Err(err) = std::process::Command::new("ldconfig").output() {
+                println!("cargo:warning={LIB}: ldconfig failed: {err:?}");
+            }
+        }
     }
+
     println!("cargo:rustc-link-lib=dylib=drift_ffi_sys");
     Ok(())
 }
