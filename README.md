@@ -50,7 +50,7 @@ async fn main() {
 
 ### Mac
 
-Install rosetta (m-series only) and configure Rust toolchain for `x86_64`
+Install rosetta (m-series only) and configure Rust toolchain for `x86_64`  
 ⚠️ `1.76.0-x86_64` must also be installed alongside latest stable rust
 
 ```bash
@@ -70,7 +70,7 @@ rustup install 1.85.0-x86_64-unknown-linux-gnu 1.76.0-x86_64-unknown-linux-gnu -
 rustup override set 1.85.0-x86_64-unknown-linux-gnu
 ```
 
-⚠️ the default toolchain is incompatible due to memory layout differences between solana program (BPF) and aarch64 and will fail at runtime with deserialization errors like: `InvalidSize`.
+⚠️ the non-x86_64 toolchains are incompatible due to memory layout differences between solana program (BPF) and aarch64 and will fail at runtime with deserialization errors like: `InvalidSize`.
 
 ## Local Development
 drift-rs links to the drift program crate via FFI, build from source (default) or dynamically link with a version from [drift-ffi-sys](https://github.com/drift-labs/drift-ffi-sys/releases)
