@@ -48,15 +48,26 @@ async fn main() {
 ```
 ## Setup
 
-### Mac (m-series)
+### Mac
 
-Install rosetta and configure Rust toolchain for `x86_64`
+Install rosetta (m-series only) and configure Rust toolchain for `x86_64`
+⚠️ `1.76.0-x86_64` must also be installed alongside latest stable rust
 
 ```bash
 softwareupdate --install-rosetta
-# replace `1.84.0` with preferred stable version
-rustup install 1.84.0-x86_64-apple-darwin
-rustup override set 1.84.0-x86_64-apple-darwin
+
+# replace '1.85.0' with preferred latest stable version
+rustup install 1.85.0-x86_64-apple-darwin 1.76.0-x86_64-apple-darwin --force-non-host
+
+rustup override set 1.85.0-x86_64-apple-darwin
+```
+
+### Linux 
+```bash
+# replace '1.85.0' with preferred latest stable version
+rustup install 1.85.0-x86_64-unknown-linux-gnu 1.76.0-x86_64-unknown-linux-gnu --force-non-host
+
+rustup override set 1.85.0-x86_64-unknown-linux-gnu
 ```
 
 ⚠️ the default toolchain is incompatible due to memory layout differences between solana program (BPF) and aarch64 and will fail at runtime with deserialization errors like: `InvalidSize`.
