@@ -1,3 +1,4 @@
+//!
 //! liquidation and margin helpers
 //!
 
@@ -21,6 +22,8 @@ use crate::{
     },
     DriftClient, MarginMode, MarketId, SdkError, SdkResult, SpotPosition,
 };
+
+use super::get_oracle_normalization_factor;
 
 /// Info on a position's liquidation price and unrealized PnL
 #[derive(Debug)]
@@ -192,6 +195,13 @@ pub fn calculate_liquidation_price_inner(
             if !spot_position.is_available() {
                 spot_free_collateral_delta =
                     calculate_spot_free_collateral_delta(&spot_position, spot_market);
+                let (numerator, denominator) = get_oracle_normalization_factor(
+                    perp_market.amm.oracle_source,
+                    spot_market.oracle_source,
+                );
+                spot_free_collateral_delta = (((spot_free_collateral_delta as i128)
+                    * numerator as i128)
+                    / denominator as i128) as i64;
             }
         }
     }
@@ -210,7 +220,7 @@ pub fn calculate_liquidation_price_inner(
     Ok(liquidation_price)
 }
 
-fn calculate_perp_free_collateral_delta(
+pub fn calculate_perp_free_collateral_delta(
     position: &PerpPosition,
     market: &PerpMarket,
     oracle_price: i64,
@@ -251,7 +261,7 @@ fn calculate_perp_free_collateral_delta(
     fcd
 }
 
-fn calculate_spot_free_collateral_delta(position: &SpotPosition, market: &SpotMarket) -> i64 {
+pub fn calculate_spot_free_collateral_delta(position: &SpotPosition, market: &SpotMarket) -> i64 {
     let market_precision = 10_i128.pow(market.decimals);
     let signed_token_amount = position.get_signed_token_amount(market).unwrap();
     let delta = if signed_token_amount > 0 {

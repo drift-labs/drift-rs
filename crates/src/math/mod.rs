@@ -1,6 +1,9 @@
-use crate::drift_idl::{
-    errors::ErrorCode,
-    types::{MarginCalculationMode, MarginRequirementType, MarketIdentifier},
+use crate::{
+    drift_idl::{
+        errors::ErrorCode,
+        types::{MarginCalculationMode, MarginRequirementType, MarketIdentifier},
+    },
+    types::OracleSource,
 };
 
 pub mod account_list_builder;
@@ -110,5 +113,22 @@ impl MarginContext {
             }
         }
         Ok(self)
+    }
+}
+
+/// Returns (numerator, denominator) pair to normalize prices from 2 different oracle source
+fn get_oracle_normalization_factor(a: OracleSource, b: OracleSource) -> (u64, u64) {
+    match (a, b) {
+        // 1M scaling relationships
+        (OracleSource::PythLazer, OracleSource::PythLazer1M)
+        | (OracleSource::PythPull, OracleSource::Pyth1MPull) => (1_000_000, 1),
+        (OracleSource::PythLazer1M, OracleSource::PythLazer)
+        | (OracleSource::Pyth1MPull, OracleSource::PythPull) => (1, 1_000_000),
+        // 1K scaling relationships
+        (OracleSource::PythLazer, OracleSource::PythLazer1K)
+        | (OracleSource::PythPull, OracleSource::Pyth1KPull) => (1_000, 1),
+        (OracleSource::PythLazer1K, OracleSource::PythLazer)
+        | (OracleSource::Pyth1KPull, OracleSource::PythPull) => (1, 1_000),
+        _ => (1, 1),
     }
 }
