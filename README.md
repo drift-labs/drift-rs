@@ -20,10 +20,10 @@ See the offical [docs](https://docs.rs/drift-rs/latest/drift_rs/)
 ## Install
 ```toml
 # crates.io
-drift-rs = "1.0.0-alpha.13"
+drift-rs = "1.0.0-alpha.14"
 
 # build from source
-drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.13" }
+drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.14" }
 ```
 
 ## Use
