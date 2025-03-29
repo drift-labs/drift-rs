@@ -231,12 +231,33 @@ impl types::PerpPosition {
 }
 
 impl accounts::User {
+    pub const STATUS_BEING_LIQUIDATED: u8 = 0b00000001;
+    pub const STATUS_BANKRUPT: u8 = 0b00000010;
+    pub const STATUS_REDUCE_ONLY: u8 = 0b00000100;
+    pub const STATUS_ADVANCED_LP: u8 = 0b00001000;
+    pub const STATUS_PROTECTED_MAKER_ORDERS: u8 = 0b00010000;
+
     pub fn get_spot_position(&self, market_index: u16) -> SdkResult<types::SpotPosition> {
         // TODO: no clone
         to_sdk_result(unsafe { user_get_spot_position(self, market_index) }).copied()
     }
     pub fn get_perp_position(&self, market_index: u16) -> SdkResult<types::PerpPosition> {
         to_sdk_result(unsafe { user_get_perp_position(self, market_index) }).copied()
+    }
+    pub fn is_being_liquidated(&self) -> bool {
+        self.status & (Self::STATUS_BEING_LIQUIDATED | Self::STATUS_BANKRUPT) > 0
+    }
+    pub fn is_bankrupt(&self) -> bool {
+        (self.status & Self::STATUS_BANKRUPT) > 0
+    }
+    pub fn is_reduce_only(&self) -> bool {
+        (self.status & Self::STATUS_REDUCE_ONLY) > 0
+    }
+    pub fn is_advanced_lp(&self) -> bool {
+        (self.status & Self::STATUS_ADVANCED_LP) > 0
+    }
+    pub fn is_protected_maker(&self) -> bool {
+        (self.status & Self::STATUS_PROTECTED_MAKER_ORDERS) > 0
     }
 }
 
