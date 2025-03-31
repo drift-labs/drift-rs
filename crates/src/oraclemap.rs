@@ -16,6 +16,7 @@ use solana_sdk::{
 use crate::{
     drift_idl::types::OracleSource,
     ffi::{get_oracle_price, OraclePriceData},
+    types::MapOf,
     websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber},
     MarketId, SdkError, SdkResult, UnsubHandle,
 };
@@ -38,11 +39,11 @@ pub struct Oracle {
 /// Alternatively, the caller may drive the map by calling `sync` periodically
 pub struct OracleMap {
     /// Oracle data keyed by pubkey
-    oraclemap: Arc<DashMap<Pubkey, Oracle, ahash::RandomState>>,
+    oraclemap: Arc<DashMap<(Pubkey, u8), Oracle, ahash::RandomState>>,
     /// Oracle subscription handles by pubkey
-    subcriptions: DashMap<Pubkey, UnsubHandle, ahash::RandomState>,
-    /// Oracle pubkey by MarketId (immutable)
-    oracle_by_market: ReadOnlyView<MarketId, Pubkey>,
+    subcriptions: DashMap<(Pubkey, u8), UnsubHandle, ahash::RandomState>,
+    /// Oracle (pubkey, source) by MarketId (immutable)
+    oracle_by_market: ReadOnlyView<MarketId, (Pubkey, OracleSource)>,
     latest_slot: Arc<AtomicU64>,
     commitment: CommitmentConfig,
     pubsub: Arc<PubsubClient>,
@@ -68,7 +69,7 @@ impl OracleMap {
             .copied()
             .map(|(market, pubkey, source)| {
                 (
-                    pubkey,
+                    (pubkey, source as u8),
                     Oracle {
                         market,
                         pubkey,
@@ -78,10 +79,10 @@ impl OracleMap {
                 )
             })
             .collect();
-        let oracle_by_market: DashMap<MarketId, Pubkey> = all_oracles
+        let oracle_by_market: DashMap<MarketId, (Pubkey, OracleSource)> = all_oracles
             .iter()
             .copied()
-            .map(|(market, pubkey, _)| (market, pubkey))
+            .map(|(market, pubkey, source)| (market, (pubkey, source)))
             .collect();
 
         Self {
@@ -109,11 +110,17 @@ impl OracleMap {
             Vec::<(WebsocketAccountSubscriber, Oracle)>::with_capacity(markets.len());
 
         for market in markets {
-            let oracle_pubkey = self.oracle_by_market.get(market).expect("oracle exists");
-            let oracle_info = self.oraclemap.get(oracle_pubkey).expect("oracle exists"); // caller did not supply in `OracleMap::new()`
+            let (oracle_pubkey, oracle_source) =
+                self.oracle_by_market.get(market).expect("oracle exists");
+            let oracle_info = self
+                .oraclemap
+                .get(&(*oracle_pubkey, *oracle_source as u8))
+                .expect("oracle exists"); // caller did not supply in `OracleMap::new()`
 
             // markets can share oracle pubkeys, only want one sub per oracle pubkey
-            if self.subcriptions.contains_key(oracle_pubkey)
+            if self
+                .subcriptions
+                .contains_key(&(*oracle_pubkey, *oracle_source as u8))
                 || pending_subscriptions
                     .iter()
                     .any(|(_, o)| &o.pubkey == oracle_pubkey)
@@ -149,7 +156,8 @@ impl OracleMap {
 
         while let Some((info, unsub)) = subscription_futs.next().await {
             log::debug!(target: LOG_TARGET, "subscribed market oracle: {:?}", info.market);
-            self.subcriptions.insert(info.pubkey, unsub?);
+            self.subcriptions
+                .insert((info.pubkey, info.source as u8), unsub?);
         }
 
         log::debug!(target: LOG_TARGET, "subscribed");
@@ -159,8 +167,11 @@ impl OracleMap {
     /// Unsubscribe from oracle updates for the given `markets`
     pub fn unsubscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
         for market in markets {
-            if let Some(oracle_pubkey) = self.oracle_by_market.get(market) {
-                if let Some((market, unsub)) = self.subcriptions.remove(oracle_pubkey) {
+            if let Some((oracle_pubkey, oracle_source)) = self.oracle_by_market.get(market) {
+                if let Some((market, unsub)) = self
+                    .subcriptions
+                    .remove(&(*oracle_pubkey, *oracle_source as u8))
+                {
                     let _ = unsub.send(());
                     self.oraclemap.remove(&market);
                 }
@@ -188,17 +199,17 @@ impl OracleMap {
         let markets = HashSet::<MarketId>::from_iter(markets.iter().copied());
         log::debug!(target: LOG_TARGET, "sync oracles for: {markets:?}");
 
-        let oracle_pubkeys: Vec<Pubkey> = self
+        let mut oracle_sources = Vec::with_capacity(markets.len());
+        let mut oracle_pubkeys = Vec::with_capacity(markets.len());
+
+        for (_, (pubkey, source)) in self
             .oracle_by_market
             .iter()
-            .filter_map(|(market, pubkey)| {
-                if markets.contains(market) {
-                    Some(*pubkey)
-                } else {
-                    None
-                }
-            })
-            .collect();
+            .filter(|(m, _)| markets.contains(m))
+        {
+            oracle_pubkeys.push(*pubkey);
+            oracle_sources.push(*source);
+        }
 
         let (synced_oracles, latest_slot) =
             match get_multi_account_data_with_fallback(rpc, &oracle_pubkeys).await {
@@ -214,19 +225,23 @@ impl OracleMap {
             return Err(SdkError::InvalidOracle);
         }
 
-        for (oracle_pubkey, oracle_account) in synced_oracles.iter() {
-            self.oraclemap.entry(*oracle_pubkey).and_modify(|o| {
-                let price_data = get_oracle_price(
-                    o.source,
-                    &mut (*oracle_pubkey, oracle_account.clone()),
-                    latest_slot,
-                )
-                .expect("valid oracle data");
+        for ((oracle_pubkey, oracle_account), oracle_source) in
+            synced_oracles.iter().zip(oracle_sources)
+        {
+            self.oraclemap
+                .entry((*oracle_pubkey, oracle_source as u8))
+                .and_modify(|o| {
+                    let price_data = get_oracle_price(
+                        o.source,
+                        &mut (*oracle_pubkey, oracle_account.clone()),
+                        latest_slot,
+                    )
+                    .expect("valid oracle data");
 
-                o.raw.clone_from(&oracle_account.data);
-                o.data = price_data;
-                o.slot = latest_slot;
-            });
+                    o.raw.clone_from(&oracle_account.data);
+                    o.data = price_data;
+                    o.slot = latest_slot;
+                });
         }
 
         self.latest_slot.store(latest_slot, Ordering::Relaxed);
@@ -243,8 +258,9 @@ impl OracleMap {
 
     /// Returns true if the oraclemap has a subscription for `market`
     pub fn is_subscribed(&self, market: &MarketId) -> bool {
-        if let Some(oracle_pubkey) = self.oracle_by_market.get(market) {
-            self.subcriptions.contains_key(oracle_pubkey)
+        if let Some((oracle_pubkey, oracle_source)) = self.oracle_by_market.get(market) {
+            self.subcriptions
+                .contains_key(&(*oracle_pubkey, *oracle_source as u8))
         } else {
             false
         }
@@ -264,20 +280,22 @@ impl OracleMap {
 
     /// Return Oracle data by pubkey, if known
     /// deprecated, see `get_by_key` instead
-    #[deprecated]
-    pub fn get(&self, key: &Pubkey) -> Option<Oracle> {
-        self.get_by_key(key)
-    }
+    // #[deprecated]
+    // pub fn get(&self, key: &Pubkey) -> Option<Oracle> {
+    //     self.get_by_key(key)
+    // }
 
-    /// Return Oracle data by pubkey, if known
-    pub fn get_by_key(&self, key: &Pubkey) -> Option<Oracle> {
-        self.oraclemap.get(key).map(|o| o.value().clone())
-    }
+    // /// Return Oracle data by pubkey, if known
+    // pub fn get_by_key(&self, key: &Pubkey) -> Option<Oracle> {
+    //     self.oraclemap.get(key).map(|o| o.value().clone())
+    // }
 
     /// Return Oracle data by market, if known
     pub fn get_by_market(&self, market: &MarketId) -> Option<Oracle> {
-        if let Some(oracle_pubkey) = self.oracle_by_market.get(market) {
-            self.oraclemap.get(oracle_pubkey).map(|o| o.clone())
+        if let Some((oracle_pubkey, oracle_source)) = self.oracle_by_market.get(market) {
+            self.oraclemap
+                .get(&(*oracle_pubkey, *oracle_source as u8))
+                .map(|o| o.clone())
         } else {
             None
         }
@@ -291,6 +309,10 @@ impl OracleMap {
     pub fn get_latest_slot(&self) -> u64 {
         self.latest_slot.load(Ordering::Relaxed)
     }
+    /// Return a reference to the internal map data structure
+    pub fn map(&self) -> Arc<MapOf<(Pubkey, u8), Oracle>> {
+        Arc::clone(&self.oraclemap)
+    }
 }
 
 /// Handler fn for new oracle account data
@@ -298,7 +320,7 @@ fn update_handler(
     update: &AccountUpdate,
     oracle_market: MarketId,
     oracle_source: OracleSource,
-    oracle_map: &DashMap<Pubkey, Oracle, ahash::RandomState>,
+    oracle_map: &DashMap<(Pubkey, u8), Oracle, ahash::RandomState>,
 ) {
     let oracle_pubkey = update.pubkey;
     let lamports = update.lamports;
@@ -317,7 +339,7 @@ fn update_handler(
     ) {
         Ok(price_data) => {
             oracle_map
-                .entry(oracle_pubkey)
+                .entry((oracle_pubkey, oracle_source as u8))
                 .and_modify(|o| {
                     o.data = price_data;
                     o.slot = update.slot;

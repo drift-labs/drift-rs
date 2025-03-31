@@ -25,6 +25,7 @@ use crate::{
     constants::{self, derive_perp_market_account, derive_spot_market_account, state_account},
     drift_idl::types::OracleSource,
     memcmp::get_market_filter,
+    types::MapOf,
     websocket_account_subscriber::WebsocketAccountSubscriber,
     DataAndSlot, MarketId, MarketType, PerpMarket, SdkResult, SpotMarket, UnsubHandle,
 };
@@ -95,6 +96,11 @@ where
             pubsub,
             commitment,
         }
+    }
+
+    /// Return a reference to the internal map data structure
+    pub fn map(&self) -> Arc<MapOf<u16, DataAndSlot<T>>> {
+        Arc::clone(&self.marketmap)
     }
 
     /// Subscribe to market account updates

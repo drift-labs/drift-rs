@@ -4,6 +4,7 @@ use std::{
     str::FromStr,
 };
 
+use dashmap::DashMap;
 pub use solana_rpc_client_api::config::RpcSendTransactionConfig;
 pub use solana_sdk::{
     commitment_config::CommitmentConfig, message::VersionedMessage,
@@ -31,6 +32,9 @@ use crate::{
     drift_idl::errors::ErrorCode,
     Wallet,
 };
+
+/// Map from K => V
+pub type MapOf<K, V> = DashMap<K, V, ahash::RandomState>;
 
 /// Handle for unsubscribing from network updates
 pub type UnsubHandle = oneshot::Sender<()>;

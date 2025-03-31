@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use drift_rs::{
     event_subscriber::RpcClient,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
@@ -198,4 +200,37 @@ async fn client_subscribe_swift_orders() {
         dbg!(swift_order.order_uuid());
         recv_count += 1;
     }
+}
+
+#[tokio::test]
+async fn oracle_source_mixed_precision() {
+    let _ = env_logger::try_init();
+    let client = DriftClient::new(
+        Context::MainNet,
+        RpcClient::new(mainnet_endpoint()),
+        Keypair::new().into(),
+    )
+    .await
+    .expect("connects");
+
+    let price = client
+        .get_oracle_price_data_and_slot(MarketId::perp(4))
+        .await
+        .unwrap()
+        .data
+        .price;
+    println!("Bonk: {price}");
+    assert!(price % 100_000 > 0);
+
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert!(client.subscribe_oracles(&[MarketId::perp(4)]).await.is_ok());
+
+    let price = client
+        .try_get_oracle_price_data_and_slot(MarketId::perp(4))
+        .unwrap()
+        .data
+        .price;
+
+    println!("Bonk: {price}");
+    assert!(price % 100_000 > 0);
 }
