@@ -12,6 +12,7 @@ use solana_sdk::{pubkey::Pubkey, signature::Signature};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
+pub use crate::types::SignedMsgOrderParamsDelegateMessage as SignedDelegateOrder;
 pub use crate::types::SignedMsgOrderParamsMessage as SignedOrder;
 use crate::{
     constants::MarketExt,
@@ -22,6 +23,13 @@ use crate::{
 /// Swift message discriminator (Anchor)
 const SWIFT_MSG_PREFIX: LazyCell<[u8; 8]> = LazyCell::new(|| {
     solana_sdk::hash::hash(b"global:SignedMsgOrderParamsMessage").to_bytes()[..8]
+        .try_into()
+        .unwrap()
+});
+
+/// Swift message discriminator (Anchor)
+const SWIFT_DELEGATE_MSG_PREFIX: LazyCell<[u8; 8]> = LazyCell::new(|| {
+    solana_sdk::hash::hash(b"global:SignedMsgOrderParamsDelegateMessage").to_bytes()[..8]
         .try_into()
         .unwrap()
 });
@@ -115,7 +123,6 @@ impl SignedOrderInfo {
 
     pub fn new(
         uuid: String,
-        ts: u64,
         taker_authority: Pubkey,
         signer: Pubkey,
         order: SignedOrder,
@@ -123,7 +130,97 @@ impl SignedOrderInfo {
     ) -> Self {
         Self {
             uuid,
-            ts,
+            ts: unix_now_ms(),
+            taker_authority,
+            signer,
+            order,
+            signature,
+        }
+    }
+}
+
+/// Swift order and metadata fresh from the Websocket
+///
+/// This is an off-chain authorization for a taker order.
+/// It may be placed and filled by any willing counter-party, ensuring the time-price bounds
+/// are respected.
+#[derive(Clone, Debug, Deserialize)]
+pub struct SignedDelegateOrderInfo {
+    /// Swift order uuid
+    uuid: String,
+    /// Order creation timestamp (unix ms)
+    pub ts: u64,
+    /// The taker authority pubkey
+    #[serde(deserialize_with = "deser_pubkey")]
+    pub taker_authority: Pubkey,
+    /// The authority pubkey that verifies `signature`
+    /// it is either the taker authority or a sub-account delegate
+    #[serde(rename = "signing_authority", deserialize_with = "deser_pubkey")]
+    pub signer: Pubkey,
+    /// hex-ified, borsh encoded signed order message
+    /// this is the signed/verified payload for onchain use
+    #[serde(
+        rename = "order_message",
+        deserialize_with = "deser_order_delegate_message"
+    )]
+    order: SignedDelegateOrder,
+    /// Signature over the serialized `order` payload
+    #[serde(rename = "order_signature", deserialize_with = "deser_signature")]
+    pub signature: Signature,
+}
+
+impl SignedDelegateOrderInfo {
+    /// The taker pubkey that delegate is signing for
+    pub fn taker_pubkey(&self) -> Pubkey {
+        self.order.taker_pubkey
+    }
+    /// The order's UUID (stringified)
+    pub fn order_uuid_str(&self) -> &str {
+        self.uuid.as_ref()
+    }
+    /// The order's UUID (raw)
+    pub fn order_uuid(&self) -> [u8; 8] {
+        self.order.uuid
+    }
+    /// The drift order params of the message
+    pub fn order_params(&self) -> OrderParams {
+        self.order.signed_msg_order_params
+    }
+    /// serialize the order message for onchain use e.g. signature verification
+    pub fn encode_for_signing(&self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(SignedDelegateOrder::INIT_SPACE + 8);
+        buf.extend_from_slice(SWIFT_DELEGATE_MSG_PREFIX.as_slice());
+        self.order
+            .serialize(&mut buf)
+            .expect("swift msg serialized");
+        hex::encode(buf).into_bytes()
+    }
+    /// convert swift order into anchor ix data
+    pub fn to_ix_data(&self) -> Vec<u8> {
+        let signed_msg = self.encode_for_signing();
+        [
+            self.signature.as_ref(),
+            self.signer.as_ref(),
+            &(signed_msg.len() as u16).to_le_bytes(),
+            signed_msg.as_ref(),
+        ]
+        .concat()
+    }
+    /// True if the message was signed by an identity other than the authority i.e a delegated
+    pub fn using_delegate_signing(&self) -> bool {
+        self.taker_authority != self.signer
+    }
+
+    pub fn new(
+        uuid: String,
+        taker_authority: Pubkey,
+        signer: Pubkey,
+        order: SignedDelegateOrder,
+        signature: Signature,
+    ) -> Self {
+        Self {
+            uuid,
+            ts: unix_now_ms(),
             taker_authority,
             signer,
             order,
@@ -302,6 +399,16 @@ where
     let order_message_buf = hex::decode(order_message).expect("valid hex");
     Ok(AnchorDeserialize::deserialize(&mut &order_message_buf[8..])
         .expect("SignedMsgOrderParams deser"))
+}
+
+fn deser_order_delegate_message<'de, D>(deserializer: D) -> Result<SignedDelegateOrder, D::Error>
+where
+    D: serde::de::Deserializer<'de>,
+{
+    let order_message: &str = serde::de::Deserialize::deserialize(deserializer)?;
+    let order_message_buf = hex::decode(order_message).expect("valid hex");
+    Ok(AnchorDeserialize::deserialize(&mut &order_message_buf[8..])
+        .expect("SignedMsgOrderDelegateParams deser"))
 }
 
 fn deser_int_str<'de, D>(deserializer: D) -> Result<u64, D::Error>
