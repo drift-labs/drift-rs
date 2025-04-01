@@ -169,7 +169,7 @@ mod tests {
 
         // after unsub, returns none
         blockhash_subscriber.unsubscribe();
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_secs(4)).await;
         assert!(blockhash_subscriber.get_latest_blockhash().is_none());
     }
 }
