@@ -696,6 +696,21 @@ impl DriftClient {
 
         Ok(())
     }
+
+    /// Return a reference to the internal spot market map
+    pub fn spot_market_map(&self) -> Arc<MapOf<u16, DataAndSlot<SpotMarket>>> {
+        self.backend.spot_market_map.map()
+    }
+
+    /// Return a reference to the internal perp market map
+    pub fn perp_market_map(&self) -> Arc<MapOf<u16, DataAndSlot<PerpMarket>>> {
+        self.backend.perp_market_map.map()
+    }
+
+    /// Return a reference to the internal oracle map
+    pub fn oracle_map(&self) -> Arc<MapOf<(Pubkey, u8), Oracle>> {
+        self.backend.oracle_map.map()
+    }
 }
 
 /// Provides the heavy-lifting and network facing features of the SDK
