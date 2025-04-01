@@ -112,6 +112,24 @@ impl SignedOrderInfo {
     pub fn using_delegate_signing(&self) -> bool {
         self.taker_authority != self.signer
     }
+
+    pub fn new(
+        uuid: String,
+        ts: u64,
+        taker_authority: Pubkey,
+        signer: Pubkey,
+        order: SignedOrder,
+        signature: Signature,
+    ) -> Self {
+        Self {
+            uuid,
+            ts,
+            taker_authority,
+            signer,
+            order,
+            signature,
+        }
+    }
 }
 
 /// Emits swift orders from the Ws server
