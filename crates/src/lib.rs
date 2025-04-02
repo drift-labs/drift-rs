@@ -18,7 +18,6 @@ use solana_sdk::{
     signature::Signature,
 };
 pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
-use swift_order_subscriber::SignedDelegateOrderInfo;
 
 use crate::{
     account_map::AccountMap,
@@ -1665,10 +1664,7 @@ impl<'a> TransactionBuilder<'a> {
                 authority: self.authority,
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.authority),
-                taker: Wallet::derive_user_account(
-                    &taker_account.authority,
-                    signed_order_info.taker_subaccount_id(),
-                ),
+                taker: signed_order_info.taker_subaccount(&taker_account.authority),
                 taker_stats: Wallet::derive_stats_account(&taker_account.authority),
                 taker_signed_msg_user_orders: Wallet::derive_swift_order_account(
                     &taker_account.authority,
@@ -1708,7 +1704,7 @@ impl<'a> TransactionBuilder<'a> {
     /// or see `place_and_make_swift_order`
     ///
     /// * `signed_order_info` - the signed swift order info
-    /// * `taker_account` - taker account data (authority of the swift order)
+    /// * `taker_account` - taker subaccount data
     ///
     pub fn place_swift_order(
         mut self,
@@ -1727,62 +1723,7 @@ impl<'a> TransactionBuilder<'a> {
             types::accounts::PlaceSignedMsgTakerOrder {
                 state: *state_account(),
                 authority: self.authority,
-                user: Wallet::derive_user_account(
-                    &taker_account.authority,
-                    signed_order_info.taker_subaccount_id(),
-                ),
-                user_stats: Wallet::derive_stats_account(&taker_account.authority),
-                signed_msg_user_orders: Wallet::derive_swift_order_account(
-                    &taker_account.authority,
-                ),
-                ix_sysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
-            },
-            &[taker_account],
-            self.force_markets.readable.iter(),
-            perp_writable
-                .iter()
-                .chain(self.force_markets.writeable.iter()),
-        );
-
-        let swift_taker_ix_data = signed_order_info.to_ix_data();
-        let ed25519_verify_ix = crate::utils::new_ed25519_ix_ptr(
-            swift_taker_ix_data.as_slice(),
-            self.ixs.len() as u16 + 1,
-        );
-
-        let place_swift_ix = Instruction {
-            program_id: constants::PROGRAM_ID,
-            accounts,
-            data: InstructionData::data(&drift_idl::instructions::PlaceSignedMsgTakerOrder {
-                signed_msg_order_params_message_bytes: swift_taker_ix_data,
-                is_delegate_signer: signed_order_info.using_delegate_signing(),
-            }),
-        };
-
-        self.ixs
-            .extend_from_slice(&[ed25519_verify_ix, place_swift_ix]);
-        self
-    }
-
-    /// Place a swift delegate order. Same as above but with a different account type provided
-    pub fn place_swift_delegate_order(
-        mut self,
-        signed_order_info: &SignedDelegateOrderInfo,
-        taker_account: &User,
-    ) -> Self {
-        let order_params = signed_order_info.order_params();
-        assert!(
-            order_params.market_type == MarketType::Perp,
-            "only swift perps are supported"
-        );
-
-        let perp_writable = [MarketId::perp(order_params.market_index)];
-        let accounts = build_accounts(
-            self.program_data,
-            types::accounts::PlaceSignedMsgTakerOrder {
-                state: *state_account(),
-                authority: self.authority,
-                user: signed_order_info.taker_pubkey(),
+                user: signed_order_info.taker_subaccount(&taker_account.authority),
                 user_stats: Wallet::derive_stats_account(&taker_account.authority),
                 signed_msg_user_orders: Wallet::derive_swift_order_account(
                     &taker_account.authority,

@@ -3,7 +3,11 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use anchor_lang::{AnchorDeserialize, AnchorSerialize, Space};
+use anchor_lang::{
+    prelude::borsh::{self},
+    AnchorDeserialize, AnchorSerialize, InitSpace, Space,
+};
+use arrayvec::ArrayVec;
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -17,7 +21,7 @@ pub use crate::types::SignedMsgOrderParamsMessage as SignedOrder;
 use crate::{
     constants::MarketExt,
     types::{Context, MarketId, OrderParams, SdkError, SdkResult},
-    DriftClient,
+    DriftClient, Wallet,
 };
 
 /// Swift message discriminator (Anchor)
@@ -39,15 +43,53 @@ pub const SWIFT_MAINNET_WS_URL: &str = "wss://swift.drift.trade";
 
 const LOG_TARGET: &str = "swift";
 
+/// Wrapper for a signed order message (aka swift order)
+///
+/// It can be either signed by the authority keypair or an authorized delegate
+#[derive(Clone, Debug, PartialEq, AnchorSerialize, AnchorDeserialize, InitSpace)]
+pub enum SignedOrderType {
+    /// Swift order signed by authority keypair
+    Authority(SignedOrder),
+    /// Swift order signed by a delegated keypair
+    Delegated(SignedDelegateOrder),
+}
+
+impl SignedOrderType {
+    /// Returns true if this is a delegated signed msg order
+    pub fn is_delegated(&self) -> bool {
+        matches!(self, Self::Delegated(_))
+    }
+    /// Serialize as a borsh buffer
+    /// This differs from `AnchorSerialize` as it does _not_ encode the enum byte
+    /// Swift clients do not encode or decode the enum byte
+    pub fn to_borsh(&self) -> ArrayVec<u8, { SignedOrderType::INIT_SPACE - 1 + 8 }> {
+        // SignedOrderType::INIT_SPACE (max variant size) -1 (no enum byte) +8 (anchor discriminator len)
+        let mut buf = ArrayVec::new();
+        match self {
+            Self::Authority(ref x) => {
+                (*SWIFT_MSG_PREFIX).serialize(&mut buf).unwrap();
+                x.serialize(&mut buf).unwrap();
+            }
+            Self::Delegated(ref x) => {
+                (*SWIFT_DELEGATE_MSG_PREFIX).serialize(&mut buf).unwrap();
+                x.serialize(&mut buf).unwrap();
+            }
+        }
+
+        buf
+    }
+}
+
+/// Order notification from Websocket
 #[derive(Clone, Deserialize)]
-pub struct OrderNotification<'a> {
+struct OrderNotification<'a> {
     #[allow(dead_code)]
     channel: &'a str,
     order: SignedOrderInfo,
 }
 
 #[derive(Deserialize)]
-pub struct Heartbeat {
+struct Heartbeat {
     #[serde(deserialize_with = "deser_int_str", rename = "message")]
     ts: u64,
 }
@@ -72,8 +114,8 @@ pub struct SignedOrderInfo {
     pub signer: Pubkey,
     /// hex-ified, borsh encoded signed order message
     /// this is the signed/verified payload for onchain use
-    #[serde(rename = "order_message", deserialize_with = "deser_order_message")]
-    order: SignedOrder,
+    #[serde(rename = "order_message", deserialize_with = "deser_signed_msg_type")]
+    order: SignedOrderType,
     /// Signature over the serialized `order` payload
     #[serde(rename = "order_signature", deserialize_with = "deser_signature")]
     pub signature: Signature,
@@ -86,114 +128,32 @@ impl SignedOrderInfo {
     }
     /// The order's UUID (raw)
     pub fn order_uuid(&self) -> [u8; 8] {
-        self.order.uuid
-    }
-    /// The drift order params of the message
-    pub fn order_params(&self) -> OrderParams {
-        self.order.signed_msg_order_params
-    }
-    /// The taker sub-account_id of the order
-    pub fn taker_subaccount_id(&self) -> u16 {
-        self.order.sub_account_id
-    }
-    /// serialize the order message for onchain use e.g. signature verification
-    pub fn encode_for_signing(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(SignedOrder::INIT_SPACE + 8);
-        buf.extend_from_slice(SWIFT_MSG_PREFIX.as_slice());
-        self.order
-            .serialize(&mut buf)
-            .expect("swift msg serialized");
-        hex::encode(buf).into_bytes()
-    }
-    /// convert swift order into anchor ix data
-    pub fn to_ix_data(&self) -> Vec<u8> {
-        let signed_msg = self.encode_for_signing();
-        [
-            self.signature.as_ref(),
-            self.signer.as_ref(),
-            &(signed_msg.len() as u16).to_le_bytes(),
-            signed_msg.as_ref(),
-        ]
-        .concat()
-    }
-    /// True if the message was signed by an identity other than the authority i.e a delegated
-    pub fn using_delegate_signing(&self) -> bool {
-        self.taker_authority != self.signer
-    }
-
-    pub fn new(
-        uuid: String,
-        taker_authority: Pubkey,
-        signer: Pubkey,
-        order: SignedOrder,
-        signature: Signature,
-    ) -> Self {
-        Self {
-            uuid,
-            ts: unix_now_ms(),
-            taker_authority,
-            signer,
-            order,
-            signature,
+        match self.order {
+            SignedOrderType::Authority(inner) => inner.uuid,
+            SignedOrderType::Delegated(inner) => inner.uuid,
         }
     }
-}
-
-/// Swift order and metadata fresh from the Websocket
-///
-/// This is an off-chain authorization for a taker order.
-/// It may be placed and filled by any willing counter-party, ensuring the time-price bounds
-/// are respected.
-#[derive(Clone, Debug, Deserialize)]
-pub struct SignedDelegateOrderInfo {
-    /// Swift order uuid
-    uuid: String,
-    /// Order creation timestamp (unix ms)
-    pub ts: u64,
-    /// The taker authority pubkey
-    #[serde(deserialize_with = "deser_pubkey")]
-    pub taker_authority: Pubkey,
-    /// The authority pubkey that verifies `signature`
-    /// it is either the taker authority or a sub-account delegate
-    #[serde(rename = "signing_authority", deserialize_with = "deser_pubkey")]
-    pub signer: Pubkey,
-    /// hex-ified, borsh encoded signed order message
-    /// this is the signed/verified payload for onchain use
-    #[serde(
-        rename = "order_message",
-        deserialize_with = "deser_order_delegate_message"
-    )]
-    order: SignedDelegateOrder,
-    /// Signature over the serialized `order` payload
-    #[serde(rename = "order_signature", deserialize_with = "deser_signature")]
-    pub signature: Signature,
-}
-
-impl SignedDelegateOrderInfo {
-    /// The taker pubkey that delegate is signing for
-    pub fn taker_pubkey(&self) -> Pubkey {
-        self.order.taker_pubkey
-    }
-    /// The order's UUID (stringified)
-    pub fn order_uuid_str(&self) -> &str {
-        self.uuid.as_ref()
-    }
-    /// The order's UUID (raw)
-    pub fn order_uuid(&self) -> [u8; 8] {
-        self.order.uuid
-    }
     /// The drift order params of the message
     pub fn order_params(&self) -> OrderParams {
-        self.order.signed_msg_order_params
+        match self.order {
+            SignedOrderType::Authority(inner) => inner.signed_msg_order_params,
+            SignedOrderType::Delegated(inner) => inner.signed_msg_order_params,
+        }
+    }
+    /// Get the taker sub-account for the order
+    ///
+    /// `taker_authority` - the Authority pubkey of the taker's sub-account
+    pub fn taker_subaccount(&self, taker_authority: &Pubkey) -> Pubkey {
+        match self.order {
+            SignedOrderType::Authority(inner) => {
+                Wallet::derive_user_account(taker_authority, inner.sub_account_id)
+            }
+            SignedOrderType::Delegated(inner) => inner.taker_pubkey,
+        }
     }
     /// serialize the order message for onchain use e.g. signature verification
     pub fn encode_for_signing(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(SignedDelegateOrder::INIT_SPACE + 8);
-        buf.extend_from_slice(SWIFT_DELEGATE_MSG_PREFIX.as_slice());
-        self.order
-            .serialize(&mut buf)
-            .expect("swift msg serialized");
-        hex::encode(buf).into_bytes()
+        hex::encode(self.order.to_borsh()).into_bytes()
     }
     /// convert swift order into anchor ix data
     pub fn to_ix_data(&self) -> Vec<u8> {
@@ -206,16 +166,17 @@ impl SignedDelegateOrderInfo {
         ]
         .concat()
     }
-    /// True if the message was signed by an identity other than the authority i.e a delegated
+
+    /// Returns true if the order was signed using delegated authority
     pub fn using_delegate_signing(&self) -> bool {
-        self.taker_authority != self.signer
+        self.order.is_delegated()
     }
 
-    pub fn new(
+    pub(crate) fn new(
         uuid: String,
         taker_authority: Pubkey,
         signer: Pubkey,
-        order: SignedDelegateOrder,
+        order: SignedOrderType,
         signature: Signature,
     ) -> Self {
         Self {
@@ -391,26 +352,6 @@ where
     Ok(Signature::try_from(base64::engine::general_purpose::STANDARD.decode(s).unwrap()).unwrap())
 }
 
-fn deser_order_message<'de, D>(deserializer: D) -> Result<SignedOrder, D::Error>
-where
-    D: serde::de::Deserializer<'de>,
-{
-    let order_message: &str = serde::de::Deserialize::deserialize(deserializer)?;
-    let order_message_buf = hex::decode(order_message).expect("valid hex");
-    Ok(AnchorDeserialize::deserialize(&mut &order_message_buf[8..])
-        .expect("SignedMsgOrderParams deser"))
-}
-
-fn deser_order_delegate_message<'de, D>(deserializer: D) -> Result<SignedDelegateOrder, D::Error>
-where
-    D: serde::de::Deserializer<'de>,
-{
-    let order_message: &str = serde::de::Deserialize::deserialize(deserializer)?;
-    let order_message_buf = hex::decode(order_message).expect("valid hex");
-    Ok(AnchorDeserialize::deserialize(&mut &order_message_buf[8..])
-        .expect("SignedMsgOrderDelegateParams deser"))
-}
-
 fn deser_int_str<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
     D: serde::de::Deserializer<'de>,
@@ -419,10 +360,41 @@ where
     Ok(s.parse().unwrap())
 }
 
+/// Deserialize hex-ified, borsh bytes as a `SignedOrderType`
+pub fn deser_signed_msg_type<'de, D>(deserializer: D) -> Result<SignedOrderType, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let payload: &[u8] = serde::Deserialize::deserialize(deserializer)?;
+    if payload.len() % 2 != 0 {
+        return Err(serde::de::Error::custom("Hex string length must be even"));
+    }
+
+    // decode expecting the largest possible variant
+    let mut borsh_buf = [0u8; SignedDelegateOrder::INIT_SPACE + 8];
+
+    hex::decode_to_slice(payload, &mut borsh_buf[..payload.len() / 2])
+        .map_err(serde::de::Error::custom)?;
+
+    // this is basically the same as if we derived AnchorDeserialize on `SignedOrderType` _expect_ it does not
+    // add a u8 to distinguish the enum
+    if borsh_buf[..8] == *SWIFT_DELEGATE_MSG_PREFIX {
+        AnchorDeserialize::deserialize(&mut &borsh_buf[8..])
+            .map(SignedOrderType::Delegated)
+            .map_err(serde::de::Error::custom)
+    } else {
+        AnchorDeserialize::deserialize(&mut &borsh_buf[8..])
+            .map(SignedOrderType::Authority)
+            .map_err(serde::de::Error::custom)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::MarketType;
+    use crate::types::{
+        MarketType, OrderTriggerCondition, OrderType, PositionDirection, PostOnlyParam,
+    };
 
     #[test]
     fn test_swift_order_deser() {
@@ -468,5 +440,67 @@ mod tests {
             signed_message.encode_for_signing().as_slice(),
             b"c8d5a65e2234f55d0001010080841e0000000000000000000000000002000000000000000001320124c6aa950000000001786b2f94000000000000bb64a9150000000074735730364f6d380000"
         );
+    }
+
+    #[test]
+    fn deserialize_incoming_signed_message_delegated() {
+        let payload = serde_json::json!({
+            "channel": "swift_orders_perp_2",
+            "order": {
+                "market_index": 2,
+                "market_type": "perp",
+                "order_message": "42656638c7259e230001010080841e00000000000000000000000000020000000000000000013201bb60507d000000000117c0127c00000000395311d51c1b87fd56c3b5872d1041111e51f399b12d291d981a0ea383407295272108160000000073386c754a4c5a650000",
+                "order_signature": "9G8luwFfeAc25HwXCgaUjrKv6yJHcMFDq4Z4uPXqom5mhwZ63YU5g7p07Kxe/AKSt5A/9OPDh3nN/c9IHjkCDA==",
+                "taker_authority": "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE",
+                "signing_authority": "GiMXQkJXLVjScmQDkoLJShBJpTh9SDPvT2AZQq8NyEBf",
+                "ts": 1739518796400_u64,
+                "uuid":"s8luJLZe"
+            }
+        })
+        .to_string();
+        let actual: OrderNotification<'_> =
+            serde_json::from_str(payload.as_str()).expect("deserializes");
+
+        assert_eq!(
+            actual.order.signer,
+            solana_sdk::pubkey!("GiMXQkJXLVjScmQDkoLJShBJpTh9SDPvT2AZQq8NyEBf")
+        );
+        assert_eq!(
+            actual.order.taker_authority,
+            solana_sdk::pubkey!("4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE")
+        );
+        assert_eq!(actual.order.order_uuid_str(), "s8luJLZe");
+
+        if let SignedOrderType::Delegated(signed_msg) = actual.order.order {
+            let expected = SignedDelegateOrder {
+                signed_msg_order_params: OrderParams {
+                    order_type: OrderType::Market,
+                    market_type: MarketType::Perp,
+                    direction: PositionDirection::Short,
+                    user_order_id: 0,
+                    base_asset_amount: 2000000,
+                    price: 0,
+                    market_index: 2,
+                    reduce_only: false,
+                    post_only: PostOnlyParam::None,
+                    immediate_or_cancel: false,
+                    max_ts: None,
+                    trigger_price: None,
+                    trigger_condition: OrderTriggerCondition::Above,
+                    oracle_price_offset: None,
+                    auction_duration: Some(50),
+                    auction_start_price: Some(2102419643),
+                    auction_end_price: Some(2081603607),
+                },
+                taker_pubkey: solana_sdk::pubkey!("4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"),
+                slot: 369631527,
+                uuid: [115, 56, 108, 117, 74, 76, 90, 101],
+                take_profit_order_params: None,
+                stop_loss_order_params: None,
+            };
+            assert_eq!(signed_msg, expected);
+        } else {
+            assert!(false, "unexpected variant");
+        }
     }
 }
