@@ -29,8 +29,8 @@ pub struct AccountUpdate {
 #[derive(Clone)]
 pub struct WebsocketAccountSubscriber {
     pubsub: Arc<PubsubClient>,
-    pub(crate) pubkey: Pubkey,
-    pub(crate) commitment: CommitmentConfig,
+    pub pubkey: Pubkey,
+    pub commitment: CommitmentConfig,
 }
 
 impl WebsocketAccountSubscriber {

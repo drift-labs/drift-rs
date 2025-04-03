@@ -107,8 +107,8 @@ pub mod dlob;
 #[must_use]
 pub struct DriftClient {
     pub context: Context,
-    backend: &'static DriftClientBackend,
-    wallet: Wallet,
+    pub backend: &'static DriftClientBackend,
+    pub wallet: Wallet,
 }
 
 impl DriftClient {
@@ -720,10 +720,10 @@ pub struct DriftClientBackend {
     pubsub_client: Arc<PubsubClient>,
     program_data: ProgramData,
     blockhash_subscriber: BlockhashSubscriber,
-    account_map: AccountMap,
-    perp_market_map: MarketMap<PerpMarket>,
-    spot_market_map: MarketMap<SpotMarket>,
-    oracle_map: OracleMap,
+    pub account_map: AccountMap,
+    pub perp_market_map: MarketMap<PerpMarket>,
+    pub spot_market_map: MarketMap<SpotMarket>,
+    pub oracle_map: OracleMap,
 }
 
 impl DriftClientBackend {
@@ -830,7 +830,7 @@ impl DriftClientBackend {
         self.oracle_map.unsubscribe_all()
     }
 
-    fn try_get_perp_market_account_and_slot(
+    pub fn try_get_perpmarket_account_and_slot(
         &self,
         market_index: u16,
     ) -> Option<DataAndSlot<PerpMarket>> {
@@ -841,7 +841,7 @@ impl DriftClientBackend {
         }
     }
 
-    fn try_get_spot_market_account_and_slot(
+    pub fn try_get_spot_market_account_and_slot(
         &self,
         market_index: u16,
     ) -> Option<DataAndSlot<SpotMarket>> {
@@ -852,13 +852,13 @@ impl DriftClientBackend {
         }
     }
 
-    fn try_get_oracle_price_data_and_slot(&self, market: MarketId) -> Option<Oracle> {
+    pub fn try_get_oracle_price_data_and_slot(&self, market: MarketId) -> Option<Oracle> {
         self.oracle_map.get_by_market(&market)
     }
 
     /// Same as `try_get_oracle_price_data_and_slot` but checks the oracle pubkey has not changed
     /// this can be useful if the oracle address changes in the program
-    fn try_get_oracle_price_data_and_slot_checked(&self, market: MarketId) -> Option<Oracle> {
+    pub fn try_get_oracle_price_data_and_slot_checked(&self, market: MarketId) -> Option<Oracle> {
         let current_oracle = self
             .oracle_map
             .get_by_market(&market)
@@ -928,7 +928,7 @@ impl DriftClientBackend {
     }
 
     /// Fetch `account` as an Anchor account type `T`
-    async fn get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
+    pub async fn get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
         if let Some(value) = self.account_map.account_data(account) {
             Ok(value)
         } else {
@@ -939,7 +939,7 @@ impl DriftClientBackend {
     }
 
     /// Fetch `account` as an Anchor account type `T` along with the retrieved slot
-    async fn get_account_with_slot<T: AccountDeserialize>(
+    pub async fn get_account_with_slot<T: AccountDeserialize>(
         &self,
         account: &Pubkey,
     ) -> SdkResult<DataAndSlot<T>> {
@@ -958,13 +958,13 @@ impl DriftClientBackend {
     /// Fetch `account` as a drift User account
     ///
     /// uses latest cached if subscribed, otherwise falls back to network query
-    async fn get_user_account(&self, account: &Pubkey) -> SdkResult<User> {
+    pub async fn get_user_account(&self, account: &Pubkey) -> SdkResult<User> {
         self.get_account(account).await
     }
 
     /// Try to fetch `account` as `T` using latest local value
     /// requires account was previously subscribed too.
-    fn try_get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
+    pub fn try_get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
         self.account_map
             .account_data(account)
             .ok_or_else(|| SdkError::NoAccountData(*account))
