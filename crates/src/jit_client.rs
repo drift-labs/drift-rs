@@ -218,11 +218,10 @@ impl JitProxyClient {
         }
         ixs.push(ix);
 
-        let lut = program_data.lookup_table.clone();
+        let luts = program_data.lookup_tables;
 
-        // TODO: update with multiple-LUTs
         let message =
-            v0::Message::try_compile(&maker_authority, ixs.as_slice(), &[lut], Default::default())
+            v0::Message::try_compile(&maker_authority, ixs.as_slice(), luts, Default::default())
                 .expect("failed to compile message");
 
         Ok(VersionedMessage::V0(message))

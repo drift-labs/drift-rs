@@ -28,7 +28,7 @@ pub use crate::drift_idl::{
     types::*,
 };
 use crate::{
-    constants::{ids, LUT_DEVNET, LUT_MAINNET},
+    constants::{ids, LUTS_DEVNET, LUTS_MAINNET},
     drift_idl::errors::ErrorCode,
     Wallet,
 };
@@ -53,7 +53,7 @@ pub fn is_one_of_variant<T: PartialEq>(value: &T, variants: &[T]) -> bool {
 pub struct Context {
     name: &'static str,
     /// market lookup table
-    lut: Pubkey,
+    luts: &'static [Pubkey],
     /// pyth program ID
     pyth: Pubkey,
 }
@@ -63,20 +63,20 @@ impl Context {
     #[allow(non_upper_case_globals)]
     pub const MainNet: Context = Self {
         name: "mainnet",
-        lut: LUT_MAINNET,
+        luts: LUTS_MAINNET,
         pyth: ids::pyth_program::ID,
     };
     /// Target DevNet context
     #[allow(non_upper_case_globals)]
     pub const DevNet: Context = Self {
         name: "devnet",
-        lut: LUT_DEVNET,
+        luts: LUTS_DEVNET,
         pyth: ids::pyth_program::ID_DEVNET,
     };
 
-    /// Return drift lookup table address
-    pub fn lut(&self) -> Pubkey {
-        self.lut
+    /// Return drift lookup table address(es)
+    pub fn luts(&self) -> &[Pubkey] {
+        self.luts
     }
 
     /// Return pyth owner address
