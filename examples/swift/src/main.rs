@@ -37,8 +37,14 @@ async fn main() {
         .await
         .expect("subscribed blockhashes");
 
+    // subscribe to filler account (used when building Txs)
+    let _ = drift
+        .subscribe_account(&filler_subaccount)
+        .await
+        .expect("subscribed");
+
     // choose some markets by symbol
-    let market_ids: Vec<MarketId> = ["sol-perp", "sui-perp", "eth-perp", "xrp-perp"]
+    let market_ids: Vec<MarketId> = ["sol-perp", "hype-perp", "fwog-perp", "render-perp"]
         .iter()
         .map(|m| drift.market_lookup(m).unwrap())
         .collect();
@@ -80,9 +86,10 @@ async fn try_fill(drift: DriftClient, filler_subaccount: Pubkey, swift_order: Si
 
     // fetching taker accounts inline
     // TODO: for better fills maintain a gRPC map of user accounts
-    let (taker_account_data, taker_stats) = tokio::try_join!(
-        drift.get_user_account(&taker_subaccount),
-        drift.get_user_stats(&swift_order.taker_authority)
+    let (taker_account_data, taker_stats, tx_builder) = tokio::try_join!(
+        drift.get_user_account(&taker_subaccount), // always hits RPC
+        drift.get_user_stats(&swift_order.taker_authority), // always hits RPC
+        drift.init_tx(&filler_subaccount, false)
     )
     .unwrap();
 
@@ -116,7 +123,7 @@ async fn try_fill(drift: DriftClient, filler_subaccount: Pubkey, swift_order: Si
             &taker_stats.referrer,
         )
         .build();
-
+    let raw_tx = tx.clone();
     match drift.sign_and_send(tx).await {
         Ok(sig) => {
             println!("sent fill: {sig}");

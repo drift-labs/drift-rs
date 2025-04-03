@@ -73,6 +73,12 @@ rustup override set 1.85.0-x86_64-unknown-linux-gnu
 ⚠️ the non-x86_64 toolchains are incompatible due to memory layout differences between solana program (BPF) and aarch64 and will fail at runtime with deserialization errors like: `InvalidSize`.
 
 ## Local Development
+Clone and init the drift-ffi-sys submodule
+```bash
+git clone https://github.com/drift-labs/drift-rs &&\
+cd drift-rs &&\
+git submodule update --init --recursive
+```
 drift-rs links to the drift program crate via FFI, build from source (default) or dynamically link with a version from [drift-ffi-sys](https://github.com/drift-labs/drift-ffi-sys/releases)
 ```bash
 # Build from source (default)

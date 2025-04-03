@@ -60,8 +60,10 @@ impl SignedOrderType {
         matches!(self, Self::Delegated(_))
     }
     /// Serialize as a borsh buffer
+    ///
     /// This differs from `AnchorSerialize` as it does _not_ encode the enum byte
-    /// Swift clients do not encode or decode the enum byte
+    ///
+    /// DEV: Swift clients do not encode or decode the enum byte
     pub fn to_borsh(&self) -> ArrayVec<u8, { SignedOrderType::INIT_SPACE - 1 + 8 }> {
         // SignedOrderType::INIT_SPACE (max variant size) -1 (no enum byte) +8 (anchor discriminator len)
         let mut buf = ArrayVec::new();
@@ -143,10 +145,10 @@ impl SignedOrderInfo {
     /// Get the taker sub-account for the order
     ///
     /// `taker_authority` - the Authority pubkey of the taker's sub-account
-    pub fn taker_subaccount(&self, taker_authority: &Pubkey) -> Pubkey {
+    pub fn taker_subaccount(&self) -> Pubkey {
         match self.order {
             SignedOrderType::Authority(inner) => {
-                Wallet::derive_user_account(taker_authority, inner.sub_account_id)
+                Wallet::derive_user_account(&self.taker_authority, inner.sub_account_id)
             }
             SignedOrderType::Delegated(inner) => inner.taker_pubkey,
         }
