@@ -47,6 +47,7 @@ tokio-stream = "0.1.17"
 tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 
 drift-pubsub-client = { version = "0.1.1", path = "crates/pubsub-client" }
+arrayvec = "0.7.6"
 
 [dev-dependencies]
 bytes = "1"
