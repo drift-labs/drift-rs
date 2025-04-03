@@ -20,6 +20,9 @@ path = "crates/src/lib.rs"
 dlob = ["rayon"]
 # run integration tests against RPC nodes
 rpc_tests = []
+default = []
+client = ["tokio", "socket2", "mio"]
+program = []
 
 [dependencies]
 abi_stable = { version = "0.11", default-features = false }
@@ -31,17 +34,19 @@ env_logger = "0.11"
 futures-util = "0.3"
 hex = "0.4"
 log = "0.4"
+mio = { version = "1", optional = true }
 rayon = { version = "1.9.0", optional = true }
 regex = "1.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+socket2 = { version = "0.5", optional = true }
 solana-account-decoder-client-types = "2.1"
 solana-rpc-client = "2.1"
 solana-rpc-client-api = "2.1"
 solana-sdk = "2.1"
 solana-transaction-status = "2.1"
 thiserror = "1"
-tokio = { version = "1.42", features = ["full"] }
+tokio = { version = "1", optional = true }
 tokio-stream = "0.1.17"
 tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 
