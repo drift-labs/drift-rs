@@ -737,16 +737,23 @@ impl DriftClientBackend {
         let spot_market_map =
             MarketMap::<SpotMarket>::new(Arc::clone(&pubsub_client), rpc_client.commitment());
 
-        let lookup_table_address = context.lut();
+        let lut_pubkeys = context.luts();
 
-        let (_, _, lut) = tokio::try_join!(
+        let (_, _, lut_accounts) = tokio::try_join!(
             perp_market_map.sync(&rpc_client),
             spot_market_map.sync(&rpc_client),
             rpc_client
-                .get_account(&lookup_table_address)
+                .get_multiple_accounts(&lut_pubkeys)
                 .map_err(Into::into),
         )?;
-        let lookup_table = utils::deserialize_alt(lookup_table_address, &lut)?;
+
+        let lookup_tables = lut_pubkeys
+            .into_iter()
+            .zip(lut_accounts.into_iter())
+            .map(|(pubkey, account_data)| {
+                utils::deserialize_alt(*pubkey, &account_data.unwrap()).expect("LUT decodes")
+            })
+            .collect();
 
         let mut all_oracles = Vec::<(MarketId, Pubkey, OracleSource)>::with_capacity(
             perp_market_map.len() + spot_market_map.len(),
@@ -780,7 +787,7 @@ impl DriftClientBackend {
             program_data: ProgramData::new(
                 spot_market_map.values(),
                 perp_market_map.values(),
-                lookup_table,
+                lookup_tables,
             ),
             account_map,
             perp_market_map,
@@ -1171,7 +1178,7 @@ impl<'a> TransactionBuilder<'a> {
             account_data: user,
             sub_account,
             ixs: Default::default(),
-            lookup_tables: vec![program_data.lookup_table.clone()],
+            lookup_tables: program_data.lookup_tables.to_vec(),
             legacy: false,
             force_markets: Default::default(),
         }
@@ -1186,11 +1193,11 @@ impl<'a> TransactionBuilder<'a> {
         self.legacy = true;
         self
     }
-    /// Set the tx lookup tables
+    /// Extend the tx lookup tables (always includes the defacto drift LUTs)
     pub fn lookup_tables(mut self, lookup_tables: &[AddressLookupTableAccount]) -> Self {
         self.lookup_tables = lookup_tables.to_vec();
         self.lookup_tables
-            .push(self.program_data.lookup_table.clone());
+            .extend(self.program_data.lookup_tables.iter().cloned());
 
         self
     }
