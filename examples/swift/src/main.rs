@@ -38,7 +38,7 @@ async fn main() {
         .expect("subscribed blockhashes");
 
     // choose some markets by symbol
-    let market_ids: Vec<MarketId> = ["sui-perp", "eth-perp", "xrp-perp"]
+    let market_ids: Vec<MarketId> = ["sol-perp", "sui-perp", "eth-perp", "xrp-perp"]
         .iter()
         .map(|m| drift.market_lookup(m).unwrap())
         .collect();
@@ -76,10 +76,7 @@ async fn try_fill(drift: DriftClient, filler_subaccount: Pubkey, swift_order: Si
     // TODO: filter `swift_order.order_params()` depending on strategy params
     println!("new swift order: {swift_order:?}");
     let taker_order = swift_order.order_params();
-    let taker_subaccount = Wallet::derive_user_account(
-        &swift_order.taker_authority,
-        swift_order.taker_subaccount_id(),
-    );
+    let taker_subaccount = swift_order.taker_subaccount(&swift_order.taker_authority);
 
     // fetching taker accounts inline
     // TODO: for better fills maintain a gRPC map of user accounts
@@ -103,7 +100,7 @@ async fn try_fill(drift: DriftClient, filler_subaccount: Pubkey, swift_order: Si
                     PositionDirection::Short => PositionDirection::Long,
                 },
                 // TODO: fill at price depending on strategy params
-                // always fill at the best price for the taker
+                // this always attempts to fill at the best price for the _taker_
                 price: taker_order
                     .auction_start_price
                     .expect("start price set")

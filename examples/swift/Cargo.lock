@@ -1216,11 +1216,12 @@ dependencies = [
 
 [[package]]
 name = "drift-rs"
-version = "1.0.0-alpha.12"
+version = "1.0.0-alpha.14"
 dependencies = [
  "abi_stable",
  "ahash",
  "anchor-lang",
+ "arrayvec",
  "base64 0.22.1",
  "bytemuck",
  "dashmap",
