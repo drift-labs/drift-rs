@@ -84,8 +84,8 @@ pub fn derive_drift_signer() -> Pubkey {
 
 /// Helper methods for market data structs
 pub trait MarketExt {
-    pub fn market_type(&self) -> &'static str;
-    pub fn symbol(&self) -> &str;
+    fn market_type(&self) -> &'static str;
+    fn symbol(&self) -> &str;
 }
 
 impl MarketExt for PerpMarket {

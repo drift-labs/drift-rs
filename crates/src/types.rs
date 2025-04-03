@@ -437,11 +437,11 @@ impl From<RemainingAccount> for AccountMeta {
 /// Provide market precision information
 pub trait MarketPrecision {
     // prices must be a multiple of this
-    pub fn price_tick(&self) -> u64;
+    fn price_tick(&self) -> u64;
     // order sizes must be a multiple of this
-    pub fn quantity_tick(&self) -> u64;
+    fn quantity_tick(&self) -> u64;
     /// smallest order size
-    pub fn min_order_size(&self) -> u64;
+    fn min_order_size(&self) -> u64;
 }
 
 impl MarketPrecision for accounts::SpotMarket {

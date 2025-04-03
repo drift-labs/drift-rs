@@ -33,9 +33,9 @@ use crate::{
 const LOG_TARGET: &str = "marketmap";
 
 pub trait Market {
-    pub const MARKET_TYPE: MarketType;
-    pub fn market_index(&self) -> u16;
-    pub fn oracle_info(&self) -> (MarketId, Pubkey, OracleSource);
+    const MARKET_TYPE: MarketType;
+    fn market_index(&self) -> u16;
+    fn oracle_info(&self) -> (MarketId, Pubkey, OracleSource);
 }
 
 impl Market for PerpMarket {

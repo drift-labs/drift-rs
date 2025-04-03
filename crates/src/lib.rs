@@ -107,10 +107,7 @@ pub mod dlob;
 #[must_use]
 pub struct DriftClient {
     pub context: Context,
-    #[cfg(feature = "unsafe_pub")]
-    pub backend: &'static DriftClientBackend,
-    #[cfg(not(feature = "unsafe_pub"))]
-    backend: DriftClientBackend,
+    backend: &'static DriftClientBackend,
     pub wallet: Wallet,
 }
 
@@ -723,21 +720,9 @@ pub struct DriftClientBackend {
     pubsub_client: Arc<PubsubClient>,
     program_data: ProgramData,
     blockhash_subscriber: BlockhashSubscriber,
-    #[cfg(feature = "unsafe_pub")]
-    pub account_map: AccountMap,
-    #[cfg(feature = "unsafe_pub")]
-    pub perp_market_map: MarketMap<PerpMarket>,
-    #[cfg(feature = "unsafe_pub")]
-    pub spot_market_map: MarketMap<SpotMarket>,
-    #[cfg(feature = "unsafe_pub")]
-    pub oracle_map: OracleMap,
-    #[cfg(not(feature = "unsafe_pub"))]
     account_map: AccountMap,
-    #[cfg(not(feature = "unsafe_pub"))]
     perp_market_map: MarketMap<PerpMarket>,
-    #[cfg(not(feature = "unsafe_pub"))]
     spot_market_map: MarketMap<SpotMarket>,
-    #[cfg(not(feature = "unsafe_pub"))]
     oracle_map: OracleMap,
 }
 impl DriftClientBackend {
@@ -844,7 +829,7 @@ impl DriftClientBackend {
         self.oracle_map.unsubscribe_all()
     }
 
-    pub fn try_get_perpmarket_account_and_slot(
+    pub fn try_get_perp_market_account_and_slot(
         &self,
         market_index: u16,
     ) -> Option<DataAndSlot<PerpMarket>> {
@@ -1097,6 +1082,26 @@ impl DriftClientBackend {
             }) => Err(SdkError::InvalidAccount),
             Err(err) => Err(err.into()),
         }
+    }
+
+    #[cfg(feature = "unsafe_pub")]
+    pub fn account_map(&self) -> &AccountMap {
+        &self.account_map
+    }
+
+    #[cfg(feature = "unsafe_pub")]
+    pub fn perp_market_map(&self) -> &MarketMap<PerpMarket> {
+        &self.perp_market_map
+    }
+
+    #[cfg(feature = "unsafe_pub")]
+    pub fn spot_market_map(&self) -> &MarketMap<SpotMarket> {
+        &self.spot_market_map
+    }
+
+    #[cfg(feature = "unsafe_pub")]
+    pub fn oracle_map(&self) -> &OracleMap {
+        &self.oracle_map
     }
 }
 
