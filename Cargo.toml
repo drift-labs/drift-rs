@@ -20,6 +20,9 @@ path = "crates/src/lib.rs"
 dlob = ["rayon"]
 # run integration tests against RPC nodes
 rpc_tests = []
+# make more variables public - use with caution
+unsafe_pub = []
+
 
 [dependencies]
 abi_stable = { version = "0.11", default-features = false }

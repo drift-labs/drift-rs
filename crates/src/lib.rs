@@ -107,7 +107,10 @@ pub mod dlob;
 #[must_use]
 pub struct DriftClient {
     pub context: Context,
+    #[cfg(feature = "unsafe_pub")]
     pub backend: &'static DriftClientBackend,
+    #[cfg(not(feature = "unsafe_pub"))]
+    backend: DriftClientBackend,
     pub wallet: Wallet,
 }
 
@@ -720,12 +723,23 @@ pub struct DriftClientBackend {
     pubsub_client: Arc<PubsubClient>,
     program_data: ProgramData,
     blockhash_subscriber: BlockhashSubscriber,
+    #[cfg(feature = "unsafe_pub")]
     pub account_map: AccountMap,
+    #[cfg(feature = "unsafe_pub")]
     pub perp_market_map: MarketMap<PerpMarket>,
+    #[cfg(feature = "unsafe_pub")]
     pub spot_market_map: MarketMap<SpotMarket>,
+    #[cfg(feature = "unsafe_pub")]
     pub oracle_map: OracleMap,
+    #[cfg(not(feature = "unsafe_pub"))]
+    account_map: AccountMap,
+    #[cfg(not(feature = "unsafe_pub"))]
+    perp_market_map: MarketMap<PerpMarket>,
+    #[cfg(not(feature = "unsafe_pub"))]
+    spot_market_map: MarketMap<SpotMarket>,
+    #[cfg(not(feature = "unsafe_pub"))]
+    oracle_map: OracleMap,
 }
-
 impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
     async fn new(context: Context, rpc_client: Arc<RpcClient>) -> SdkResult<Self> {
