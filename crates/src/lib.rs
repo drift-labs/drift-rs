@@ -743,15 +743,16 @@ impl DriftClientBackend {
             perp_market_map.sync(&rpc_client),
             spot_market_map.sync(&rpc_client),
             rpc_client
-                .get_multiple_accounts(&lut_pubkeys)
+                .get_multiple_accounts(lut_pubkeys)
                 .map_err(Into::into),
         )?;
 
         let lookup_tables = lut_pubkeys
-            .into_iter()
-            .zip(lut_accounts.into_iter())
+            .iter()
+            .zip(lut_accounts.iter())
             .map(|(pubkey, account_data)| {
-                utils::deserialize_alt(*pubkey, &account_data.unwrap()).expect("LUT decodes")
+                utils::deserialize_alt(*pubkey, account_data.as_ref().unwrap())
+                    .expect("LUT decodes")
             })
             .collect();
 

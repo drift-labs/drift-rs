@@ -278,18 +278,6 @@ impl OracleMap {
             .map(|x| x.pubkey)
     }
 
-    /// Return Oracle data by pubkey, if known
-    /// deprecated, see `get_by_key` instead
-    // #[deprecated]
-    // pub fn get(&self, key: &Pubkey) -> Option<Oracle> {
-    //     self.get_by_key(key)
-    // }
-
-    // /// Return Oracle data by pubkey, if known
-    // pub fn get_by_key(&self, key: &Pubkey) -> Option<Oracle> {
-    //     self.oraclemap.get(key).map(|o| o.value().clone())
-    // }
-
     /// Return Oracle data by market, if known
     pub fn get_by_market(&self, market: &MarketId) -> Option<Oracle> {
         if let Some((oracle_pubkey, oracle_source)) = self.oracle_by_market.get(market) {
