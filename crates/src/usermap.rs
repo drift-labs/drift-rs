@@ -34,7 +34,7 @@ use crate::{
 pub struct GlobalUserMap {
     subscribed: bool,
     subscription: WebsocketProgramAccountSubscriber,
-    pub(crate) usermap: Arc<DashMap<String, User>>,
+    pub usermap: Arc<DashMap<String, User>>,
     sync_lock: Option<Mutex<()>>,
     latest_slot: Arc<AtomicU64>,
     commitment: CommitmentConfig,
@@ -132,7 +132,7 @@ impl GlobalUserMap {
     }
 
     #[allow(clippy::await_holding_lock)]
-    async fn sync(&self) -> SdkResult<()> {
+    pub async fn sync(&self) -> SdkResult<()> {
         let sync_lock = self.sync_lock.as_ref().expect("expected sync lock");
 
         let _lock = match sync_lock.try_lock() {

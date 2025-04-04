@@ -39,11 +39,11 @@ pub struct Oracle {
 /// Alternatively, the caller may drive the map by calling `sync` periodically
 pub struct OracleMap {
     /// Oracle data keyed by pubkey
-    oraclemap: Arc<DashMap<(Pubkey, u8), Oracle, ahash::RandomState>>,
+    pub oraclemap: Arc<DashMap<(Pubkey, u8), Oracle, ahash::RandomState>>,
     /// Oracle subscription handles by pubkey
     subcriptions: DashMap<(Pubkey, u8), UnsubHandle, ahash::RandomState>,
     /// Oracle (pubkey, source) by MarketId (immutable)
-    oracle_by_market: ReadOnlyView<MarketId, (Pubkey, OracleSource)>,
+    pub oracle_by_market: ReadOnlyView<MarketId, (Pubkey, OracleSource)>,
     latest_slot: Arc<AtomicU64>,
     commitment: CommitmentConfig,
     pubsub: Arc<PubsubClient>,

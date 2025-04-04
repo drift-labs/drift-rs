@@ -40,7 +40,7 @@ pub struct WebsocketProgramAccountOptions {
 
 pub struct WebsocketProgramAccountSubscriber {
     url: String,
-    pub(crate) options: WebsocketProgramAccountOptions,
+    pub options: WebsocketProgramAccountOptions,
 }
 
 impl WebsocketProgramAccountSubscriber {
