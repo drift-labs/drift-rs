@@ -3,6 +3,7 @@
 use std::{borrow::Cow, collections::BTreeSet, sync::Arc, time::Duration};
 
 use anchor_lang::{AccountDeserialize, InstructionData};
+use constants::{TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID};
 pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
 use log::debug;
@@ -739,12 +740,13 @@ impl DriftClientBackend {
 
         let lut_pubkeys = context.luts();
 
-        let (_, _, lut_accounts) = tokio::try_join!(
+        let (_, _, lut_accounts, state) = tokio::try_join!(
             perp_market_map.sync(&rpc_client),
             spot_market_map.sync(&rpc_client),
             rpc_client
                 .get_multiple_accounts(lut_pubkeys)
                 .map_err(Into::into),
+            rpc_client.get_account_with_config(state_account()),
         )?;
 
         let lookup_tables = lut_pubkeys
@@ -789,6 +791,7 @@ impl DriftClientBackend {
                 spot_market_map.values(),
                 perp_market_map.values(),
                 lookup_tables,
+                state,
             ),
             account_map,
             perp_market_map,
@@ -1800,7 +1803,7 @@ impl<'a> TransactionBuilder<'a> {
             self.program_data,
             types::accounts::UpdateUserCustomMarginRatio {
                 authority: self.authority,
-                user: Wallet::derive_user_account(&self.authority, sub_account_id),
+                user: self.sub_account,
             },
             &[self.account_data.as_ref()],
             std::iter::empty(),
@@ -1818,6 +1821,88 @@ impl<'a> TransactionBuilder<'a> {
 
         self
     }
+
+    /// Add a spot `begin_swap` ix
+    ///
+    /// This should be followed by a subsequent `end_swap` ix
+    pub fn begin_swap_ix(
+        mut self,
+        out_market_index: u16,
+        in_market_index: u16,
+        amount_in: u64,
+        payer_token_account: &Pubkey,
+        payee_token_account: &Pubkey,
+        limit_price: Option<u64>,
+        reduce_only: bool,
+    ) -> Self {
+        let out_market = self
+            .program_data
+            .spot_market_config_by_index(out_market_index)
+            .unwrap();
+        let in_market = self
+            .program_data
+            .spot_market_config_by_index(in_market_index)
+            .unwrap();
+
+        let in_token_program = if in_market.token_program == 1 {
+            TOKEN_2022_PROGRAM_ID
+        } else {
+            TOKEN_PROGRAM_ID
+        };
+
+        let out_token_program = if out_market.token_program == 1 {
+            TOKEN_2022_PROGRAM_ID
+        } else {
+            TOKEN_PROGRAM_ID
+        };
+
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::BeginSwap {
+                state: *state_account(),
+                user: self.sub_account,
+                user_stats: Wallet::derive_stats_account(&self.authority),
+                authority: self.authority,
+                out_spot_market_vault: out_market.vault,
+                in_spot_market_vault: in_market.vault,
+                in_token_account: payer_token_account,
+                out_token_account: payee_token_account,
+                token_program: in_token_program,
+                drift_signer: self.program_data.state().signer,
+                instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+            },
+            &[self.account_data.as_ref()],
+            self.force_markets.readable.iter(),
+            self.force_markets.writeable.iter(),
+        );
+
+        if out_token_program != in_token_program {
+            accounts.push(AccountMeta::new(out_token_program, false));
+        }
+
+        if out_market.token_program == 1 || in_market.token_program == 1 {
+            accounts.push(AccountMeta::new(in_market.mint, false));
+            accounts.push(AccountMeta::new(out_market.mint, false));
+        }
+
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::BeginSwap {
+                in_market_index,
+                out_market_index,
+                amount_in,
+            }),
+        };
+        self.ixs.push(ix);
+
+        self
+    }
+
+    /// Add a spot `end_swap` ix
+    ///
+    /// This should follow a preceding `begin_swap` ix
+    pub fn end_swap_ix(mut self) -> Self {}
 
     /// Build the transaction message ready for signing and sending
     pub fn build(self) -> VersionedMessage {
