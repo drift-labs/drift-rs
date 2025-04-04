@@ -1706,9 +1706,9 @@ impl<'a> TransactionBuilder<'a> {
         if taker_account_referrer != &DEFAULT_PUBKEY {
             accounts.push(AccountMeta::new(
                 Wallet::derive_stats_account(taker_account_referrer),
-                true,
+                false,
             ));
-            accounts.push(AccountMeta::new(*taker_account_referrer, true));
+            accounts.push(AccountMeta::new(*taker_account_referrer, false));
         }
 
         self.ixs.push(Instruction {
