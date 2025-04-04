@@ -1843,9 +1843,9 @@ impl<'a> TransactionBuilder<'a> {
                 ),
                 liquidator_stats: Wallet::derive_stats_account(&self.authority),
             },
-            &[self.account_data.as_ref()],
-            std::iter::empty(),
-            std::iter::empty(),
+            &[self.account_data.as_ref(), user_to_liquidate],
+            self.force_markets.readable.iter(),
+            self.force_markets.writeable.iter(),
         );
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
@@ -1885,9 +1885,9 @@ impl<'a> TransactionBuilder<'a> {
                 ),
                 liquidator_stats: Wallet::derive_stats_account(&self.authority),
             },
-            &[self.account_data.as_ref()],
-            std::iter::empty(),
-            std::iter::empty(),
+            &[self.account_data.as_ref(), user_to_liquidate],
+            self.force_markets.readable.iter(),
+            self.force_markets.writeable.iter(),
         );
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
