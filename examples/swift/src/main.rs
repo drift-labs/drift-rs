@@ -44,7 +44,7 @@ async fn main() {
         .expect("subscribed");
 
     // choose some markets by symbol
-    let market_ids: Vec<MarketId> = ["sol-perp", "hype-perp", "fwog-perp", "render-perp"]
+    let market_ids: Vec<MarketId> = ["sol-perp", "fwog-perp", "render-perp"]
         .iter()
         .map(|m| drift.market_lookup(m).unwrap())
         .collect();
@@ -123,7 +123,7 @@ async fn try_fill(drift: DriftClient, filler_subaccount: Pubkey, swift_order: Si
             &taker_stats.referrer,
         )
         .build();
-    let raw_tx = tx.clone();
+
     match drift.sign_and_send(tx).await {
         Ok(sig) => {
             println!("sent fill: {sig}");

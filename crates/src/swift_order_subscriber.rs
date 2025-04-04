@@ -12,7 +12,7 @@ use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use solana_sdk::{pubkey::Pubkey, signature::Signature};
+use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
@@ -197,23 +197,6 @@ impl SignedOrderInfo {
     /// Returns true if the order was signed using delegated authority
     pub fn using_delegate_signing(&self) -> bool {
         self.order.is_delegated()
-    }
-
-    pub(crate) fn new(
-        uuid: String,
-        taker_authority: Pubkey,
-        signer: Pubkey,
-        order: SignedOrderType,
-        signature: Signature,
-    ) -> Self {
-        Self {
-            uuid,
-            ts: unix_now_ms(),
-            taker_authority,
-            signer,
-            order,
-            signature,
-        }
     }
 }
 
