@@ -84,9 +84,25 @@ fn build_ffi_lib(current_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     // Build the library
     let profile = std::env::var("PROFILE")?;
     let drift_ffi_sys_crate = current_dir.join("crates/drift-ffi-sys");
-
+    // Check if submodule was cloned/exists
+    check_submodule_exists(&drift_ffi_sys_crate)?;
     build_with_toolchain(&drift_ffi_sys_crate, lib_target, &profile)?;
     install_library(&drift_ffi_sys_crate, &profile, lib_ext)?;
+
+    Ok(())
+}
+
+fn check_submodule_exists(crate_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    // Check if the Cargo.toml file exists in the submodule directory
+    let cargo_toml_path = crate_path.join("Cargo.toml");
+
+    if !cargo_toml_path.exists() {
+        println!("cargo:warning=drift-ffi-sys submodule not found");
+        return Err(format!(
+            "drift-ffi-sys submodule not initialized: {} not found. Run 'git submodule update --init --recursive'",
+            cargo_toml_path.display()
+        ).into());
+    }
 
     Ok(())
 }
