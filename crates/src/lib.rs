@@ -1819,6 +1819,90 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
+    pub fn liquidate_spot(
+        mut self,
+        user_to_liquidate: &User,
+        liability_market_index: u16,
+        asset_market_index: u16,
+        liquidator_max_liability_transfer: u128,
+        limit_price: Option<u64>,
+    ) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::LiquidateSpot {
+                state: *state_account(),
+                authority: self.authority,
+                user: Wallet::derive_user_account(
+                    &user_to_liquidate.authority,
+                    user_to_liquidate.sub_account_id,
+                ),
+                user_stats: Wallet::derive_stats_account(&user_to_liquidate.authority),
+                liquidator: Wallet::derive_user_account(
+                    &self.authority,
+                    self.account_data.sub_account_id,
+                ),
+                liquidator_stats: Wallet::derive_stats_account(&self.authority),
+            },
+            &[self.account_data.as_ref()],
+            std::iter::empty(),
+            std::iter::empty(),
+        );
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::LiquidateSpot {
+                asset_market_index,
+                liability_market_index,
+                limit_price,
+                liquidator_max_liability_transfer,
+            }),
+        };
+        self.ixs.push(ix);
+
+        self
+    }
+
+    pub fn liquidate_perp(
+        mut self,
+        user_to_liquidate: &User,
+        market_index: u16,
+        liquidator_max_base_asset_amount: u64,
+        limit_price: Option<u64>,
+    ) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::LiquidatePerp {
+                state: *state_account(),
+                authority: self.authority,
+                user: Wallet::derive_user_account(
+                    &user_to_liquidate.authority,
+                    user_to_liquidate.sub_account_id,
+                ),
+                user_stats: Wallet::derive_stats_account(&user_to_liquidate.authority),
+                liquidator: Wallet::derive_user_account(
+                    &self.authority,
+                    self.account_data.sub_account_id,
+                ),
+                liquidator_stats: Wallet::derive_stats_account(&self.authority),
+            },
+            &[self.account_data.as_ref()],
+            std::iter::empty(),
+            std::iter::empty(),
+        );
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::LiquidatePerp {
+                market_index,
+                limit_price,
+                liquidator_max_base_asset_amount,
+            }),
+        };
+        self.ixs.push(ix);
+
+        self
+    }
+
     /// Build the transaction message ready for signing and sending
     pub fn build(self) -> VersionedMessage {
         if self.legacy {
