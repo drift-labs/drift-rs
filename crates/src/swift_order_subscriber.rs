@@ -54,7 +54,7 @@ pub struct SignedMessageInfo {
 }
 
 /// It can be either signed by the authority keypair or an authorized delegate
-#[derive(Clone, Debug, PartialEq, AnchorSerialize, AnchorDeserialize, InitSpace)]
+#[derive(Clone, Debug, PartialEq, AnchorSerialize, AnchorDeserialize, InitSpace, Copy)]
 pub enum SignedOrderType {
     /// Swift order signed by authority keypair
     Authority(SignedOrder),
