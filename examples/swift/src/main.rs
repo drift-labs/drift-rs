@@ -82,7 +82,7 @@ async fn try_fill(drift: DriftClient, filler_subaccount: Pubkey, swift_order: Si
     // TODO: filter `swift_order.order_params()` depending on strategy params
     println!("new swift order: {swift_order:?}");
     let taker_order = swift_order.order_params();
-    let taker_subaccount = swift_order.taker_subaccount(&swift_order.taker_authority);
+    let taker_subaccount = swift_order.taker_subaccount();
 
     // fetching taker accounts inline
     // TODO: for better fills maintain a gRPC map of user accounts
@@ -95,7 +95,6 @@ async fn try_fill(drift: DriftClient, filler_subaccount: Pubkey, swift_order: Si
 
     // built the taker tx
     // It places the swift order for the taker and fills it
-    let tx_builder = drift.init_tx(&filler_subaccount, false).await.unwrap();
     let tx = tx_builder
         .place_and_make_swift_order(
             OrderParams {
@@ -133,3 +132,40 @@ async fn try_fill(drift: DriftClient, filler_subaccount: Pubkey, swift_order: Si
         }
     }
 }
+
+/*
+ SignedOrderInfo {
+    uuid: "xu5AywOw",
+    ts: 1743734832311,
+    taker_authority: CTh4Q6xooiaJMWCwKP5KLQ4j7X3NEJPf3Uq6rX8UsKSi,
+    signer: CTh4Q6xooiaJMWCwKP5KLQ4j7X3NEJPf3Uq6rX8UsKSi,
+    order: Authority(
+    SignedMsgOrderParamsMessage {
+      signed_msg_order_params: OrderParams {
+        order_type: Market,
+        market_type: Perp,
+        direction: Short,
+        user_order_id: 0,
+        base_asset_amount: 29133284777858,
+        price: 34566,
+        market_index: 54,
+        reduce_only: false,
+        post_only: None,
+        immediate_or_cancel: false,
+        max_ts: Some(1743734834),
+        trigger_price: None,
+        trigger_condition: Above,
+        oracle_price_offset: None,
+        auction_duration: Some(10),
+        auction_start_price: Some(34566),
+        auction_end_price: Some(34566)
+      },
+      sub_account_id: 4,
+      slot: 331152657,
+      uuid: [120,117,53,65,121,119,79,119],
+      take_profit_order_params: None,
+      stop_loss_order_params: None
+    }),
+    signature: 36H12PYh5M4ogHMfjLp4q4EJiGy5TTau1JJravsEDPdX4C8bzkB7cZfzbg9DrztVXZkmFZuZuuox93QybHWBtMoS
+}
+ */
