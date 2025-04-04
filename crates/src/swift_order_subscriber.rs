@@ -44,7 +44,15 @@ pub const SWIFT_MAINNET_WS_URL: &str = "wss://swift.drift.trade";
 const LOG_TARGET: &str = "swift";
 
 /// Wrapper for a signed order message (aka swift order)
-///
+
+/// Common fields of signed message types
+pub struct SignedMessageInfo {
+    pub taker_pubkey: Pubkey,
+    pub order_params: OrderParams,
+    pub uuid: [u8; 8],
+    pub slot: Slot,
+}
+
 /// It can be either signed by the authority keypair or an authorized delegate
 #[derive(Clone, Debug, PartialEq, AnchorSerialize, AnchorDeserialize, InitSpace)]
 pub enum SignedOrderType {
@@ -79,6 +87,23 @@ impl SignedOrderType {
         }
 
         buf
+    }
+
+    pub fn info(&self, taker_authority: &Pubkey) -> SignedMessageInfo {
+        match self {
+            Self::Authority(x) => SignedMessageInfo {
+                taker_pubkey: Wallet::derive_user_account(taker_authority, x.sub_account_id),
+                order_params: x.signed_msg_order_params,
+                uuid: x.uuid,
+                slot: x.slot,
+            },
+            Self::Delegated(x) => SignedMessageInfo {
+                taker_pubkey: x.taker_pubkey,
+                order_params: x.signed_msg_order_params,
+                uuid: x.uuid,
+                slot: x.slot,
+            },
+        }
     }
 }
 

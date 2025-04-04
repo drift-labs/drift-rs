@@ -128,6 +128,7 @@ extern "C" {
         order_params: &types::OrderParams,
         perp_market: &accounts::PerpMarket,
         oracle_price: i64,
+        is_signed_msg: bool,
     ) -> FfiResult<bool>;
 }
 
@@ -202,9 +203,15 @@ pub fn simulate_will_auction_params_sanitize(
     order_params: &mut types::OrderParams,
     perp_market: &accounts::PerpMarket,
     oracle_price: i64,
+    is_signed_msg: bool,
 ) -> SdkResult<bool> {
     let res = unsafe {
-        order_params_will_auction_params_sanitize(order_params, perp_market, oracle_price)
+        order_params_will_auction_params_sanitize(
+            order_params,
+            perp_market,
+            oracle_price,
+            is_signed_msg,
+        )
     };
     to_sdk_result(res)
 }
