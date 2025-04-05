@@ -711,6 +711,12 @@ impl DriftClient {
     pub fn oracle_map(&self) -> Arc<MapOf<(Pubkey, u8), Oracle>> {
         self.backend.oracle_map.map()
     }
+
+    /// Return a reference to the internal backend
+    #[cfg(feature = "unsafe_pub")]
+    pub fn backend(&self) -> &'static DriftClientBackend {
+        self.backend
+    }
 }
 
 /// Provides the heavy-lifting and network facing features of the SDK
