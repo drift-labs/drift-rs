@@ -75,7 +75,7 @@ impl Market for SpotMarket {
 /// Caller can subscribe to updates via Ws with `.subscribe(..)`
 /// or drive the map by calling `.sync()` periodically
 pub struct MarketMap<T: AnchorDeserialize + Send> {
-    marketmap: Arc<DashMap<u16, DataAndSlot<T>, ahash::RandomState>>,
+    pub marketmap: Arc<DashMap<u16, DataAndSlot<T>, ahash::RandomState>>,
     subscriptions: DashMap<u16, UnsubHandle, ahash::RandomState>,
     latest_slot: Arc<AtomicU64>,
     pubsub: Arc<PubsubClient>,
