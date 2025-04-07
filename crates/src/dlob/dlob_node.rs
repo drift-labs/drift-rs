@@ -297,7 +297,7 @@ pub(crate) fn create_node(node_type: NodeType, order: Order, user_account: Pubke
     Node::new(node_type, order, user_account)
 }
 
-pub(crate) fn get_order_signature(order_id: u32, user_account: Pubkey) -> String {
+pub fn get_order_signature(order_id: u32, user_account: Pubkey) -> String {
     format!("{}-{}", order_id, user_account)
 }
 
