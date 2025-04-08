@@ -1233,6 +1233,7 @@ dependencies = [
  "abi_stable",
  "ahash",
  "anchor-lang",
+ "arrayvec",
  "base64 0.22.1",
  "bytemuck",
  "bytes",

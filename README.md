@@ -81,12 +81,11 @@ git clone https://github.com/drift-labs/drift-rs &&\
 cd drift-rs &&\
 git submodule update --init --recursive
 ```
+
 **build**
 ```bash
 # Build from source (default)
 CARGO_DRIFT_FFI_STATIC=1
-# on linux distros may need to run `ldconfig` to link
-ldconfig
 
 # Provide a prebuilt drift_ffi_sys lib 
 CARGO_DRIFT_FFI_PATH="/path/to/libdrift_ffi_sys"

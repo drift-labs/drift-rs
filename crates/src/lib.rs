@@ -1172,7 +1172,7 @@ pub struct TransactionBuilder<'a> {
     ixs: Vec<Instruction>,
     /// use legacy transaction mode
     legacy: bool,
-    /// add additional lookup tables (v0 only)
+    /// Tx lookup tables (v0 only)
     lookup_tables: Vec<AddressLookupTableAccount>,
     /// some markets forced to include in the tx accounts list
     force_markets: ForceMarkets,
@@ -1712,10 +1712,7 @@ impl<'a> TransactionBuilder<'a> {
                 authority: self.authority,
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.authority),
-                taker: Wallet::derive_user_account(
-                    &taker_account.authority,
-                    signed_order_info.taker_subaccount_id(),
-                ),
+                taker: signed_order_info.taker_subaccount(),
                 taker_stats: Wallet::derive_stats_account(&taker_account.authority),
                 taker_signed_msg_user_orders: Wallet::derive_swift_order_account(
                     &taker_account.authority,
@@ -1729,11 +1726,11 @@ impl<'a> TransactionBuilder<'a> {
         );
 
         if taker_account_referrer != &DEFAULT_PUBKEY {
+            accounts.push(AccountMeta::new(*taker_account_referrer, false));
             accounts.push(AccountMeta::new(
                 Wallet::derive_stats_account(taker_account_referrer),
                 false,
             ));
-            accounts.push(AccountMeta::new(*taker_account_referrer, false));
         }
 
         self.ixs.push(Instruction {
@@ -1755,7 +1752,7 @@ impl<'a> TransactionBuilder<'a> {
     /// or see `place_and_make_swift_order`
     ///
     /// * `signed_order_info` - the signed swift order info
-    /// * `taker_account` - taker account data (authority of the swift order)
+    /// * `taker_account` - taker subaccount data
     ///
     pub fn place_swift_order(
         mut self,
@@ -1768,16 +1765,13 @@ impl<'a> TransactionBuilder<'a> {
             "only swift perps are supported"
         );
 
-        let perp_writable = [MarketId::perp(order_params.market_index)];
+        let perp_readable = [MarketId::perp(order_params.market_index)];
         let accounts = build_accounts(
             self.program_data,
             types::accounts::PlaceSignedMsgTakerOrder {
                 state: *state_account(),
                 authority: self.authority,
-                user: Wallet::derive_user_account(
-                    &taker_account.authority,
-                    signed_order_info.taker_subaccount_id(),
-                ),
+                user: signed_order_info.taker_subaccount(),
                 user_stats: Wallet::derive_stats_account(&taker_account.authority),
                 signed_msg_user_orders: Wallet::derive_swift_order_account(
                     &taker_account.authority,
@@ -1785,10 +1779,10 @@ impl<'a> TransactionBuilder<'a> {
                 ix_sysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
             },
             &[taker_account],
-            self.force_markets.readable.iter(),
-            perp_writable
+            perp_readable
                 .iter()
-                .chain(self.force_markets.writeable.iter()),
+                .chain(self.force_markets.readable.iter()),
+            self.force_markets.writeable.iter(),
         );
 
         let swift_taker_ix_data = signed_order_info.to_ix_data();
