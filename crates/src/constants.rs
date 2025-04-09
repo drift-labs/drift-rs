@@ -133,7 +133,7 @@ impl ProgramData {
             spot_markets: &[],
             perp_markets: &[],
             lookup_tables: &[],
-            state: State::default(),
+            state: unsafe { std::mem::zeroed() },
         }
     }
     /// Initialize `ProgramData`

@@ -123,7 +123,7 @@ impl OracleMap {
                 .contains_key(&(*oracle_pubkey, *oracle_source as u8))
                 || pending_subscriptions
                     .iter()
-                    .any(|(_, o)| &o.pubkey == oracle_pubkey && o.source == oracle_source)
+                    .any(|(_, o)| &o.pubkey == oracle_pubkey && o.source == *oracle_source)
             {
                 log::debug!(target: LOG_TARGET, "subscription exists: {market:?}/{oracle_pubkey:?}");
                 continue;
