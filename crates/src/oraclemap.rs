@@ -41,7 +41,7 @@ pub struct OracleMap {
     /// Oracle data keyed by pubkey
     pub oraclemap: Arc<DashMap<(Pubkey, u8), Oracle, ahash::RandomState>>,
     /// Oracle subscription handles by pubkey
-    subcriptions: DashMap<(Pubkey, u8), UnsubHandle, ahash::RandomState>,
+    subscriptions: DashMap<(Pubkey, u8), UnsubHandle, ahash::RandomState>,
     /// Oracle (pubkey, source) by MarketId (immutable)
     pub oracle_by_market: ReadOnlyView<MarketId, (Pubkey, OracleSource)>,
     latest_slot: Arc<AtomicU64>,
@@ -88,7 +88,7 @@ impl OracleMap {
         Self {
             oraclemap: Arc::new(oraclemap),
             oracle_by_market: oracle_by_market.into_read_only(),
-            subcriptions: Default::default(),
+            subscriptions: Default::default(),
             latest_slot: Arc::new(AtomicU64::new(0)),
             commitment,
             pubsub: pubsub_client,
@@ -119,11 +119,11 @@ impl OracleMap {
 
             // markets can share oracle pubkeys, only want one sub per oracle pubkey
             if self
-                .subcriptions
+                .subscriptions
                 .contains_key(&(*oracle_pubkey, *oracle_source as u8))
                 || pending_subscriptions
                     .iter()
-                    .any(|(_, o)| &o.pubkey == oracle_pubkey)
+                    .any(|(_, o)| &o.pubkey == oracle_pubkey && o.source == *oracle_source)
             {
                 log::debug!(target: LOG_TARGET, "subscription exists: {market:?}/{oracle_pubkey:?}");
                 continue;
@@ -156,7 +156,7 @@ impl OracleMap {
 
         while let Some((info, unsub)) = subscription_futs.next().await {
             log::debug!(target: LOG_TARGET, "subscribed market oracle: {:?}", info.market);
-            self.subcriptions
+            self.subscriptions
                 .insert((info.pubkey, info.source as u8), unsub?);
         }
 
@@ -169,7 +169,7 @@ impl OracleMap {
         for market in markets {
             if let Some((oracle_pubkey, oracle_source)) = self.oracle_by_market.get(market) {
                 if let Some((market, unsub)) = self
-                    .subcriptions
+                    .subscriptions
                     .remove(&(*oracle_pubkey, *oracle_source as u8))
                 {
                     let _ = unsub.send(());
@@ -185,7 +185,7 @@ impl OracleMap {
     /// Unsubscribe from all oracle updates
     pub fn unsubscribe_all(&self) -> SdkResult<()> {
         let all_markets: Vec<MarketId> = self
-            .subcriptions
+            .subscriptions
             .iter()
             .filter_map(|s| self.oraclemap.get(s.key()).map(|o| o.market))
             .collect();
@@ -259,7 +259,7 @@ impl OracleMap {
     /// Returns true if the oraclemap has a subscription for `market`
     pub fn is_subscribed(&self, market: &MarketId) -> bool {
         if let Some((oracle_pubkey, oracle_source)) = self.oracle_by_market.get(market) {
-            self.subcriptions
+            self.subscriptions
                 .contains_key(&(*oracle_pubkey, *oracle_source as u8))
         } else {
             false
@@ -432,7 +432,10 @@ async fn get_multi_account_data_with_fallback(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::{get_ws_url, test_envs::devnet_endpoint};
+    use crate::utils::{
+        get_ws_url,
+        test_envs::{devnet_endpoint, mainnet_endpoint},
+    };
 
     const SOL_PERP_ORACLE: Pubkey =
         solana_sdk::pubkey!("BAtFj4kQttZRVep3UZS2aZRDixkGYgWsbqTBVDbnSsPF");
@@ -470,6 +473,41 @@ mod tests {
             MarketId::spot(1),
         ];
         map.sync(&markets, &rpc).await.expect("subd");
+    }
+
+    #[tokio::test]
+    async fn oraclemap_subscribe_mixed_spot_perp_source() {
+        // bonk oracle uses a precision trick via 'oracle source'
+        // with same oracle pubkey
+        let all_oracles = vec![
+            (
+                MarketId::perp(0),
+                solana_sdk::pubkey!("3m6i4RFWEDw2Ft4tFHPJtYgmpPe21k56M3FHeWYrgGBz"),
+                OracleSource::PythLazer,
+            ),
+            (
+                MarketId::perp(4),
+                solana_sdk::pubkey!("BERaNi6cpEresbq6HC1EQGaB1H1UjvEo4NGnmYSSJof4"),
+                OracleSource::PythLazer1M,
+            ),
+            (
+                MarketId::spot(32),
+                solana_sdk::pubkey!("BERaNi6cpEresbq6HC1EQGaB1H1UjvEo4NGnmYSSJof4"),
+                OracleSource::PythLazer,
+            ),
+        ];
+        let pubsub = Arc::new(
+            PubsubClient::new(&get_ws_url(&mainnet_endpoint()).unwrap())
+                .await
+                .expect("ws connects"),
+        );
+        let map = OracleMap::new(pubsub, &all_oracles, CommitmentConfig::confirmed());
+
+        let markets = [MarketId::perp(0), MarketId::spot(32), MarketId::perp(4)];
+        map.subscribe(&markets).await.expect("subd");
+        assert_eq!(map.len(), 3);
+        assert!(map.is_subscribed(&MarketId::spot(32)));
+        assert!(map.is_subscribed(&MarketId::perp(4)));
     }
 
     #[tokio::test]
