@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.117.0";
+pub const IDL_VERSION: &str = "2.118.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -3875,6 +3875,24 @@ pub mod types {
         #[default]
         Spot,
         Perp,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub enum OrderBitFlag {
+        #[default]
+        SignedMessage,
+        OracleTriggerMarket,
+        SafeTriggerOrder,
     }
     #[derive(
         AnchorSerialize,
@@ -21345,6 +21363,7 @@ pub mod events {
         pub maker_order_cumulative_base_asset_amount_filled: Option<u64>,
         pub maker_order_cumulative_quote_asset_amount_filled: Option<u64>,
         pub oracle_price: i64,
+        pub bit_flags: u8,
     }
     #[event]
     pub struct LPRecord {
