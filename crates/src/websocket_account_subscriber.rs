@@ -135,7 +135,7 @@ impl WebsocketAccountSubscriber {
                                     }
                                 }
                                 None => {
-                                    log::error!(target: LOG_TARGET, "{subscription_name}: Ws ended unexpectedly");
+                                    log::error!(target: LOG_TARGET, "{subscription_name}: Ws ended unexpectedly: {pubkey:?}");
                                     break Err(());
                                 }
                             }
