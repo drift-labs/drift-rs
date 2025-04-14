@@ -28,6 +28,7 @@ unsafe_pub = []
 abi_stable = { version = "0.11", default-features = false }
 ahash = "0.8.11"
 anchor-lang = { version = "0.31", features = ["derive"] }
+arrayvec = "0.7.6"
 base64 = "0.22"
 bytemuck = "1.17"
 dashmap = "6"
@@ -50,7 +51,6 @@ tokio-stream = "0.1.17"
 tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 
 drift-pubsub-client = { version = "0.1.1", path = "crates/pubsub-client" }
-arrayvec = "0.7.6"
 
 [dev-dependencies]
 bytes = "1"
