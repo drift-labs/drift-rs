@@ -12,6 +12,7 @@ use crate::{
         errors::ErrorCode,
         types::{self, ContractType, MarginRequirementType, OracleSource},
     },
+    types::SdkError,
     SdkResult,
 };
 
@@ -41,7 +42,7 @@ extern "C" {
 
     #[allow(improper_ctypes)]
     pub fn oracle_get_oracle_price(
-        orace_source: OracleSource,
+        oracle_source: OracleSource,
         oracle_account: &mut (Pubkey, Account),
         slot: Slot,
     ) -> FfiResult<OraclePriceData>;
@@ -142,11 +143,14 @@ pub fn check_ffi_version() -> String {
 }
 
 pub fn get_oracle_price(
-    orace_source: OracleSource,
+    oracle_source: OracleSource,
     oracle_account: &mut (Pubkey, Account),
     slot: Slot,
 ) -> SdkResult<OraclePriceData> {
-    to_sdk_result(unsafe { oracle_get_oracle_price(orace_source, oracle_account, slot) })
+    if oracle_account.1.data.is_empty() {
+        return Err(SdkError::NoAccountData(oracle_account.0));
+    }
+    to_sdk_result(unsafe { oracle_get_oracle_price(oracle_source, oracle_account, slot) })
 }
 
 pub fn calculate_auction_price(

@@ -78,6 +78,7 @@ impl WebsocketAccountSubscriber {
                             slot: response.context.slot,
                         });
                     } else {
+                        warn!("seeding account failed: {response:?}");
                         return Err(SdkError::InvalidAccount);
                     }
                 }
