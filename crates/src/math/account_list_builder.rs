@@ -1,4 +1,4 @@
-use ahash::HashMap;
+use ahash::{HashMap, HashMapExt};
 use arrayvec::ArrayVec;
 use solana_sdk::{account::Account, pubkey::Pubkey};
 
@@ -39,8 +39,7 @@ impl AccountsListBuilder {
         user: &User,
         force_markets: &[MarketId],
     ) -> SdkResult<AccountsList> {
-        let mut oracle_markets =
-            HashMap::<(Pubkey, u8), MarketId>::with_capacity_and_hasher(16, Default::default());
+        let mut oracle_markets = HashMap::<Pubkey, MarketId>::with_capacity(16);
         let drift_state_account = client.try_get_account::<State>(state_account())?;
 
         let force_spot_iter = force_markets
@@ -59,10 +58,7 @@ impl AccountsListBuilder {
 
         for idx in spot_market_idxs {
             let market = client.try_get_spot_market_account(idx)?;
-            oracle_markets.insert(
-                (market.oracle, market.oracle_source as u8),
-                MarketId::spot(market.market_index),
-            );
+            oracle_markets.insert(market.oracle, MarketId::spot(market.market_index));
             self.spot_accounts.push(
                 (
                     market.pubkey,
@@ -90,10 +86,7 @@ impl AccountsListBuilder {
 
         for idx in perp_market_idxs {
             let market = client.try_get_perp_market_account(idx)?;
-            oracle_markets.insert(
-                (market.amm.oracle, market.amm.oracle_source as u8),
-                MarketId::perp(market.market_index),
-            );
+            oracle_markets.insert(market.amm.oracle, MarketId::perp(market.market_index));
             self.perp_accounts.push(
                 (
                     market.pubkey,
@@ -108,7 +101,7 @@ impl AccountsListBuilder {
         }
 
         let mut latest_oracle_slot = 0;
-        for ((oracle_key, _oracle_source_disc), market) in oracle_markets.iter() {
+        for (oracle_key, market) in oracle_markets.iter() {
             let oracle = client
                 .try_get_oracle_price_data_and_slot(*market)
                 .ok_or(SdkError::NoMarketData(*market))?;
@@ -152,8 +145,7 @@ impl AccountsListBuilder {
         user: &User,
         force_markets: &[MarketId],
     ) -> SdkResult<AccountsList> {
-        let mut oracle_markets =
-            HashMap::<Pubkey, MarketId>::with_capacity_and_hasher(16, Default::default());
+        let mut oracle_markets = HashMap::<Pubkey, MarketId>::with_capacity(16);
         let drift_state_account = client.try_get_account::<State>(state_account())?;
 
         // TODO: could batch the requests
