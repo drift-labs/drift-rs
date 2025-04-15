@@ -923,6 +923,7 @@ mod test {
                             ..Default::default()
                         }),
                         0,
+                        0,
                     ),
                     OrderRecord {
                         ts: id as i64,
@@ -1062,6 +1063,7 @@ mod test {
         maker: Option<Pubkey>,
         maker_order: Option<Order>,
         oracle_price: i64,
+        bit_flags: u8,
     ) -> OrderActionRecord {
         OrderActionRecord {
             bit_flags,
