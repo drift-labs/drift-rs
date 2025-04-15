@@ -1064,6 +1064,7 @@ mod test {
         oracle_price: i64,
     ) -> OrderActionRecord {
         OrderActionRecord {
+            bit_flags,
             ts,
             action,
             action_explanation,
