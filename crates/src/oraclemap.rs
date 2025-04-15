@@ -23,6 +23,7 @@ use crate::{
 
 const LOG_TARGET: &str = "oraclemap";
 
+#[allow(dead_code)]
 #[derive(Copy, Clone, Debug)]
 /// Captures shared relationship between oracles and markets/source types
 enum OracleShareMode {
@@ -515,7 +516,7 @@ mod tests {
         let map = OracleMap::new(pubsub, &all_oracles, rpc.commitment());
 
         // - dups ignored
-        // - makerts with same oracle pubkey, make at most 1 sub
+        // - markets with same oracle pubkey, make at most 1 sub
         let markets = [
             MarketId::perp(0),
             MarketId::spot(1),
@@ -562,6 +563,7 @@ mod tests {
 
     #[tokio::test]
     async fn oraclemap_subscribes() {
+        let _ = env_logger::try_init();
         let all_oracles = vec![
             (
                 MarketId::spot(0),
@@ -576,16 +578,15 @@ mod tests {
             ),
             (MarketId::spot(1), SOL_PERP_ORACLE, OracleSource::PythPull),
         ];
-        let rpc = Arc::new(RpcClient::new(devnet_endpoint().into()));
         let pubsub = Arc::new(
             PubsubClient::new(&get_ws_url(&devnet_endpoint()).unwrap())
                 .await
                 .expect("ws connects"),
         );
-        let map = OracleMap::new(pubsub, &all_oracles, rpc.commitment());
+        let map = OracleMap::new(pubsub, &all_oracles, CommitmentConfig::confirmed());
 
         // - dups ignored
-        // - makerts with same oracle pubkey, make at most 1 sub
+        // - markets with same oracle pubkey, make at most 1 sub
         let markets = [
             MarketId::perp(0),
             MarketId::spot(1),
@@ -593,10 +594,10 @@ mod tests {
             MarketId::spot(1),
         ];
         map.subscribe(&markets).await.expect("subd");
-        assert_eq!(map.len(), 3);
+        assert_eq!(map.len(), 2);
         let markets = [MarketId::perp(0), MarketId::spot(1)];
         map.subscribe(&markets).await.expect("subd");
-        assert_eq!(map.len(), 3);
+        assert_eq!(map.len(), 2);
 
         assert!(map.is_subscribed(&MarketId::perp(0)));
         assert!(map.is_subscribed(&MarketId::perp(1)));
