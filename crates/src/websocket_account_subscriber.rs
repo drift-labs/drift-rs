@@ -29,8 +29,8 @@ pub struct AccountUpdate {
 #[derive(Clone)]
 pub struct WebsocketAccountSubscriber {
     pubsub: Arc<PubsubClient>,
-    pub(crate) pubkey: Pubkey,
-    pub(crate) commitment: CommitmentConfig,
+    pub pubkey: Pubkey,
+    pub commitment: CommitmentConfig,
 }
 
 impl WebsocketAccountSubscriber {
@@ -78,6 +78,7 @@ impl WebsocketAccountSubscriber {
                             slot: response.context.slot,
                         });
                     } else {
+                        warn!("seeding account failed: {response:?}");
                         return Err(SdkError::InvalidAccount);
                     }
                 }
@@ -134,7 +135,7 @@ impl WebsocketAccountSubscriber {
                                     }
                                 }
                                 None => {
-                                    log::error!(target: LOG_TARGET, "{subscription_name}: Ws ended unexpectedly");
+                                    log::error!(target: LOG_TARGET, "{subscription_name}: Ws ended unexpectedly: {pubkey:?}");
                                     break Err(());
                                 }
                             }

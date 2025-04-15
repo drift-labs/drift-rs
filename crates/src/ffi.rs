@@ -12,6 +12,7 @@ use crate::{
         errors::ErrorCode,
         types::{self, ContractType, MarginRequirementType, OracleSource},
     },
+    types::SdkError,
     SdkResult,
 };
 
@@ -41,7 +42,7 @@ extern "C" {
 
     #[allow(improper_ctypes)]
     pub fn oracle_get_oracle_price(
-        orace_source: OracleSource,
+        oracle_source: OracleSource,
         oracle_account: &mut (Pubkey, Account),
         slot: Slot,
     ) -> FfiResult<OraclePriceData>;
@@ -123,6 +124,13 @@ extern "C" {
         order_params: &types::OrderParams,
         accounts: &mut AccountsList,
     ) -> FfiResult<bool>;
+    #[allow(improper_ctypes)]
+    pub fn order_params_will_auction_params_sanitize(
+        order_params: &types::OrderParams,
+        perp_market: &accounts::PerpMarket,
+        oracle_price: i64,
+        is_signed_msg: bool,
+    ) -> FfiResult<bool>;
 }
 
 //
@@ -135,11 +143,14 @@ pub fn check_ffi_version() -> String {
 }
 
 pub fn get_oracle_price(
-    orace_source: OracleSource,
+    oracle_source: OracleSource,
     oracle_account: &mut (Pubkey, Account),
     slot: Slot,
 ) -> SdkResult<OraclePriceData> {
-    to_sdk_result(unsafe { oracle_get_oracle_price(orace_source, oracle_account, slot) })
+    if oracle_account.1.data.is_empty() {
+        return Err(SdkError::NoAccountData(oracle_account.0));
+    }
+    to_sdk_result(unsafe { oracle_get_oracle_price(oracle_source, oracle_account, slot) })
 }
 
 pub fn calculate_auction_price(
@@ -185,6 +196,27 @@ pub fn simulate_place_perp_order(
     order_params: &types::OrderParams,
 ) -> SdkResult<bool> {
     let res = unsafe { orders_place_perp_order(user, state, order_params, accounts) };
+    to_sdk_result(res)
+}
+
+/// Simulates using the program's update_perp_auction_params func to determine if
+/// an order's auction params will get sanitized
+///
+/// Returns `true` if the order's auctions will get sanitized
+pub fn simulate_will_auction_params_sanitize(
+    order_params: &mut types::OrderParams,
+    perp_market: &accounts::PerpMarket,
+    oracle_price: i64,
+    is_signed_msg: bool,
+) -> SdkResult<bool> {
+    let res = unsafe {
+        order_params_will_auction_params_sanitize(
+            order_params,
+            perp_market,
+            oracle_price,
+            is_signed_msg,
+        )
+    };
     to_sdk_result(res)
 }
 

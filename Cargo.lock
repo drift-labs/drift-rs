@@ -1284,6 +1284,7 @@ dependencies = [
  "abi_stable",
  "ahash 0.8.11",
  "anchor-lang",
+ "arrayvec",
  "base64 0.22.1",
  "bytemuck",
  "bytes",

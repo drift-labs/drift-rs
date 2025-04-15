@@ -1,5 +1,5 @@
 {
-  "version": "2.117.0",
+  "version": "2.118.0",
   "name": "drift",
   "instructions": [
     {
@@ -12158,6 +12158,23 @@
       }
     },
     {
+      "name": "OrderBitFlag",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "SignedMessage"
+          },
+          {
+            "name": "OracleTriggerMarket"
+          },
+          {
+            "name": "SafeTriggerOrder"
+          }
+        ]
+      }
+    },
+    {
       "name": "ReferrerStatus",
       "type": {
         "kind": "enum",
@@ -12912,6 +12929,11 @@
         {
           "name": "oraclePrice",
           "type": "i64",
+          "index": false
+        },
+        {
+          "name": "bitFlags",
+          "type": "u8",
           "index": false
         }
       ]

@@ -6,7 +6,7 @@ use anchor_lang::{AccountDeserialize, InstructionData};
 use constants::{TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID};
 pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
-use jupiter_swap_api_client::JupiterSwapApiClient;
+use jupiter_swap_api_client::{quote::QuoteResponse, swap::SwapInstructionsResponse, JupiterSwapApiClient};
 use log::debug;
 pub use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::response::Response;
@@ -110,7 +110,7 @@ pub mod dlob;
 pub struct DriftClient {
     pub context: Context,
     backend: &'static DriftClientBackend,
-    wallet: Wallet,
+    pub wallet: Wallet,
 }
 
 impl DriftClient {
@@ -713,6 +713,12 @@ impl DriftClient {
     pub fn oracle_map(&self) -> Arc<MapOf<(Pubkey, u8), Oracle>> {
         self.backend.oracle_map.map()
     }
+
+    /// Return a reference to the internal backend
+    #[cfg(feature = "unsafe_pub")]
+    pub fn backend(&self) -> &'static DriftClientBackend {
+        self.backend
+    }
 }
 
 /// Provides the heavy-lifting and network facing features of the SDK
@@ -727,7 +733,6 @@ pub struct DriftClientBackend {
     spot_market_map: MarketMap<SpotMarket>,
     oracle_map: OracleMap,
 }
-
 impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
     async fn new(context: Context, rpc_client: Arc<RpcClient>) -> SdkResult<Self> {
@@ -834,7 +839,7 @@ impl DriftClientBackend {
         self.oracle_map.unsubscribe_all()
     }
 
-    fn try_get_perp_market_account_and_slot(
+    pub fn try_get_perp_market_account_and_slot(
         &self,
         market_index: u16,
     ) -> Option<DataAndSlot<PerpMarket>> {
@@ -845,7 +850,7 @@ impl DriftClientBackend {
         }
     }
 
-    fn try_get_spot_market_account_and_slot(
+    pub fn try_get_spot_market_account_and_slot(
         &self,
         market_index: u16,
     ) -> Option<DataAndSlot<SpotMarket>> {
@@ -856,13 +861,13 @@ impl DriftClientBackend {
         }
     }
 
-    fn try_get_oracle_price_data_and_slot(&self, market: MarketId) -> Option<Oracle> {
+    pub fn try_get_oracle_price_data_and_slot(&self, market: MarketId) -> Option<Oracle> {
         self.oracle_map.get_by_market(&market)
     }
 
     /// Same as `try_get_oracle_price_data_and_slot` but checks the oracle pubkey has not changed
     /// this can be useful if the oracle address changes in the program
-    fn try_get_oracle_price_data_and_slot_checked(&self, market: MarketId) -> Option<Oracle> {
+    pub fn try_get_oracle_price_data_and_slot_checked(&self, market: MarketId) -> Option<Oracle> {
         let current_oracle = self
             .oracle_map
             .get_by_market(&market)
@@ -932,7 +937,7 @@ impl DriftClientBackend {
     }
 
     /// Fetch `account` as an Anchor account type `T`
-    async fn get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
+    pub async fn get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
         if let Some(value) = self.account_map.account_data(account) {
             Ok(value)
         } else {
@@ -943,7 +948,7 @@ impl DriftClientBackend {
     }
 
     /// Fetch `account` as an Anchor account type `T` along with the retrieved slot
-    async fn get_account_with_slot<T: AccountDeserialize>(
+    pub async fn get_account_with_slot<T: AccountDeserialize>(
         &self,
         account: &Pubkey,
     ) -> SdkResult<DataAndSlot<T>> {
@@ -962,13 +967,13 @@ impl DriftClientBackend {
     /// Fetch `account` as a drift User account
     ///
     /// uses latest cached if subscribed, otherwise falls back to network query
-    async fn get_user_account(&self, account: &Pubkey) -> SdkResult<User> {
+    pub async fn get_user_account(&self, account: &Pubkey) -> SdkResult<User> {
         self.get_account(account).await
     }
 
     /// Try to fetch `account` as `T` using latest local value
     /// requires account was previously subscribed too.
-    fn try_get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
+    pub fn try_get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
         self.account_map
             .account_data(account)
             .ok_or_else(|| SdkError::NoAccountData(*account))
@@ -1060,7 +1065,6 @@ impl DriftClientBackend {
                 ffi::get_oracle_price(oracle_source, &mut (oracle, account_data.clone()), slot)?;
 
             Ok(Oracle {
-                market,
                 pubkey: oracle,
                 source: oracle_source,
                 slot,
@@ -1087,6 +1091,26 @@ impl DriftClientBackend {
             }) => Err(SdkError::InvalidAccount),
             Err(err) => Err(err.into()),
         }
+    }
+
+    #[cfg(feature = "unsafe_pub")]
+    pub fn account_map(&self) -> &AccountMap {
+        &self.account_map
+    }
+
+    #[cfg(feature = "unsafe_pub")]
+    pub fn perp_market_map(&self) -> &MarketMap<PerpMarket> {
+        &self.perp_market_map
+    }
+
+    #[cfg(feature = "unsafe_pub")]
+    pub fn spot_market_map(&self) -> &MarketMap<SpotMarket> {
+        &self.spot_market_map
+    }
+
+    #[cfg(feature = "unsafe_pub")]
+    pub fn oracle_map(&self) -> &OracleMap {
+        &self.oracle_map
     }
 }
 
@@ -1151,7 +1175,7 @@ pub struct TransactionBuilder<'a> {
     ixs: Vec<Instruction>,
     /// use legacy transaction mode
     legacy: bool,
-    /// add additional lookup tables (v0 only)
+    /// Tx lookup tables (v0 only)
     lookup_tables: Vec<AddressLookupTableAccount>,
     /// some markets forced to include in the tx accounts list
     force_markets: ForceMarkets,
@@ -1691,10 +1715,7 @@ impl<'a> TransactionBuilder<'a> {
                 authority: self.authority,
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.authority),
-                taker: Wallet::derive_user_account(
-                    &taker_account.authority,
-                    signed_order_info.taker_subaccount_id(),
-                ),
+                taker: signed_order_info.taker_subaccount(),
                 taker_stats: Wallet::derive_stats_account(&taker_account.authority),
                 taker_signed_msg_user_orders: Wallet::derive_swift_order_account(
                     &taker_account.authority,
@@ -1708,11 +1729,11 @@ impl<'a> TransactionBuilder<'a> {
         );
 
         if taker_account_referrer != &DEFAULT_PUBKEY {
+            accounts.push(AccountMeta::new(*taker_account_referrer, false));
             accounts.push(AccountMeta::new(
                 Wallet::derive_stats_account(taker_account_referrer),
-                true,
+                false,
             ));
-            accounts.push(AccountMeta::new(*taker_account_referrer, true));
         }
 
         self.ixs.push(Instruction {
@@ -1734,7 +1755,7 @@ impl<'a> TransactionBuilder<'a> {
     /// or see `place_and_make_swift_order`
     ///
     /// * `signed_order_info` - the signed swift order info
-    /// * `taker_account` - taker account data (authority of the swift order)
+    /// * `taker_account` - taker subaccount data
     ///
     pub fn place_swift_order(
         mut self,
@@ -1747,16 +1768,13 @@ impl<'a> TransactionBuilder<'a> {
             "only swift perps are supported"
         );
 
-        let perp_writable = [MarketId::perp(order_params.market_index)];
+        let perp_readable = [MarketId::perp(order_params.market_index)];
         let accounts = build_accounts(
             self.program_data,
             types::accounts::PlaceSignedMsgTakerOrder {
                 state: *state_account(),
                 authority: self.authority,
-                user: Wallet::derive_user_account(
-                    &taker_account.authority,
-                    signed_order_info.taker_subaccount_id(),
-                ),
+                user: signed_order_info.taker_subaccount(),
                 user_stats: Wallet::derive_stats_account(&taker_account.authority),
                 signed_msg_user_orders: Wallet::derive_swift_order_account(
                     &taker_account.authority,
@@ -1764,10 +1782,10 @@ impl<'a> TransactionBuilder<'a> {
                 ix_sysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
             },
             &[taker_account],
-            self.force_markets.readable.iter(),
-            perp_writable
+            perp_readable
                 .iter()
-                .chain(self.force_markets.writeable.iter()),
+                .chain(self.force_markets.readable.iter()),
+            self.force_markets.writeable.iter(),
         );
 
         let swift_taker_ix_data = signed_order_info.to_ix_data();
@@ -1960,42 +1978,16 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
-    pub async fn jupiter_swap_v6(mut self, jup: JupiterSwapApiClient) -> Self {
-        use jupiter_swap_api_client::{
-            quote::QuoteRequest, swap::SwapRequest, transaction_config::TransactionConfig,
-            JupiterSwapApiClient,
-        };
-        // TODO: set the params
-        let quote = jup.quote(&QuoteRequest {
-             input_mint: (),
-             output_mint: (),
-             amount: (),
-             swap_mode: (),
-             slippage_bps: (),
-             auto_slippage: (),
-             max_auto_slippage_bps: (),
-             compute_auto_slippage: (),
-             auto_slippage_collision_usd_value: (),
-             minimize_slippage: (),
-             platform_fee_bps: (),
-             dexes: (),
-             excluded_dexes: (),
-             only_direct_routes: (),
-             as_legacy_transaction: (),
-             restrict_intermediate_tokens: (),
-             max_accounts: (),
-             quote_type: (),
-             quote_args: (),
-             prefer_liquid_dexes: (),
-             compute_unit_score: (),
-             routing_constraints: (),
-             token_category_based_intermediate_tokens: ()
-            })
-            .await
-            .unwrap();
+    pub fn jupiter_swap_v6(
+        mut self, 
+        jupiter_swap_ixs: SwapInstructionsResponse,
+    ) -> Self {
+        // add `ixs` to self.ixs``
+        self.begin_swap(out_market_index, in_market_index, amount_in, payer_token_account, payee_token_account);
+        self.ixs.push(jupiter_swap_ixs);
+        self.end_swap(out_market_index, in_market_index, payer_token_account, payee_token_account, limit_price, reduce_only);
 
-            let swap_ix = jup.swap_instructions(&SwapRequest { user_public_key: (), quote_response: quote, config: () }).await.unwrap();
-            // add `ixs` to self.ixs``
+        self
     }
 
     /// Build the transaction message ready for signing and sending
@@ -2022,6 +2014,44 @@ impl<'a> TransactionBuilder<'a> {
     pub fn account_data(&self) -> &Cow<'_, User> {
         &self.account_data
     }
+}
+
+/*
+trait for building Jupiter Ixs
+TRansactionBuilder add Jupiter client
+add method to do 
+- Get quote
+- Get Ixs
+- Build Tx
+ */
+pub async fn jupiter_quote() -> QuoteResponse {
+    let jup = JupiterSwapApiClient::new("example.come");
+    // TODO: set the params
+    jup.quote(&QuoteRequest {
+        input_mint: (),
+        output_mint: (),
+        amount: (),
+        swap_mode: (),
+        slippage_bps: (),
+        auto_slippage: (),
+        max_auto_slippage_bps: (),
+        compute_auto_slippage: (),
+        auto_slippage_collision_usd_value: (),
+        minimize_slippage: (),
+        platform_fee_bps: (),
+        dexes: (),
+        excluded_dexes: (),
+        only_direct_routes: (),
+        as_legacy_transaction: (),
+        restrict_intermediate_tokens: (),
+        max_accounts: (),
+        quote_type: (),
+        quote_args: (),
+        prefer_liquid_dexes: (),
+        compute_unit_score: (),
+        routing_constraints: (),
+        token_category_based_intermediate_tokens: ()
+    }).await
 }
 
 /// Builds a set of required accounts from a user's open positions and additional given accounts

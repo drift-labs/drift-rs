@@ -23,9 +23,30 @@ use crate::{
 
 const LOG_TARGET: &str = "oraclemap";
 
+#[allow(dead_code)]
+#[derive(Copy, Clone, Debug)]
+/// Captures shared relationship between oracles and markets/source types
+enum OracleShareMode {
+    /// Oracle is unshared
+    Isolated {
+        market: MarketId,
+        source: OracleSource,
+    },
+    /// Oracle is shared by two markets
+    Dual {
+        spot: MarketId,
+        perp: MarketId,
+        source: OracleSource,
+    },
+    /// Oracle is shared by two markets with mixed sources
+    DualMixed {
+        spot: (MarketId, OracleSource),
+        perp: (MarketId, OracleSource),
+    },
+}
+
 #[derive(Clone, Default, Debug)]
 pub struct Oracle {
-    pub market: MarketId,
     pub pubkey: Pubkey,
     pub data: OraclePriceData,
     pub source: OracleSource,
@@ -38,12 +59,14 @@ pub struct Oracle {
 /// Caller can subscribe to some subset of markets for Ws backed updates
 /// Alternatively, the caller may drive the map by calling `sync` periodically
 pub struct OracleMap {
-    /// Oracle data keyed by pubkey
-    oraclemap: Arc<DashMap<(Pubkey, u8), Oracle, ahash::RandomState>>,
+    /// Oracle data keyed by pubkey and source
+    pub oraclemap: Arc<DashMap<(Pubkey, u8), Oracle, ahash::RandomState>>,
     /// Oracle subscription handles by pubkey
-    subscriptions: DashMap<(Pubkey, u8), UnsubHandle, ahash::RandomState>,
+    subscriptions: DashMap<Pubkey, UnsubHandle, ahash::RandomState>,
     /// Oracle (pubkey, source) by MarketId (immutable)
-    oracle_by_market: ReadOnlyView<MarketId, (Pubkey, OracleSource)>,
+    pub oracle_by_market: ReadOnlyView<MarketId, (Pubkey, OracleSource), ahash::RandomState>,
+    /// map from oracle to consuming markets/source types
+    shared_oracles: ReadOnlyView<Pubkey, OracleShareMode, ahash::RandomState>,
     latest_slot: Arc<AtomicU64>,
     commitment: CommitmentConfig,
     pubsub: Arc<PubsubClient>,
@@ -64,30 +87,56 @@ impl OracleMap {
         commitment: CommitmentConfig,
     ) -> Self {
         log::debug!(target: LOG_TARGET, "all oracles: {:?}", all_oracles);
-        let oraclemap = all_oracles
-            .iter()
-            .copied()
-            .map(|(market, pubkey, source)| {
-                (
-                    (pubkey, source as u8),
-                    Oracle {
-                        market,
-                        pubkey,
-                        source,
-                        ..Default::default()
-                    },
-                )
-            })
-            .collect();
-        let oracle_by_market: DashMap<MarketId, (Pubkey, OracleSource)> = all_oracles
-            .iter()
-            .copied()
-            .map(|(market, pubkey, source)| (market, (pubkey, source)))
-            .collect();
+        let oracle_by_market: DashMap<MarketId, (Pubkey, OracleSource), ahash::RandomState> =
+            all_oracles
+                .iter()
+                .copied()
+                .map(|(market, pubkey, source)| (market, (pubkey, source)))
+                .collect();
+        let oracle_by_market = oracle_by_market.into_read_only();
+
+        let shared_oracles = DashMap::<Pubkey, OracleShareMode, ahash::RandomState>::default();
+        for (market, (pubkey, source)) in oracle_by_market.iter() {
+            shared_oracles
+                .entry(*pubkey)
+                .and_modify(|m| {
+                    match m {
+                        OracleShareMode::Isolated {
+                            market: isolated_market,
+                            source: isolated_source,
+                        } => {
+                            let (spot, perp) = if isolated_market.is_spot() {
+                                ((*isolated_market, *isolated_source), (*market, *source))
+                            } else {
+                                ((*market, *source), (*isolated_market, *isolated_source))
+                            };
+
+                            if source == isolated_source {
+                                *m = OracleShareMode::Dual {
+                                    spot: spot.0,
+                                    perp: perp.0,
+                                    source: *source,
+                                };
+                            } else {
+                                *m = OracleShareMode::DualMixed { spot, perp };
+                            }
+                        }
+                        _ => {
+                            // the oracle is being used by more than 2 markets
+                            panic!("detected unhandled shared oracle mode");
+                        }
+                    }
+                })
+                .or_insert(OracleShareMode::Isolated {
+                    market: *market,
+                    source: *source,
+                });
+        }
 
         Self {
-            oraclemap: Arc::new(oraclemap),
-            oracle_by_market: oracle_by_market.into_read_only(),
+            oraclemap: Arc::default(),
+            shared_oracles: shared_oracles.into_read_only(),
+            oracle_by_market,
             subscriptions: Default::default(),
             latest_slot: Arc::new(AtomicU64::new(0)),
             commitment,
@@ -107,23 +156,17 @@ impl OracleMap {
         log::debug!(target: LOG_TARGET, "subscribe market oracles: {markets:?}");
 
         let mut pending_subscriptions =
-            Vec::<(WebsocketAccountSubscriber, Oracle)>::with_capacity(markets.len());
+            Vec::<WebsocketAccountSubscriber>::with_capacity(markets.len());
 
         for market in markets {
-            let (oracle_pubkey, oracle_source) =
+            let (oracle_pubkey, _oracle_source) =
                 self.oracle_by_market.get(market).expect("oracle exists");
-            let oracle_info = self
-                .oraclemap
-                .get(&(*oracle_pubkey, *oracle_source as u8))
-                .expect("oracle exists"); // caller did not supply in `OracleMap::new()`
 
             // markets can share oracle pubkeys, only want one sub per oracle pubkey
-            if self
-                .subscriptions
-                .contains_key(&(*oracle_pubkey, *oracle_source as u8))
+            if self.subscriptions.contains_key(oracle_pubkey)
                 || pending_subscriptions
                     .iter()
-                    .any(|(_, o)| &o.pubkey == oracle_pubkey && o.source == *oracle_source)
+                    .any(|sub| &sub.pubkey == oracle_pubkey)
             {
                 log::debug!(target: LOG_TARGET, "subscription exists: {market:?}/{oracle_pubkey:?}");
                 continue;
@@ -135,29 +178,46 @@ impl OracleMap {
                 self.commitment,
             );
 
-            pending_subscriptions.push((oracle_subscriber, oracle_info.clone()));
+            pending_subscriptions.push(oracle_subscriber);
         }
 
-        let futs_iter = pending_subscriptions.into_iter().map(|(sub_fut, info)| {
+        let futs_iter = pending_subscriptions.into_iter().map(|sub_fut| {
             let oraclemap = Arc::clone(&self.oraclemap);
+            let oracle_shared_mode = self
+                .shared_oracles
+                .get(&sub_fut.pubkey)
+                .expect("oracle exists")
+                .clone();
+
             async move {
-                let unsub = sub_fut
-                    .subscribe(Self::SUBSCRIPTION_ID, true, {
-                        // TODO:
-                        // receive a list of all markets that share the oracle to update the data simultaneously
-                        move |update| update_handler(update, info.market, info.source, &oraclemap)
-                    })
-                    .await;
-                (info, unsub)
+                let unsub =
+                    sub_fut
+                        .subscribe(Self::SUBSCRIPTION_ID, true, move |update| {
+                            match oracle_shared_mode {
+                                OracleShareMode::Isolated { market: _, source } => {
+                                    update_handler(update, source, &oraclemap)
+                                }
+                                OracleShareMode::Dual {
+                                    spot: _,
+                                    perp: _,
+                                    source,
+                                } => update_handler(update, source, &oraclemap),
+                                OracleShareMode::DualMixed { spot, perp } => {
+                                    update_handler(update, spot.1, &oraclemap);
+                                    update_handler(update, perp.1, &oraclemap);
+                                }
+                            }
+                        })
+                        .await;
+                ((sub_fut.pubkey, oracle_shared_mode), unsub)
             }
         });
 
         let mut subscription_futs = FuturesUnordered::from_iter(futs_iter);
 
-        while let Some((info, unsub)) = subscription_futs.next().await {
-            log::debug!(target: LOG_TARGET, "subscribed market oracle: {:?}", info.market);
-            self.subscriptions
-                .insert((info.pubkey, info.source as u8), unsub?);
+        while let Some(((pubkey, oracle_share_mode), unsub)) = subscription_futs.next().await {
+            log::debug!(target: LOG_TARGET, "subscribed market oracle: {oracle_share_mode:?}");
+            self.subscriptions.insert(pubkey, unsub?);
         }
 
         log::debug!(target: LOG_TARGET, "subscribed");
@@ -168,12 +228,10 @@ impl OracleMap {
     pub fn unsubscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
         for market in markets {
             if let Some((oracle_pubkey, oracle_source)) = self.oracle_by_market.get(market) {
-                if let Some((market, unsub)) = self
-                    .subscriptions
-                    .remove(&(*oracle_pubkey, *oracle_source as u8))
-                {
+                if let Some((_, unsub)) = self.subscriptions.remove(oracle_pubkey) {
                     let _ = unsub.send(());
-                    self.oraclemap.remove(&market);
+                    self.oraclemap
+                        .remove(&(*oracle_pubkey, *oracle_source as u8));
                 }
             }
         }
@@ -184,11 +242,7 @@ impl OracleMap {
 
     /// Unsubscribe from all oracle updates
     pub fn unsubscribe_all(&self) -> SdkResult<()> {
-        let all_markets: Vec<MarketId> = self
-            .subscriptions
-            .iter()
-            .filter_map(|s| self.oraclemap.get(s.key()).map(|o| o.market))
-            .collect();
+        let all_markets: Vec<MarketId> = self.oracle_by_market.keys().copied().collect();
         self.unsubscribe(&all_markets)
     }
 
@@ -258,9 +312,8 @@ impl OracleMap {
 
     /// Returns true if the oraclemap has a subscription for `market`
     pub fn is_subscribed(&self, market: &MarketId) -> bool {
-        if let Some((oracle_pubkey, oracle_source)) = self.oracle_by_market.get(market) {
-            self.subscriptions
-                .contains_key(&(*oracle_pubkey, *oracle_source as u8))
+        if let Some((oracle_pubkey, _oracle_source)) = self.oracle_by_market.get(market) {
+            self.subscriptions.contains_key(oracle_pubkey)
         } else {
             false
         }
@@ -306,7 +359,6 @@ impl OracleMap {
 /// Handler fn for new oracle account data
 fn update_handler(
     update: &AccountUpdate,
-    oracle_market: MarketId,
     oracle_source: OracleSource,
     oracle_map: &DashMap<(Pubkey, u8), Oracle, ahash::RandomState>,
 ) {
@@ -334,16 +386,15 @@ fn update_handler(
                     o.raw.clone_from(&update.data);
                 })
                 .or_insert(Oracle {
-                    market: oracle_market,
                     pubkey: oracle_pubkey,
-                    data: price_data,
                     source: oracle_source,
+                    data: price_data,
                     slot: update.slot,
                     raw: update.data.clone(),
                 });
         }
         Err(err) => {
-            log::error!("Failed to get oracle price: {err:?}")
+            log::error!("Failed to get oracle price: {err:?}, {oracle_pubkey:?}")
         }
     }
 }
@@ -432,7 +483,10 @@ async fn get_multi_account_data_with_fallback(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::utils::{get_ws_url, test_envs::devnet_endpoint};
+    use crate::utils::{
+        get_ws_url,
+        test_envs::{devnet_endpoint, mainnet_endpoint},
+    };
 
     const SOL_PERP_ORACLE: Pubkey =
         solana_sdk::pubkey!("BAtFj4kQttZRVep3UZS2aZRDixkGYgWsbqTBVDbnSsPF");
@@ -462,7 +516,7 @@ mod tests {
         let map = OracleMap::new(pubsub, &all_oracles, rpc.commitment());
 
         // - dups ignored
-        // - makerts with same oracle pubkey, make at most 1 sub
+        // - markets with same oracle pubkey, make at most 1 sub
         let markets = [
             MarketId::perp(0),
             MarketId::spot(1),
@@ -473,7 +527,43 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn oraclemap_subscribe_mixed_spot_perp_source() {
+        // bonk oracle uses a precision trick via 'oracle source'
+        // with same oracle pubkey
+        let all_oracles = vec![
+            (
+                MarketId::perp(0),
+                solana_sdk::pubkey!("3m6i4RFWEDw2Ft4tFHPJtYgmpPe21k56M3FHeWYrgGBz"),
+                OracleSource::PythLazer,
+            ),
+            (
+                MarketId::perp(4),
+                solana_sdk::pubkey!("BERaNi6cpEresbq6HC1EQGaB1H1UjvEo4NGnmYSSJof4"),
+                OracleSource::PythLazer1M,
+            ),
+            (
+                MarketId::spot(32),
+                solana_sdk::pubkey!("BERaNi6cpEresbq6HC1EQGaB1H1UjvEo4NGnmYSSJof4"),
+                OracleSource::PythLazer,
+            ),
+        ];
+        let pubsub = Arc::new(
+            PubsubClient::new(&get_ws_url(&mainnet_endpoint()).unwrap())
+                .await
+                .expect("ws connects"),
+        );
+        let map = OracleMap::new(pubsub, &all_oracles, CommitmentConfig::confirmed());
+
+        let markets = [MarketId::perp(0), MarketId::spot(32), MarketId::perp(4)];
+        map.subscribe(&markets).await.expect("subd");
+        assert_eq!(map.len(), 3);
+        assert!(map.is_subscribed(&MarketId::spot(32)));
+        assert!(map.is_subscribed(&MarketId::perp(4)));
+    }
+
+    #[tokio::test]
     async fn oraclemap_subscribes() {
+        let _ = env_logger::try_init();
         let all_oracles = vec![
             (
                 MarketId::spot(0),
@@ -488,16 +578,15 @@ mod tests {
             ),
             (MarketId::spot(1), SOL_PERP_ORACLE, OracleSource::PythPull),
         ];
-        let rpc = Arc::new(RpcClient::new(devnet_endpoint().into()));
         let pubsub = Arc::new(
             PubsubClient::new(&get_ws_url(&devnet_endpoint()).unwrap())
                 .await
                 .expect("ws connects"),
         );
-        let map = OracleMap::new(pubsub, &all_oracles, rpc.commitment());
+        let map = OracleMap::new(pubsub, &all_oracles, CommitmentConfig::confirmed());
 
         // - dups ignored
-        // - makerts with same oracle pubkey, make at most 1 sub
+        // - markets with same oracle pubkey, make at most 1 sub
         let markets = [
             MarketId::perp(0),
             MarketId::spot(1),
@@ -505,10 +594,10 @@ mod tests {
             MarketId::spot(1),
         ];
         map.subscribe(&markets).await.expect("subd");
-        assert_eq!(map.len(), 3);
+        assert_eq!(map.len(), 2);
         let markets = [MarketId::perp(0), MarketId::spot(1)];
         map.subscribe(&markets).await.expect("subd");
-        assert_eq!(map.len(), 3);
+        assert_eq!(map.len(), 2);
 
         assert!(map.is_subscribed(&MarketId::perp(0)));
         assert!(map.is_subscribed(&MarketId::perp(1)));

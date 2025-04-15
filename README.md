@@ -19,12 +19,14 @@ See the offical [docs](https://docs.rs/drift-rs/latest/drift_rs/)
 
 ## Install
 ```toml
-# crates.io
-drift-rs = "1.0.0-alpha.14"
-
-# build from source
+# point to git (recommended)
 drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.14" }
+
+# use crates.io*
+drift-rs = "1.0.0-alpha.14"
 ```
+_*_ crates.io requires [libdrift](https://github.com/drift-labs/drift-ffi-sys/?tab=readme-ov-file#from-source) is installed and linked locally
+
 
 ## Use
 ```rust
@@ -81,12 +83,11 @@ git clone https://github.com/drift-labs/drift-rs &&\
 cd drift-rs &&\
 git submodule update --init --recursive
 ```
+
 **build**
 ```bash
 # Build from source (default)
 CARGO_DRIFT_FFI_STATIC=1
-# on linux distros may need to run `ldconfig` to link
-ldconfig
 
 # Provide a prebuilt drift_ffi_sys lib 
 CARGO_DRIFT_FFI_PATH="/path/to/libdrift_ffi_sys"
