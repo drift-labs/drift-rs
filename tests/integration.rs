@@ -80,6 +80,8 @@ async fn client_sync_subscribe_mainnet() {
         MarketId::perp(0),
         MarketId::perp(1),
         MarketId::perp(2),
+        MarketId::perp(4),
+        MarketId::spot(32),
     ];
     tokio::try_join!(
         client.subscribe_markets(&markets),
@@ -90,7 +92,10 @@ async fn client_sync_subscribe_mainnet() {
     let price = client.oracle_price(MarketId::perp(1)).await.expect("ok");
     assert!(price > 0);
     dbg!(price);
-    let price = client.oracle_price(MarketId::spot(2)).await.expect("ok");
+    let price = client.oracle_price(MarketId::perp(4)).await.expect("ok");
+    assert!(price > 0);
+    dbg!(price);
+    let price = client.oracle_price(MarketId::spot(32)).await.expect("ok");
     assert!(price > 0);
     dbg!(price);
 }

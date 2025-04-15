@@ -1061,7 +1061,6 @@ impl DriftClientBackend {
                 ffi::get_oracle_price(oracle_source, &mut (oracle, account_data.clone()), slot)?;
 
             Ok(Oracle {
-                market,
                 pubkey: oracle,
                 source: oracle_source,
                 slot,
