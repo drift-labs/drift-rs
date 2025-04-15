@@ -52,6 +52,7 @@ pub mod drift_idl;
 pub mod types;
 
 // internal infra
+pub mod grpc;
 pub mod polled_account_subscriber;
 pub mod websocket_account_subscriber;
 pub mod websocket_program_account_subscriber;
@@ -65,13 +66,11 @@ pub mod swift_order_subscriber;
 
 pub mod jit_client;
 
+pub mod account_map;
 pub mod marketmap;
 pub mod oraclemap;
 pub mod slot_subscriber;
 pub mod usermap;
-
-// wrappers
-pub mod account_map;
 
 #[cfg(feature = "dlob")]
 pub mod dlob;
