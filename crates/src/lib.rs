@@ -2,15 +2,17 @@
 
 use std::{borrow::Cow, collections::BTreeSet, sync::Arc, time::Duration};
 
-use anchor_lang::{AccountDeserialize, InstructionData};
+use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
 pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
+use grpc::grpc_subscriber::AccountFilter;
 use log::debug;
 pub use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::response::Response;
 use solana_sdk::{
     account::Account,
     clock::Slot,
+    commitment_config::CommitmentLevel,
     compute_budget::ComputeBudgetInstruction,
     hash::Hash,
     instruction::{AccountMeta, Instruction},
@@ -27,6 +29,7 @@ use crate::{
         ProgramData, DEFAULT_PUBKEY, SYSVAR_INSTRUCTIONS_PUBKEY,
     },
     drift_idl::traits::ToAccountMetas,
+    grpc::grpc_subscriber::DriftGrpcClient,
     marketmap::MarketMap,
     oraclemap::{Oracle, OracleMap},
     swift_order_subscriber::{SignedOrderInfo, SwiftOrderStream},
@@ -711,6 +714,11 @@ impl DriftClient {
         self.backend.oracle_map.map()
     }
 
+    /// Subscribe to all: markets, oracles, and slot updates over gRPC
+    pub async fn grpc_subscribe(&self, endpoint: String, x_token: String) -> SdkResult<()> {
+        self.backend.grpc_subscribe(endpoint, x_token).await
+    }
+
     /// Return a reference to the internal backend
     #[cfg(feature = "unsafe_pub")]
     pub fn backend(&self) -> &'static DriftClientBackend {
@@ -823,6 +831,36 @@ impl DriftClientBackend {
     /// Start subscriptions for market oracle accounts
     async fn subscribe_oracles(&self, markets: &[MarketId]) -> SdkResult<()> {
         self.oracle_map.subscribe(markets).await
+    }
+
+    /// Subscribe to all: markets, oracles, and slot updates over gRPC
+    async fn grpc_subscribe(&self, endpoint: String, x_token: String) -> SdkResult<()> {
+        let mut grpc = DriftGrpcClient::new(endpoint, x_token);
+        grpc.on_account(
+            AccountFilter::partial().with_discriminator(SpotMarket::DISCRIMINATOR),
+            self.spot_market_map.on_account_fn(),
+        );
+        grpc.on_account(
+            AccountFilter::partial().with_discriminator(PerpMarket::DISCRIMINATOR),
+            self.perp_market_map.on_account_fn(),
+        );
+        let oracles: Vec<Pubkey> = self
+            .oracle_map
+            .oracle_by_market
+            .iter()
+            .map(|x| x.1 .0)
+            .collect();
+        grpc.on_account(
+            AccountFilter::partial().with_accounts(oracles.into_iter()),
+            self.oracle_map.on_account_fn(),
+        );
+        grpc.on_slot(|slot| {
+            log::info!("new slot: {slot}");
+        });
+
+        grpc.subscribe(CommitmentLevel::Confirmed, Default::default())
+            .await
+            .map_err(Into::into)
     }
 
     /// End subscriptions to live program data

@@ -43,8 +43,6 @@ pub const SWIFT_MAINNET_WS_URL: &str = "wss://swift.drift.trade";
 
 const LOG_TARGET: &str = "swift";
 
-/// Wrapper for a signed order message (aka swift order)
-
 /// Common fields of signed message types
 pub struct SignedMessageInfo {
     pub taker_pubkey: Pubkey,

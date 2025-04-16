@@ -101,6 +101,37 @@ async fn client_sync_subscribe_mainnet() {
 }
 
 #[tokio::test]
+async fn client_sync_subscribe_mainnet_grpc() {
+    let _ = env_logger::try_init();
+    let client = DriftClient::new(
+        Context::MainNet,
+        RpcClient::new(mainnet_endpoint()),
+        Keypair::new().into(),
+    )
+    .await
+    .expect("connects");
+    assert!(client
+        .grpc_subscribe(
+            "https://api.rpcpool.com".into(),
+            std::env::var("TEST_GRPC_X_TOKEN").expect("TEST_GRPC_X_TOKEN set"),
+        )
+        .await
+        .is_ok());
+
+    tokio::time::sleep(Duration::from_secs(4)).await;
+
+    let price = client.oracle_price(MarketId::perp(1)).await.expect("ok");
+    assert!(price > 0);
+    dbg!(price);
+    let price = client.oracle_price(MarketId::perp(4)).await.expect("ok");
+    assert!(price > 0);
+    dbg!(price);
+    let price = client.oracle_price(MarketId::spot(32)).await.expect("ok");
+    assert!(price > 0);
+    dbg!(price);
+}
+
+#[tokio::test]
 async fn place_and_cancel_orders() {
     let _ = env_logger::try_init();
     let btc_perp = MarketId::perp(1);

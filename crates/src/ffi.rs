@@ -386,8 +386,8 @@ pub mod abi_types {
         pub latest_slot: Slot,
     }
 
+    #[cfg(test)]
     impl<'a> AccountsList<'a> {
-        #[cfg(test)]
         pub fn new(
             perp_markets: &'a mut [AccountWithKey],
             spot_markets: &'a mut [AccountWithKey],

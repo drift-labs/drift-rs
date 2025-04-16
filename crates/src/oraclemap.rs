@@ -16,8 +16,9 @@ use solana_sdk::{
 use crate::{
     drift_idl::types::OracleSource,
     ffi::{get_oracle_price, OraclePriceData},
+    grpc::grpc_subscriber::AccountUpdate,
     types::MapOf,
-    websocket_account_subscriber::{AccountUpdate, WebsocketAccountSubscriber},
+    websocket_account_subscriber::{AccountUpdate as WsAccountUpdate, WebsocketAccountSubscriber},
     MarketId, SdkError, SdkResult, UnsubHandle,
 };
 
@@ -183,11 +184,10 @@ impl OracleMap {
 
         let futs_iter = pending_subscriptions.into_iter().map(|sub_fut| {
             let oraclemap = Arc::clone(&self.oraclemap);
-            let oracle_shared_mode = self
+            let oracle_shared_mode = *(self
                 .shared_oracles
                 .get(&sub_fut.pubkey)
-                .expect("oracle exists")
-                .clone();
+                .expect("oracle exists"));
 
             async move {
                 let unsub =
@@ -354,11 +354,78 @@ impl OracleMap {
     pub fn map(&self) -> Arc<MapOf<(Pubkey, u8), Oracle>> {
         Arc::clone(&self.oraclemap)
     }
+
+    /// Returns a hook for driving the map with new `Account` updates
+    pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
+        let marketmap = self.map();
+        let oracle_lookup = self.shared_oracles.clone();
+
+        move |update: &AccountUpdate| match oracle_lookup.get(&update.pubkey).unwrap() {
+            OracleShareMode::Dual {
+                spot: _,
+                perp: _,
+                source,
+            } => {
+                update_handler_grpc(update, *source, &marketmap);
+            }
+            OracleShareMode::Isolated { market: _, source } => {
+                update_handler_grpc(update, *source, &marketmap);
+            }
+            OracleShareMode::DualMixed { spot, perp } => {
+                update_handler_grpc(update, spot.1, &marketmap);
+                update_handler_grpc(update, perp.1, &marketmap);
+            }
+        }
+    }
+}
+
+/// Handler fn for new oracle account data
+#[inline]
+fn update_handler_grpc(
+    update: &AccountUpdate,
+    oracle_source: OracleSource,
+    oracle_map: &DashMap<(Pubkey, u8), Oracle, ahash::RandomState>,
+) {
+    let lamports = update.lamports;
+    let slot = update.slot;
+    match get_oracle_price(
+        oracle_source,
+        &mut (
+            update.pubkey,
+            Account {
+                owner: update.owner,
+                data: update.data.to_vec(),
+                lamports,
+                ..Default::default()
+            },
+        ),
+        slot,
+    ) {
+        Ok(price_data) => {
+            oracle_map
+                .entry((update.pubkey, oracle_source as u8))
+                .and_modify(|o| {
+                    o.data = price_data;
+                    o.slot = slot;
+                    o.raw.clone_from_slice(update.data);
+                })
+                .or_insert(Oracle {
+                    pubkey: update.pubkey,
+                    source: oracle_source,
+                    data: price_data,
+                    slot,
+                    raw: update.data.to_vec(),
+                });
+        }
+        Err(err) => {
+            log::error!("Failed to get oracle price: {err:?}, {:?}", update.pubkey)
+        }
+    }
 }
 
 /// Handler fn for new oracle account data
 fn update_handler(
-    update: &AccountUpdate,
+    update: &WsAccountUpdate,
     oracle_source: OracleSource,
     oracle_map: &DashMap<(Pubkey, u8), Oracle, ahash::RandomState>,
 ) {
