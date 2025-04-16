@@ -1,6 +1,6 @@
 //! Hybrid solana account map backed by Ws or RPC polling
 use std::{
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -12,8 +12,9 @@ use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{
-    polled_account_subscriber::PolledAccountSubscriber, types::DataAndSlot,
-    websocket_account_subscriber::WebsocketAccountSubscriber, SdkResult, UnsubHandle,
+    grpc::grpc_subscriber::AccountUpdate, polled_account_subscriber::PolledAccountSubscriber,
+    types::DataAndSlot, websocket_account_subscriber::WebsocketAccountSubscriber, SdkResult,
+    UnsubHandle,
 };
 
 const LOG_TARGET: &str = "accountmap";
@@ -31,7 +32,7 @@ pub struct AccountMap {
     pubsub: Arc<PubsubClient>,
     rpc: Arc<RpcClient>,
     commitment: CommitmentConfig,
-    inner: DashMap<Pubkey, AccountSub<Subscribed>, ahash::RandomState>,
+    inner: Arc<DashMap<Pubkey, AccountSub<Subscribed>, ahash::RandomState>>,
 }
 
 impl AccountMap {
@@ -44,7 +45,7 @@ impl AccountMap {
             pubsub,
             rpc,
             commitment,
-            inner: Default::default(),
+            inner: Arc::default(),
         }
     }
     /// Subscribe account with Ws
@@ -58,7 +59,7 @@ impl AccountMap {
         debug!(target: LOG_TARGET, "subscribing: {account:?}");
 
         let user = AccountSub::new(Arc::clone(&self.pubsub), self.commitment, *account);
-        let user = user.subscribe().await?;
+        let user = user.subscribe(Arc::clone(&self.inner)).await?;
 
         self.inner.insert(*account, user);
 
@@ -80,11 +81,35 @@ impl AccountMap {
         debug!(target: LOG_TARGET, "subscribing: {account:?} @ {interval:?}");
 
         let user = AccountSub::polled(Arc::clone(&self.rpc), *account, interval);
-        let user = user.subscribe().await?;
+        let user = user.subscribe(Arc::clone(&self.inner)).await?;
 
         self.inner.insert(*account, user);
 
         Ok(())
+    }
+    pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) + Send + Sync + 'static {
+        let accounts = Arc::clone(&self.inner);
+        move |update| {
+            dbg!("grpc update user!!", update.pubkey);
+            accounts
+                .entry(update.pubkey)
+                .and_modify(|x| {
+                    x.state.data_and_slot.slot = update.slot;
+                    x.state.data_and_slot.raw.resize(update.data.len(), 0);
+                    x.state.data_and_slot.raw.clone_from_slice(update.data);
+                })
+                .or_insert(AccountSub::<Subscribed> {
+                    pubkey: update.pubkey,
+                    subscription: SubscriptionImpl::Grpc,
+                    state: Subscribed {
+                        data_and_slot: AccountSlot {
+                            slot: update.slot,
+                            raw: update.data.to_vec(),
+                        },
+                        unsub: Mutex::default(),
+                    },
+                });
+        }
     }
     /// Unsubscribe user account
     pub fn unsubscribe_account(&self, account: &Pubkey) {
@@ -102,14 +127,15 @@ impl AccountMap {
         &self,
         account: &Pubkey,
     ) -> Option<DataAndSlot<T>> {
-        self.inner
-            .get(account)
-            .map(|u| u.get_account_data_and_slot())
+        match self.inner.get(account) {
+            Some(entry) => entry.get_account_data_and_slot(),
+            None => None,
+        }
     }
 }
 
 struct Subscribed {
-    data_and_slot: Arc<RwLock<AccountSlot>>,
+    data_and_slot: AccountSlot,
     unsub: Mutex<Option<UnsubHandle>>,
 }
 struct Unsubscribed;
@@ -151,35 +177,43 @@ impl AccountSub<Unsubscribed> {
     }
 
     /// Start the subscriber task
-    pub async fn subscribe(self) -> SdkResult<AccountSub<Subscribed>> {
-        let data_and_slot = Arc::new(RwLock::new(AccountSlot::default()));
-
+    pub async fn subscribe(
+        self,
+        accounts: Arc<DashMap<Pubkey, AccountSub<Subscribed>, ahash::RandomState>>,
+    ) -> SdkResult<AccountSub<Subscribed>> {
         let unsub = match self.subscription {
             SubscriptionImpl::Ws(ref ws) => {
-                let data_and_slot = Arc::clone(&data_and_slot);
-                ws.subscribe(Self::SUBSCRIPTION_ID, true, move |update| {
-                    let mut guard = data_and_slot.write().expect("acquired");
-                    guard.raw.clone_from(&update.data);
-                    guard.slot = update.slot;
-                })
-                .await?
+                let unsub = ws
+                    .subscribe(Self::SUBSCRIPTION_ID, true, move |update| {
+                        accounts.entry(update.pubkey).and_modify(|x| {
+                            x.state.data_and_slot.slot = update.slot;
+                            x.state.data_and_slot.raw.clone_from(&update.data);
+                        });
+                    })
+                    .await?;
+                Some(unsub)
             }
             SubscriptionImpl::Polled(ref poll) => {
-                let data_and_slot = Arc::clone(&data_and_slot);
-                poll.subscribe(move |update| {
-                    let mut guard = data_and_slot.write().expect("acquired");
-                    guard.raw.clone_from(&update.data);
-                    guard.slot = update.slot;
-                })
+                let unsub = poll.subscribe(move |update| {
+                    accounts.entry(update.pubkey).and_modify(|x| {
+                        x.state.data_and_slot.slot = update.slot;
+                        x.state.data_and_slot.raw.clone_from(&update.data);
+                    });
+                });
+                Some(unsub)
             }
+            SubscriptionImpl::Grpc => None,
         };
 
-        Ok(AccountSub {
+        Ok(AccountSub::<Subscribed> {
             pubkey: self.pubkey,
             subscription: self.subscription,
             state: Subscribed {
-                data_and_slot,
-                unsub: Mutex::new(Some(unsub)),
+                data_and_slot: AccountSlot {
+                    raw: vec![],
+                    slot: 0,
+                },
+                unsub: Mutex::new(unsub),
             },
         })
     }
@@ -189,12 +223,16 @@ impl AccountSub<Subscribed> {
     /// Return the latest value of the account data along with last updated slot
     /// # Panics
     /// Panics if account data cannot be deserialized as `T`
-    pub fn get_account_data_and_slot<T: AccountDeserialize>(&self) -> DataAndSlot<T> {
-        let guard = self.state.data_and_slot.read().expect("acquired");
-        DataAndSlot {
-            slot: guard.slot,
-            data: T::try_deserialize_unchecked(&mut guard.raw.as_slice()).expect("desrializes"),
+    pub fn get_account_data_and_slot<T: AccountDeserialize>(&self) -> Option<DataAndSlot<T>> {
+        if self.state.data_and_slot.raw.is_empty() {
+            return None;
         }
+
+        Some(DataAndSlot {
+            slot: self.state.data_and_slot.slot,
+            data: T::try_deserialize_unchecked(&mut self.state.data_and_slot.raw.as_slice())
+                .expect("deserializes"),
+        })
     }
 
     /// Stop the user subscriber task, if it exists
@@ -217,6 +255,7 @@ impl AccountSub<Subscribed> {
 enum SubscriptionImpl {
     Ws(WebsocketAccountSubscriber),
     Polled(PolledAccountSubscriber),
+    Grpc,
 }
 
 #[cfg(test)]

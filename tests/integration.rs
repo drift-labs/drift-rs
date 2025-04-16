@@ -114,11 +114,16 @@ async fn client_sync_subscribe_mainnet_grpc() {
         .grpc_subscribe(
             "https://api.rpcpool.com".into(),
             std::env::var("TEST_GRPC_X_TOKEN").expect("TEST_GRPC_X_TOKEN set"),
+            true,
+            true,
+            Some(move |slot| {
+                println!("slot: {slot}");
+            })
         )
         .await
         .is_ok());
 
-    tokio::time::sleep(Duration::from_secs(4)).await;
+    tokio::time::sleep(Duration::from_secs(8)).await;
 
     let price = client.oracle_price(MarketId::perp(1)).await.expect("ok");
     assert!(price > 0);

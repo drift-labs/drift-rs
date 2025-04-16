@@ -108,7 +108,6 @@ where
     pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
         let marketmap = self.map();
         move |update: &AccountUpdate| {
-            dbg!("grpc update market!!");
             let market = T::deserialize(&mut &update.data[8..]).expect("deser market");
             let idx = market.market_index();
             marketmap.insert(

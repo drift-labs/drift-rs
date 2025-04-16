@@ -407,6 +407,7 @@ fn update_handler_grpc(
                 .and_modify(|o| {
                     o.data = price_data;
                     o.slot = slot;
+                    o.raw.resize(update.data.len(), 0);
                     o.raw.clone_from_slice(update.data);
                 })
                 .or_insert(Oracle {

@@ -5,7 +5,6 @@ use std::{borrow::Cow, collections::BTreeSet, sync::Arc, time::Duration};
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
 pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
-use grpc::grpc_subscriber::AccountFilter;
 use log::debug;
 pub use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::response::Response;
@@ -29,7 +28,7 @@ use crate::{
         ProgramData, DEFAULT_PUBKEY, SYSVAR_INSTRUCTIONS_PUBKEY,
     },
     drift_idl::traits::ToAccountMetas,
-    grpc::grpc_subscriber::DriftGrpcClient,
+    grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient},
     marketmap::MarketMap,
     oraclemap::{Oracle, OracleMap},
     swift_order_subscriber::{SignedOrderInfo, SwiftOrderStream},
@@ -715,8 +714,28 @@ impl DriftClient {
     }
 
     /// Subscribe to all: markets, oracles, and slot updates over gRPC
-    pub async fn grpc_subscribe(&self, endpoint: String, x_token: String) -> SdkResult<()> {
-        self.backend.grpc_subscribe(endpoint, x_token).await
+    pub async fn grpc_subscribe(
+        &self,
+        endpoint: String,
+        x_token: String,
+        all_users: bool,
+        all_user_stats: bool,
+        on_slot: Option<impl Fn(Slot) + Send + Sync + 'static>,
+    ) -> SdkResult<()> {
+        let first_3_sub_accounts = (0_u16..=3)
+            .into_iter()
+            .map(|i| self.wallet.sub_account(i))
+            .collect();
+        self.backend
+            .grpc_subscribe(
+                endpoint,
+                x_token,
+                Some(first_3_sub_accounts),
+                all_users,
+                all_user_stats,
+                on_slot,
+            )
+            .await
     }
 
     /// Return a reference to the internal backend
@@ -834,7 +853,15 @@ impl DriftClientBackend {
     }
 
     /// Subscribe to all: markets, oracles, and slot updates over gRPC
-    async fn grpc_subscribe(&self, endpoint: String, x_token: String) -> SdkResult<()> {
+    async fn grpc_subscribe(
+        &self,
+        endpoint: String,
+        x_token: String,
+        users: Option<Vec<Pubkey>>,
+        all_users: bool,
+        all_user_stats: bool,
+        on_slot: Option<impl Fn(Slot) + Send + Sync + 'static>,
+    ) -> SdkResult<()> {
         let mut grpc = DriftGrpcClient::new(endpoint, x_token);
         grpc.on_account(
             AccountFilter::partial().with_discriminator(SpotMarket::DISCRIMINATOR),
@@ -854,8 +881,33 @@ impl DriftClientBackend {
             AccountFilter::partial().with_accounts(oracles.into_iter()),
             self.oracle_map.on_account_fn(),
         );
-        grpc.on_slot(|slot| {
-            log::info!("new slot: {slot}");
+
+        // subscribe to custom `User` accounts
+        users.map(|u| {
+            grpc.on_account(
+                AccountFilter::full()
+                    .with_discriminator(User::DISCRIMINATOR)
+                    .with_accounts(u.into_iter()),
+                self.account_map.on_account_fn(),
+            );
+        });
+
+        if all_users {
+            grpc.on_account(
+                AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
+                self.account_map.on_account_fn(),
+            );
+        }
+
+        if all_user_stats {
+            grpc.on_account(
+                AccountFilter::partial().with_discriminator(UserStats::DISCRIMINATOR),
+                self.account_map.on_account_fn(),
+            );
+        }
+
+        on_slot.map(|f| {
+            grpc.on_slot(f);
         });
 
         grpc.subscribe(CommitmentLevel::Confirmed, Default::default())
@@ -975,6 +1027,9 @@ impl DriftClientBackend {
             Ok(value)
         } else {
             let account_data = self.rpc_client.get_account_data(account).await?;
+            if account_data.is_empty() {
+                return Err(SdkError::NoAccountData(*account));
+            }
             T::try_deserialize(&mut account_data.as_slice())
                 .map_err(|err| SdkError::Anchor(Box::new(err)))
         }
