@@ -59,9 +59,12 @@ pub struct GrpcSubscribeOpts {
     /// list of user (sub)accounts to subscribe
     pub user_accounts: Vec<Pubkey>,
     /// callback for slot updates
-    pub on_slot: Option<Box<dyn Fn(Slot) + 'static>>,
+    pub on_slot: Option<Box<dyn Fn(Slot) + Send + Sync + 'static>>,
     /// custom callback for account updates
-    pub on_account: Option<(AccountFilter, Box<dyn Fn(&AccountUpdate) + 'static>)>,
+    pub on_account: Option<(
+        AccountFilter,
+        Box<dyn Fn(&AccountUpdate) + Send + Sync + 'static>,
+    )>,
     /// Network level connection config
     pub connection_opts: GrpcConnectionOpts,
 }
@@ -93,7 +96,7 @@ impl GrpcSubscribeOpts {
     /// * `on_slot` - the callback for new slot updates
     ///
     /// ! `on_slot` must not block the gRPC task
-    pub fn on_slot(mut self, on_slot: impl Fn(Slot) + 'static) -> Self {
+    pub fn on_slot(mut self, on_slot: impl Fn(Slot) + Send + Sync + 'static) -> Self {
         self.on_slot = Some(Box::new(on_slot));
         self
     }
@@ -106,7 +109,7 @@ impl GrpcSubscribeOpts {
     pub fn on_account(
         mut self,
         filter: AccountFilter,
-        on_account: impl Fn(&AccountUpdate) + 'static,
+        on_account: impl Fn(&AccountUpdate) + Send + Sync + 'static,
     ) -> Self {
         self.on_account = Some((filter, Box::new(on_account)));
         self

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
-use crate::constants::PROGRAM_ID as DRIFT_PROGRAM_ID;
+use crate::{constants::PROGRAM_ID as DRIFT_PROGRAM_ID, types::UnsubHandle};
 
 use ahash::HashSet;
 use futures_util::{sink::SinkExt, stream::StreamExt};
@@ -28,7 +28,7 @@ use yellowstone_grpc_proto::{
 
 type SlotsFilterMap = HashMap<String, SubscribeRequestFilterSlots>;
 type AccountFilterMap = HashMap<String, SubscribeRequestFilterAccounts>;
-type HookFn = dyn Fn(&AccountUpdate) + 'static;
+type HookFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
 type Hooks = Vec<(AccountFilter, Box<HookFn>)>;
 
 /// Account update from gRPC
@@ -146,17 +146,17 @@ pub struct GrpcConnectionOpts {
     connect_timeout_ms: Option<u64>,
     /// Sets the tower service default internal buffer size, default is 1024
     buffer_size: Option<usize>,
-    /// Sets whether to use an adaptive flow control. Uses hyper’s default otherwise.
+    /// Sets whether to use an adaptive flow control. Uses hyper's default otherwise.
     http2_adaptive_window: Option<bool>,
-    /// Set http2 KEEP_ALIVE_TIMEOUT. Uses hyper’s default otherwise.
+    /// Set http2 KEEP_ALIVE_TIMEOUT. Uses hyper's default otherwise.
     http2_keep_alive_interval_ms: Option<u64>,
     /// Sets the max connection-level flow control for HTTP2, default is 65,535
     initial_connection_window_size: Option<u32>,
     ///Sets the SETTINGS_INITIAL_WINDOW_SIZE option for HTTP2 stream-level flow control, default is 65,535
     initial_stream_window_size: Option<u32>,
-    ///Set http2 KEEP_ALIVE_TIMEOUT. Uses hyper’s default otherwise.
+    ///Set http2 KEEP_ALIVE_TIMEOUT. Uses hyper's default otherwise.
     keep_alive_timeout_ms: Option<u64>,
-    /// Set http2 KEEP_ALIVE_WHILE_IDLE. Uses hyper’s default otherwise.
+    /// Set http2 KEEP_ALIVE_WHILE_IDLE. Uses hyper's default otherwise.
     keep_alive_while_idle: Option<bool>,
     /// Set whether TCP keepalive messages are enabled on accepted connections.
     tcp_keepalive_ms: Option<u64>,
@@ -219,7 +219,7 @@ pub struct DriftGrpcClient {
     x_token: String,
     grpc_opts: Option<GrpcConnectionOpts>,
     on_account_hooks: Hooks,
-    on_slot: Box<dyn Fn(Slot)>,
+    on_slot: Box<dyn Fn(Slot) + Send + Sync + 'static>,
 }
 
 impl DriftGrpcClient {
@@ -245,7 +245,7 @@ impl DriftGrpcClient {
     /// Add a callback on slot updates
     ///
     /// `on_slot` must prioritize fast handling or risk blocking the gRPC thread
-    pub fn on_slot<F: Fn(Slot) + 'static>(&mut self, on_slot: F) {
+    pub fn on_slot<F: Fn(Slot) + Send + Sync + 'static>(&mut self, on_slot: F) {
         self.on_slot = Box::new(on_slot);
     }
 
@@ -257,7 +257,7 @@ impl DriftGrpcClient {
     /// * `on_account` - fn to receive callback on filter match
     ///
     /// DEV: `on_account` must prioritize fast handling or risk blocking the gRPC thread
-    pub fn on_account<T: Fn(&AccountUpdate) + 'static>(
+    pub fn on_account<T: Fn(&AccountUpdate) + Send + Sync + 'static>(
         &mut self,
         filter: AccountFilter,
         on_account: T,
@@ -266,11 +266,13 @@ impl DriftGrpcClient {
     }
 
     /// Start subscription for geyser updates
+    ///
+    /// Returns an unsub handle on success
     pub async fn subscribe(
         self,
         commitment: CommitmentLevel,
         subscribe_opts: SubscribeOpts,
-    ) -> Result<(), GrpcError> {
+    ) -> Result<UnsubHandle, GrpcError> {
         let mut grpc_client = grpc_connect(
             self.endpoint.as_str(),
             self.x_token.as_str(),
@@ -282,22 +284,62 @@ impl DriftGrpcClient {
             GrpcError::Geyser(err)
         })?;
 
-        grpc_client.ping(1).await.map_err(GrpcError::Client)?;
-        info!("gRPC connected 🔌");
+        let resp = grpc_client.get_version().await.map_err(GrpcError::Client)?;
+        info!("gRPC connected 🔌: {}", resp.version);
         let request = subscribe_opts.to_subscribe_request(commitment);
         info!(target: "grpc", "gRPC subscribing: {request:?}");
 
-        // gRPC receives updates very frequently, don't want tokio scheduling processing elsewhere
-        let localset = tokio::task::LocalSet::new();
-        localset.spawn_local(Self::geyser_subscribe(
-            grpc_client,
-            request,
-            self.on_account_hooks,
-            self.on_slot,
-        ));
+        let (subscribe_tx, subscribe_rx) = tokio::sync::oneshot::channel::<()>();
+        let (unsub_tx, unsub_rx) = tokio::sync::oneshot::channel::<()>();
+
+        // gRPC receives updates very frequently, don't want tokio scheduler moving it
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build();
+            if let Err(ref err) = rt {
+                log::error!("failed grpc thread init: {err:?}");
+            }
+            let rt = rt.unwrap();
+
+            rt.spawn(async move {
+                info!("HELLO FROM CT RT");
+                info!("HELLO FROM CT RT");
+                info!("HELLO FROM CT RT");
+                info!("HELLO FROM CT RT");
+                info!("HELLO FROM CT RT");
+                info!("HELLO FROM CT RT");
+            });
+
+            let _task = rt.spawn(Self::geyser_subscribe(
+                grpc_client,
+                request,
+                self.on_account_hooks,
+                self.on_slot,
+            ));
+
+            rt.spawn(async move {
+                info!("HELLO FROM CT RT");
+                info!("HELLO FROM CT RT");
+                info!("HELLO FROM CT RT");
+                info!("HELLO FROM CT RT");
+                info!("HELLO FROM CT RT");
+                info!("HELLO FROM CT RT");
+            });
+
+            subscribe_tx.send(()).expect("sent");
+            // nb: will cause grpc task to drop but doesn't call any 'unsub' endpoint
+            let _ = unsub_rx.blocking_recv();
+            info!(target: "grpc", "gRPC connection unsubscribed");
+        });
+
+        if let Err(err) = subscribe_rx.await {
+            error!("WTF: {err:?}");
+        }
+
         info!(target: "grpc", "gRPC subscribed ⚡️");
 
-        Ok(())
+        Ok(unsub_tx)
     }
 
     /// Run the gRPC subscription task
@@ -332,6 +374,7 @@ impl DriftGrpcClient {
                 };
 
             while let Some(message) = stream.next().await {
+                dbg!("update");
                 match message {
                     Ok(msg) => {
                         match msg.update_oneof {
@@ -348,7 +391,7 @@ impl DriftGrpcClient {
                                 );
                                 log::trace!(target: "grpc", "account update: {pubkey}");
                                 let update = AccountUpdate {
-                                    owner: DRIFT_PROGRAM_ID, // assuming not subscribed to any other accounts..
+                                    owner: DRIFT_PROGRAM_ID, // assuming not subscribed to any other program accounts..
                                     pubkey,
                                     slot: latest_slot,
                                     lamports: account.lamports,
@@ -531,4 +574,97 @@ async fn grpc_connect(
     }
 
     builder.connect().await
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use solana_sdk::pubkey::Pubkey;
+
+    fn create_test_account(data: Vec<u8>) -> SubscribeUpdateAccountInfo {
+        SubscribeUpdateAccountInfo {
+            data,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn grpc_partial_match_discriminator() {
+        let discriminator = &[1, 2, 3, 4, 5, 6, 7, 8];
+        let filter = AccountFilter::partial().with_discriminator(discriminator);
+
+        // Test matching discriminator
+        let account = create_test_account(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        assert!(filter.matches(&Pubkey::new_unique(), &account));
+
+        // Test non-matching discriminator
+        let account = create_test_account(vec![8, 7, 6, 5, 4, 3, 2, 1, 9, 10]);
+        assert!(!filter.matches(&Pubkey::new_unique(), &account));
+    }
+
+    #[test]
+    fn grpc_partial_match_accounts() {
+        let pubkey = Pubkey::new_unique();
+        let filter = AccountFilter::partial().with_accounts([pubkey].into_iter());
+
+        // Test matching pubkey
+        let account = create_test_account(vec![1, 2, 3, 4]);
+        assert!(filter.matches(&pubkey, &account));
+
+        // Test non-matching pubkey
+        let other_pubkey = Pubkey::new_unique();
+        assert!(!filter.matches(&other_pubkey, &account));
+    }
+
+    #[test]
+    fn grpc_partial_match_memcmp() {
+        let memcmp = Memcmp::new_raw_bytes(0, vec![1, 2, 3]);
+        let filter = AccountFilter::partial().with_memcmp(memcmp);
+
+        // Test matching memcmp
+        let account = create_test_account(vec![1, 2, 3, 4, 5]);
+        assert!(filter.matches(&Pubkey::new_unique(), &account));
+
+        // Test non-matching memcmp
+        let account = create_test_account(vec![3, 2, 1, 4, 5]);
+        assert!(!filter.matches(&Pubkey::new_unique(), &account));
+    }
+
+    #[test]
+    fn grpc_full_match_all_filters() {
+        let pubkey = Pubkey::new_unique();
+        let discriminator = &[1, 2, 3, 4, 5, 6, 7, 8];
+        let memcmp = Memcmp::new_raw_bytes(8, vec![9, 10]);
+
+        let filter = AccountFilter::full()
+            .with_discriminator(discriminator)
+            .with_accounts([pubkey].into_iter())
+            .with_memcmp(memcmp);
+
+        // Test all match
+        let account = create_test_account(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        assert!(filter.matches(&pubkey, &account));
+
+        // Test discriminator mismatch
+        let account = create_test_account(vec![8, 7, 6, 5, 4, 3, 2, 1, 9, 10]);
+        assert!(!filter.matches(&pubkey, &account));
+
+        // Test pubkey mismatch
+        let other_pubkey = Pubkey::new_unique();
+        let account = create_test_account(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        assert!(!filter.matches(&other_pubkey, &account));
+
+        // Test memcmp mismatch
+        let account = create_test_account(vec![1, 2, 3, 4, 5, 6, 7, 8, 10, 9]);
+        assert!(!filter.matches(&pubkey, &account));
+    }
+
+    #[test]
+    fn grpc_firehose_matches_everything() {
+        let filter = AccountFilter::firehose();
+        let pubkey = Pubkey::new_unique();
+        let account = create_test_account(vec![1, 2, 3, 4]);
+
+        assert!(filter.matches(&pubkey, &account));
+    }
 }

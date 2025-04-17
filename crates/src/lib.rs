@@ -3,7 +3,7 @@
 use std::{
     borrow::Cow,
     collections::BTreeSet,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, RwLock},
     time::Duration,
 };
 
@@ -743,6 +743,11 @@ impl DriftClient {
         self.backend.grpc_subscribe(endpoint, x_token, opts).await
     }
 
+    /// Unsubscribe the gRPC connection
+    pub fn grpc_unsubscribe(&self) {
+        self.backend.grpc_unsubscribe();
+    }
+
     /// Return a reference to the internal backend
     #[cfg(feature = "unsafe_pub")]
     pub fn backend(&self) -> &'static DriftClientBackend {
@@ -761,7 +766,7 @@ pub struct DriftClientBackend {
     perp_market_map: MarketMap<PerpMarket>,
     spot_market_map: MarketMap<SpotMarket>,
     oracle_map: OracleMap,
-    grpc_subscribed: AtomicBool,
+    grpc_unsub: RwLock<Option<UnsubHandle>>,
 }
 impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
@@ -831,14 +836,14 @@ impl DriftClientBackend {
             perp_market_map,
             spot_market_map,
             oracle_map,
-            grpc_subscribed: AtomicBool::new(false),
+            grpc_unsub: RwLock::default(),
         })
     }
 
     /// Returns true if `DriftClientBackend` is subscribed via gRPC
     pub fn is_grpc_subscribed(&self) -> bool {
-        self.grpc_subscribed
-            .load(std::sync::atomic::Ordering::Relaxed)
+        let unsub = self.grpc_unsub.read().unwrap();
+        unsub.is_some()
     }
 
     /// Start subscription for latest block hashes
@@ -936,9 +941,22 @@ impl DriftClientBackend {
         });
 
         // start subscription
-        grpc.subscribe(CommitmentLevel::Confirmed, SubscribeOpts::default())
+        let grpc_unsub = grpc
+            .subscribe(CommitmentLevel::Confirmed, SubscribeOpts::default())
             .await
-            .map_err(Into::into)
+            .map_err(|err| SdkError::Grpc(err))?;
+
+        let mut unsub = self.grpc_unsub.write().unwrap();
+        let _ = unsub.insert(grpc_unsub);
+
+        Ok(())
+    }
+
+    /// Unsubscribe the gRPC connection
+    fn grpc_unsubscribe(&self) {
+        let mut guard = self.grpc_unsub.write().unwrap();
+        let unsub = guard.take();
+        unsub.map(|u| u.send(()));
     }
 
     /// End subscriptions to live program data
@@ -2115,6 +2133,7 @@ mod tests {
                 Arc::clone(&rpc_client),
                 CommitmentConfig::processed(),
             ),
+            grpc_unsub: Default::default(),
         };
 
         DriftClient {

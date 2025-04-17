@@ -1,17 +1,17 @@
-use std::{
-    sync::{atomic::AtomicU64, Arc},
-    time::Duration,
-};
+use std::time::Duration;
 
+use anchor_lang::Discriminator;
 use drift_rs::{
+    constants::DEFAULT_PUBKEY,
     event_subscriber::RpcClient,
+    grpc::grpc_subscriber::AccountFilter,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
-    types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam},
+    types::{accounts::User, Context, GrpcSubscribeOpts, MarketId, NewOrder, PostOnlyParam},
     utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
-    DriftClient, TransactionBuilder, Wallet,
+    DriftClient, Pubkey, TransactionBuilder, Wallet,
 };
 use futures_util::StreamExt;
-use solana_sdk::signature::Keypair;
+use solana_sdk::{clock::Slot, signature::Keypair};
 
 #[tokio::test]
 async fn client_sync_subscribe_all_devnet() {
@@ -103,7 +103,8 @@ async fn client_sync_subscribe_mainnet() {
     dbg!(price);
 }
 
-#[tokio::test]
+// run with multithreaded RT otherwise the gRPC worker thread will block the test
+#[tokio::test(flavor = "multi_thread")]
 async fn client_sync_subscribe_mainnet_grpc() {
     let _ = env_logger::try_init();
     let client = DriftClient::new(
@@ -114,23 +115,33 @@ async fn client_sync_subscribe_mainnet_grpc() {
     .await
     .expect("connects");
 
-    let latest_slot = Arc::new(AtomicU64::default());
-    let latest_slot_ref = Arc::clone(&latest_slot);
+    let (slot_update_tx, mut slot_update_rx) = tokio::sync::mpsc::channel::<Slot>(1);
+    let (user_update_tx, mut user_update_rx) = tokio::sync::mpsc::channel::<Pubkey>(1);
+
     assert!(client
         .grpc_subscribe(
             "https://api.rpcpool.com".into(),
             std::env::var("TEST_GRPC_X_TOKEN").expect("TEST_GRPC_X_TOKEN set"),
-            true,
-            true,
-            Some(move |new_slot| {
-                println!("slot: {new_slot}");
-                latest_slot_ref.store(new_slot, std::sync::atomic::Ordering::Relaxed);
-            })
+            GrpcSubscribeOpts::default()
+                .usermap_on()
+                .on_slot(move |new_slot| {
+                    println!("slot: {new_slot}");
+                    slot_update_tx.try_send(new_slot).expect("update sent");
+                })
+                .on_account(
+                    AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
+                    move |account| {
+                        println!("account: {}", account.pubkey);
+                        user_update_tx
+                            .try_send(account.pubkey)
+                            .expect("update sent");
+                    }
+                )
         )
         .await
         .is_ok());
 
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(Duration::from_secs(10)).await;
 
     // oracles available
     let price = client.oracle_price(MarketId::perp(4)).await.expect("ok");
@@ -140,12 +151,16 @@ async fn client_sync_subscribe_mainnet_grpc() {
     assert!(price > 0);
     dbg!(price);
 
-    // markets available
-    assert!(client.try_get_perp_market_account(1).is_ok());
-    assert!(client.try_get_spot_market_account(1).is_ok());
+    // slot update received
+    assert!(slot_update_rx.try_recv().is_ok_and(|s| s > 0));
 
-    // slot updated
-    assert!(latest_slot.load(std::sync::atomic::Ordering::Relaxed) > 0);
+    // user update received
+    assert!(user_update_rx.try_recv().is_ok_and(|u| u != DEFAULT_PUBKEY));
+
+    // markets available
+    assert!(client.try_get_perp_market_account(0).is_ok());
+    assert!(client.try_get_spot_market_account(1).is_ok());
+    
 }
 
 #[tokio::test]
