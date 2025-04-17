@@ -3,7 +3,10 @@ use std::{collections::HashMap, time::Duration};
 use crate::{constants::PROGRAM_ID as DRIFT_PROGRAM_ID, types::UnsubHandle};
 
 use ahash::HashSet;
-use futures_util::{sink::SinkExt, stream::StreamExt};
+use futures_util::{
+    sink::SinkExt,
+    stream::{FuturesUnordered, StreamExt},
+};
 use log::{error, info, warn};
 use solana_rpc_client_api::filter::Memcmp;
 use solana_sdk::{
@@ -23,7 +26,7 @@ use yellowstone_grpc_proto::{
         SubscribeRequestFilterAccountsFilter, SubscribeRequestFilterAccountsFilterMemcmp,
         SubscribeRequestFilterSlots, SubscribeRequestPing,
     },
-    tonic::transport::Certificate,
+    tonic::{transport::Certificate, Status},
 };
 
 type SlotsFilterMap = HashMap<String, SubscribeRequestFilterSlots>;
@@ -211,6 +214,8 @@ pub enum GrpcError {
     Geyser(GeyserGrpcBuilderError),
     #[error("grpc request err: {0}")]
     Client(GeyserGrpcClientError),
+    #[error("grpc stream err: {0}")]
+    Stream(Status),
 }
 
 /// specialized Drift gRPC client
@@ -289,56 +294,46 @@ impl DriftGrpcClient {
         let request = subscribe_opts.to_subscribe_request(commitment);
         info!(target: "grpc", "gRPC subscribing: {request:?}");
 
-        let (subscribe_tx, subscribe_rx) = tokio::sync::oneshot::channel::<()>();
-        let (unsub_tx, unsub_rx) = tokio::sync::oneshot::channel::<()>();
+        let (unsub_tx, mut unsub_rx) = tokio::sync::oneshot::channel::<()>();
 
         // gRPC receives updates very frequently, don't want tokio scheduler moving it
-        std::thread::spawn(move || {
+        std::thread::spawn(|| {
             let rt = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
-                .build();
-            if let Err(ref err) = rt {
-                log::error!("failed grpc thread init: {err:?}");
-            }
-            let rt = rt.unwrap();
-
-            rt.spawn(async move {
-                info!("HELLO FROM CT RT");
-                info!("HELLO FROM CT RT");
-                info!("HELLO FROM CT RT");
-                info!("HELLO FROM CT RT");
-                info!("HELLO FROM CT RT");
-                info!("HELLO FROM CT RT");
-            });
-
-            let _task = rt.spawn(Self::geyser_subscribe(
+                .build()
+                .unwrap();
+            let ls = tokio::task::LocalSet::new();
+            let geyser_task = ls.spawn_local(Self::geyser_subscribe(
                 grpc_client,
                 request,
                 self.on_account_hooks,
                 self.on_slot,
             ));
+            let mut waiter = FuturesUnordered::new();
+            waiter.push(geyser_task);
 
-            rt.spawn(async move {
-                info!("HELLO FROM CT RT");
-                info!("HELLO FROM CT RT");
-                info!("HELLO FROM CT RT");
-                info!("HELLO FROM CT RT");
-                info!("HELLO FROM CT RT");
-                info!("HELLO FROM CT RT");
+            // nb: will cause grpc task to drop when triggered but-
+            // it doesn't call any 'unsub' endpoint
+            let _ = ls.block_on(&rt, async move {
+                loop {
+                    tokio::select! {
+                        biased;
+                        _ = &mut unsub_rx => break,
+                        res = waiter.next() => {
+                            if let Ok(Some(err)) = res.unwrap() {
+                                log::error!(target: "grpc", "subscription task failed: {err:?}");
+                            } else {
+                                log::error!(target: "grpc", "subscription task ended unexpectedly");
+                            }
+                            break;
+                        }
+                    }
+                }
             });
-
-            subscribe_tx.send(()).expect("sent");
-            // nb: will cause grpc task to drop but doesn't call any 'unsub' endpoint
-            let _ = unsub_rx.blocking_recv();
             info!(target: "grpc", "gRPC connection unsubscribed");
         });
 
-        if let Err(err) = subscribe_rx.await {
-            error!("WTF: {err:?}");
-        }
-
         info!(target: "grpc", "gRPC subscribed ⚡️");
-
         Ok(unsub_tx)
     }
 
@@ -350,10 +345,11 @@ impl DriftGrpcClient {
         request: SubscribeRequest,
         on_account: Hooks,
         on_slot: impl Fn(Slot),
-    ) {
+    ) -> Option<GrpcError> {
         let max_retries = 3;
         let mut retry_count = 0;
         let mut latest_slot = 0;
+        let mut last_error: Option<GrpcError> = None;
         loop {
             if retry_count >= max_retries {
                 log::warn!(target: "grpc", "max retry attempts reached. disconnecting...");
@@ -369,12 +365,12 @@ impl DriftGrpcClient {
                         log::warn!(target: "grpc", "failed subscription: {err:?}");
                         retry_count += 1;
                         tokio::time::sleep(Duration::from_secs(2_u64.pow(retry_count + 1))).await;
+                        let _ = last_error.insert(GrpcError::Client(err));
                         continue;
                     }
                 };
 
             while let Some(message) = stream.next().await {
-                dbg!("update");
                 match message {
                     Ok(msg) => {
                         match msg.update_oneof {
@@ -443,13 +439,14 @@ impl DriftGrpcClient {
                                 warn!(target: "grpc", "unhandled update: {other_update:?}");
                             }
                             None => {
-                                error!(target: "grpc", "update not found in the message");
+                                warn!(target: "grpc", "received empty update");
                                 break;
                             }
                         }
                     }
-                    Err(error) => {
-                        error!(target: "grpc", "stream error: {error:?}");
+                    Err(status) => {
+                        error!(target: "grpc", "stream error: {status:?}");
+                        let _ = last_error.insert(GrpcError::Stream(status));
                         break;
                     }
                 }
@@ -457,6 +454,7 @@ impl DriftGrpcClient {
         }
 
         error!(target: "grpc", "gRPC stream closed");
+        last_error
     }
 }
 

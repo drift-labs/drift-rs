@@ -972,7 +972,7 @@ impl DriftClientBackend {
         &self,
         market_index: u16,
     ) -> Option<DataAndSlot<PerpMarket>> {
-        if self.perp_market_map.is_subscribed(market_index) {
+        if self.is_grpc_subscribed() || self.perp_market_map.is_subscribed(market_index) {
             self.perp_market_map.get(&market_index)
         } else {
             None
@@ -983,7 +983,7 @@ impl DriftClientBackend {
         &self,
         market_index: u16,
     ) -> Option<DataAndSlot<SpotMarket>> {
-        if self.spot_market_map.is_subscribed(market_index) {
+        if self.is_grpc_subscribed() || self.spot_market_map.is_subscribed(market_index) {
             self.spot_market_map.get(&market_index)
         } else {
             None

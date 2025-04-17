@@ -103,8 +103,7 @@ async fn client_sync_subscribe_mainnet() {
     dbg!(price);
 }
 
-// run with multithreaded RT otherwise the gRPC worker thread will block the test
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
 async fn client_sync_subscribe_mainnet_grpc() {
     let _ = env_logger::try_init();
     let client = DriftClient::new(
@@ -126,22 +125,21 @@ async fn client_sync_subscribe_mainnet_grpc() {
                 .usermap_on()
                 .on_slot(move |new_slot| {
                     println!("slot: {new_slot}");
-                    slot_update_tx.try_send(new_slot).expect("update sent");
+                    let _ = slot_update_tx.try_send(new_slot);
                 })
                 .on_account(
                     AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
                     move |account| {
                         println!("account: {}", account.pubkey);
-                        user_update_tx
-                            .try_send(account.pubkey)
-                            .expect("update sent");
+                        let _ = user_update_tx.try_send(account.pubkey);
                     }
                 )
         )
         .await
         .is_ok());
 
-    tokio::time::sleep(Duration::from_secs(10)).await;
+    // wait for updates
+    tokio::time::sleep(Duration::from_secs(6)).await;
 
     // oracles available
     let price = client.oracle_price(MarketId::perp(4)).await.expect("ok");
@@ -151,16 +149,16 @@ async fn client_sync_subscribe_mainnet_grpc() {
     assert!(price > 0);
     dbg!(price);
 
+    // markets available
+    assert!(client.try_get_perp_market_account(0).is_ok());
+    assert!(client.try_get_spot_market_account(1).is_ok());
+
     // slot update received
     assert!(slot_update_rx.try_recv().is_ok_and(|s| s > 0));
 
     // user update received
     assert!(user_update_rx.try_recv().is_ok_and(|u| u != DEFAULT_PUBKEY));
-
-    // markets available
-    assert!(client.try_get_perp_market_account(0).is_ok());
-    assert!(client.try_get_spot_market_account(1).is_ok());
-    
+    client.grpc_unsubscribe();
 }
 
 #[tokio::test]
