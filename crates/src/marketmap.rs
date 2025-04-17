@@ -24,7 +24,7 @@ use crate::{
     accounts::State,
     constants::{self, derive_perp_market_account, derive_spot_market_account, state_account},
     drift_idl::types::OracleSource,
-    grpc::grpc_subscriber::AccountUpdate,
+    grpc::AccountUpdate,
     memcmp::get_market_filter,
     types::MapOf,
     websocket_account_subscriber::WebsocketAccountSubscriber,

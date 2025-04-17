@@ -16,7 +16,7 @@ use solana_sdk::{
 use crate::{
     drift_idl::types::OracleSource,
     ffi::{get_oracle_price, OraclePriceData},
-    grpc::grpc_subscriber::AccountUpdate,
+    grpc::AccountUpdate,
     types::MapOf,
     websocket_account_subscriber::{AccountUpdate as WsAccountUpdate, WebsocketAccountSubscriber},
     MarketId, SdkError, SdkResult, UnsubHandle,

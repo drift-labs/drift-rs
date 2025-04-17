@@ -7,11 +7,7 @@ use futures_util::{
 };
 use log::{error, info, warn};
 use solana_rpc_client_api::filter::Memcmp;
-use solana_sdk::{
-    clock::{Epoch, Slot},
-    commitment_config::CommitmentLevel,
-    pubkey::Pubkey,
-};
+use solana_sdk::{clock::Slot, commitment_config::CommitmentLevel, pubkey::Pubkey};
 use yellowstone_grpc_client::{
     ClientTlsConfig, GeyserGrpcBuilderError, GeyserGrpcClient, GeyserGrpcClientError, Interceptor,
 };
@@ -29,29 +25,11 @@ use yellowstone_grpc_proto::{
 
 use crate::{constants::PROGRAM_ID as DRIFT_PROGRAM_ID, types::UnsubHandle};
 
+use super::{AccountUpdate, OnAccountFn};
+
 type SlotsFilterMap = HashMap<String, SubscribeRequestFilterSlots>;
 type AccountFilterMap = HashMap<String, SubscribeRequestFilterAccounts>;
-type HookFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
-type Hooks = Vec<(AccountFilter, Box<HookFn>)>;
-
-/// Account update from gRPC
-#[derive(PartialEq, Eq, Clone)]
-pub struct AccountUpdate<'a> {
-    /// the account's pubkey
-    pub pubkey: Pubkey,
-    /// lamports in the account
-    pub lamports: u64,
-    /// data held in the account
-    pub data: &'a [u8],
-    /// the program that owns the account. If executable, the program that loads the account.
-    pub owner: Pubkey,
-    /// the account's data contains a loaded program (and is now read-only)
-    pub executable: bool,
-    /// the epoch at which the account will next owe rent
-    pub rent_epoch: Epoch,
-    /// Slot the update was retrieved
-    pub slot: Slot,
-}
+type Hooks = Vec<(AccountFilter, Box<OnAccountFn>)>;
 
 /// Provides filter criteria for accounts over gRPC
 ///
@@ -190,9 +168,9 @@ impl Default for GrpcConnectionOpts {
     }
 }
 
-/// Options for gRPC subscription
+/// Options for the geyser subscription request
 #[derive(Debug, Default, Clone)]
-pub struct SubscribeOpts {
+pub struct GeyserSubscribeOpts {
     /// Filter by presence of field txn_signature
     accounts_nonempty_txn_signature: Option<bool>,
     /// Filter by Account Pubkey
@@ -276,7 +254,7 @@ impl DriftGrpcClient {
     pub async fn subscribe(
         self,
         commitment: CommitmentLevel,
-        subscribe_opts: SubscribeOpts,
+        subscribe_opts: GeyserSubscribeOpts,
     ) -> Result<UnsubHandle, GrpcError> {
         let mut grpc_client = grpc_connect(
             self.endpoint.as_str(),
@@ -314,18 +292,15 @@ impl DriftGrpcClient {
 
             // nb: will cause grpc task to drop when triggered but-
             // it doesn't call any 'unsub' endpoint
-            let _ = ls.block_on(&rt, async move {
-                loop {
-                    tokio::select! {
-                        biased;
-                        _ = &mut unsub_rx => break,
-                        res = waiter.next() => {
-                            if let Ok(Some(err)) = res.unwrap() {
-                                log::error!(target: "grpc", "subscription task failed: {err:?}");
-                            } else {
-                                log::error!(target: "grpc", "subscription task ended unexpectedly");
-                            }
-                            break;
+            ls.block_on(&rt, async move {
+                tokio::select! {
+                    biased;
+                    _ = &mut unsub_rx => (),
+                    res = waiter.next() => {
+                        if let Ok(Some(err)) = res.unwrap() {
+                            log::error!(target: "grpc", "subscription task failed: {err:?}");
+                        } else {
+                            log::error!(target: "grpc", "subscription task ended unexpectedly");
                         }
                     }
                 }
@@ -458,7 +433,7 @@ impl DriftGrpcClient {
     }
 }
 
-impl SubscribeOpts {
+impl GeyserSubscribeOpts {
     fn to_subscribe_request(&self, commitment: CommitmentLevel) -> SubscribeRequest {
         let mut accounts = AccountFilterMap::default();
         let mut filters = vec![];

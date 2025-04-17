@@ -33,7 +33,7 @@ use crate::{
         ProgramData, DEFAULT_PUBKEY, SYSVAR_INSTRUCTIONS_PUBKEY,
     },
     drift_idl::traits::ToAccountMetas,
-    grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, SubscribeOpts},
+    grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, GeyserSubscribeOpts},
     marketmap::MarketMap,
     oraclemap::{Oracle, OracleMap},
     swift_order_subscriber::{SignedOrderInfo, SwiftOrderStream},
@@ -43,7 +43,7 @@ use crate::{
     },
     utils::{get_http_url, get_ws_url},
 };
-pub use crate::{types::Context, wallet::Wallet};
+pub use crate::{grpc::GrpcSubscribeOpts, types::Context, wallet::Wallet};
 
 // utils
 pub mod async_utils;
@@ -932,18 +932,18 @@ impl DriftClientBackend {
         }
 
         // set custom callbacks
-        opts.on_account.map(|(filter, on_account)| {
+        if let Some((filter, on_account)) = opts.on_account {
             grpc.on_account(filter, on_account);
-        });
-        opts.on_slot.map(|f| {
+        }
+        if let Some(f) = opts.on_slot {
             grpc.on_slot(f);
-        });
+        }
 
         // start subscription
         let grpc_unsub = grpc
-            .subscribe(CommitmentLevel::Confirmed, SubscribeOpts::default())
+            .subscribe(CommitmentLevel::Confirmed, GeyserSubscribeOpts::default())
             .await
-            .map_err(|err| SdkError::Grpc(err))?;
+            .map_err(SdkError::Grpc)?;
 
         let mut unsub = self.grpc_unsub.write().unwrap();
         let _ = unsub.insert(grpc_unsub);
