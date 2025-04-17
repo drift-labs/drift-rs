@@ -16,8 +16,10 @@ use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
-pub use crate::types::SignedMsgOrderParamsDelegateMessage as SignedDelegateOrder;
-pub use crate::types::SignedMsgOrderParamsMessage as SignedOrder;
+pub use crate::types::{
+    SignedMsgOrderParamsDelegateMessage as SignedDelegateOrder,
+    SignedMsgOrderParamsMessage as SignedOrder,
+};
 use crate::{
     constants::MarketExt,
     types::{Context, MarketId, OrderParams, SdkError, SdkResult},
@@ -42,8 +44,6 @@ pub const SWIFT_DEVNET_WS_URL: &str = "wss://master.swift.drift.trade";
 pub const SWIFT_MAINNET_WS_URL: &str = "wss://swift.drift.trade";
 
 const LOG_TARGET: &str = "swift";
-
-/// Wrapper for a signed order message (aka swift order)
 
 /// Common fields of signed message types
 pub struct SignedMessageInfo {

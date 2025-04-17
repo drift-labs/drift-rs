@@ -1,8 +1,13 @@
 //! Drift SDK
 
-use std::{borrow::Cow, collections::BTreeSet, sync::Arc, time::Duration};
+use std::{
+    borrow::Cow,
+    collections::BTreeSet,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 
-use anchor_lang::{AccountDeserialize, InstructionData};
+use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
 pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
 use log::debug;
@@ -11,6 +16,7 @@ use solana_rpc_client_api::response::Response;
 use solana_sdk::{
     account::Account,
     clock::Slot,
+    commitment_config::CommitmentLevel,
     compute_budget::ComputeBudgetInstruction,
     hash::Hash,
     instruction::{AccountMeta, Instruction},
@@ -27,6 +33,7 @@ use crate::{
         ProgramData, DEFAULT_PUBKEY, SYSVAR_INSTRUCTIONS_PUBKEY,
     },
     drift_idl::traits::ToAccountMetas,
+    grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, GeyserSubscribeOpts},
     marketmap::MarketMap,
     oraclemap::{Oracle, OracleMap},
     swift_order_subscriber::{SignedOrderInfo, SwiftOrderStream},
@@ -36,7 +43,7 @@ use crate::{
     },
     utils::{get_http_url, get_ws_url},
 };
-pub use crate::{types::Context, wallet::Wallet};
+pub use crate::{grpc::GrpcSubscribeOpts, types::Context, wallet::Wallet};
 
 // utils
 pub mod async_utils;
@@ -52,6 +59,7 @@ pub mod drift_idl;
 pub mod types;
 
 // internal infra
+pub mod grpc;
 pub mod polled_account_subscriber;
 pub mod websocket_account_subscriber;
 pub mod websocket_program_account_subscriber;
@@ -65,13 +73,11 @@ pub mod swift_order_subscriber;
 
 pub mod jit_client;
 
+pub mod account_map;
 pub mod marketmap;
 pub mod oraclemap;
 pub mod slot_subscriber;
 pub mod usermap;
-
-// wrappers
-pub mod account_map;
 
 #[cfg(feature = "dlob")]
 pub mod dlob;
@@ -698,18 +704,47 @@ impl DriftClient {
     }
 
     /// Return a reference to the internal spot market map
+    #[cfg(feature = "unsafe_pub")]
     pub fn spot_market_map(&self) -> Arc<MapOf<u16, DataAndSlot<SpotMarket>>> {
         self.backend.spot_market_map.map()
     }
 
     /// Return a reference to the internal perp market map
+    #[cfg(feature = "unsafe_pub")]
     pub fn perp_market_map(&self) -> Arc<MapOf<u16, DataAndSlot<PerpMarket>>> {
         self.backend.perp_market_map.map()
     }
 
     /// Return a reference to the internal oracle map
+    #[cfg(feature = "unsafe_pub")]
     pub fn oracle_map(&self) -> Arc<MapOf<(Pubkey, u8), Oracle>> {
         self.backend.oracle_map.map()
+    }
+
+    /// Subscribe to all: markets, oracles, users, and slot updates over gRPC
+    ///
+    /// Updates are transparently handled by the `DriftClient` and calls to get User accounts, markets, oracles, etc.
+    /// will utilize the latest cached updates from the gRPC subscription.
+    ///
+    /// use `opts` to control what is _cached_ by the client. The gRPC connection will always subscribe
+    /// to all drift accounts regardless.
+    ///
+    /// * `endpoint` - the gRPC endpoint
+    /// * `x_token` - gRPC authentication X token
+    /// * `opts` - configure callbacks and caching
+    ///
+    pub async fn grpc_subscribe(
+        &self,
+        endpoint: String,
+        x_token: String,
+        opts: GrpcSubscribeOpts,
+    ) -> SdkResult<()> {
+        self.backend.grpc_subscribe(endpoint, x_token, opts).await
+    }
+
+    /// Unsubscribe the gRPC connection
+    pub fn grpc_unsubscribe(&self) {
+        self.backend.grpc_unsubscribe();
     }
 
     /// Return a reference to the internal backend
@@ -730,6 +765,7 @@ pub struct DriftClientBackend {
     perp_market_map: MarketMap<PerpMarket>,
     spot_market_map: MarketMap<SpotMarket>,
     oracle_map: OracleMap,
+    grpc_unsub: RwLock<Option<UnsubHandle>>,
 }
 impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
@@ -799,7 +835,14 @@ impl DriftClientBackend {
             perp_market_map,
             spot_market_map,
             oracle_map,
+            grpc_unsub: RwLock::default(),
         })
+    }
+
+    /// Returns true if `DriftClientBackend` is subscribed via gRPC
+    pub fn is_grpc_subscribed(&self) -> bool {
+        let unsub = self.grpc_unsub.read().unwrap();
+        unsub.is_some()
     }
 
     /// Start subscription for latest block hashes
@@ -810,6 +853,11 @@ impl DriftClientBackend {
 
     /// Start subscriptions for market accounts
     async fn subscribe_markets(&self, markets: &[MarketId]) -> SdkResult<()> {
+        if self.is_grpc_subscribed() {
+            log::info!("already subscribed markets via gRPC");
+            return Err(SdkError::AlreadySubscribed);
+        }
+
         let (perps, spot) = markets
             .iter()
             .partition::<Vec<MarketId>, _>(|x| x.is_perp());
@@ -823,7 +871,91 @@ impl DriftClientBackend {
 
     /// Start subscriptions for market oracle accounts
     async fn subscribe_oracles(&self, markets: &[MarketId]) -> SdkResult<()> {
+        if self.is_grpc_subscribed() {
+            log::info!("already subscribed oracles via gRPC");
+            return Err(SdkError::AlreadySubscribed);
+        }
+
         self.oracle_map.subscribe(markets).await
+    }
+
+    /// Subscribe to all: markets, oracles, and slot updates over gRPC
+    async fn grpc_subscribe(
+        &self,
+        endpoint: String,
+        x_token: String,
+        opts: GrpcSubscribeOpts,
+    ) -> SdkResult<()> {
+        let mut grpc =
+            DriftGrpcClient::new(endpoint, x_token).grpc_connection_opts(opts.connection_opts);
+
+        grpc.on_account(
+            AccountFilter::partial().with_discriminator(SpotMarket::DISCRIMINATOR),
+            self.spot_market_map.on_account_fn(),
+        );
+        grpc.on_account(
+            AccountFilter::partial().with_discriminator(PerpMarket::DISCRIMINATOR),
+            self.perp_market_map.on_account_fn(),
+        );
+        let oracles: Vec<Pubkey> = self
+            .oracle_map
+            .oracle_by_market
+            .iter()
+            .map(|x| x.1 .0)
+            .collect();
+        grpc.on_account(
+            AccountFilter::partial().with_accounts(oracles.into_iter()),
+            self.oracle_map.on_account_fn(),
+        );
+
+        if opts.usermap {
+            grpc.on_account(
+                AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
+                self.account_map.on_account_fn(),
+            );
+        } else {
+            // when usermap is on, the custom accounts are already included
+            // usermap off: subscribe to custom `User` accounts
+            grpc.on_account(
+                AccountFilter::full()
+                    .with_discriminator(User::DISCRIMINATOR)
+                    .with_accounts(opts.user_accounts.into_iter()),
+                self.account_map.on_account_fn(),
+            );
+        }
+
+        if opts.user_stats_map {
+            grpc.on_account(
+                AccountFilter::partial().with_discriminator(UserStats::DISCRIMINATOR),
+                self.account_map.on_account_fn(),
+            );
+        }
+
+        // set custom callbacks
+        if let Some((filter, on_account)) = opts.on_account {
+            grpc.on_account(filter, on_account);
+        }
+        if let Some(f) = opts.on_slot {
+            grpc.on_slot(f);
+        }
+
+        // start subscription
+        let grpc_unsub = grpc
+            .subscribe(CommitmentLevel::Confirmed, GeyserSubscribeOpts::default())
+            .await
+            .map_err(SdkError::Grpc)?;
+
+        let mut unsub = self.grpc_unsub.write().unwrap();
+        let _ = unsub.insert(grpc_unsub);
+
+        Ok(())
+    }
+
+    /// Unsubscribe the gRPC connection
+    fn grpc_unsubscribe(&self) {
+        let mut guard = self.grpc_unsub.write().unwrap();
+        let unsub = guard.take();
+        unsub.map(|u| u.send(()));
     }
 
     /// End subscriptions to live program data
@@ -839,7 +971,7 @@ impl DriftClientBackend {
         &self,
         market_index: u16,
     ) -> Option<DataAndSlot<PerpMarket>> {
-        if self.perp_market_map.is_subscribed(market_index) {
+        if self.is_grpc_subscribed() || self.perp_market_map.is_subscribed(market_index) {
             self.perp_market_map.get(&market_index)
         } else {
             None
@@ -850,7 +982,7 @@ impl DriftClientBackend {
         &self,
         market_index: u16,
     ) -> Option<DataAndSlot<SpotMarket>> {
-        if self.spot_market_map.is_subscribed(market_index) {
+        if self.is_grpc_subscribed() || self.spot_market_map.is_subscribed(market_index) {
             self.spot_market_map.get(&market_index)
         } else {
             None
@@ -938,6 +1070,9 @@ impl DriftClientBackend {
             Ok(value)
         } else {
             let account_data = self.rpc_client.get_account_data(account).await?;
+            if account_data.is_empty() {
+                return Err(SdkError::NoAccountData(*account));
+            }
             T::try_deserialize(&mut account_data.as_slice())
                 .map_err(|err| SdkError::Anchor(Box::new(err)))
         }
@@ -1997,6 +2132,7 @@ mod tests {
                 Arc::clone(&rpc_client),
                 CommitmentConfig::processed(),
             ),
+            grpc_unsub: Default::default(),
         };
 
         DriftClient {

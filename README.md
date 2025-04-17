@@ -29,8 +29,12 @@ _*_ crates.io requires [libdrift](https://github.com/drift-labs/drift-ffi-sys/?t
 
 
 ## Use
+The `DriftClient` struct provides methods for reading drift program accounts and crafting transactions.  
+It is built on a subscription model where live account updates are transparently cached and made accessible via accessor methods.  
+The client may be subscribed either via Ws or gRPC.  
+
 ```rust
-use drift_rs::{DriftClient, Wallet};
+use drift_rs::{AccountFilter, DriftClient, Wallet, grpc::GrpcSubscribeOpts};
 use solana_sdk::signature::Keypair;
 
 async fn main() {
@@ -42,11 +46,36 @@ async fn main() {
     .await
     .expect("connects");
 
-    // Subscribe to Ws-based live market and price changes
+    // Subscribe via WebSocket
+    //
+    // 1) Ws-based live market and price changes
     let markets = [MarketId::spot(1), MarketId::perp(0)];
     client.subscribe_markets(&markets).await.unwrap();
     client.subscribe_oracles(&markets).await.unwrap();
-}
+    client.subscribe_account("SUBACCOUNT_1");
+
+    // OR 2) subscribe via gRPC (advanced)
+    // gRPC automatically subscribes to all markets and oracles
+    client.grpc_subscribe(
+      "https://grpc.example.com".into(),
+      "API-X-TOKEN".into(),
+      GrpcSubscribeOpts::default()
+        .user_accounts("SUBACCOUNT_1", "SUB_ACCOUNT_2")
+        .on_slot(move |new_slot| {
+          // do something on slot
+        })
+        .on_account(
+          AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
+          move |account| {
+              // do something on user account updates
+          })
+    ).await;
+
+    //
+    // Fetch latest values
+    ///
+    let sol_perp_price = client.oracle_price(MarketId::perp(0));
+    let subaccount_1: User = client.try_get_account("SUBACCOUNT_1"));
 ```
 ## Setup
 
