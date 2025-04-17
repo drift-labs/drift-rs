@@ -386,8 +386,8 @@ pub mod abi_types {
         pub latest_slot: Slot,
     }
 
+    #[cfg(test)]
     impl<'a> AccountsList<'a> {
-        #[cfg(test)]
         pub fn new(
             perp_markets: &'a mut [AccountWithKey],
             spot_markets: &'a mut [AccountWithKey],
@@ -457,7 +457,10 @@ mod tests {
     use super::{simulate_place_perp_order, AccountWithKey, AccountsList, MarginContextMode};
     use crate::{
         accounts::State,
-        constants::{self, ids::pyth_program},
+        constants::{
+            ids::pyth_program,
+            {self},
+        },
         create_account_info,
         drift_idl::{
             accounts::{PerpMarket, SpotMarket, User},

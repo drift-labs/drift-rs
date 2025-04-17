@@ -24,6 +24,7 @@ use crate::{
     accounts::State,
     constants::{self, derive_perp_market_account, derive_spot_market_account, state_account},
     drift_idl::types::OracleSource,
+    grpc::AccountUpdate,
     memcmp::get_market_filter,
     types::MapOf,
     websocket_account_subscriber::WebsocketAccountSubscriber,
@@ -101,6 +102,22 @@ where
     /// Return a reference to the internal map data structure
     pub fn map(&self) -> Arc<MapOf<u16, DataAndSlot<T>>> {
         Arc::clone(&self.marketmap)
+    }
+
+    /// Returns a hook for driving the map with new `Account` updates
+    pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
+        let marketmap = self.map();
+        move |update: &AccountUpdate| {
+            let market = T::deserialize(&mut &update.data[8..]).expect("deser market");
+            let idx = market.market_index();
+            marketmap.insert(
+                idx,
+                DataAndSlot {
+                    slot: update.slot,
+                    data: market,
+                },
+            );
+        }
     }
 
     /// Subscribe to market account updates

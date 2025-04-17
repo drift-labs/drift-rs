@@ -4,6 +4,7 @@
 
 use std::ops::Neg;
 
+use super::get_oracle_normalization_factor;
 use crate::{
     ffi::{
         self, calculate_margin_requirement_and_total_collateral_and_liability_info, AccountsList,
@@ -22,8 +23,6 @@ use crate::{
     },
     DriftClient, MarginMode, MarketId, SdkError, SdkResult, SpotPosition,
 };
-
-use super::get_oracle_normalization_factor;
 
 /// Info on a position's liquidation price and unrealized PnL
 #[derive(Debug)]
@@ -375,7 +374,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        constants::{self, ids::pyth_program},
+        constants::{
+            ids::pyth_program,
+            {self},
+        },
         drift_idl::types::{HistoricalOracleData, MarketStatus, OracleSource, SpotPosition, AMM},
         math::constants::{
             AMM_RESERVE_PRECISION, BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, PEG_PRECISION,

@@ -1,14 +1,17 @@
 use std::time::Duration;
 
+use anchor_lang::Discriminator;
 use drift_rs::{
+    constants::DEFAULT_PUBKEY,
     event_subscriber::RpcClient,
+    grpc::grpc_subscriber::AccountFilter,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
     types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam},
     utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
-    DriftClient, TransactionBuilder, Wallet,
+    DriftClient, GrpcSubscribeOpts, Pubkey, TransactionBuilder, Wallet,
 };
 use futures_util::StreamExt;
-use solana_sdk::signature::Keypair;
+use solana_sdk::{clock::Slot, signature::Keypair};
 
 #[tokio::test]
 async fn client_sync_subscribe_all_devnet() {
@@ -98,6 +101,64 @@ async fn client_sync_subscribe_mainnet() {
     let price = client.oracle_price(MarketId::spot(32)).await.expect("ok");
     assert!(price > 0);
     dbg!(price);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 3)]
+async fn client_sync_subscribe_mainnet_grpc() {
+    let _ = env_logger::try_init();
+    let client = DriftClient::new(
+        Context::MainNet,
+        RpcClient::new(mainnet_endpoint()),
+        Keypair::new().into(),
+    )
+    .await
+    .expect("connects");
+
+    let (slot_update_tx, mut slot_update_rx) = tokio::sync::mpsc::channel::<Slot>(1);
+    let (user_update_tx, mut user_update_rx) = tokio::sync::mpsc::channel::<Pubkey>(1);
+
+    assert!(client
+        .grpc_subscribe(
+            "https://api.rpcpool.com".into(),
+            std::env::var("TEST_GRPC_X_TOKEN").expect("TEST_GRPC_X_TOKEN set"),
+            GrpcSubscribeOpts::default()
+                .usermap_on()
+                .on_slot(move |new_slot| {
+                    println!("slot: {new_slot}");
+                    let _ = slot_update_tx.try_send(new_slot);
+                })
+                .on_account(
+                    AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
+                    move |account| {
+                        println!("account: {}", account.pubkey);
+                        let _ = user_update_tx.try_send(account.pubkey);
+                    }
+                )
+        )
+        .await
+        .is_ok());
+
+    // wait for updates
+    tokio::time::sleep(Duration::from_secs(6)).await;
+
+    // oracles available
+    let price = client.oracle_price(MarketId::perp(4)).await.expect("ok");
+    assert!(price > 0);
+    dbg!(price);
+    let price = client.oracle_price(MarketId::spot(32)).await.expect("ok");
+    assert!(price > 0);
+    dbg!(price);
+
+    // markets available
+    assert!(client.try_get_perp_market_account(0).is_ok());
+    assert!(client.try_get_spot_market_account(1).is_ok());
+
+    // slot update received
+    assert!(slot_update_rx.try_recv().is_ok_and(|s| s > 0));
+
+    // user update received
+    assert!(user_update_rx.try_recv().is_ok_and(|u| u != DEFAULT_PUBKEY));
+    client.grpc_unsubscribe();
 }
 
 #[tokio::test]

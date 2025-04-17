@@ -30,6 +30,7 @@ pub use crate::drift_idl::{
 use crate::{
     constants::{ids, LUTS_DEVNET, LUTS_MAINNET},
     drift_idl::errors::ErrorCode,
+    grpc::grpc_subscriber::GrpcError,
     Wallet,
 };
 
@@ -333,6 +334,8 @@ pub enum SdkError {
     LibDriftVersion,
     #[error("wallet signing disabled")]
     WalletSigningDisabled,
+    #[error("{0}")]
+    Grpc(#[from] GrpcError),
 }
 
 impl SdkError {
