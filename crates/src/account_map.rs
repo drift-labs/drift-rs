@@ -87,10 +87,9 @@ impl AccountMap {
 
         Ok(())
     }
-    pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) + Send + Sync + 'static {
+    pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
         let accounts = Arc::clone(&self.inner);
         move |update| {
-            dbg!("grpc update user!!", update.pubkey);
             accounts
                 .entry(update.pubkey)
                 .and_modify(|x| {

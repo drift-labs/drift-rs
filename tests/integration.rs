@@ -1,4 +1,7 @@
-use std::time::Duration;
+use std::{
+    sync::{atomic::AtomicU64, Arc},
+    time::Duration,
+};
 
 use drift_rs::{
     event_subscriber::RpcClient,
@@ -110,30 +113,39 @@ async fn client_sync_subscribe_mainnet_grpc() {
     )
     .await
     .expect("connects");
+
+    let latest_slot = Arc::new(AtomicU64::default());
+    let latest_slot_ref = Arc::clone(&latest_slot);
     assert!(client
         .grpc_subscribe(
             "https://api.rpcpool.com".into(),
             std::env::var("TEST_GRPC_X_TOKEN").expect("TEST_GRPC_X_TOKEN set"),
             true,
             true,
-            Some(move |slot| {
-                println!("slot: {slot}");
+            Some(move |new_slot| {
+                println!("slot: {new_slot}");
+                latest_slot_ref.store(new_slot, std::sync::atomic::Ordering::Relaxed);
             })
         )
         .await
         .is_ok());
 
-    tokio::time::sleep(Duration::from_secs(8)).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
-    let price = client.oracle_price(MarketId::perp(1)).await.expect("ok");
-    assert!(price > 0);
-    dbg!(price);
+    // oracles available
     let price = client.oracle_price(MarketId::perp(4)).await.expect("ok");
     assert!(price > 0);
     dbg!(price);
     let price = client.oracle_price(MarketId::spot(32)).await.expect("ok");
     assert!(price > 0);
     dbg!(price);
+
+    // markets available
+    assert!(client.try_get_perp_market_account(1).is_ok());
+    assert!(client.try_get_spot_market_account(1).is_ok());
+
+    // slot updated
+    assert!(latest_slot.load(std::sync::atomic::Ordering::Relaxed) > 0);
 }
 
 #[tokio::test]

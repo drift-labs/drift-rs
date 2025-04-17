@@ -28,7 +28,7 @@ use yellowstone_grpc_proto::{
 
 type SlotsFilterMap = HashMap<String, SubscribeRequestFilterSlots>;
 type AccountFilterMap = HashMap<String, SubscribeRequestFilterAccounts>;
-type HookFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
+type HookFn = dyn Fn(&AccountUpdate) + 'static;
 type Hooks = Vec<(AccountFilter, Box<HookFn>)>;
 
 /// Account update from gRPC
@@ -141,7 +141,7 @@ impl AccountFilter {
 }
 
 #[derive(Debug, Clone)]
-pub struct GrpcOpts {
+pub struct GrpcConnectionOpts {
     /// Apply a timeout to connecting to the uri.
     connect_timeout_ms: Option<u64>,
     /// Sets the tower service default internal buffer size, default is 1024
@@ -168,7 +168,7 @@ pub struct GrpcOpts {
     max_decoding_message_size: usize,
 }
 
-impl Default for GrpcOpts {
+impl Default for GrpcConnectionOpts {
     fn default() -> Self {
         Self {
             connect_timeout_ms: None,
@@ -217,9 +217,9 @@ pub enum GrpcError {
 pub struct DriftGrpcClient {
     endpoint: String,
     x_token: String,
-    grpc_opts: Option<GrpcOpts>,
+    grpc_opts: Option<GrpcConnectionOpts>,
     on_account_hooks: Hooks,
-    on_slot: Box<dyn Fn(Slot) + Send>,
+    on_slot: Box<dyn Fn(Slot)>,
 }
 
 impl DriftGrpcClient {
@@ -237,14 +237,15 @@ impl DriftGrpcClient {
     }
 
     /// Set gRPC network options
-    pub fn grpc_opts(&mut self, grpc_opts: GrpcOpts) {
+    pub fn grpc_connection_opts(mut self, grpc_opts: GrpcConnectionOpts) -> Self {
         let _ = self.grpc_opts.insert(grpc_opts);
+        self
     }
 
     /// Add a callback on slot updates
     ///
     /// `on_slot` must prioritize fast handling or risk blocking the gRPC thread
-    pub fn on_slot<F: Fn(Slot) + Send + Sync + 'static>(&mut self, on_slot: F) {
+    pub fn on_slot<F: Fn(Slot) + 'static>(&mut self, on_slot: F) {
         self.on_slot = Box::new(on_slot);
     }
 
@@ -256,7 +257,7 @@ impl DriftGrpcClient {
     /// * `on_account` - fn to receive callback on filter match
     ///
     /// DEV: `on_account` must prioritize fast handling or risk blocking the gRPC thread
-    pub fn on_account<T: Fn(&AccountUpdate) + Send + Sync + 'static>(
+    pub fn on_account<T: Fn(&AccountUpdate) + 'static>(
         &mut self,
         filter: AccountFilter,
         on_account: T,
@@ -286,13 +287,15 @@ impl DriftGrpcClient {
         let request = subscribe_opts.to_subscribe_request(commitment);
         info!(target: "grpc", "gRPC subscribing: {request:?}");
 
-        tokio::spawn({
-            async move {
-                Self::geyser_subscribe(grpc_client, request, self.on_account_hooks, self.on_slot)
-                    .await
-            }
-        });
-        info!("gRPC subscribed ⚡️");
+        // gRPC receives updates very frequently, don't want tokio scheduling processing elsewhere
+        let localset = tokio::task::LocalSet::new();
+        localset.spawn_local(Self::geyser_subscribe(
+            grpc_client,
+            request,
+            self.on_account_hooks,
+            self.on_slot,
+        ));
+        info!(target: "grpc", "gRPC subscribed ⚡️");
 
         Ok(())
     }
@@ -323,6 +326,7 @@ impl DriftGrpcClient {
                     Err(err) => {
                         log::warn!(target: "grpc", "failed subscription: {err:?}");
                         retry_count += 1;
+                        tokio::time::sleep(Duration::from_secs(2_u64.pow(retry_count + 1))).await;
                         continue;
                     }
                 };
@@ -360,7 +364,7 @@ impl DriftGrpcClient {
                                 }
                             }
                             Some(UpdateOneof::Slot(msg)) => {
-                                log::debug!(target: "grpc", "slot: {}", msg.slot);
+                                log::trace!(target: "grpc", "slot: {}", msg.slot);
                                 if msg.slot > latest_slot {
                                     latest_slot = msg.slot;
                                     on_slot(latest_slot);
@@ -370,19 +374,27 @@ impl DriftGrpcClient {
                                 // This is necessary to keep load balancers that expect client pings alive. If your load balancer doesn't
                                 // require periodic client pings then this is unnecessary
                                 log::debug!(target: "grpc", "ping");
-                                // TODO: set timeout
-                                if let Err(err) = subscribe_tx
-                                    .send(SubscribeRequest {
-                                        ping: Some(SubscribeRequestPing { id: 1 }),
-                                        ..Default::default()
-                                    })
-                                    .await
+                                let ping = SubscribeRequest {
+                                    ping: Some(SubscribeRequestPing { id: 1 }),
+                                    ..Default::default()
+                                };
+                                match tokio::time::timeout(
+                                    Duration::from_secs(5),
+                                    subscribe_tx.send(ping),
+                                )
+                                .await
                                 {
-                                    log::warn!(target: "grpc", "ping failed: {err:?}");
+                                    Ok(Ok(_)) => (),
+                                    Ok(Err(err)) => {
+                                        log::warn!(target: "grpc", "ping failed: {err:?}");
+                                    }
+                                    Err(_) => {
+                                        log::warn!(target: "grpc", "ping timeout");
+                                    }
                                 }
                             }
                             Some(UpdateOneof::Pong(_)) => {
-                                log::debug!(target: "grpc", "pong");
+                                log::trace!(target: "grpc", "pong");
                             }
                             Some(other_update) => {
                                 warn!(target: "grpc", "unhandled update: {other_update:?}");
@@ -401,7 +413,7 @@ impl DriftGrpcClient {
             }
         }
 
-        warn!(target: "grpc", "gRPC stream closed");
+        error!(target: "grpc", "gRPC stream closed");
     }
 }
 
@@ -469,7 +481,7 @@ impl SubscribeOpts {
 async fn grpc_connect(
     endpoint: &str,
     x_token: &str,
-    opts: GrpcOpts,
+    opts: GrpcConnectionOpts,
 ) -> Result<GeyserGrpcClient<impl Interceptor>, GeyserGrpcBuilderError> {
     info!(target: "grpc", "gRPC connecting: {endpoint}...");
     let mut tls_config = ClientTlsConfig::new().with_native_roots();

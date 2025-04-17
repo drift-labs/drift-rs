@@ -6,14 +6,15 @@ use std::{
 
 use dashmap::DashMap;
 pub use solana_rpc_client_api::config::RpcSendTransactionConfig;
-pub use solana_sdk::{
-    commitment_config::CommitmentConfig, message::VersionedMessage,
-    transaction::VersionedTransaction,
-};
 use solana_sdk::{
+    clock::Slot,
     instruction::{AccountMeta, InstructionError},
     pubkey::Pubkey,
     transaction::TransactionError,
+};
+pub use solana_sdk::{
+    commitment_config::CommitmentConfig, message::VersionedMessage,
+    transaction::VersionedTransaction,
 };
 use thiserror::Error;
 use tokio::sync::oneshot;
@@ -30,9 +31,92 @@ pub use crate::drift_idl::{
 use crate::{
     constants::{ids, LUTS_DEVNET, LUTS_MAINNET},
     drift_idl::errors::ErrorCode,
-    grpc::grpc_subscriber::GrpcError,
+    grpc::grpc_subscriber::{AccountFilter, AccountUpdate, GrpcConnectionOpts, GrpcError},
     Wallet,
 };
+
+/// Config options for drift gRPC subscription
+///
+/// ```example(no_run)
+///   // subscribe to all user and users stats accounts
+///   let opts = GrpcSubscribeOpts::default()
+///                .usermap_on() // subscribe to ALL user accounts
+///                .statsmap_on(); // subscribe to ALL user stats accounts
+///
+///  // cache specific user accounts only and set a new slot callback
+///  let first_3_subaccounts = (0_u16..3).into_iter().map(|i| wallet.sub_account(i)).collect();
+///  let opts = GrpcSubscribeOpts::default()
+///                 .user_accounts(first_3_subaccounts);
+///                 .on_slot(move |new_slot| {}) // slot callback
+/// ```
+///
+#[derive(Default)]
+pub struct GrpcSubscribeOpts {
+    /// toggle usermap
+    pub usermap: bool,
+    /// toggle user stats map
+    pub user_stats_map: bool,
+    /// list of user (sub)accounts to subscribe
+    pub user_accounts: Vec<Pubkey>,
+    /// callback for slot updates
+    pub on_slot: Option<Box<dyn Fn(Slot) + 'static>>,
+    /// custom callback for account updates
+    pub on_account: Option<(AccountFilter, Box<dyn Fn(&AccountUpdate) + 'static>)>,
+    /// Network level connection config
+    pub connection_opts: GrpcConnectionOpts,
+}
+
+impl GrpcSubscribeOpts {
+    /// Cache ALL drift `User` account updates
+    ///
+    /// useful for e.g. building the DLOB, fast TX building for makers
+    ///
+    /// note: memory requirements ~2GiB
+    pub fn usermap_on(mut self) -> Self {
+        self.usermap = true;
+        self
+    }
+    /// Cache ALL drift `UserStats` account updates
+    ///
+    /// useful for e.g. fast TX building for makers
+    pub fn statsmap_on(mut self) -> Self {
+        self.user_stats_map = true;
+        self
+    }
+    /// Cache account updates for given `users` only
+    pub fn user_accounts(mut self, users: Vec<Pubkey>) -> Self {
+        self.user_accounts = users;
+        self
+    }
+    /// Set a callback to invoke on new slot updates
+    ///
+    /// * `on_slot` - the callback for new slot updates
+    ///
+    /// ! `on_slot` must not block the gRPC task
+    pub fn on_slot(mut self, on_slot: impl Fn(Slot) + 'static) -> Self {
+        self.on_slot = Some(Box::new(on_slot));
+        self
+    }
+    /// Register a custom callback for account updates
+    ///
+    /// * `filter` - accounts matching filter will invoke the callback
+    /// * `on_account` - fn to invoke on matching account update
+    ///
+    /// ! `on_account` must not block the gRPC task
+    pub fn on_account(
+        mut self,
+        filter: AccountFilter,
+        on_account: impl Fn(&AccountUpdate) + 'static,
+    ) -> Self {
+        self.on_account = Some((filter, Box::new(on_account)));
+        self
+    }
+    /// Set network level connection opts
+    pub fn connection_opts(mut self, opts: GrpcConnectionOpts) -> Self {
+        self.connection_opts = opts;
+        self
+    }
+}
 
 /// Map from K => V
 pub type MapOf<K, V> = DashMap<K, V, ahash::RandomState>;
