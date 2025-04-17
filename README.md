@@ -34,7 +34,7 @@ It is built on a subscription model where live account updates are transparently
 The client may be subscribed either via Ws or gRPC.  
 
 ```rust
-use drift_rs::{AccountFilter, DriftClient, GrpcSubscribeOpts, Wallet};
+use drift_rs::{AccountFilter, DriftClient, Wallet, grpc::GrpcSubscribeOpts};
 use solana_sdk::signature::Keypair;
 
 async fn main() {

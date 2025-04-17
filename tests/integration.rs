@@ -6,9 +6,9 @@ use drift_rs::{
     event_subscriber::RpcClient,
     grpc::grpc_subscriber::AccountFilter,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
-    types::{accounts::User, Context, GrpcSubscribeOpts, MarketId, NewOrder, PostOnlyParam},
+    types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam},
     utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
-    DriftClient, Pubkey, TransactionBuilder, Wallet,
+    DriftClient, GrpcSubscribeOpts, Pubkey, TransactionBuilder, Wallet,
 };
 use futures_util::StreamExt;
 use solana_sdk::{clock::Slot, signature::Keypair};
