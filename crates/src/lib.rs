@@ -10,7 +10,6 @@ use std::{
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
 pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
-use grpc::grpc_subscriber::SubscribeOpts;
 use log::debug;
 pub use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::response::Response;
@@ -34,7 +33,7 @@ use crate::{
         ProgramData, DEFAULT_PUBKEY, SYSVAR_INSTRUCTIONS_PUBKEY,
     },
     drift_idl::traits::ToAccountMetas,
-    grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient},
+    grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, SubscribeOpts},
     marketmap::MarketMap,
     oraclemap::{Oracle, OracleMap},
     swift_order_subscriber::{SignedOrderInfo, SwiftOrderStream},

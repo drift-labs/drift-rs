@@ -1,7 +1,5 @@
 use std::{collections::HashMap, time::Duration};
 
-use crate::{constants::PROGRAM_ID as DRIFT_PROGRAM_ID, types::UnsubHandle};
-
 use ahash::HashSet;
 use futures_util::{
     sink::SinkExt,
@@ -28,6 +26,8 @@ use yellowstone_grpc_proto::{
     },
     tonic::{transport::Certificate, Status},
 };
+
+use crate::{constants::PROGRAM_ID as DRIFT_PROGRAM_ID, types::UnsubHandle};
 
 type SlotsFilterMap = HashMap<String, SubscribeRequestFilterSlots>;
 type AccountFilterMap = HashMap<String, SubscribeRequestFilterAccounts>;
@@ -576,8 +576,9 @@ async fn grpc_connect(
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use solana_sdk::pubkey::Pubkey;
+
+    use super::*;
 
     fn create_test_account(data: Vec<u8>) -> SubscribeUpdateAccountInfo {
         SubscribeUpdateAccountInfo {

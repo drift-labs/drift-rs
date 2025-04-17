@@ -2105,8 +2105,9 @@ pub mod instructions {
 }
 pub mod types {
     #![doc = r" IDL types"]
-    use super::*;
     use std::ops::Mul;
+
+    use super::*;
     #[doc = ""]
     #[doc = " backwards compatible u128 deserializing data from rust <=1.76.0 when u/i128 was 8-byte aligned"]
     #[doc = " https://solana.stackexchange.com/questions/7720/using-u128-without-sacrificing-alignment-8"]

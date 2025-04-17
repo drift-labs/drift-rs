@@ -457,7 +457,10 @@ mod tests {
     use super::{simulate_place_perp_order, AccountWithKey, AccountsList, MarginContextMode};
     use crate::{
         accounts::State,
-        constants::{self, ids::pyth_program},
+        constants::{
+            ids::pyth_program,
+            {self},
+        },
         create_account_info,
         drift_idl::{
             accounts::{PerpMarket, SpotMarket, User},
