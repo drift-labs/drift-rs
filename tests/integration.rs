@@ -208,7 +208,6 @@ async fn place_and_cancel_orders() {
     let result = client.sign_and_send(tx).await;
     dbg!(&result);
     assert!(result.is_ok());
-    client.unsubscribe().await.unwrap();
 }
 
 #[ignore]

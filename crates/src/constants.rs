@@ -4,7 +4,7 @@ use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey
 
 use crate::{
     drift_idl::accounts::{PerpMarket, SpotMarket},
-    types::Context,
+    types::{accounts::State, Context},
     MarketId, MarketType, OracleSource,
 };
 
@@ -25,10 +25,21 @@ pub const JIT_PROXY_ID: Pubkey =
 /// Empty pubkey
 pub const DEFAULT_PUBKEY: Pubkey = solana_sdk::pubkey!("11111111111111111111111111111111");
 
+pub const SYSTEM_PROGRAM_ID: Pubkey = DEFAULT_PUBKEY;
+
 static STATE_ACCOUNT: OnceLock<Pubkey> = OnceLock::new();
 
+/// Address of the SPL Token program
 pub const TOKEN_PROGRAM_ID: Pubkey =
     solana_sdk::pubkey!("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
+
+/// Address of the SPL Token 2022 program
+pub const TOKEN_2022_PROGRAM_ID: Pubkey =
+    solana_sdk::pubkey!("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+
+/// Address of Associated Token Program
+pub const ASSOCIATED_TOKEN_PROGRAM_ID: Pubkey =
+    solana_sdk::pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 /// Drift market lookup table (DevNet)
 pub const LUTS_DEVNET: &[Pubkey] = &[solana_sdk::pubkey!(
@@ -117,6 +128,8 @@ pub struct ProgramData {
     spot_markets: &'static [SpotMarket],
     perp_markets: &'static [PerpMarket],
     pub lookup_tables: &'static [AddressLookupTableAccount],
+    // drift state account
+    state: State,
 }
 
 impl ProgramData {
@@ -126,6 +139,7 @@ impl ProgramData {
             spot_markets: &[],
             perp_markets: &[],
             lookup_tables: &[],
+            state: unsafe { std::mem::zeroed() },
         }
     }
     /// Initialize `ProgramData`
@@ -133,6 +147,7 @@ impl ProgramData {
         mut spot: Vec<SpotMarket>,
         mut perp: Vec<PerpMarket>,
         lookup_tables: Vec<AddressLookupTableAccount>,
+        state: State,
     ) -> Self {
         spot.sort_by(|a, b| a.market_index.cmp(&b.market_index));
         perp.sort_by(|a, b| a.market_index.cmp(&b.market_index));
@@ -154,7 +169,15 @@ impl ProgramData {
             spot_markets: Box::leak(spot.into_boxed_slice()),
             perp_markets: Box::leak(perp.into_boxed_slice()),
             lookup_tables: Box::leak(lookup_tables.into_boxed_slice()),
+            state,
         }
+    }
+
+    /// Return drift `State` account (cached)
+    ///
+    /// prefer live
+    pub fn state(&self) -> &State {
+        &self.state
     }
 
     /// Return known spot markets
@@ -168,11 +191,15 @@ impl ProgramData {
     }
 
     /// Return the spot market config given a market index
+    ///
+    /// Useful for static metadata e.g. token program address
     pub fn spot_market_config_by_index(&self, market_index: u16) -> Option<&'static SpotMarket> {
         self.spot_markets.get(market_index as usize)
     }
 
     /// Return the perp market config given a market index
+    ///
+    /// Useful for static metadata e.g. token program address
     pub fn perp_market_config_by_index(&self, market_index: u16) -> Option<&'static PerpMarket> {
         self.perp_markets.get(market_index as usize)
     }

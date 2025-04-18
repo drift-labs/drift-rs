@@ -11,7 +11,7 @@ use solana_sdk::{
 
 use crate::{
     constants::{self},
-    types::{SdkError, SdkResult},
+    types::{accounts::SpotMarket, SdkError, SdkResult},
     utils,
 };
 
@@ -157,6 +157,15 @@ impl Wallet {
             &constants::PROGRAM_ID,
         );
         account_drift_pda
+    }
+
+    /// Calculate the wallet's ATA for drift spot market
+    pub fn derive_associated_token_address(authority: &Pubkey, market: &SpotMarket) -> Pubkey {
+        spl_associated_token_account::get_associated_token_address_with_program_id(
+            authority,
+            &market.mint,
+            &market.token_program(),
+        )
     }
 
     /// Signs a solana message (ixs, accounts) and builds a signed tx

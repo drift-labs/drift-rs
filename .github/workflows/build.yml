@@ -62,8 +62,10 @@ jobs:
         run: |
           cargo test --no-fail-fast --lib -- --nocapture
           cargo test --no-fail-fast --test integration -- --nocapture --test-threads 1
+          cargo test --no-fail-fast --test jupiter -- --nocapture --test-threads 1
         env:
           TEST_DEVNET_RPC_ENDPOINT: ${{ secrets.DEVNET_RPC_ENDPOINT }}
           TEST_MAINNET_RPC_ENDPOINT: ${{ secrets.MAINNET_RPC_ENDPOINT }}
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
+          TEST_MAINNET_PRIVATE_KEY: ${{ secrets.TEST_MAINNET_PRIVATE_KEY }}
           TEST_GRPC_X_TOKEN: ${{ secrets.TEST_GRPC_X_TOKEN }}
