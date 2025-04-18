@@ -15,7 +15,7 @@
 
 Experimental, high performance Rust SDK for building offchain clients for [Drift V2](https://github.com/drift-labs/protocol-v2) protocol.
 
-See the offical [docs](https://docs.rs/drift-rs/latest/drift_rs/)
+See the official [docs](https://docs.rs/drift-rs/latest/drift_rs/)
 
 ## Install
 ```toml

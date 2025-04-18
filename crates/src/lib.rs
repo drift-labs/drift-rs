@@ -820,11 +820,14 @@ impl DriftClientBackend {
             .subscribe_account_polled(state_account(), Some(Duration::from_secs(180)))
             .await?;
 
-        let (_, _, lut_accounts) = tokio::try_join!(
+        let (_, _, lut_accounts, state_account_data) = tokio::try_join!(
             perp_market_map.sync(&rpc_client),
             spot_market_map.sync(&rpc_client),
             rpc_client
                 .get_multiple_accounts(lut_pubkeys)
+                .map_err(Into::into),
+            rpc_client
+                .get_account_data(&state_account())
                 .map_err(Into::into),
         )?;
 
@@ -862,7 +865,7 @@ impl DriftClientBackend {
                 spot_market_map.values(),
                 perp_market_map.values(),
                 lookup_tables,
-                account_map.account_data(state_account()).unwrap(),
+                State::try_deserialize(&mut state_account_data.as_slice()).unwrap(),
             ),
             account_map,
             perp_market_map,
