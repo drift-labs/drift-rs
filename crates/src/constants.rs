@@ -25,6 +25,8 @@ pub const JIT_PROXY_ID: Pubkey =
 /// Empty pubkey
 pub const DEFAULT_PUBKEY: Pubkey = solana_sdk::pubkey!("11111111111111111111111111111111");
 
+pub const SYSTEM_PROGRAM_ID: Pubkey = DEFAULT_PUBKEY;
+
 static STATE_ACCOUNT: OnceLock<Pubkey> = OnceLock::new();
 
 /// Address of the SPL Token program
@@ -34,6 +36,10 @@ pub const TOKEN_PROGRAM_ID: Pubkey =
 /// Address of the SPL Token 2022 program
 pub const TOKEN_2022_PROGRAM_ID: Pubkey =
     solana_sdk::pubkey!("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+
+/// Address of Associated Token Program
+pub const ASSOCIATED_TOKEN_PROGRAM_ID: Pubkey =
+    solana_sdk::pubkey!("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 
 /// Drift market lookup table (DevNet)
 pub const LUTS_DEVNET: &[Pubkey] = &[solana_sdk::pubkey!(
@@ -185,11 +191,15 @@ impl ProgramData {
     }
 
     /// Return the spot market config given a market index
+    ///
+    /// Useful for static metadata e.g. token program address
     pub fn spot_market_config_by_index(&self, market_index: u16) -> Option<&'static SpotMarket> {
         self.spot_markets.get(market_index as usize)
     }
 
     /// Return the perp market config given a market index
+    ///
+    /// Useful for static metadata e.g. token program address
     pub fn perp_market_config_by_index(&self, market_index: u16) -> Option<&'static PerpMarket> {
         self.perp_markets.get(market_index as usize)
     }

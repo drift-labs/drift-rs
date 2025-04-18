@@ -8,17 +8,17 @@ use std::{
 };
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
+use constants::{
+    ASSOCIATED_TOKEN_PROGRAM_ID, SYSTEM_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID,
+};
 pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
-use jupiter::JupiterSwapInfo;
-use jupiter_swap_api_client::{
-    quote::{self, QuoteResponse, SwapMode},
-    swap::SwapInstructionsResponse,
-    JupiterSwapApiClient,
-};
 use log::debug;
 pub use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-use solana_rpc_client_api::response::Response;
+use solana_rpc_client_api::{
+    config::RpcSimulateTransactionConfig,
+    response::{Response, RpcSimulateTransactionResult},
+};
 use solana_sdk::{
     account::Account,
     clock::Slot,
@@ -36,11 +36,11 @@ use crate::{
     blockhash_subscriber::BlockhashSubscriber,
     constants::{
         derive_perp_market_account, derive_spot_market_account, state_account, MarketExt,
-        ProgramData, DEFAULT_PUBKEY, SYSVAR_INSTRUCTIONS_PUBKEY, TOKEN_2022_PROGRAM_ID,
-        TOKEN_PROGRAM_ID,
+        ProgramData, DEFAULT_PUBKEY, SYSVAR_INSTRUCTIONS_PUBKEY,
     },
     drift_idl::traits::ToAccountMetas,
     grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, GeyserSubscribeOpts},
+    jupiter::JupiterSwapInfo,
     marketmap::MarketMap,
     oraclemap::{Oracle, OracleMap},
     swift_order_subscriber::{SignedOrderInfo, SwiftOrderStream},
@@ -482,6 +482,29 @@ impl DriftClient {
     /// It contains various exchange level config parameters
     pub fn state_account(&self) -> SdkResult<State> {
         self.backend.try_get_account(state_account())
+    }
+
+    /// Simulate the tx on remote RPC node
+    pub async fn simulate_tx(
+        &self,
+        tx: VersionedMessage,
+    ) -> SdkResult<RpcSimulateTransactionResult> {
+        let response = self
+            .rpc()
+            .simulate_transaction_with_config(
+                &VersionedTransaction {
+                    message: tx,
+                    // must provide a signature for the RPC call to work
+                    signatures: vec![Signature::new_unique()],
+                },
+                RpcSimulateTransactionConfig {
+                    sig_verify: false,
+                    replace_recent_blockhash: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+        response.map(|r| r.value).map_err(Into::into)
     }
 
     /// Sign and send a tx to the network
@@ -1382,7 +1405,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn deposit(
         mut self,
         amount: u64,
-        spot_market_index: u16,
+        market_index: u16,
         user_token_account: Pubkey,
         reduce_only: Option<bool>,
     ) -> Self {
@@ -1393,20 +1416,24 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.authority),
                 authority: self.authority,
-                spot_market_vault: constants::derive_spot_market_vault(spot_market_index),
+                spot_market_vault: constants::derive_spot_market_vault(market_index),
                 user_token_account,
-                token_program: constants::TOKEN_PROGRAM_ID,
+                token_program: self
+                    .program_data
+                    .spot_market_config_by_index(market_index)
+                    .unwrap()
+                    .token_program(),
             },
             &[self.account_data.as_ref()],
             self.force_markets.readable.iter(),
-            [MarketId::spot(spot_market_index)].iter(),
+            [MarketId::spot(market_index)].iter(),
         );
 
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
             data: InstructionData::data(&drift_idl::instructions::Deposit {
-                market_index: spot_market_index,
+                market_index,
                 amount,
                 reduce_only: reduce_only.unwrap_or(false),
             }),
@@ -1421,7 +1448,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn withdraw(
         mut self,
         amount: u64,
-        spot_market_index: u16,
+        market_index: u16,
         user_token_account: Pubkey,
         reduce_only: Option<bool>,
     ) -> Self {
@@ -1432,14 +1459,18 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.authority),
                 authority: self.authority,
-                spot_market_vault: constants::derive_spot_market_vault(spot_market_index),
+                spot_market_vault: constants::derive_spot_market_vault(market_index),
                 user_token_account,
                 drift_signer: constants::derive_drift_signer(),
-                token_program: constants::TOKEN_PROGRAM_ID,
+                token_program: self
+                    .program_data
+                    .spot_market_config_by_index(market_index)
+                    .unwrap()
+                    .token_program(),
             },
             &[self.account_data.as_ref()],
             self.force_markets.readable.iter(),
-            [MarketId::spot(spot_market_index)]
+            [MarketId::spot(market_index)]
                 .iter()
                 .chain(self.force_markets.writeable.iter()),
         );
@@ -1448,7 +1479,7 @@ impl<'a> TransactionBuilder<'a> {
             program_id: constants::PROGRAM_ID,
             accounts,
             data: InstructionData::data(&drift_idl::instructions::Withdraw {
-                market_index: spot_market_index,
+                market_index,
                 amount,
                 reduce_only: reduce_only.unwrap_or(false),
             }),
@@ -1975,32 +2006,14 @@ impl<'a> TransactionBuilder<'a> {
     /// This should be followed by a subsequent `end_swap` ix
     pub fn begin_swap(
         mut self,
-        out_market_index: u16,
-        in_market_index: u16,
         amount_in: u64,
+        in_market: &SpotMarket,
+        out_market: &SpotMarket,
         payer_token_account: &Pubkey,
         payee_token_account: &Pubkey,
     ) -> Self {
-        let out_market = self
-            .program_data
-            .spot_market_config_by_index(out_market_index)
-            .unwrap();
-        let in_market = self
-            .program_data
-            .spot_market_config_by_index(in_market_index)
-            .unwrap();
-
-        let in_token_program = if in_market.token_program == 1 {
-            TOKEN_2022_PROGRAM_ID
-        } else {
-            TOKEN_PROGRAM_ID
-        };
-
-        let out_token_program = if out_market.token_program == 1 {
-            TOKEN_2022_PROGRAM_ID
-        } else {
-            TOKEN_PROGRAM_ID
-        };
+        let in_token_program = in_market.token_program();
+        let out_token_program = out_market.token_program();
 
         let mut accounts = build_accounts(
             self.program_data,
@@ -2018,25 +2031,29 @@ impl<'a> TransactionBuilder<'a> {
                 instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
             },
             &[self.account_data.as_ref()],
-            self.force_markets.readable.iter(),
-            self.force_markets.writeable.iter(),
+            [MarketId::QUOTE_SPOT].iter(),
+            [
+                MarketId::spot(in_market.market_index),
+                MarketId::spot(out_market.market_index),
+            ]
+            .iter(),
         );
 
         if out_token_program != in_token_program {
-            accounts.push(AccountMeta::new(out_token_program, false));
+            accounts.push(AccountMeta::new_readonly(out_token_program, false));
         }
 
         if out_market.token_program == 1 || in_market.token_program == 1 {
-            accounts.push(AccountMeta::new(in_market.mint, false));
-            accounts.push(AccountMeta::new(out_market.mint, false));
+            accounts.push(AccountMeta::new_readonly(in_market.mint, false));
+            accounts.push(AccountMeta::new_readonly(out_market.mint, false));
         }
 
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
             data: InstructionData::data(&drift_idl::instructions::BeginSwap {
-                in_market_index,
-                out_market_index,
+                in_market_index: in_market.market_index,
+                out_market_index: out_market.market_index,
                 amount_in,
             }),
         };
@@ -2050,27 +2067,14 @@ impl<'a> TransactionBuilder<'a> {
     /// This should follow a preceding `begin_swap` ix
     pub fn end_swap(
         mut self,
-        out_market_index: u16,
-        in_market_index: u16,
+        in_market: &SpotMarket,
+        out_market: &SpotMarket,
         payer_token_account: &Pubkey,
         payee_token_account: &Pubkey,
         limit_price: Option<u64>,
         reduce_only: Option<SwapReduceOnly>,
     ) -> Self {
-        let out_market = self
-            .program_data
-            .spot_market_config_by_index(out_market_index)
-            .unwrap();
-        let in_market = self
-            .program_data
-            .spot_market_config_by_index(in_market_index)
-            .unwrap();
-
-        let in_token_program = if in_market.token_program == 1 {
-            TOKEN_2022_PROGRAM_ID
-        } else {
-            TOKEN_PROGRAM_ID
-        };
+        let in_token_program = in_market.token_program();
 
         let accounts = build_accounts(
             self.program_data,
@@ -2088,16 +2092,20 @@ impl<'a> TransactionBuilder<'a> {
                 instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
             },
             &[self.account_data.as_ref()],
-            self.force_markets.readable.iter(),
-            self.force_markets.writeable.iter(),
+            [MarketId::QUOTE_SPOT].iter(),
+            [
+                MarketId::spot(in_market.market_index),
+                MarketId::spot(out_market.market_index),
+            ]
+            .iter(),
         );
 
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
             data: InstructionData::data(&drift_idl::instructions::EndSwap {
-                in_market_index,
-                out_market_index,
+                in_market_index: in_market.market_index,
+                out_market_index: out_market.market_index,
                 limit_price,
                 reduce_only,
             }),
@@ -2107,61 +2115,98 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
-    /// Add a Jupiter v6 swap to the tx
+    /// Add a Jupiter token swap to the tx
     ///
     /// # Arguments
     /// * `jupiter_swap_info` - Jupiter swap route and instructions
-    /// * `in_market_index` - Market index for input token
-    /// * `out_market_index` - Market index for output token
+    /// * `in_market` - Spot market of the input token
+    /// * `out_market` - Spot market of the output token
     /// * `in_token_account` - Input token account pubkey
     /// * `out_token_account` - Output token account pubkey
-    /// * `limit_price` - Optional minimum output amount
-    /// * `reduce_only` - Optional flag to only reduce positions
-    pub fn jupiter_swap_v6(
-        self,
+    /// * `limit_price` - Set a limit price
+    /// * `reduce_only` - Set a reduce only order
+    pub fn jupiter_swap(
+        mut self,
         jupiter_swap_info: JupiterSwapInfo,
-        in_market_index: u16,
-        out_market_index: u16,
+        in_market: &SpotMarket,
+        out_market: &SpotMarket,
         in_token_account: &Pubkey,
         out_token_account: &Pubkey,
         limit_price: Option<u64>,
         reduce_only: Option<SwapReduceOnly>,
     ) -> Self {
+        let jupiter_swap_ixs = jupiter_swap_info.ixs;
+
+        // initialize token accounts
+        if !jupiter_swap_ixs.setup_instructions.is_empty() {
+            // jupiter swap ixs imply account creation is required
+            // provide our own creation ixs
+            // new_self.ixs.extend(jupiter_swap_ixs.setup_instructions);
+
+            // TODO: support alternative payer address e.g. delegate
+            let create_in_account_ix = Instruction {
+                program_id: ASSOCIATED_TOKEN_PROGRAM_ID,
+                accounts: vec![
+                    AccountMeta::new(self.authority, true), // payer
+                    AccountMeta::new(*in_token_account, false),
+                    AccountMeta::new_readonly(self.authority, false), // wallet
+                    AccountMeta::new_readonly(in_market.mint, false),
+                    AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
+                    AccountMeta::new_readonly(in_market.token_program(), false),
+                ],
+                data: vec![1], // idempotent mode
+            };
+            let create_out_account_ix = Instruction {
+                program_id: ASSOCIATED_TOKEN_PROGRAM_ID,
+                accounts: vec![
+                    AccountMeta::new(self.authority, true), // payer
+                    AccountMeta::new(*out_token_account, false),
+                    AccountMeta::new_readonly(self.authority, false), // wallet
+                    AccountMeta::new_readonly(out_market.mint, false),
+                    AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
+                    AccountMeta::new_readonly(out_market.token_program(), false),
+                ],
+                data: vec![1], // idempotent mode
+            };
+            self.ixs
+                .extend_from_slice(&[create_in_account_ix, create_out_account_ix]);
+        }
+
         let mut new_self = self.begin_swap(
-            out_market_index,
-            in_market_index,
             jupiter_swap_info.quote.in_amount,
+            in_market,
+            out_market,
             in_token_account,
             out_token_account,
         );
 
-        let jupiter_swap_ixs = jupiter_swap_info.ixs;
-
-        // user account should initialize token accounts
-        new_self.ixs.extend(jupiter_swap_ixs.setup_instructions);
-
-        // TODO: suppot jito bundle
+        // TODO: support jito bundle
         if !jupiter_swap_ixs.other_instructions.is_empty() {
             panic!("jupiter swap unsupported ix: Jito tip");
         }
 
         new_self.ixs.push(jupiter_swap_ixs.swap_instruction);
 
-        // TODO: support unwrap SOL
-        if jupiter_swap_ixs.cleanup_instruction.is_some() {
-            panic!("jupiter swap unsupported ix: unwrap SOL");
+        // support SOL unwrap ixs, ignore account delete/reclaim ixs
+        if let Some(unwrap_ix) = jupiter_swap_ixs.cleanup_instruction {
+            if unwrap_ix.program_id != TOKEN_PROGRAM_ID
+                && unwrap_ix.program_id != TOKEN_2022_PROGRAM_ID
+            {
+                new_self.ixs.push(unwrap_ix);
+            }
         }
 
-        new_self = new_self.lookup_tables(&jupiter_swap_info.luts);
-
-        new_self.end_swap(
-            out_market_index,
-            in_market_index,
+        new_self = new_self.end_swap(
+            in_market,
+            out_market,
             in_token_account,
             out_token_account,
             limit_price,
             reduce_only,
-        )
+        );
+
+        // Add the jup tx LUTs
+        new_self.lookup_tables(&jupiter_swap_info.luts)
     }
 
     /// Build the transaction message ready for signing and sending

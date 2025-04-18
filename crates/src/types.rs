@@ -28,11 +28,13 @@ pub use crate::drift_idl::{
     types::*,
 };
 use crate::{
-    constants::{ids, LUTS_DEVNET, LUTS_MAINNET},
+    constants::{ids, LUTS_DEVNET, LUTS_MAINNET, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID},
     drift_idl::errors::ErrorCode,
     grpc::grpc_subscriber::GrpcError,
     Wallet,
 };
+
+use self::accounts::SpotMarket;
 
 /// Map from K => V
 pub type MapOf<K, V> = DashMap<K, V, ahash::RandomState>;
@@ -44,6 +46,17 @@ pub type SdkResult<T> = Result<T, SdkError>;
 
 pub fn is_one_of_variant<T: PartialEq>(value: &T, variants: &[T]) -> bool {
     variants.iter().any(|variant| value == variant)
+}
+
+impl SpotMarket {
+    /// Return the spot market's token program address
+    pub fn token_program(&self) -> Pubkey {
+        if self.token_program == 1 {
+            TOKEN_2022_PROGRAM_ID
+        } else {
+            TOKEN_PROGRAM_ID
+        }
+    }
 }
 
 /// Drift program context
