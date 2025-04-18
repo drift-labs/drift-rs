@@ -310,7 +310,7 @@ impl OracleMap {
         self.oraclemap.len()
     }
 
-    /// Returns true if the oraclemap has a subscription for `market`
+    /// Returns true if the oraclemap has a Ws subscription for `market`
     pub fn is_subscribed(&self, market: &MarketId) -> bool {
         if let Some((oracle_pubkey, _oracle_source)) = self.oracle_by_market.get(market) {
             self.subscriptions.contains_key(oracle_pubkey)
