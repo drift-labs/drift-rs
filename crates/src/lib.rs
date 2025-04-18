@@ -10,7 +10,11 @@ use std::{
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
 pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
-use jupiter_swap_api_client::{quote::QuoteResponse, swap::SwapInstructionsResponse, JupiterSwapApiClient};
+use jupiter_swap_api_client::{
+    quote::{self, QuoteResponse, SwapMode},
+    swap::SwapInstructionsResponse,
+    JupiterSwapApiClient,
+};
 use log::debug;
 pub use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::response::Response;
@@ -30,9 +34,9 @@ use crate::{
     account_map::AccountMap,
     blockhash_subscriber::BlockhashSubscriber,
     constants::{
-        TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID,
         derive_perp_market_account, derive_spot_market_account, state_account, MarketExt,
-        ProgramData, DEFAULT_PUBKEY, SYSVAR_INSTRUCTIONS_PUBKEY,
+        ProgramData, DEFAULT_PUBKEY, SYSVAR_INSTRUCTIONS_PUBKEY, TOKEN_2022_PROGRAM_ID,
+        TOKEN_PROGRAM_ID,
     },
     drift_idl::traits::ToAccountMetas,
     grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, GeyserSubscribeOpts},
@@ -50,6 +54,7 @@ pub use crate::{grpc::GrpcSubscribeOpts, types::Context, wallet::Wallet};
 // utils
 pub mod async_utils;
 pub mod ffi;
+pub mod jupiter;
 pub mod math;
 pub mod memcmp;
 pub mod utils;
@@ -1173,7 +1178,7 @@ impl DriftClientBackend {
     ///
     /// Uses latest local value from an `OracleMap` if subscribed, falls back to network query
     pub async fn get_oracle(&self, market: MarketId) -> SdkResult<Oracle> {
-        if self.oracle_map.is_subscribed(&market) {
+        if self.is_grpc_subscribed() || self.oracle_map.is_subscribed(&market) {
             Ok(self
                 .try_get_oracle_price_data_and_slot(market)
                 .expect("oracle exists"))
@@ -2113,14 +2118,25 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
-    pub fn jupiter_swap_v6(
-        mut self, 
-        jupiter_swap_ixs: SwapInstructionsResponse,
-    ) -> Self {
+    pub fn jupiter_swap_v6(mut self, jupiter_swap_ixs: SwapInstructionsResponse) -> Self {
         // add `ixs` to self.ixs``
-        self.begin_swap(out_market_index, in_market_index, amount_in, payer_token_account, payee_token_account);
-        self.ixs.push(jupiter_swap_ixs);
-        self.end_swap(out_market_index, in_market_index, payer_token_account, payee_token_account, limit_price, reduce_only);
+        // self.begin_swap(
+        //     out_market_index,
+        //     in_market_index,
+        //     amount_in,
+        //     payer_token_account,
+        //     payee_token_account,
+        // );
+        // // TODO: what order do I push the ixs here?
+        // self.ixs.push(jupiter_swap_ixs);
+        // self.end_swap(
+        //     out_market_index,
+        //     in_market_index,
+        //     payer_token_account,
+        //     payee_token_account,
+        //     limit_price,
+        //     reduce_only,
+        // );
 
         self
     }
@@ -2149,44 +2165,6 @@ impl<'a> TransactionBuilder<'a> {
     pub fn account_data(&self) -> &Cow<'_, User> {
         &self.account_data
     }
-}
-
-/*
-trait for building Jupiter Ixs
-TRansactionBuilder add Jupiter client
-add method to do 
-- Get quote
-- Get Ixs
-- Build Tx
- */
-pub async fn jupiter_quote() -> QuoteResponse {
-    let jup = JupiterSwapApiClient::new("example.come");
-    // TODO: set the params
-    jup.quote(&QuoteRequest {
-        input_mint: (),
-        output_mint: (),
-        amount: (),
-        swap_mode: (),
-        slippage_bps: (),
-        auto_slippage: (),
-        max_auto_slippage_bps: (),
-        compute_auto_slippage: (),
-        auto_slippage_collision_usd_value: (),
-        minimize_slippage: (),
-        platform_fee_bps: (),
-        dexes: (),
-        excluded_dexes: (),
-        only_direct_routes: (),
-        as_legacy_transaction: (),
-        restrict_intermediate_tokens: (),
-        max_accounts: (),
-        quote_type: (),
-        quote_args: (),
-        prefer_liquid_dexes: (),
-        compute_unit_score: (),
-        routing_constraints: (),
-        token_category_based_intermediate_tokens: ()
-    }).await
 }
 
 /// Builds a set of required accounts from a user's open positions and additional given accounts
