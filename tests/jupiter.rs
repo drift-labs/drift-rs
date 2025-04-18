@@ -2,7 +2,7 @@ use drift_rs::{
     event_subscriber::RpcClient,
     jupiter::{JupiterSwapApi, SwapMode},
     types::{accounts::User, Context, MarketId},
-    utils::test_envs::{mainnet_endpoint, test_keypair},
+    utils::test_envs::{mainnet_endpoint, mainnet_test_keypair},
     DriftClient, TransactionBuilder, Wallet,
 };
 use solana_sdk::{
@@ -15,7 +15,7 @@ const DRIFT_CLIENT: OnceCell<DriftClient> = OnceCell::const_new();
 async fn drift_client() -> DriftClient {
     DRIFT_CLIENT
         .get_or_init(|| async move {
-            let wallet: Wallet = test_keypair().into();
+            let wallet: Wallet = mainnet_test_keypair().into();
             DriftClient::new(
                 Context::MainNet,
                 RpcClient::new(mainnet_endpoint()),
