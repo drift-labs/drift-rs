@@ -10,6 +10,7 @@ use std::{
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
 pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
+use jupiter::JupiterSwapInfo;
 use jupiter_swap_api_client::{
     quote::{self, QuoteResponse, SwapMode},
     swap::SwapInstructionsResponse,
@@ -1354,9 +1355,7 @@ impl<'a> TransactionBuilder<'a> {
     }
     /// Extend the tx lookup tables (always includes the defacto drift LUTs)
     pub fn lookup_tables(mut self, lookup_tables: &[AddressLookupTableAccount]) -> Self {
-        self.lookup_tables = lookup_tables.to_vec();
-        self.lookup_tables
-            .extend(self.program_data.lookup_tables.iter().cloned());
+        self.lookup_tables.extend_from_slice(lookup_tables);
 
         self
     }
@@ -2108,27 +2107,61 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
-    pub fn jupiter_swap_v6(mut self, jupiter_swap_ixs: SwapInstructionsResponse) -> Self {
-        // add `ixs` to self.ixs``
-        // self.begin_swap(
-        //     out_market_index,
-        //     in_market_index,
-        //     amount_in,
-        //     payer_token_account,
-        //     payee_token_account,
-        // );
-        // // TODO: what order do I push the ixs here?
-        // self.ixs.push(jupiter_swap_ixs);
-        // self.end_swap(
-        //     out_market_index,
-        //     in_market_index,
-        //     payer_token_account,
-        //     payee_token_account,
-        //     limit_price,
-        //     reduce_only,
-        // );
+    /// Add a Jupiter v6 swap to the tx
+    ///
+    /// # Arguments
+    /// * `jupiter_swap_info` - Jupiter swap route and instructions
+    /// * `in_market_index` - Market index for input token
+    /// * `out_market_index` - Market index for output token
+    /// * `in_token_account` - Input token account pubkey
+    /// * `out_token_account` - Output token account pubkey
+    /// * `limit_price` - Optional minimum output amount
+    /// * `reduce_only` - Optional flag to only reduce positions
+    pub fn jupiter_swap_v6(
+        self,
+        jupiter_swap_info: JupiterSwapInfo,
+        in_market_index: u16,
+        out_market_index: u16,
+        in_token_account: &Pubkey,
+        out_token_account: &Pubkey,
+        limit_price: Option<u64>,
+        reduce_only: Option<SwapReduceOnly>,
+    ) -> Self {
+        let mut new_self = self.begin_swap(
+            out_market_index,
+            in_market_index,
+            jupiter_swap_info.quote.in_amount,
+            in_token_account,
+            out_token_account,
+        );
 
-        self
+        let jupiter_swap_ixs = jupiter_swap_info.ixs;
+
+        // user account should initialize token accounts
+        new_self.ixs.extend(jupiter_swap_ixs.setup_instructions);
+
+        // TODO: suppot jito bundle
+        if !jupiter_swap_ixs.other_instructions.is_empty() {
+            panic!("jupiter swap unsupported ix: Jito tip");
+        }
+
+        new_self.ixs.push(jupiter_swap_ixs.swap_instruction);
+
+        // TODO: support unwrap SOL
+        if jupiter_swap_ixs.cleanup_instruction.is_some() {
+            panic!("jupiter swap unsupported ix: unwrap SOL");
+        }
+
+        new_self = new_self.lookup_tables(&jupiter_swap_info.luts);
+
+        new_self.end_swap(
+            out_market_index,
+            in_market_index,
+            in_token_account,
+            out_token_account,
+            limit_price,
+            reduce_only,
+        )
     }
 
     /// Build the transaction message ready for signing and sending
