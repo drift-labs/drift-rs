@@ -152,6 +152,12 @@ pub mod test_envs {
         let private_key = std::env::var("TEST_PRIVATE_KEY").expect("TEST_PRIVATE_KEY set");
         Keypair::from_base58_string(private_key.as_str())
     }
+    /// keypair for mainnet integration tests
+    pub fn mainnet_test_keypair() -> Keypair {
+        let private_key =
+            std::env::var("TEST_MAINNET_PRIVATE_KEY").expect("TEST_MAINNET_PRIVATE_KEY set");
+        Keypair::from_base58_string(private_key.as_str())
+    }
 }
 
 /// copy of `solana_sdk::ed25519_instruction::Ed25519SignatureOffsets`

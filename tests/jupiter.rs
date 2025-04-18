@@ -3,7 +3,7 @@ use drift_rs::{
     jupiter::{JupiterSwapApi, SwapMode},
     types::{accounts::User, Context, MarketId},
     utils::test_envs::{mainnet_endpoint, test_keypair},
-    DriftClient, Pubkey, TransactionBuilder, Wallet,
+    DriftClient, TransactionBuilder, Wallet,
 };
 use solana_sdk::{
     instruction::InstructionError, native_token::LAMPORTS_PER_SOL, transaction::TransactionError,
