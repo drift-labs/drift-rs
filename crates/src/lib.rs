@@ -971,22 +971,14 @@ impl DriftClientBackend {
         &self,
         market_index: u16,
     ) -> Option<DataAndSlot<PerpMarket>> {
-        if self.is_grpc_subscribed() || self.perp_market_map.is_subscribed(market_index) {
-            self.perp_market_map.get(&market_index)
-        } else {
-            None
-        }
+        self.perp_market_map.get(&market_index)
     }
 
     pub fn try_get_spot_market_account_and_slot(
         &self,
         market_index: u16,
     ) -> Option<DataAndSlot<SpotMarket>> {
-        if self.is_grpc_subscribed() || self.spot_market_map.is_subscribed(market_index) {
-            self.spot_market_map.get(&market_index)
-        } else {
-            None
-        }
+        self.spot_market_map.get(&market_index)
     }
 
     pub fn try_get_oracle_price_data_and_slot(&self, market: MarketId) -> Option<Oracle> {
@@ -1169,10 +1161,8 @@ impl DriftClientBackend {
     ///
     /// Uses latest local value from an `OracleMap` if subscribed, falls back to network query
     pub async fn get_oracle(&self, market: MarketId) -> SdkResult<Oracle> {
-        if self.oracle_map.is_subscribed(&market) {
-            Ok(self
-                .try_get_oracle_price_data_and_slot(market)
-                .expect("oracle exists"))
+        if let Some(oracle) = self.try_get_oracle_price_data_and_slot(market) {
+            Ok(oracle)
         } else {
             debug!(target: "rpc", "fetch oracle account: {market:?}");
             let (oracle, oracle_source) = match market.kind() {

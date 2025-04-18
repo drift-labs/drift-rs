@@ -181,7 +181,7 @@ where
         Ok(())
     }
 
-    /// Returns whether the market is subscribed to live updates or not
+    /// Returns whether the market is subscribed to Ws updates or not
     pub fn is_subscribed(&self, market_index: u16) -> bool {
         self.subscriptions.contains_key(&market_index)
     }
