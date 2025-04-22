@@ -168,7 +168,7 @@ async fn jupiter_swap_exact_out_udsc_to_sol() {
         Some(err) => {
             assert_eq!(
                 err,
-                TransactionError::InstructionError(4, InstructionError::Custom(6157))
+                TransactionError::InstructionError(2, InstructionError::Custom(6157))
             )
         }
         None => assert!(true),
