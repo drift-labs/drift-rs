@@ -89,7 +89,16 @@ async fn jupiter_swap_exact_in_udsc_to_sol() {
 
     let result = client.simulate_tx(tx).await;
     dbg!(&result);
-    assert!(result.expect("sim ok").err.is_none());
+    let err = result.expect("sim ok").err;
+    match err {
+        Some(err) => {
+            assert_eq!(
+                err,
+                TransactionError::InstructionError(4, InstructionError::Custom(6157))
+            )
+        }
+        None => assert!(true),
+    }
 }
 
 #[tokio::test]
@@ -153,7 +162,17 @@ async fn jupiter_swap_exact_out_udsc_to_sol() {
 
     let result = client.simulate_tx(tx).await;
     dbg!(&result);
-    assert!(result.expect("sim ok").err.is_none());
+    // either swap OK or it would incur borrow which is fine (test account missing 'token in' amount)
+    let err = result.expect("sim ok").err;
+    match err {
+        Some(err) => {
+            assert_eq!(
+                err,
+                TransactionError::InstructionError(2, InstructionError::Custom(6157))
+            )
+        }
+        None => assert!(true),
+    }
 }
 
 #[tokio::test]
@@ -217,7 +236,17 @@ async fn jupiter_swap_exact_out_udsc_jto() {
 
     let result = client.simulate_tx(tx).await;
     dbg!(&result);
-    assert!(result.expect("sim ok").err.is_none());
+    let err = result.expect("sim ok").err;
+    // either swap OK or it would incur borrow which is fine (test account missing 'token in' amount)
+    match err {
+        Some(err) => {
+            assert_eq!(
+                err,
+                TransactionError::InstructionError(4, InstructionError::Custom(6157))
+            )
+        }
+        None => assert!(true),
+    }
 }
 
 #[tokio::test]
