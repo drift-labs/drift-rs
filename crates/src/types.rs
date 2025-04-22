@@ -352,6 +352,7 @@ pub enum SdkError {
     Grpc(#[from] GrpcError),
 }
 
+#[derive(Debug, PartialEq)]
 /// Solana program execution error
 pub enum ProgramError {
     /// instruction error from Drift
@@ -383,6 +384,8 @@ impl SdkError {
                 // inverse of anchor's 'From<ErrorCode> for u32'
                 let err = match code.checked_sub(anchor_lang::error::ERROR_CODE_OFFSET) {
                     Some(code) => {
+                        // this will saturate e.g. if u32 > |ErrorCode\ then it always returns the
+                        // highest idx variant
                         ProgramError::Drift(unsafe { std::mem::transmute::<u32, ErrorCode>(code) })
                     }
                     None => ProgramError::Other { ix_idx, code },
@@ -593,7 +596,7 @@ mod tests {
     };
 
     use super::{RemainingAccount, SdkError};
-    use crate::{drift_idl::errors::ErrorCode, MarketType};
+    use crate::{drift_idl::errors::ErrorCode, types::ProgramError, MarketType};
 
     #[test]
     fn market_type_str() {
@@ -630,7 +633,7 @@ mod tests {
 
         assert_eq!(
             err.to_anchor_error_code().unwrap(),
-            ErrorCode::UserOrderIdAlreadyInUse,
+            ProgramError::Drift(ErrorCode::UserOrderIdAlreadyInUse),
         );
     }
 
