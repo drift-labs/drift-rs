@@ -1,6 +1,7 @@
 use std::{
     cell::{BorrowError, BorrowMutError},
     cmp::Ordering,
+    fmt::Display,
     str::FromStr,
 };
 
@@ -351,19 +352,42 @@ pub enum SdkError {
     Grpc(#[from] GrpcError),
 }
 
+/// Solana program execution error
+pub enum ProgramError {
+    /// instruction error from Drift
+    Drift(ErrorCode),
+    /// instruction error from another program
+    Other { ix_idx: u8, code: u32 },
+}
+
+impl Display for ProgramError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Drift(code) => f.write_fmt(format_args!("drift: {code}")),
+            Self::Other { ix_idx, code } => {
+                f.write_fmt(format_args!("ix_idx: {ix_idx}, code: {code}"))
+            }
+        }
+    }
+}
+
 impl SdkError {
     /// extract anchor error code from the SdkError if it exists
-    pub fn to_anchor_error_code(&self) -> Option<ErrorCode> {
+    pub fn to_anchor_error_code(&self) -> Option<ProgramError> {
         if let SdkError::Rpc(inner) = self {
-            if let Some(TransactionError::InstructionError(_, InstructionError::Custom(code))) =
-                inner.get_transaction_error()
+            if let Some(TransactionError::InstructionError(
+                ix_idx,
+                InstructionError::Custom(code),
+            )) = inner.get_transaction_error()
             {
                 // inverse of anchor's 'From<ErrorCode> for u32'
-                return Some(unsafe {
-                    std::mem::transmute::<u32, ErrorCode>(
-                        code - anchor_lang::error::ERROR_CODE_OFFSET,
-                    )
-                });
+                let err = match code.checked_sub(anchor_lang::error::ERROR_CODE_OFFSET) {
+                    Some(code) => {
+                        ProgramError::Drift(unsafe { std::mem::transmute::<u32, ErrorCode>(code) })
+                    }
+                    None => ProgramError::Other { ix_idx, code },
+                };
+                return Some(err);
             }
         }
         None

@@ -1369,6 +1369,10 @@ impl<'a> TransactionBuilder<'a> {
             force_markets: Default::default(),
         }
     }
+    /// Pubkey of sub-account owner
+    fn owner(&self) -> Pubkey {
+        self.account_data.authority
+    }
     /// force given `markets` to be included in the final tx accounts list (ensure to call before building ixs)
     pub fn force_include_markets(&mut self, readable: &[MarketId], writeable: &[MarketId]) {
         self.force_markets.with_readable(readable);
@@ -2023,7 +2027,7 @@ impl<'a> TransactionBuilder<'a> {
             types::accounts::BeginSwap {
                 state: *state_account(),
                 user: self.sub_account,
-                user_stats: Wallet::derive_stats_account(&self.authority),
+                user_stats: Wallet::derive_stats_account(&self.owner()),
                 authority: self.authority,
                 out_spot_market_vault: out_market.vault,
                 in_spot_market_vault: in_market.vault,
@@ -2077,14 +2081,15 @@ impl<'a> TransactionBuilder<'a> {
         limit_price: Option<u64>,
         reduce_only: Option<SwapReduceOnly>,
     ) -> Self {
+        let out_token_program = out_market.token_program();
         let in_token_program = in_market.token_program();
 
-        let accounts = build_accounts(
+        let mut accounts = build_accounts(
             self.program_data,
             types::accounts::EndSwap {
                 state: *state_account(),
                 user: self.sub_account,
-                user_stats: Wallet::derive_stats_account(&self.authority),
+                user_stats: Wallet::derive_stats_account(&self.owner()),
                 authority: self.authority,
                 out_spot_market_vault: out_market.vault,
                 in_spot_market_vault: in_market.vault,
@@ -2102,6 +2107,15 @@ impl<'a> TransactionBuilder<'a> {
             ]
             .iter(),
         );
+
+        if out_token_program != in_token_program {
+            accounts.push(AccountMeta::new_readonly(out_token_program, false));
+        }
+
+        if out_market.token_program == 1 || in_market.token_program == 1 {
+            accounts.push(AccountMeta::new_readonly(in_market.mint, false));
+            accounts.push(AccountMeta::new_readonly(out_market.mint, false));
+        }
 
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
@@ -2145,8 +2159,6 @@ impl<'a> TransactionBuilder<'a> {
             // jupiter swap ixs imply account creation is required
             // provide our own creation ixs
             // new_self.ixs.extend(jupiter_swap_ixs.setup_instructions);
-
-            // TODO: support alternative payer address e.g. delegate
             let create_in_account_ix = Instruction {
                 program_id: ASSOCIATED_TOKEN_PROGRAM_ID,
                 accounts: vec![
