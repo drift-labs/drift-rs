@@ -207,7 +207,7 @@ pub struct NewOrder {
     reduce_only: bool,
     market_id: MarketId,
     post_only: PostOnlyParam,
-    ioc: bool,
+    ioc: u8,
     amount: u64,
     price: u64,
     user_order_id: u8,
@@ -253,9 +253,9 @@ impl NewOrder {
         self.reduce_only = flag;
         self
     }
-    /// Set immediate or cancel (default: false)
-    pub fn ioc(mut self, flag: bool) -> Self {
-        self.ioc = flag;
+    /// Set immediate or cancel and other flags (default: false)
+    pub fn bit_flags(mut self, flags: u8) -> Self {
+        self.ioc = flags;
         self
     }
     /// Set post-only (default: None)
@@ -278,7 +278,7 @@ impl NewOrder {
             base_asset_amount: self.amount,
             reduce_only: self.reduce_only,
             direction: self.direction,
-            immediate_or_cancel: self.ioc,
+            bit_flags: self.ioc,
             post_only: self.post_only,
             user_order_id: self.user_order_id,
             ..Default::default()

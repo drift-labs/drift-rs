@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.118.0";
+pub const IDL_VERSION: &str = "2.119.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -1893,6 +1893,17 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketFuel {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdatePerpMarketProtectedMakerParams {
+        pub protected_maker_limit_price_divisor: Option<u8>,
+        pub protected_maker_dynamic_divisor: Option<u8>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdatePerpMarketProtectedMakerParams {
+        const DISCRIMINATOR: &[u8] = &[249, 213, 115, 34, 253, 239, 75, 173];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdatePerpMarketProtectedMakerParams {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdateSpotMarketFuel {
         pub fuel_boost_deposits: Option<u8>,
         pub fuel_boost_borrows: Option<u8>,
@@ -2455,7 +2466,7 @@ pub mod types {
         pub market_index: u16,
         pub reduce_only: bool,
         pub post_only: PostOnlyParam,
-        pub immediate_or_cancel: bool,
+        pub bit_flags: u8,
         pub max_ts: Option<i64>,
         pub trigger_price: Option<u64>,
         pub trigger_condition: OrderTriggerCondition,
@@ -2542,7 +2553,7 @@ pub mod types {
         pub price: Option<u64>,
         pub reduce_only: Option<bool>,
         pub post_only: Option<PostOnlyParam>,
-        pub immediate_or_cancel: Option<bool>,
+        pub bit_flags: Option<u8>,
         pub max_ts: Option<i64>,
         pub trigger_price: Option<u64>,
         pub trigger_condition: Option<OrderTriggerCondition>,
@@ -3456,6 +3467,23 @@ pub mod types {
         PythLazer1K,
         PythLazer1M,
         PythLazerStableCoin,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub enum OrderParamsBitFlag {
+        #[default]
+        ImmediateOrCancel,
+        UpdateHighLeverageMode,
     }
     #[derive(
         AnchorSerialize,
@@ -19131,6 +19159,76 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdatePerpMarketProtectedMakerParams {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+        pub perp_market: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdatePerpMarketProtectedMakerParams {
+        const DISCRIMINATOR: &[u8] = &[31, 187, 231, 244, 165, 74, 103, 137];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketProtectedMakerParams {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdatePerpMarketProtectedMakerParams {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdatePerpMarketProtectedMakerParams {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdatePerpMarketProtectedMakerParams {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdatePerpMarketProtectedMakerParams {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.perp_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdatePerpMarketProtectedMakerParams {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdatePerpMarketProtectedMakerParams {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateSpotMarketFuel {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -21221,6 +21319,8 @@ pub mod errors {
         InvalidTransferPerpPosition,
         #[msg("Invalid SignedMsgUserOrders resize")]
         InvalidSignedMsgUserOrdersResize,
+        #[msg("Could not deserialize high leverage mode config")]
+        CouldNotDeserializeHighLeverageModeConfig,
     }
 }
 pub mod events {

@@ -204,7 +204,7 @@ pub fn simulate_place_perp_order(
 ///
 /// Returns `true` if the order's auctions will get sanitized
 pub fn simulate_will_auction_params_sanitize(
-    order_params: &mut types::OrderParams,
+    order_params: &types::OrderParams,
     perp_market: &accounts::PerpMarket,
     oracle_price: i64,
     is_signed_msg: bool,

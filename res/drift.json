@@ -1,5 +1,5 @@
 {
-  "version": "2.118.0",
+  "version": "2.119.0",
   "name": "drift",
   "instructions": [
     {
@@ -6416,6 +6416,40 @@
       ]
     },
     {
+      "name": "updatePerpMarketProtectedMakerParams",
+      "accounts": [
+        {
+          "name": "admin",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "state",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "perpMarket",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "protectedMakerLimitPriceDivisor",
+          "type": {
+            "option": "u8"
+          }
+        },
+        {
+          "name": "protectedMakerDynamicDivisor",
+          "type": {
+            "option": "u8"
+          }
+        }
+      ]
+    },
+    {
       "name": "updateSpotMarketFuel",
       "accounts": [
         {
@@ -9436,8 +9470,8 @@
             }
           },
           {
-            "name": "immediateOrCancel",
-            "type": "bool"
+            "name": "bitFlags",
+            "type": "u8"
           },
           {
             "name": "maxTs",
@@ -9634,9 +9668,9 @@
             }
           },
           {
-            "name": "immediateOrCancel",
+            "name": "bitFlags",
             "type": {
-              "option": "bool"
+              "option": "u8"
             }
           },
           {
@@ -11710,6 +11744,20 @@
           },
           {
             "name": "PythLazerStableCoin"
+          }
+        ]
+      }
+    },
+    {
+      "name": "OrderParamsBitFlag",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "ImmediateOrCancel"
+          },
+          {
+            "name": "UpdateHighLeverageMode"
           }
         ]
       }
@@ -15078,6 +15126,11 @@
       "code": 6313,
       "name": "InvalidSignedMsgUserOrdersResize",
       "msg": "Invalid SignedMsgUserOrders resize"
+    },
+    {
+      "code": 6314,
+      "name": "CouldNotDeserializeHighLeverageModeConfig",
+      "msg": "Could not deserialize high leverage mode config"
     }
   ],
   "metadata": {
