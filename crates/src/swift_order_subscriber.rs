@@ -510,7 +510,7 @@ mod tests {
                     market_index: 2,
                     reduce_only: false,
                     post_only: PostOnlyParam::None,
-                    immediate_or_cancel: false,
+                    bit_flags: 0,
                     max_ts: None,
                     trigger_price: None,
                     trigger_condition: OrderTriggerCondition::Above,
