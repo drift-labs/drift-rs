@@ -262,7 +262,7 @@ async fn client_subscribe_swift_orders() {
 
     let all_markets = client.get_all_perp_market_ids();
     let mut order_stream = client
-        .subscribe_swift_orders(all_markets.as_slice())
+        .subscribe_swift_orders(all_markets.as_slice(), Some(true))
         .await
         .unwrap();
     let mut recv_count = 0;

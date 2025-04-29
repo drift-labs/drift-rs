@@ -228,9 +228,9 @@ pub type SwiftOrderStream = ReceiverStream<SignedOrderInfo>;
 
 /// Subscribe to the Swift WebSocket server, authenticate, and listen to new orders
 ///
-/// `client` Drift client instance
-/// `markets` markets to listen on for new swift orders
-/// `accept_sanitized` set to true to also view *sanitized order flow
+/// * `client` - Drift client instance
+/// * `markets` - markets to listen on for new swift orders
+/// * `accept_sanitized` - set to true to also view *sanitized order flow
 ///
 /// *a sanitized order may have its auction params modified by the program when
 /// placed onchain. Makers should understand the time/price implications to accept these.

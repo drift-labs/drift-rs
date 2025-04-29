@@ -220,13 +220,23 @@ impl DriftClient {
     /// Subscribe to swift order feed(s) for given `markets`
     ///
     /// * `markets` - list of markets to watch for swift orders
+    /// * `accept_sanitized` - set to `Some(true)` to also view *sanitized order flow
+    ///
+    /// *a sanitized order may have its auction params modified by the program when
+    /// placed onchain. Makers should understand the time/price implications to accept these.
     ///
     /// Returns a stream of swift orders
     pub async fn subscribe_swift_orders(
         &self,
         markets: &[MarketId],
+        accept_sanitized: Option<bool>,
     ) -> SdkResult<SwiftOrderStream> {
-        swift_order_subscriber::subscribe_swift_orders(self, markets, false).await
+        swift_order_subscriber::subscribe_swift_orders(
+            self,
+            markets,
+            accept_sanitized.is_some_and(|x| x),
+        )
+        .await
     }
 
     /// Returns the MarketIds for all active spot markets (ignores de-listed and settled markets)
