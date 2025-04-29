@@ -52,8 +52,8 @@ thiserror = "1"
 tokio = { version = "1.42", features = ["full"] }
 tokio-stream = "0.1.17"
 tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
-yellowstone-grpc-client = "6.0.0"
-yellowstone-grpc-proto = "6.0.0"
+yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc", rev = "bb3a44a" }
+yellowstone-grpc-proto = { git = "https://github.com/rpcpool/yellowstone-grpc", rev = "bb3a44a" }
 
 drift-pubsub-client = { version = "0.1.1", path = "crates/pubsub-client" }
 

@@ -32,16 +32,17 @@ jobs:
         with:
           submodules: true
       - name: Cache Rust toolchain
-        uses: actions/cache@v4
+        id: cache-rust-target-restore
+        uses: actions/cache/restore@v4
         with:
-         path: |
-           ~/.rustup
-           ~/.cargo/registry
-           ~/.cargo/git
-           target
-         key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
-         restore-keys: |
-           ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
+          path: |
+            ~/.rustup
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
       - name: Config rust toolchain
         run: |
           rustup show active-toolchain
@@ -61,11 +62,21 @@ jobs:
       - name: Test
         run: |
           cargo test --no-fail-fast --lib -- --nocapture
-          cargo test --no-fail-fast --test integration -- --nocapture --test-threads 1
-          cargo test --no-fail-fast --test jupiter -- --nocapture --test-threads 1
+          cargo test --no-fail-fast --test integration -- --nocapture --test-threads 2
+          cargo test --no-fail-fast --test jupiter -- --nocapture --test-threads 2
         env:
           TEST_DEVNET_RPC_ENDPOINT: ${{ secrets.DEVNET_RPC_ENDPOINT }}
           TEST_MAINNET_RPC_ENDPOINT: ${{ secrets.MAINNET_RPC_ENDPOINT }}
           TEST_PRIVATE_KEY: ${{ secrets.TEST_PRIVATE_KEY }}
           TEST_MAINNET_PRIVATE_KEY: ${{ secrets.TEST_MAINNET_PRIVATE_KEY }}
           TEST_GRPC_X_TOKEN: ${{ secrets.TEST_GRPC_X_TOKEN }}
+      - name: Cache Rust toolchain (save)
+        uses: actions/cache/save@v4
+        if: success() || failure()
+        with:
+          path: |
+            ~/.rustup
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ steps.cache-rust-target-restore.outputs.cache-primary-key }}

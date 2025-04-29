@@ -23,7 +23,7 @@ use yellowstone_grpc_proto::{
     tonic::{transport::Certificate, Status},
 };
 
-use crate::{constants::PROGRAM_ID as DRIFT_PROGRAM_ID, types::UnsubHandle};
+use crate::types::UnsubHandle;
 
 use super::{AccountUpdate, OnAccountFn};
 
@@ -171,18 +171,18 @@ impl Default for GrpcConnectionOpts {
 /// Options for the geyser subscription request
 #[derive(Debug, Default, Clone)]
 pub struct GeyserSubscribeOpts {
-    /// Filter by presence of field txn_signature
-    accounts_nonempty_txn_signature: Option<bool>,
-    /// Filter by Account Pubkey
-    accounts_account: Vec<String>,
     /// Filter by Offset and Data, format: `offset,data in base58`
-    accounts_memcmp: Vec<Memcmp>,
+    pub accounts_memcmp: Vec<Memcmp>,
     /// Filter by Data size
-    accounts_datasize: Option<u64>,
+    pub accounts_datasize: Option<u64>,
+    /// subscribe must match one of these owners
+    pub accounts_owners: Vec<String>,
+    /// subscribe must match one of these pubkeys
+    pub accounts_pubkeys: Vec<String>,
     /// Re-send message from slot
-    from_slot: Option<u64>,
+    pub from_slot: Option<u64>,
     /// Send ping in subscribe request
-    ping: Option<i32>,
+    pub ping: Option<i32>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -362,7 +362,9 @@ impl DriftGrpcClient {
                                 );
                                 log::trace!(target: "grpc", "account update: {pubkey}");
                                 let update = AccountUpdate {
-                                    owner: DRIFT_PROGRAM_ID, // assuming not subscribed to any other program accounts..
+                                    owner: Pubkey::new_from_array(
+                                        account.owner.as_slice().try_into().unwrap(),
+                                    ),
                                     pubkey,
                                     slot: latest_slot,
                                     lamports: account.lamports,
@@ -458,10 +460,10 @@ impl GeyserSubscribeOpts {
         accounts.insert(
             "client".to_owned(),
             SubscribeRequestFilterAccounts {
-                nonempty_txn_signature: self.accounts_nonempty_txn_signature,
-                account: self.accounts_account.clone(),
-                owner: vec![DRIFT_PROGRAM_ID.to_string()],
+                account: self.accounts_pubkeys.clone(),
+                owner: self.accounts_owners.clone(),
                 filters,
+                ..Default::default()
             },
         );
 
@@ -470,7 +472,7 @@ impl GeyserSubscribeOpts {
             "client".to_owned(),
             SubscribeRequestFilterSlots {
                 filter_by_commitment: Some(true),
-                interslot_updates: Some(false),
+                interslot_updates: None,
             },
         );
 

@@ -9,7 +9,8 @@ use std::{
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
 use constants::{
-    ASSOCIATED_TOKEN_PROGRAM_ID, SYSTEM_PROGRAM_ID, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID, PROGRAM_ID, SYSTEM_PROGRAM_ID, TOKEN_2022_PROGRAM_ID,
+    TOKEN_PROGRAM_ID,
 };
 pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
@@ -219,13 +220,23 @@ impl DriftClient {
     /// Subscribe to swift order feed(s) for given `markets`
     ///
     /// * `markets` - list of markets to watch for swift orders
+    /// * `accept_sanitized` - set to `Some(true)` to also view *sanitized order flow
+    ///
+    /// *a sanitized order may have its auction params modified by the program when
+    /// placed onchain. Makers should understand the time/price implications to accept these.
     ///
     /// Returns a stream of swift orders
     pub async fn subscribe_swift_orders(
         &self,
         markets: &[MarketId],
+        accept_sanitized: Option<bool>,
     ) -> SdkResult<SwiftOrderStream> {
-        swift_order_subscriber::subscribe_swift_orders(self, markets).await
+        swift_order_subscriber::subscribe_swift_orders(
+            self,
+            markets,
+            accept_sanitized.is_some_and(|x| x),
+        )
+        .await
     }
 
     /// Returns the MarketIds for all active spot markets (ignores de-listed and settled markets)
@@ -796,7 +807,7 @@ pub struct DriftClientBackend {
     perp_market_map: MarketMap<PerpMarket>,
     spot_market_map: MarketMap<SpotMarket>,
     oracle_map: OracleMap,
-    grpc_unsub: RwLock<Option<UnsubHandle>>,
+    grpc_unsub: RwLock<Option<(UnsubHandle, UnsubHandle)>>,
 }
 impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
@@ -827,7 +838,7 @@ impl DriftClientBackend {
                 .get_multiple_accounts(lut_pubkeys)
                 .map_err(Into::into),
             rpc_client
-                .get_account_data(&state_account())
+                .get_account_data(state_account())
                 .map_err(Into::into),
         )?;
 
@@ -922,8 +933,8 @@ impl DriftClientBackend {
         x_token: String,
         opts: GrpcSubscribeOpts,
     ) -> SdkResult<()> {
-        let mut grpc =
-            DriftGrpcClient::new(endpoint, x_token).grpc_connection_opts(opts.connection_opts);
+        let mut grpc = DriftGrpcClient::new(endpoint.clone(), x_token.clone())
+            .grpc_connection_opts(opts.connection_opts.clone());
 
         grpc.on_account(
             AccountFilter::partial().with_discriminator(SpotMarket::DISCRIMINATOR),
@@ -932,16 +943,6 @@ impl DriftClientBackend {
         grpc.on_account(
             AccountFilter::partial().with_discriminator(PerpMarket::DISCRIMINATOR),
             self.perp_market_map.on_account_fn(),
-        );
-        let oracles: Vec<Pubkey> = self
-            .oracle_map
-            .oracle_by_market
-            .iter()
-            .map(|x| x.1 .0)
-            .collect();
-        grpc.on_account(
-            AccountFilter::partial().with_accounts(oracles.into_iter()),
-            self.oracle_map.on_account_fn(),
         );
 
         if opts.usermap {
@@ -977,21 +978,52 @@ impl DriftClientBackend {
 
         // start subscription
         let grpc_unsub = grpc
-            .subscribe(CommitmentLevel::Confirmed, GeyserSubscribeOpts::default())
+            .subscribe(
+                CommitmentLevel::Confirmed,
+                GeyserSubscribeOpts {
+                    accounts_owners: vec![PROGRAM_ID.to_string()],
+                    ..Default::default()
+                },
+            )
+            .await
+            .map_err(SdkError::Grpc)?;
+
+        // oracle pubkeys are subscribed individually
+        // due to ownership differences
+        let mut oracles_grpc =
+            DriftGrpcClient::new(endpoint, x_token).grpc_connection_opts(opts.connection_opts);
+
+        let oracle_pubkeys: Vec<String> = self
+            .oracle_map
+            .oracle_by_market
+            .iter()
+            .map(|(_, (pubkey, _))| pubkey.to_string())
+            .collect();
+        oracles_grpc.on_account(AccountFilter::firehose(), self.oracle_map.on_account_fn());
+        let oracles_grpc_unsub = oracles_grpc
+            .subscribe(
+                CommitmentLevel::Confirmed,
+                GeyserSubscribeOpts {
+                    accounts_pubkeys: oracle_pubkeys,
+                    ..Default::default()
+                },
+            )
             .await
             .map_err(SdkError::Grpc)?;
 
         let mut unsub = self.grpc_unsub.write().unwrap();
-        let _ = unsub.insert(grpc_unsub);
+        let _ = unsub.insert((grpc_unsub, oracles_grpc_unsub));
 
         Ok(())
     }
 
-    /// Unsubscribe the gRPC connection
+    /// Unsubscribe the gRPC connections
     fn grpc_unsubscribe(&self) {
         let mut guard = self.grpc_unsub.write().unwrap();
-        let unsub = guard.take();
-        unsub.map(|u| u.send(()));
+        if let Some((a, b)) = guard.take() {
+            let _ = a.send(());
+            let _ = b.send(());
+        }
     }
 
     /// End subscriptions to live program data
