@@ -25,7 +25,7 @@ jobs:
     env:
       CARGO_DRIFT_FFI_PATH: /usr/lib
     runs-on: ubicloud
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out
         uses: actions/checkout@v4
