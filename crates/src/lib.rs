@@ -988,7 +988,8 @@ impl DriftClientBackend {
             .await
             .map_err(SdkError::Grpc)?;
 
-        // TODO: build custom subscribe for oracle accounts
+        // oracle pubkeys are subscribed individually
+        // due to ownership differences
         let mut oracles_grpc =
             DriftGrpcClient::new(endpoint, x_token).grpc_connection_opts(opts.connection_opts);
 

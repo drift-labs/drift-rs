@@ -50,7 +50,7 @@ async fn main() {
         .collect();
 
     let mut swift_order_stream = drift
-        .subscribe_swift_orders(&market_ids)
+        .subscribe_swift_orders(&market_ids, None)
         .await
         .expect("subscribed swift orders");
 
