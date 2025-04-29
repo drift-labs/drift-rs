@@ -60,6 +60,8 @@ pub struct GrpcSubscribeOpts {
     pub on_account: Option<(AccountFilter, Box<OnAccountFn>)>,
     /// Network level connection config
     pub connection_opts: GrpcConnectionOpts,
+    /// Subscribe to switchboard oracles
+    pub swithboard_oracles: bool,
 }
 
 impl GrpcSubscribeOpts {

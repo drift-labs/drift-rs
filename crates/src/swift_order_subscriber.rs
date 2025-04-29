@@ -146,6 +146,11 @@ pub struct SignedOrderInfo {
     /// Signature over the serialized `order` payload
     #[serde(rename = "order_signature", deserialize_with = "deser_signature")]
     pub signature: Signature,
+    /// true if the order params are highly likely to be sanitized (improved) by the program when placed
+    ///
+    /// MMs wishing to fill a sanitized order should understand the potential time/price bound changes
+    #[serde(default)]
+    pub will_sanitize: bool,
 }
 
 impl SignedOrderInfo {
@@ -213,6 +218,7 @@ impl SignedOrderInfo {
             signer,
             order,
             signature,
+            will_sanitize: false,
         }
     }
 }
@@ -224,11 +230,16 @@ pub type SwiftOrderStream = ReceiverStream<SignedOrderInfo>;
 ///
 /// `client` Drift client instance
 /// `markets` markets to listen on for new swift orders
+/// `accept_sanitized` set to true to also view *sanitized order flow
+///
+/// *a sanitized order may have its auction params modified by the program when
+/// placed onchain. Makers should understand the time/price implications to accept these.
 ///
 /// Returns a stream of new Swift order messages
 pub async fn subscribe_swift_orders(
     client: &DriftClient,
     markets: &[MarketId],
+    accept_sanitized: bool,
 ) -> SdkResult<SwiftOrderStream> {
     let base_url = if client.context == Context::MainNet {
         SWIFT_MAINNET_WS_URL
@@ -319,6 +330,10 @@ pub async fn subscribe_swift_orders(
                         Ok(OrderNotification { channel: _, order }) => {
                             log::debug!(target: LOG_TARGET, "uuid: {}, latency: {}ms", order.uuid, unix_now_ms().saturating_sub(order.ts));
 
+                            if !accept_sanitized {
+                                log::debug!(target: LOG_TARGET, "skipping sanitized order: {}", order.uuid);
+                                continue;
+                            }
                             if let Err(err) = tx.try_send(order) {
                                 log::error!(target: LOG_TARGET, "order chan failed: {err:?}");
                                 break;
