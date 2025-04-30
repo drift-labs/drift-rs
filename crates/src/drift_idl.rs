@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.119.0";
+pub const IDL_VERSION: &str = "2.120.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -2113,6 +2113,17 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateProtectedMakerModeConfig {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct AdminDeposit {
+        pub market_index: u16,
+        pub amount: u64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for AdminDeposit {
+        const DISCRIMINATOR: &[u8] = &[210, 66, 65, 182, 102, 214, 176, 30];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for AdminDeposit {}
 }
 pub mod types {
     #![doc = r" IDL types"]
@@ -3213,6 +3224,7 @@ pub mod types {
         Transfer,
         Borrow,
         RepayBorrow,
+        Reward,
     }
     #[derive(
         AnchorSerialize,
@@ -20669,6 +20681,94 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for UpdateProtectedMakerModeConfig {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct AdminDeposit {
+        pub state: Pubkey,
+        pub user: Pubkey,
+        pub admin: Pubkey,
+        pub spot_market_vault: Pubkey,
+        pub admin_token_account: Pubkey,
+        pub token_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for AdminDeposit {
+        const DISCRIMINATOR: &[u8] = &[164, 41, 145, 198, 178, 181, 43, 8];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for AdminDeposit {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for AdminDeposit {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for AdminDeposit {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for AdminDeposit {}
+    #[automatically_derived]
+    impl ToAccountMetas for AdminDeposit {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.user,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.admin_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for AdminDeposit {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for AdminDeposit {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
