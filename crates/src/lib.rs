@@ -2256,6 +2256,46 @@ impl<'a> TransactionBuilder<'a> {
         new_self.lookup_tables(&jupiter_swap_info.luts)
     }
 
+    /// Settle perp PnL for some user account and market
+    ///
+    /// * `market_index` market to settle position for
+    /// * `target_pubkey` target subaccount address, leave None to settle PnL for the signer
+    /// * `target_account` target subaccount data, leave None to settle PnL for the signer
+    ///
+    pub fn settle_pnl(
+        mut self,
+        market_index: u16,
+        target_pubkey: Option<&Pubkey>,
+        target_account: Option<&User>,
+    ) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::SettlePnl {
+                state: *state_account(),
+                user: target_pubkey.copied().unwrap_or(self.sub_account),
+                authority: self.authority,
+                spot_market_vault: self
+                    .program_data
+                    .spot_market_config_by_index(MarketId::QUOTE_SPOT.index())
+                    .unwrap()
+                    .vault,
+            },
+            &[target_account.unwrap_or(&self.account_data)],
+            std::iter::empty(),
+            [MarketId::QUOTE_SPOT, MarketId::perp(market_index)].iter(),
+        );
+
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::SettlePnl { market_index }),
+        };
+
+        self.ixs.push(ix);
+
+        self
+    }
+
     /// Build the transaction message ready for signing and sending
     pub fn build(self) -> VersionedMessage {
         if self.legacy {
