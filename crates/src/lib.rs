@@ -2296,6 +2296,54 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
+    /// Settle perp multiple PnLs for user account and markets
+    ///
+    /// * `markets` market indexes to settle positions for
+    /// * `mode` Choose Must or try settle PnL
+    /// * `target_pubkey` target subaccount address, leave None to settle PnL for the signer
+    /// * `target_account` target subaccount data, leave None to settle PnL for the signer
+    ///
+    pub fn settle_pnl_multi(
+        mut self,
+        markets: &[u16],
+        mode: SettlePnlMode,
+        target_pubkey: Option<&Pubkey>,
+        target_account: Option<&User>,
+    ) -> Self {
+        let perp_iter: Vec<MarketId> = markets.iter().map(|i| MarketId::perp(*i)).collect();
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::SettlePnl {
+                state: *state_account(),
+                user: target_pubkey.copied().unwrap_or(self.sub_account),
+                authority: self.authority,
+                spot_market_vault: self
+                    .program_data
+                    .spot_market_config_by_index(MarketId::QUOTE_SPOT.index())
+                    .unwrap()
+                    .vault,
+            },
+            &[target_account.unwrap_or(&self.account_data)],
+            std::iter::empty(),
+            perp_iter
+                .iter()
+                .chain(std::iter::once(&MarketId::QUOTE_SPOT)),
+        );
+
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::SettleMultiplePnls {
+                market_indexes: markets.to_vec(),
+                mode,
+            }),
+        };
+
+        self.ixs.push(ix);
+
+        self
+    }
+
     /// Build the transaction message ready for signing and sending
     pub fn build(self) -> VersionedMessage {
         if self.legacy {
