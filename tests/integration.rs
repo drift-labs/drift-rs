@@ -314,8 +314,8 @@ async fn oracle_source_mixed_precision() {
 async fn settle_pnl_txs() {
     let wallet: Wallet = test_keypair().into();
     let client = DriftClient::new(
-        Context::DevNet,
-        RpcClient::new(devnet_endpoint()),
+        Context::MainNet,
+        RpcClient::new(mainnet_endpoint()),
         wallet.clone(),
     )
     .await

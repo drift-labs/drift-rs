@@ -38,7 +38,7 @@ use crate::{
         events::{FundingPaymentRecord, OrderActionRecord, OrderRecord},
         types::{MarketType, Order, OrderAction, OrderActionExplanation, PositionDirection},
     },
-    types::SdkResult,
+    types::{events::SwapRecord, SdkResult},
 };
 
 const LOG_TARGET: &str = "events";
@@ -512,6 +512,17 @@ pub enum DriftEvent {
         signature: String,
         tx_idx: usize,
     },
+    Swap {
+        user: Pubkey,
+        amount_in: u64,
+        amount_out: u64,
+        market_in: u16,
+        market_out: u16,
+        fee: u64,
+        ts: u64,
+        signature: String,
+        tx_idx: usize,
+    },
 }
 
 impl DriftEvent {
@@ -526,6 +537,7 @@ impl DriftEvent {
             Self::OrderExpire { user, .. } => user == subject,
             Self::OrderCancelMissing { .. } => true,
             Self::FundingPayment { user, .. } => *user == sub_account,
+            Self::Swap { user, .. } => *user == sub_account,
         }
     }
     /// Deserialize drift event by discriminant
@@ -552,10 +564,28 @@ impl DriftEvent {
                 signature,
                 tx_idx,
             )),
+            SwapRecord::DISCRIMINATOR => Some(Self::from_swap_record(
+                SwapRecord::deserialize(data).expect("deserializes"),
+                signature,
+                tx_idx,
+            )),
             _ => {
                 debug!(target: LOG_TARGET, "unhandled event: {disc:?}");
                 None
             }
+        }
+    }
+    fn from_swap_record(value: SwapRecord, signature: &str, tx_idx: usize) -> Self {
+        Self::Swap {
+            amount_in: value.amount_in,
+            amount_out: value.amount_out,
+            market_in: value.in_market_index,
+            market_out: value.out_market_index,
+            fee: value.fee,
+            ts: value.ts.unsigned_abs(),
+            user: value.user,
+            signature: signature.to_string(),
+            tx_idx,
         }
     }
     fn from_funding_payment_record(
@@ -1003,6 +1033,73 @@ mod test {
         }));
         tokio::time::sleep(Duration::from_secs(1)).await;
         assert!(event_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn parses_swap_logs() {
+        let _ = env_logger::try_init();
+        let logs = [
+            "Program ComputeBudget111111111111111111111111111111 invoke [1]",
+            "Program ComputeBudget111111111111111111111111111111 success",
+            "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH invoke [1]",
+            "Program log: Instruction: BeginSwap",
+            "Program data: t7rLuuG7X4KaKRhoAAAAAAEA+cUBBi3pAAAAAAAAAAAAAChj7nUCAAAAAAAAAAAAAABkycImhIMAAAAAAAAAAAAASvkgrAIAAAAAAAAAAAAAAAA1DADgIgIAgE8SAA==",
+            "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]",
+            "Program log: Instruction: Transfer",
+            "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4645 of 549891 compute units",
+            "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+            "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH consumed 68535 of 602850 compute units",
+            "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH success",
+            "Program JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4 invoke [1]",
+            "Program log: Instruction: Route",
+            "Program obriQD1zbpyLz95G5n7nJe6a4DPjpFwa5XYPoNm113y invoke [2]",
+            "Program log: Instruction: Swap",
+            "Program log: price_x: 1447685",
+            "Program log: price_y: 10000",
+            "Program log: reld 4",
+            "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [3]",
+            "Program log: Instruction: Transfer",
+            "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4645 of 480841 compute units",
+            "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+            "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [3]",
+            "Program log: Instruction: Transfer",
+            "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4736 of 473320 compute units",
+            "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+            "Program log: YX15 199179269003,100319696971,2000000,13814365",
+            "Program obriQD1zbpyLz95G5n7nJe6a4DPjpFwa5XYPoNm113y consumed 67898 of 529822 compute units",
+            "Program obriQD1zbpyLz95G5n7nJe6a4DPjpFwa5XYPoNm113y success",
+            "Program JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4 invoke [2]",
+            "Program JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4 consumed 184 of 460188 compute units",
+            "Program JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4 success",
+            "Program JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4 consumed 75895 of 534315 compute units",
+            "Program return: JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4 XcrSAAAAAAA=",
+            "Program JUP6LkbZbjS1jKKwapdHNy74zcZ3tLUZoi5QNyVTaV4 success",
+            "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH invoke [1]",
+            "Program log: Instruction: EndSwap",
+            "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA invoke [2]",
+            "Program log: Instruction: Transfer",
+            "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA consumed 4736 of 408324 compute units",
+            "Program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA success",
+            "Program log: Invalid Spot 0 Oracle: Stale (oracle_delay=38)",
+            "Program log: Invalid Spot 9 Oracle: Stale (oracle_delay=38)",
+            "Program log: Invalid Spot 5 Oracle: Stale (oracle_delay=38)",
+            "Program data: ort7woo4+vGaKRhoAAAAAGV38QbUIIRAZCdpZP/Qu59+ZUJQ7xCnqbsMijUn8LhNXcrSAAAAAACAhB4AAAAAAAEAAADA3KAIAAAAAEBCDwAAAAAAAAAAAAAAAAA=",
+            "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH consumed 152124 of 458420 compute units",
+            "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH success",
+        ];
+
+        let res: Vec<DriftEvent> = logs.iter().enumerate().filter_map(|(idx, log)| try_parse_log(log, "2M1e4UJ1x6rwvjFR6kh5CDCWZg8NcGeqzT2GbDRGaC2TmZDgNTNbKSn4Y4pu11apErVycpk5p3Hq6Tg2nrFdGimm", idx)).collect();
+        assert_eq!(res[0], DriftEvent::Swap {
+            user: solana_sdk::pubkey!("7q6FkeUEvTDS6DaM2WTHw6s1gTzbBasGTPATLzMZW41S"),
+            amount_in: 2000000,
+            amount_out: 13814365,
+            market_in: 0,
+            market_out: 1,
+            fee: 0,
+            ts: 1746413978,
+            signature: "2M1e4UJ1x6rwvjFR6kh5CDCWZg8NcGeqzT2GbDRGaC2TmZDgNTNbKSn4Y4pu11apErVycpk5p3Hq6Tg2nrFdGimm".try_into().unwrap(),
+            tx_idx: 44,
+        });
     }
 
     /// Make transaction with dummy instruction for drift program
