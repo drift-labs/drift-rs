@@ -6,7 +6,9 @@ use drift_rs::{
     event_subscriber::RpcClient,
     grpc::grpc_subscriber::AccountFilter,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
-    types::{accounts::User, Context, MarketId, NewOrder, OracleSource, PostOnlyParam},
+    types::{
+        accounts::User, Context, MarketId, NewOrder, OracleSource, PostOnlyParam, SettlePnlMode,
+    },
     utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
     DriftClient, GrpcSubscribeOpts, Pubkey, TransactionBuilder, Wallet,
 };
@@ -306,4 +308,47 @@ async fn oracle_source_mixed_precision() {
 
     println!("Bonk: {price}");
     assert!(price % 100_000 > 0);
+}
+
+#[tokio::test]
+async fn settle_pnl_txs() {
+    let wallet: Wallet = test_keypair().into();
+    let client = DriftClient::new(
+        Context::MainNet,
+        RpcClient::new(mainnet_endpoint()),
+        wallet.clone(),
+    )
+    .await
+    .expect("connects");
+
+    let doge_perp = client.market_lookup("doge-perp").expect("exists");
+
+    let tx = client
+        .init_tx(&wallet.default_sub_account(), false)
+        .await
+        .unwrap()
+        .settle_pnl(doge_perp.index(), None, None)
+        .build();
+
+    let result = client.simulate_tx(tx).await;
+    dbg!(&result);
+    assert!(result.is_ok_and(|x| x.err.is_none()));
+
+    let sol_perp = client.market_lookup("sol-perp").expect("exists");
+    let tx = client
+        .init_tx(&wallet.default_sub_account(), false)
+        .await
+        .unwrap()
+        .with_priority_fee(1, Some(2 * 200_000))
+        .settle_pnl_multi(
+            &[sol_perp.index(), doge_perp.index()],
+            SettlePnlMode::MustSettle,
+            None,
+            None,
+        )
+        .build();
+
+    let result = client.simulate_tx(tx).await;
+    dbg!(&result);
+    assert!(result.is_ok_and(|x| x.err.is_none()));
 }

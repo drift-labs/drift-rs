@@ -2,6 +2,7 @@
 
 use solana_sdk::{
     clock::{Epoch, Slot},
+    commitment_config::CommitmentLevel,
     pubkey::Pubkey,
 };
 pub mod grpc_subscriber;
@@ -48,6 +49,7 @@ pub struct AccountUpdate<'a> {
 ///
 #[derive(Default)]
 pub struct GrpcSubscribeOpts {
+    pub commitment: Option<CommitmentLevel>,
     /// toggle usermap
     pub usermap: bool,
     /// toggle user stats map
@@ -60,9 +62,22 @@ pub struct GrpcSubscribeOpts {
     pub on_account: Option<(AccountFilter, Box<OnAccountFn>)>,
     /// Network level connection config
     pub connection_opts: GrpcConnectionOpts,
+    /// Enable inter-slot update notifications
+    pub interslot_updates: bool,
 }
 
 impl GrpcSubscribeOpts {
+    /// Set the gRPC subscription's commitment level (default: 'confirmed')
+    pub fn commitment(mut self, commitment: CommitmentLevel) -> Self {
+        self.commitment = Some(commitment);
+        self
+    }
+    /// Enables the subscription to receive updates for changes within a slot,  
+    /// not just at the beginning of new slots. default: false
+    pub fn interslot_updates_on(mut self) -> Self {
+        self.interslot_updates = true;
+        self
+    }
     /// Cache ALL drift `User` account updates
     ///
     /// useful for e.g. building the DLOB, fast TX building for makers
