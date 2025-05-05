@@ -933,6 +933,7 @@ impl DriftClientBackend {
         x_token: String,
         opts: GrpcSubscribeOpts,
     ) -> SdkResult<()> {
+        log::debug!(target: "grpc", "subscribing to grpc with config: commitment: {:?}, interslot updates: {:?}", opts.commitment, opts.interslot_updates);
         let mut grpc = DriftGrpcClient::new(endpoint.clone(), x_token.clone())
             .grpc_connection_opts(opts.connection_opts.clone());
 
@@ -977,11 +978,13 @@ impl DriftClientBackend {
         }
 
         // start subscription
+        let commitment = opts.commitment.unwrap_or(CommitmentLevel::Confirmed);
         let grpc_unsub = grpc
             .subscribe(
-                CommitmentLevel::Confirmed,
+                commitment,
                 GeyserSubscribeOpts {
                     accounts_owners: vec![PROGRAM_ID.to_string()],
+                    interslot_updates: Some(opts.interslot_updates),
                     ..Default::default()
                 },
             )
@@ -1002,9 +1005,10 @@ impl DriftClientBackend {
         oracles_grpc.on_account(AccountFilter::firehose(), self.oracle_map.on_account_fn());
         let oracles_grpc_unsub = oracles_grpc
             .subscribe(
-                CommitmentLevel::Confirmed,
+                commitment,
                 GeyserSubscribeOpts {
                     accounts_pubkeys: oracle_pubkeys,
+                    interslot_updates: Some(opts.interslot_updates),
                     ..Default::default()
                 },
             )
@@ -2254,6 +2258,94 @@ impl<'a> TransactionBuilder<'a> {
 
         // Add the jup tx LUTs
         new_self.lookup_tables(&jupiter_swap_info.luts)
+    }
+
+    /// Settle perp PnL for some user account and market
+    ///
+    /// * `market_index` market to settle position for
+    /// * `target_pubkey` target subaccount address, leave None to settle PnL for the signer
+    /// * `target_account` target subaccount data, leave None to settle PnL for the signer
+    ///
+    pub fn settle_pnl(
+        mut self,
+        market_index: u16,
+        target_pubkey: Option<&Pubkey>,
+        target_account: Option<&User>,
+    ) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::SettlePnl {
+                state: *state_account(),
+                user: target_pubkey.copied().unwrap_or(self.sub_account),
+                authority: self.authority,
+                spot_market_vault: self
+                    .program_data
+                    .spot_market_config_by_index(MarketId::QUOTE_SPOT.index())
+                    .unwrap()
+                    .vault,
+            },
+            &[target_account.unwrap_or(&self.account_data)],
+            std::iter::empty(),
+            [MarketId::QUOTE_SPOT, MarketId::perp(market_index)].iter(),
+        );
+
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::SettlePnl { market_index }),
+        };
+
+        self.ixs.push(ix);
+
+        self
+    }
+
+    /// Settle perp multiple PnLs for user account and markets
+    ///
+    /// * `markets` market indexes to settle positions for
+    /// * `mode` Choose Must or try settle PnL
+    /// * `target_pubkey` target subaccount address, leave None to settle PnL for the signer
+    /// * `target_account` target subaccount data, leave None to settle PnL for the signer
+    ///
+    pub fn settle_pnl_multi(
+        mut self,
+        markets: &[u16],
+        mode: SettlePnlMode,
+        target_pubkey: Option<&Pubkey>,
+        target_account: Option<&User>,
+    ) -> Self {
+        let perp_iter: Vec<MarketId> = markets.iter().map(|i| MarketId::perp(*i)).collect();
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::SettlePnl {
+                state: *state_account(),
+                user: target_pubkey.copied().unwrap_or(self.sub_account),
+                authority: self.authority,
+                spot_market_vault: self
+                    .program_data
+                    .spot_market_config_by_index(MarketId::QUOTE_SPOT.index())
+                    .unwrap()
+                    .vault,
+            },
+            &[target_account.unwrap_or(&self.account_data)],
+            std::iter::empty(),
+            perp_iter
+                .iter()
+                .chain(std::iter::once(&MarketId::QUOTE_SPOT)),
+        );
+
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::SettleMultiplePnls {
+                market_indexes: markets.to_vec(),
+                mode,
+            }),
+        };
+
+        self.ixs.push(ix);
+
+        self
     }
 
     /// Build the transaction message ready for signing and sending

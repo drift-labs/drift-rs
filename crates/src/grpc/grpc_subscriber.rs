@@ -183,6 +183,8 @@ pub struct GeyserSubscribeOpts {
     pub from_slot: Option<u64>,
     /// Send ping in subscribe request
     pub ping: Option<i32>,
+    /// Enable interslot updates
+    pub interslot_updates: Option<bool>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -472,7 +474,7 @@ impl GeyserSubscribeOpts {
             "client".to_owned(),
             SubscribeRequestFilterSlots {
                 filter_by_commitment: Some(true),
-                interslot_updates: None,
+                interslot_updates: self.interslot_updates,
             },
         );
 
