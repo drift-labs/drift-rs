@@ -1778,7 +1778,7 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.authority),
                 taker: *taker,
-                taker_stats: Wallet::derive_stats_account(taker),
+                taker_stats: Wallet::derive_stats_account(&taker_account.authority),
             },
             &[self.account_data.as_ref(), taker_account],
             self.force_markets.readable.iter(),
