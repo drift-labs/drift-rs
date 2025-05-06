@@ -197,8 +197,8 @@ pub fn simulate_place_perp_order(
     user: &accounts::User,
     accounts: &mut AccountsList,
     state: &accounts::State,
-    high_leverage_mode_config: Option<&mut accounts::HighLeverageModeConfig>,
     order_params: &types::OrderParams,
+    high_leverage_mode_config: Option<&mut accounts::HighLeverageModeConfig>,
 ) -> SdkResult<bool> {
     if order_params.high_leverage_mode() && high_leverage_mode_config.is_none() {
         return Err(SdkError::Generic(
@@ -483,10 +483,7 @@ mod tests {
     use super::{simulate_place_perp_order, AccountWithKey, AccountsList, MarginContextMode};
     use crate::{
         accounts::State,
-        constants::{
-            ids::pyth_program,
-            {self},
-        },
+        constants::{self, ids::pyth_program},
         create_account_info,
         drift_idl::{
             accounts::{PerpMarket, SpotMarket, User},
@@ -505,7 +502,7 @@ mod tests {
             PRICE_PRECISION_I64, QUOTE_PRECISION, QUOTE_PRECISION_I64, SPOT_BALANCE_PRECISION,
             SPOT_BALANCE_PRECISION_U64, SPOT_CUMULATIVE_INTEREST_PRECISION, SPOT_WEIGHT_PRECISION,
         },
-        types::MarketType,
+        types::{accounts::HighLeverageModeConfig, MarketType},
         utils::test_utils::{get_account_bytes, get_pyth_price},
         HistoricalOracleData, MarketStatus, PositionDirection, AMM,
     };
@@ -1019,8 +1016,32 @@ mod tests {
                 order_type: OrderType::Market,
                 ..Default::default()
             },
+            None,
         );
-        assert!(res.is_ok_and(|truthy| truthy))
+        assert!(res.is_ok_and(|truthy| truthy));
+
+        // HLM on
+        let res = simulate_place_perp_order(
+            &user,
+            &mut accounts,
+            &State::default(),
+            &OrderParams {
+                market_index: 1,
+                market_type: MarketType::Perp,
+                direction: PositionDirection::Short,
+                base_asset_amount: 1_234 * BASE_PRECISION as u64,
+                order_type: OrderType::Market,
+                bit_flags: 0b0000_00010, // HLM on
+                ..Default::default()
+            },
+            Some(&mut HighLeverageModeConfig {
+                reduce_only: 0,
+                current_users: 2,
+                max_users: 5,
+                ..Default::default()
+            }),
+        );
+        assert!(res.is_ok_and(|truthy| truthy));
     }
 
     #[test]
