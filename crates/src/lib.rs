@@ -9,8 +9,8 @@ use std::{
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
 use constants::{
-    ASSOCIATED_TOKEN_PROGRAM_ID, PROGRAM_ID, SYSTEM_PROGRAM_ID, TOKEN_2022_PROGRAM_ID,
-    TOKEN_PROGRAM_ID,
+    high_leverage_mode_account, ASSOCIATED_TOKEN_PROGRAM_ID, PROGRAM_ID, SYSTEM_PROGRAM_ID,
+    TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID,
 };
 pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
@@ -827,9 +827,14 @@ impl DriftClientBackend {
             Arc::clone(&rpc_client),
             rpc_client.commitment(),
         );
-        account_map
-            .subscribe_account_polled(state_account(), Some(Duration::from_secs(180)))
-            .await?;
+
+        tokio::try_join!(
+            account_map.subscribe_account_polled(state_account(), Some(Duration::from_secs(180))),
+            account_map.subscribe_account_polled(
+                high_leverage_mode_account(),
+                Some(Duration::from_secs(180))
+            )
+        )?;
 
         let (_, _, lut_accounts, state_account_data) = tokio::try_join!(
             perp_market_map.sync(&rpc_client),
@@ -1556,10 +1561,7 @@ impl<'a> TransactionBuilder<'a> {
         );
 
         if orders.iter().any(|x| x.high_leverage_mode()) {
-            accounts.push(AccountMeta::new(
-                Wallet::derive_high_leverage_mode_account(&self.authority),
-                false,
-            ));
+            accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
         let ix = Instruction {
@@ -1789,10 +1791,7 @@ impl<'a> TransactionBuilder<'a> {
         );
 
         if order.high_leverage_mode() {
-            accounts.push(AccountMeta::new(
-                Wallet::derive_high_leverage_mode_account(&taker_account.authority),
-                false,
-            ));
+            accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
         if let Some(referrer) = referrer {
@@ -1868,6 +1867,10 @@ impl<'a> TransactionBuilder<'a> {
             }
             .chain(self.force_markets.writeable.iter()),
         );
+
+        if order.high_leverage_mode() {
+            accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
+        }
 
         if referrer.is_some_and(|r| !maker_info.is_some_and(|(m, _)| m == r)) {
             let referrer = referrer.unwrap();
@@ -2006,10 +2009,7 @@ impl<'a> TransactionBuilder<'a> {
         );
 
         if signed_order_info.order_params().high_leverage_mode() {
-            accounts.push(AccountMeta::new(
-                Wallet::derive_high_leverage_mode_account(&self.authority),
-                false,
-            ));
+            accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
         let swift_taker_ix_data = signed_order_info.to_ix_data();

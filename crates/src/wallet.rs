@@ -168,15 +168,6 @@ impl Wallet {
         )
     }
 
-    /// Calculate the wallet's HLM account address
-    pub fn derive_high_leverage_mode_account(authority: &Pubkey) -> Pubkey {
-        let (account_drift_pda, _seed) = Pubkey::find_program_address(
-            &[&b"high_leverage_mode_config"[..], authority.as_ref()],
-            &constants::PROGRAM_ID,
-        );
-        account_drift_pda
-    }
-
     /// Signs a solana message (ixs, accounts) and builds a signed tx
     /// ready for sending over RPC
     ///

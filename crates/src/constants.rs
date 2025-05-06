@@ -28,6 +28,7 @@ pub const DEFAULT_PUBKEY: Pubkey = solana_sdk::pubkey!("111111111111111111111111
 pub const SYSTEM_PROGRAM_ID: Pubkey = DEFAULT_PUBKEY;
 
 static STATE_ACCOUNT: OnceLock<Pubkey> = OnceLock::new();
+static HIGH_LEVERAGE_MODE_ACCOUNT: OnceLock<Pubkey> = OnceLock::new();
 
 /// Address of the SPL Token program
 pub const TOKEN_PROGRAM_ID: Pubkey =
@@ -57,6 +58,15 @@ pub fn state_account() -> &'static Pubkey {
         let (state_account, _seed) =
             Pubkey::find_program_address(&[&b"drift_state"[..]], &PROGRAM_ID);
         state_account
+    })
+}
+
+/// Returns the program's HLM config address
+pub fn high_leverage_mode_account() -> &'static Pubkey {
+    HIGH_LEVERAGE_MODE_ACCOUNT.get_or_init(|| {
+        let (account_drift_pda, _seed) =
+            Pubkey::find_program_address(&[&b"high_leverage_mode_config"[..]], &PROGRAM_ID);
+        account_drift_pda
     })
 }
 

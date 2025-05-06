@@ -3,10 +3,13 @@
 //! Defines wrapper types for ergonomic access to drift-program logic
 //!
 use abi_stable::std_types::ROption;
+use anchor_lang::prelude::AccountInfo;
+use bytemuck::bytes_of_mut;
 use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 
 pub use self::abi_types::*;
 use crate::{
+    constants::{high_leverage_mode_account, PROGRAM_ID},
     drift_idl::{
         accounts,
         errors::ErrorCode,
@@ -118,11 +121,12 @@ extern "C" {
         market_index: u16,
     ) -> FfiResult<&types::PerpPosition>;
     #[allow(improper_ctypes)]
-    pub fn orders_place_perp_order(
+    pub fn orders_place_perp_order<'a>(
         user: &accounts::User,
         state: &accounts::State,
         order_params: &types::OrderParams,
         accounts: &mut AccountsList,
+        high_leverage_mode_config: Option<&'a AccountInfo<'a>>,
     ) -> FfiResult<bool>;
     #[allow(improper_ctypes)]
     pub fn order_params_will_auction_params_sanitize(
@@ -193,9 +197,29 @@ pub fn simulate_place_perp_order(
     user: &accounts::User,
     accounts: &mut AccountsList,
     state: &accounts::State,
+    high_leverage_mode_config: Option<&mut accounts::HighLeverageModeConfig>,
     order_params: &types::OrderParams,
 ) -> SdkResult<bool> {
-    let res = unsafe { orders_place_perp_order(user, state, order_params, accounts) };
+    if order_params.high_leverage_mode() && high_leverage_mode_config.is_none() {
+        return Err(SdkError::Generic(
+            "HLM config account must be provided".to_owned(),
+        ));
+    }
+
+    let mut lamports = 0;
+    let hlm = high_leverage_mode_config.map(|hlm| {
+        AccountInfo::new(
+            high_leverage_mode_account(),
+            false,
+            true,
+            &mut lamports,
+            bytes_of_mut(hlm),
+            &PROGRAM_ID,
+            false,
+            u64::MAX,
+        )
+    });
+    let res = unsafe { orders_place_perp_order(user, state, order_params, accounts, hlm.as_ref()) };
     to_sdk_result(res)
 }
 
@@ -379,9 +403,11 @@ pub mod abi_types {
     /// Its used as input for drift program math functions
     #[repr(C)]
     pub struct AccountsList<'a> {
+        // accounts
         pub perp_markets: &'a mut [AccountWithKey],
         pub spot_markets: &'a mut [AccountWithKey],
         pub oracles: &'a mut [AccountWithKey],
+        // context
         pub oracle_guard_rails: Option<OracleGuardRails>,
         pub latest_slot: Slot,
     }
@@ -794,7 +820,7 @@ mod tests {
 
     #[test]
     fn ffi_test_calculate_margin_requirement_and_total_collateral_and_liability_info() {
-        // smoke test for ffi compatability, logic tested in `math::` module
+        // smoke test for ffi compatibility, logic tested in `math::` module
         let btc_perp_index = 1_u16;
         let mut user = User::default();
         user.spot_positions[1] = SpotPosition {
