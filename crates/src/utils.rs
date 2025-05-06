@@ -1,5 +1,6 @@
 //! SDK utility functions
 
+use anchor_lang::Discriminator;
 use base64::Engine;
 use bytemuck::{bytes_of, Pod, Zeroable};
 use serde_json::json;
@@ -208,6 +209,10 @@ pub fn new_ed25519_ix_ptr(message: &[u8], instruction_index: u16) -> Instruction
         accounts: vec![],
         data: instruction_data,
     }
+}
+
+pub fn get_anchor_account_bytes<T: bytemuck::Pod + Discriminator>(account: &mut T) -> &[u8] {
+    bytemuck::bytes_of(account)
 }
 
 #[cfg(test)]

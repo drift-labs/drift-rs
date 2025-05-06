@@ -9,8 +9,8 @@ use std::{
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
 use constants::{
-    ASSOCIATED_TOKEN_PROGRAM_ID, PROGRAM_ID, SYSTEM_PROGRAM_ID, TOKEN_2022_PROGRAM_ID,
-    TOKEN_PROGRAM_ID,
+    high_leverage_mode_account, ASSOCIATED_TOKEN_PROGRAM_ID, PROGRAM_ID, SYSTEM_PROGRAM_ID,
+    TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID,
 };
 pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
@@ -827,9 +827,14 @@ impl DriftClientBackend {
             Arc::clone(&rpc_client),
             rpc_client.commitment(),
         );
-        account_map
-            .subscribe_account_polled(state_account(), Some(Duration::from_secs(180)))
-            .await?;
+
+        tokio::try_join!(
+            account_map.subscribe_account_polled(state_account(), Some(Duration::from_secs(180))),
+            account_map.subscribe_account_polled(
+                high_leverage_mode_account(),
+                Some(Duration::from_secs(180))
+            )
+        )?;
 
         let (_, _, lut_accounts, state_account_data) = tokio::try_join!(
             perp_market_map.sync(&rpc_client),
@@ -1543,7 +1548,7 @@ impl<'a> TransactionBuilder<'a> {
             .collect();
         readable_accounts.extend(&self.force_markets.readable);
 
-        let accounts = build_accounts(
+        let mut accounts = build_accounts(
             self.program_data,
             types::accounts::PlaceOrders {
                 state: *state_account(),
@@ -1554,6 +1559,10 @@ impl<'a> TransactionBuilder<'a> {
             readable_accounts.iter(),
             self.force_markets.writeable.iter(),
         );
+
+        if orders.iter().any(|x| x.high_leverage_mode()) {
+            accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
+        }
 
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
@@ -1781,6 +1790,10 @@ impl<'a> TransactionBuilder<'a> {
             .chain(self.force_markets.writeable.iter()),
         );
 
+        if order.high_leverage_mode() {
+            accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
+        }
+
         if let Some(referrer) = referrer {
             accounts.push(AccountMeta::new(
                 Wallet::derive_stats_account(&referrer),
@@ -1854,6 +1867,10 @@ impl<'a> TransactionBuilder<'a> {
             }
             .chain(self.force_markets.writeable.iter()),
         );
+
+        if order.high_leverage_mode() {
+            accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
+        }
 
         if referrer.is_some_and(|r| !maker_info.is_some_and(|(m, _)| m == r)) {
             let referrer = referrer.unwrap();
@@ -1972,7 +1989,7 @@ impl<'a> TransactionBuilder<'a> {
         );
 
         let perp_readable = [MarketId::perp(order_params.market_index)];
-        let accounts = build_accounts(
+        let mut accounts = build_accounts(
             self.program_data,
             types::accounts::PlaceSignedMsgTakerOrder {
                 state: *state_account(),
@@ -1990,6 +2007,10 @@ impl<'a> TransactionBuilder<'a> {
                 .chain(self.force_markets.readable.iter()),
             self.force_markets.writeable.iter(),
         );
+
+        if signed_order_info.order_params().high_leverage_mode() {
+            accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
+        }
 
         let swift_taker_ix_data = signed_order_info.to_ix_data();
         let ed25519_verify_ix = crate::utils::new_ed25519_ix_ptr(

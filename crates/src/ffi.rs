@@ -3,16 +3,18 @@
 //! Defines wrapper types for ergonomic access to drift-program logic
 //!
 use abi_stable::std_types::ROption;
+use anchor_lang::{prelude::AccountInfo, Discriminator};
 use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 
 pub use self::abi_types::*;
 use crate::{
+    constants::{high_leverage_mode_account, PROGRAM_ID},
     drift_idl::{
         accounts,
         errors::ErrorCode,
         types::{self, ContractType, MarginRequirementType, OracleSource},
     },
-    types::SdkError,
+    types::{accounts::HighLeverageModeConfig, SdkError},
     SdkResult,
 };
 
@@ -118,11 +120,12 @@ extern "C" {
         market_index: u16,
     ) -> FfiResult<&types::PerpPosition>;
     #[allow(improper_ctypes)]
-    pub fn orders_place_perp_order(
+    pub fn orders_place_perp_order<'a>(
         user: &accounts::User,
         state: &accounts::State,
         order_params: &types::OrderParams,
         accounts: &mut AccountsList,
+        high_leverage_mode_config: Option<&'a AccountInfo<'a>>,
     ) -> FfiResult<bool>;
     #[allow(improper_ctypes)]
     pub fn order_params_will_auction_params_sanitize(
@@ -194,8 +197,34 @@ pub fn simulate_place_perp_order(
     accounts: &mut AccountsList,
     state: &accounts::State,
     order_params: &types::OrderParams,
+    high_leverage_mode_config: Option<&mut accounts::HighLeverageModeConfig>,
 ) -> SdkResult<bool> {
-    let res = unsafe { orders_place_perp_order(user, state, order_params, accounts) };
+    if order_params.high_leverage_mode() && high_leverage_mode_config.is_none() {
+        return Err(SdkError::Generic(
+            "HLM config account must be provided".to_owned(),
+        ));
+    }
+
+    let mut lamports = 0;
+    let res = match high_leverage_mode_config {
+        Some(hlm) => {
+            let mut data = HighLeverageModeConfig::DISCRIMINATOR.to_vec();
+            data.extend_from_slice(bytemuck::bytes_of(hlm));
+
+            let hlm = AccountInfo::new(
+                high_leverage_mode_account(),
+                false,
+                true,
+                &mut lamports,
+                data.as_mut_slice(),
+                &PROGRAM_ID,
+                false,
+                u64::MAX,
+            );
+            unsafe { orders_place_perp_order(user, state, order_params, accounts, Some(&hlm)) }
+        }
+        None => unsafe { orders_place_perp_order(user, state, order_params, accounts, None) },
+    };
     to_sdk_result(res)
 }
 
@@ -379,9 +408,11 @@ pub mod abi_types {
     /// Its used as input for drift program math functions
     #[repr(C)]
     pub struct AccountsList<'a> {
+        // accounts
         pub perp_markets: &'a mut [AccountWithKey],
         pub spot_markets: &'a mut [AccountWithKey],
         pub oracles: &'a mut [AccountWithKey],
+        // context
         pub oracle_guard_rails: Option<OracleGuardRails>,
         pub latest_slot: Slot,
     }
@@ -457,10 +488,7 @@ mod tests {
     use super::{simulate_place_perp_order, AccountWithKey, AccountsList, MarginContextMode};
     use crate::{
         accounts::State,
-        constants::{
-            ids::pyth_program,
-            {self},
-        },
+        constants::{self, ids::pyth_program},
         create_account_info,
         drift_idl::{
             accounts::{PerpMarket, SpotMarket, User},
@@ -479,7 +507,7 @@ mod tests {
             PRICE_PRECISION_I64, QUOTE_PRECISION, QUOTE_PRECISION_I64, SPOT_BALANCE_PRECISION,
             SPOT_BALANCE_PRECISION_U64, SPOT_CUMULATIVE_INTEREST_PRECISION, SPOT_WEIGHT_PRECISION,
         },
-        types::MarketType,
+        types::{accounts::HighLeverageModeConfig, MarketType},
         utils::test_utils::{get_account_bytes, get_pyth_price},
         HistoricalOracleData, MarketStatus, PositionDirection, AMM,
     };
@@ -794,7 +822,7 @@ mod tests {
 
     #[test]
     fn ffi_test_calculate_margin_requirement_and_total_collateral_and_liability_info() {
-        // smoke test for ffi compatability, logic tested in `math::` module
+        // smoke test for ffi compatibility, logic tested in `math::` module
         let btc_perp_index = 1_u16;
         let mut user = User::default();
         user.spot_positions[1] = SpotPosition {
@@ -993,8 +1021,32 @@ mod tests {
                 order_type: OrderType::Market,
                 ..Default::default()
             },
+            None,
         );
-        assert!(res.is_ok_and(|truthy| truthy))
+        assert!(res.is_ok_and(|truthy| truthy));
+
+        let res = simulate_place_perp_order(
+            &user,
+            &mut accounts,
+            &State::default(),
+            &OrderParams {
+                market_index: 1,
+                market_type: MarketType::Perp,
+                direction: PositionDirection::Short,
+                base_asset_amount: 1_234 * BASE_PRECISION as u64,
+                order_type: OrderType::Market,
+                bit_flags: 0b0000_0010,
+                ..Default::default()
+            },
+            Some(&mut HighLeverageModeConfig {
+                max_users: 5,
+                current_users: 2,
+                reduce_only: 0,
+                padding: Default::default(),
+            }),
+        );
+        dbg!(&res);
+        assert!(res.is_ok_and(|truthy| truthy));
     }
 
     #[test]

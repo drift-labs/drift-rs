@@ -118,7 +118,7 @@ async fn jupiter_swap_exact_out_udsc_to_sol() {
     let jupiter_swap_info = client
         .jupiter_swap_query(
             wallet.authority(),
-            1 * LAMPORTS_PER_SOL,
+            LAMPORTS_PER_SOL / 10,
             SwapMode::ExactOut,
             10,
             token_in.index(),
@@ -275,7 +275,7 @@ async fn jupiter_swap_sol_unwrap() {
     let jupiter_swap_info = client
         .jupiter_swap_query(
             wallet.authority(),
-            1 * LAMPORTS_PER_SOL,
+            LAMPORTS_PER_SOL / 10,
             SwapMode::ExactIn,
             10,
             token_in.index(),
