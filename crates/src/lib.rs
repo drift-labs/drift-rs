@@ -1543,7 +1543,7 @@ impl<'a> TransactionBuilder<'a> {
             .collect();
         readable_accounts.extend(&self.force_markets.readable);
 
-        let accounts = build_accounts(
+        let mut accounts = build_accounts(
             self.program_data,
             types::accounts::PlaceOrders {
                 state: *state_account(),
@@ -1554,6 +1554,13 @@ impl<'a> TransactionBuilder<'a> {
             readable_accounts.iter(),
             self.force_markets.writeable.iter(),
         );
+
+        if orders.iter().any(|x| x.high_leverage_mode()) {
+            accounts.push(AccountMeta::new(
+                Wallet::derive_high_leverage_mode_account(&self.authority),
+                false,
+            ));
+        }
 
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
@@ -1781,6 +1788,13 @@ impl<'a> TransactionBuilder<'a> {
             .chain(self.force_markets.writeable.iter()),
         );
 
+        if order.high_leverage_mode() {
+            accounts.push(AccountMeta::new(
+                Wallet::derive_high_leverage_mode_account(&taker_account.authority),
+                false,
+            ));
+        }
+
         if let Some(referrer) = referrer {
             accounts.push(AccountMeta::new(
                 Wallet::derive_stats_account(&referrer),
@@ -1972,7 +1986,7 @@ impl<'a> TransactionBuilder<'a> {
         );
 
         let perp_readable = [MarketId::perp(order_params.market_index)];
-        let accounts = build_accounts(
+        let mut accounts = build_accounts(
             self.program_data,
             types::accounts::PlaceSignedMsgTakerOrder {
                 state: *state_account(),
@@ -1990,6 +2004,13 @@ impl<'a> TransactionBuilder<'a> {
                 .chain(self.force_markets.readable.iter()),
             self.force_markets.writeable.iter(),
         );
+
+        if signed_order_info.order_params().high_leverage_mode() {
+            accounts.push(AccountMeta::new(
+                Wallet::derive_high_leverage_mode_account(&self.authority),
+                false,
+            ));
+        }
 
         let swift_taker_ix_data = signed_order_info.to_ix_data();
         let ed25519_verify_ix = crate::utils::new_ed25519_ix_ptr(
