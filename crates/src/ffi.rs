@@ -3,8 +3,7 @@
 //! Defines wrapper types for ergonomic access to drift-program logic
 //!
 use abi_stable::std_types::ROption;
-use anchor_lang::prelude::AccountInfo;
-use bytemuck::bytes_of_mut;
+use anchor_lang::{prelude::AccountInfo, Discriminator};
 use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 
 pub use self::abi_types::*;
@@ -15,7 +14,7 @@ use crate::{
         errors::ErrorCode,
         types::{self, ContractType, MarginRequirementType, OracleSource},
     },
-    types::SdkError,
+    types::{accounts::HighLeverageModeConfig, SdkError},
     SdkResult,
 };
 
@@ -207,19 +206,25 @@ pub fn simulate_place_perp_order(
     }
 
     let mut lamports = 0;
-    let hlm = high_leverage_mode_config.map(|hlm| {
-        AccountInfo::new(
-            high_leverage_mode_account(),
-            false,
-            true,
-            &mut lamports,
-            bytes_of_mut(hlm),
-            &PROGRAM_ID,
-            false,
-            u64::MAX,
-        )
-    });
-    let res = unsafe { orders_place_perp_order(user, state, order_params, accounts, hlm.as_ref()) };
+    let res = match high_leverage_mode_config {
+        Some(hlm) => {
+            let mut data = HighLeverageModeConfig::DISCRIMINATOR.to_vec();
+            data.extend_from_slice(bytemuck::bytes_of(hlm));
+
+            let hlm = AccountInfo::new(
+                high_leverage_mode_account(),
+                false,
+                true,
+                &mut lamports,
+                data.as_mut_slice(),
+                &PROGRAM_ID,
+                false,
+                u64::MAX,
+            );
+            unsafe { orders_place_perp_order(user, state, order_params, accounts, Some(&hlm)) }
+        }
+        None => unsafe { orders_place_perp_order(user, state, order_params, accounts, None) },
+    };
     to_sdk_result(res)
 }
 
@@ -1020,7 +1025,6 @@ mod tests {
         );
         assert!(res.is_ok_and(|truthy| truthy));
 
-        // HLM on
         let res = simulate_place_perp_order(
             &user,
             &mut accounts,
@@ -1031,16 +1035,17 @@ mod tests {
                 direction: PositionDirection::Short,
                 base_asset_amount: 1_234 * BASE_PRECISION as u64,
                 order_type: OrderType::Market,
-                bit_flags: 0b0000_00010, // HLM on
+                bit_flags: 0b0000_0010,
                 ..Default::default()
             },
             Some(&mut HighLeverageModeConfig {
-                reduce_only: 0,
-                current_users: 2,
                 max_users: 5,
-                ..Default::default()
+                current_users: 2,
+                reduce_only: 0,
+                padding: Default::default(),
             }),
         );
+        dbg!(&res);
         assert!(res.is_ok_and(|truthy| truthy));
     }
 
