@@ -33,7 +33,7 @@ use tokio::{
 };
 
 use crate::{
-    constants,
+    constants::{self, PROGRAM_ID},
     drift_idl::{
         events::{FundingPaymentRecord, OrderActionRecord, OrderRecord},
         types::{MarketType, Order, OrderAction, OrderActionExplanation, PositionDirection},
@@ -114,6 +114,9 @@ impl EventSubscriber {
     /// Subscribe to drift events of `sub_account`, backed by Ws APIs
     ///
     /// * `sub_account` - pubkey of the user's sub-account to subscribe to
+    ///
+    /// passing the driftV2 address `dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH`
+    /// will yield events from all sub-accounts.
     ///
     /// Returns a stream of events
     pub async fn subscribe(
@@ -528,6 +531,9 @@ pub enum DriftEvent {
 impl DriftEvent {
     /// Return true if the event is connected to sub-account
     fn pertains_to(&self, sub_account: Pubkey) -> bool {
+        if sub_account == PROGRAM_ID {
+            return true;
+        }
         let subject = &Some(sub_account);
         match self {
             Self::OrderCancel { maker, taker, .. } | Self::OrderFill { maker, taker, .. } => {
