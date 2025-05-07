@@ -457,12 +457,36 @@ impl DriftClient {
         self.backend.get_user_account(account).await
     }
 
-    /// Get a stats account
+    /// Get the user account data and slot it was fetched at
+    /// Uses cached value if subscribed, falls back to network query
+    ///
+    /// * `account` - the drift user PDA (subaccount)
+    ///
+    /// Returns the deserialized account data (`User`)
+    pub async fn get_user_account_with_slot(
+        &self,
+        account: &Pubkey,
+    ) -> SdkResult<DataAndSlot<User>> {
+        self.backend.get_user_account_with_slot(account).await
+    }
+
+    /// Get a user stats account
     ///
     /// Returns the deserialized account data (`UserStats`)
     pub async fn get_user_stats(&self, authority: &Pubkey) -> SdkResult<UserStats> {
         let user_stats_pubkey = Wallet::derive_stats_account(authority);
         self.backend.get_account(&user_stats_pubkey).await
+    }
+
+    /// Get a user stats account and slot it was fetched at
+    ///
+    /// Returns the deserialized account data (`UserStats`)
+    pub async fn get_user_stats_with_slot(
+        &self,
+        authority: &Pubkey,
+    ) -> SdkResult<DataAndSlot<UserStats>> {
+        let user_stats_pubkey = Wallet::derive_stats_account(authority);
+        self.backend.get_account_with_slot(&user_stats_pubkey).await
     }
 
     /// Get the latest recent_block_hash
@@ -616,6 +640,88 @@ impl DriftClient {
             .try_get_perp_market_account_and_slot(market_index)
         {
             Ok(market.data)
+        } else {
+            Err(SdkError::NoMarketData(MarketId::perp(market_index)))
+        }
+    }
+
+    /// Get spot market account and slot it was fetched at
+    ///
+    /// * `market_index` - spot market index
+    ///
+    /// uses latest cached value if subscribed, otherwise falls back to network query
+    pub async fn get_spot_market_account_and_slot(
+        &self,
+        market_index: u16,
+    ) -> SdkResult<DataAndSlot<SpotMarket>> {
+        match self
+            .backend
+            .try_get_spot_market_account_and_slot(market_index)
+        {
+            Some(market) => Ok(market),
+            None => {
+                debug!(target: "rpc", "fetch market: spot/{market_index}");
+                let market = derive_spot_market_account(market_index);
+                self.backend.get_account_with_slot(&market).await
+            }
+        }
+    }
+
+    /// Get perp market account and slot it was fetched at
+    ///
+    /// * `market_index` - perp market index
+    ///
+    /// uses latest cached value if subscribed, otherwise falls back to network query
+    pub async fn get_perp_market_account_and_slot(
+        &self,
+        market_index: u16,
+    ) -> SdkResult<DataAndSlot<PerpMarket>> {
+        match self
+            .backend
+            .try_get_perp_market_account_and_slot(market_index)
+        {
+            Some(market) => Ok(market),
+            None => {
+                debug!(target: "rpc", "fetch market: perp/{market_index}");
+                let market = derive_perp_market_account(market_index);
+                self.backend.get_account_with_slot(&market).await
+            }
+        }
+    }
+
+    /// Try to spot market account from cache and slot it was fetched at
+    ///
+    /// * `market_index` - spot market index
+    ///
+    /// Returns error if not subscribed
+    pub fn try_get_spot_market_account_and_slot(
+        &self,
+        market_index: u16,
+    ) -> SdkResult<DataAndSlot<SpotMarket>> {
+        if let Some(market) = self
+            .backend
+            .try_get_spot_market_account_and_slot(market_index)
+        {
+            Ok(market)
+        } else {
+            Err(SdkError::NoMarketData(MarketId::spot(market_index)))
+        }
+    }
+
+    /// Try to get perp market account from cache and slot it was fetched at
+    ///
+    /// * `market_index` - spot market index
+    ///
+    /// Returns error if not subscribed
+    pub fn try_get_perp_market_account_and_slot(
+        &self,
+        market_index: u16,
+    ) -> SdkResult<DataAndSlot<PerpMarket>> {
+        if let Some(market) = self
+            .backend
+            .try_get_perp_market_account_and_slot(market_index)
+        {
+            Ok(market)
         } else {
             Err(SdkError::NoMarketData(MarketId::perp(market_index)))
         }
@@ -1169,6 +1275,16 @@ impl DriftClientBackend {
     /// uses latest cached if subscribed, otherwise falls back to network query
     pub async fn get_user_account(&self, account: &Pubkey) -> SdkResult<User> {
         self.get_account(account).await
+    }
+
+    /// Fetch `account` as a drift User account and slot it was fetched at
+    ///
+    /// uses latest cached if subscribed, otherwise falls back to network query
+    pub async fn get_user_account_with_slot(
+        &self,
+        account: &Pubkey,
+    ) -> SdkResult<DataAndSlot<User>> {
+        self.get_account_with_slot(account).await
     }
 
     /// Try to fetch `account` as `T` using latest local value
