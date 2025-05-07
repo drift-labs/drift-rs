@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use anchor_lang::Discriminator;
 use drift_rs::{
-    constants::DEFAULT_PUBKEY,
-    event_subscriber::RpcClient,
+    constants::{DEFAULT_PUBKEY, PROGRAM_ID},
+    event_subscriber::{EventSubscriber, RpcClient},
     grpc::grpc_subscriber::AccountFilter,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
     types::{
