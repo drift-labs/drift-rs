@@ -295,6 +295,22 @@ impl OracleMap {
                     o.raw.clone_from(&oracle_account.data);
                     o.data = price_data;
                     o.slot = latest_slot;
+                })
+                .or_insert({
+                    let price_data = get_oracle_price(
+                        oracle_source,
+                        &mut (*oracle_pubkey, oracle_account.clone()),
+                        latest_slot,
+                    )
+                    .expect("valid oracle data");
+
+                    Oracle {
+                        pubkey: *oracle_pubkey,
+                        data: price_data,
+                        slot: latest_slot,
+                        source: oracle_source,
+                        raw: oracle_account.data.clone(),
+                    }
                 });
         }
 

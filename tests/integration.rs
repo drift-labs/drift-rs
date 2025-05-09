@@ -135,23 +135,11 @@ async fn client_sync_subscribe_mainnet_grpc() {
                         println!("account: {}", account.pubkey);
                         let _ = user_update_tx.try_send(account.pubkey);
                     }
-                )
+                ),
+            true,
         )
         .await
         .is_ok());
-
-    // wait for updates
-    tokio::time::sleep(Duration::from_secs(120)).await;
-
-    // markets available
-    assert!(client.try_get_perp_market_account(0).is_ok());
-    assert!(client.try_get_spot_market_account(1).is_ok());
-
-    // slot update received
-    assert!(slot_update_rx.try_recv().is_ok_and(|s| s > 0));
-
-    // user update received
-    assert!(user_update_rx.try_recv().is_ok_and(|u| u != DEFAULT_PUBKEY));
 
     // oracle map subscribed
     for market in client.get_all_spot_market_ids() {
@@ -167,6 +155,33 @@ async fn client_sync_subscribe_mainnet_grpc() {
                 .is_some_and(|m| m.oracle_source == OracleSource::SwitchboardOnDemand)),
         }
     }
+
+    for market in client.get_all_perp_market_ids() {
+        let rpc_fetched_price = client.oracle_price(market).await.unwrap();
+        log::info!("fetching market: {market:?}");
+        match client.try_get_oracle_price_data_and_slot(market) {
+            Some(x) => assert!(x.data.price == rpc_fetched_price),
+            // there was no gRPC synced data since the test started
+            // this is acceptable for switchboard on demand oracle (seems to update slowly)
+            None => assert!(client
+                .program_data()
+                .spot_market_config_by_index(market.index())
+                .is_some_and(|m| m.oracle_source == OracleSource::SwitchboardOnDemand)),
+        }
+    }
+
+    // wait for updates
+    tokio::time::sleep(Duration::from_secs(120)).await;
+
+    // markets available
+    assert!(client.try_get_perp_market_account(0).is_ok());
+    assert!(client.try_get_spot_market_account(1).is_ok());
+
+    // slot update received
+    assert!(slot_update_rx.try_recv().is_ok_and(|s| s > 0));
+
+    // user update received
+    assert!(user_update_rx.try_recv().is_ok_and(|u| u != DEFAULT_PUBKEY));
 
     client.grpc_unsubscribe();
 }
