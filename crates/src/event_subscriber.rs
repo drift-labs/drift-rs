@@ -906,7 +906,7 @@ mod test {
             "Program J1TnP8zvVxbtF5KFp5xRmWuvG9McnhzmBd9XGfCyuxFP success",
             ].into_iter().map(Into::into).collect();
 
-        log_stream.process_log(RpcLogsResponse {
+        log_stream.process_log(338797360, RpcLogsResponse {
             signature: "2jLk34wWwgecuws9iD9Ug63JdL8kYBePdtcakzG34zEx9KYVYD6HuokxMZYpFw799cJZBcaCMZ47WAxkGJjM7zNC".into(),
             err: None,
             logs: logs.clone(),
@@ -952,7 +952,7 @@ mod test {
             .unwrap();
         log_stream.cache.write().await.reset();
 
-        log_stream.process_log(RpcLogsResponse {
+        log_stream.process_log(338797360, RpcLogsResponse {
             signature: "2jLk34wWwgecuws9iD9Ug63JdL8kYBePdtcakzG34zEx9KYVYD6HuokxMZYpFw799cJZBcaCMZ47WAxkGJjM7zNC".into(),
             err: None,
             logs: logs.clone(),
