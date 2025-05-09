@@ -780,8 +780,11 @@ impl DriftClient {
         endpoint: String,
         x_token: String,
         opts: GrpcSubscribeOpts,
+        sync: bool,
     ) -> SdkResult<()> {
-        self.backend.grpc_subscribe(endpoint, x_token, opts).await
+        self.backend
+            .grpc_subscribe(endpoint, x_token, opts, sync)
+            .await
     }
 
     /// Unsubscribe the gRPC connection
@@ -937,10 +940,34 @@ impl DriftClientBackend {
         endpoint: String,
         x_token: String,
         opts: GrpcSubscribeOpts,
+        sync: bool,
     ) -> SdkResult<()> {
         log::debug!(target: "grpc", "subscribing to grpc with config: commitment: {:?}, interslot updates: {:?}", opts.commitment, opts.interslot_updates);
         let mut grpc = DriftGrpcClient::new(endpoint.clone(), x_token.clone())
             .grpc_connection_opts(opts.connection_opts.clone());
+
+        if sync {
+            tokio::try_join!(
+                self.spot_market_map.sync(&self.rpc_client),
+                self.perp_market_map.sync(&self.rpc_client),
+            )?;
+
+            let spot_markets = self
+                .spot_market_map
+                .marketmap
+                .iter()
+                .map(|i| MarketId::spot(*i.key()));
+            let perp_markets = self
+                .perp_market_map
+                .marketmap
+                .iter()
+                .map(|i| MarketId::perp(*i.key()));
+            let all_markets: Vec<MarketId> = spot_markets.chain(perp_markets).collect();
+
+            self.oracle_map
+                .sync(all_markets.as_ref(), &self.rpc_client)
+                .await?;
+        }
 
         grpc.on_account(
             AccountFilter::partial().with_discriminator(SpotMarket::DISCRIMINATOR),
