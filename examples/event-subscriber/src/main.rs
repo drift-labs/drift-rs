@@ -26,13 +26,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let grpc_x_token = env::var("GRPC_X_TOKEN").expect("GRPC_X_TOKEN must be set");
         EventSubscriber::subscribe_grpc(grpc_endpoint, grpc_x_token, PROGRAM_ID)
             .await
-            .expect("subscribed to grpc events")
+            .expect("error subscribing to grpc events")
     } else {
         let ws_rpc_endpoint = env::var("WS_RPC_ENDPOINT").expect("WS_RPC_ENDPOINT must be set");
         let client = PubsubClient::new(&ws_rpc_endpoint).await.unwrap();
         EventSubscriber::subscribe(Arc::new(client), PROGRAM_ID)
             .await
-            .expect("subscribed to ws events")
+            .expect("error subscribing to ws events")
     };
 
     println!("subscribed to events");
@@ -73,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     bit_flags
                 );
                 count += 1;
-                if count > 50 {
+                if count > 100 {
                     break;
                 }
             }

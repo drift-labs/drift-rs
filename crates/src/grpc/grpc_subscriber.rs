@@ -5,11 +5,9 @@ use futures_util::{
     sink::SinkExt,
     stream::{FuturesUnordered, StreamExt},
 };
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use solana_rpc_client_api::filter::Memcmp;
-use solana_sdk::{
-    clock::Slot, commitment_config::CommitmentLevel, pubkey::Pubkey,
-};
+use solana_sdk::{clock::Slot, commitment_config::CommitmentLevel, pubkey::Pubkey};
 use yellowstone_grpc_client::{
     ClientTlsConfig, GeyserGrpcBuilderError, GeyserGrpcClient, GeyserGrpcClientError, Interceptor,
 };
@@ -517,15 +515,17 @@ impl GeyserSubscribeOpts {
             });
         }
 
-        accounts.insert(
-            "client".to_owned(),
-            SubscribeRequestFilterAccounts {
-                account: self.accounts_pubkeys.clone(),
-                owner: self.accounts_owners.clone(),
-                filters,
-                ..Default::default()
-            },
-        );
+        if !self.accounts_pubkeys.is_empty() || !self.accounts_owners.is_empty() {
+            accounts.insert(
+                "client".to_owned(),
+                SubscribeRequestFilterAccounts {
+                    account: self.accounts_pubkeys.clone(),
+                    owner: self.accounts_owners.clone(),
+                    filters,
+                    ..Default::default()
+                },
+            );
+        }
 
         let mut slots = SlotsFilterMap::default();
         slots.insert(

@@ -176,20 +176,21 @@ impl LogEventStream {
         debug!(target: LOG_TARGET, "start log subscription: {sub_account:?}");
 
         while let Some(response) = log_stream.next().await {
-            self.process_log(response.value).await;
+            self.process_log(response.context.slot, response.value)
+                .await;
         }
         warn!(target: LOG_TARGET, "log stream ended: {sub_account:?}");
     }
 
     /// Process a log response from RPC, emitting any relevant events
-    async fn process_log(&self, response: RpcLogsResponse) {
+    async fn process_log(&self, slot: u64, response: RpcLogsResponse) {
         let signature = response.signature;
         if response.err.is_some() {
             debug!(target: LOG_TARGET, "skipping failed tx: {signature:?}");
             return;
         }
         if signature == EMPTY_SIGNATURE {
-            debug!(target: LOG_TARGET, "skipping empty signature");
+            debug!(target: LOG_TARGET, "skipping empty signature, logs");
             return;
         }
         {
@@ -201,7 +202,7 @@ impl LogEventStream {
             cache.insert(signature.clone());
         }
 
-        debug!(target: LOG_TARGET, "log extracting events, tx: {signature:?}");
+        debug!(target: LOG_TARGET, "log extracting events, slot: {slot}, tx: {signature:?}");
         for (tx_idx, log) in response.logs.iter().enumerate() {
             // a drift sub-account should not interact with any other program by definition
             if let Some(event) = try_parse_log(log.as_str(), &signature, tx_idx) {
@@ -249,7 +250,7 @@ impl GrpcLogEventStream {
                 self.commitment.commitment,
                 GeyserSubscribeOpts {
                     transactions_accounts_include: vec![sub_account.to_string()],
-                    transactions_accounts_required: vec![PROGRAM_ID.to_string()],
+                    // transactions_accounts_required: vec![PROGRAM_ID.to_string()],
                     ..Default::default()
                 },
             )
@@ -258,7 +259,11 @@ impl GrpcLogEventStream {
         info!(target: LOG_TARGET, "grpc log stream connected: {sub_account:?}");
 
         while let Some(event) = raw_event_rx.recv().await {
+            let start = std::time::Instant::now();
+            let slot = event.slot;
             self.process_log(event).await;
+            let elapsed = start.elapsed();
+            debug!(target: "grpc", "transaction slot: {}, len: {} callbacks took {:?}", slot, raw_event_rx.len(), elapsed);
         }
         info!(target: LOG_TARGET, "grpc log stream ended: {sub_account:?}");
     }
@@ -271,12 +276,12 @@ impl GrpcLogEventStream {
             return;
         }
         let signature = signature.unwrap();
+        let signature = Signature::from(<[u8; 64]>::try_from(signature.as_slice()).unwrap());
+        let signature_str = signature.to_string();
 
-        debug!(target: LOG_TARGET, "log extracting events, tx: {signature:?}");
+        debug!(target: LOG_TARGET, "log extracting events, slot: {}, tx: {signature_str}", event.slot);
         let logs = &event.meta.log_messages;
         for (tx_idx, log) in logs.iter().enumerate() {
-            let signature = Signature::from(<[u8; 64]>::try_from(signature.as_slice()).unwrap());
-            let signature_str = signature.to_string();
             if let Some(event) = try_parse_log(log.as_str(), &signature_str, tx_idx) {
                 // unrelated events from same tx should not be emitted e.g. a filler tx which produces other fill events
                 if event.pertains_to(self.sub_account) {
