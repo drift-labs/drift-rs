@@ -250,7 +250,6 @@ impl GrpcLogEventStream {
                 self.commitment.commitment,
                 GeyserSubscribeOpts {
                     transactions_accounts_include: vec![sub_account.to_string()],
-                    // transactions_accounts_required: vec![PROGRAM_ID.to_string()],
                     ..Default::default()
                 },
             )
