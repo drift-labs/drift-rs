@@ -241,11 +241,12 @@ impl GrpcLogEventStream {
         ) = channel(256);
 
         let raw_event_tx_clone = raw_event_tx.clone();
-        grpc.on_transaction(Box::new(move |tx_update: TransactionUpdate| {
-            raw_event_tx_clone.try_send(tx_update).unwrap();
+        grpc.on_transaction(Box::new(move |tx_update: &TransactionUpdate| {
+            raw_event_tx_clone.try_send(tx_update.clone()).unwrap();
         }));
 
-        let unsub_fn = grpc
+        // prevent dropping unsub_fn and unsubscribing from grpc
+        let _unsub_fn = grpc
             .subscribe(
                 self.commitment.commitment,
                 GeyserSubscribeOpts {
@@ -260,7 +261,7 @@ impl GrpcLogEventStream {
         while let Some(event) = raw_event_rx.recv().await {
             let start = std::time::Instant::now();
             let slot = event.slot;
-            self.process_log(event).await;
+            self.process_log(&event).await;
             let elapsed = start.elapsed();
             debug!(target: "grpc", "transaction slot: {}, len: {} callbacks took {:?}", slot, raw_event_rx.len(), elapsed);
         }
@@ -268,20 +269,19 @@ impl GrpcLogEventStream {
     }
 
     /// Process a log response from RPC, emitting any relevant events
-    async fn process_log(&self, event: TransactionUpdate) {
+    async fn process_log(&self, event: &TransactionUpdate) {
         let signature = event.transaction.signatures.first();
         if signature.is_none() {
             debug!(target: LOG_TARGET, "skipping tx with no signatures");
             return;
         }
-        let signature = signature.unwrap();
-        let signature = Signature::from(<[u8; 64]>::try_from(signature.as_slice()).unwrap());
-        let signature_str = signature.to_string();
+        let signature =
+            Signature::from(<[u8; 64]>::try_from(signature.unwrap().as_slice()).unwrap());
 
-        debug!(target: LOG_TARGET, "log extracting events, slot: {}, tx: {signature_str}", event.slot);
+        debug!(target: LOG_TARGET, "log extracting events, slot: {}, tx: {}", event.slot, signature);
         let logs = &event.meta.log_messages;
         for (tx_idx, log) in logs.iter().enumerate() {
-            if let Some(event) = try_parse_log(log.as_str(), &signature_str, tx_idx) {
+            if let Some(event) = try_parse_log(log.as_str(), &signature.to_string(), tx_idx) {
                 // unrelated events from same tx should not be emitted e.g. a filler tx which produces other fill events
                 if event.pertains_to(self.sub_account) {
                     if self.event_tx.send(event).await.is_err() {

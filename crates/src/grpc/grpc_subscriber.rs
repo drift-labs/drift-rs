@@ -5,7 +5,7 @@ use futures_util::{
     sink::SinkExt,
     stream::{FuturesUnordered, StreamExt},
 };
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use solana_rpc_client_api::filter::Memcmp;
 use solana_sdk::{clock::Slot, commitment_config::CommitmentLevel, pubkey::Pubkey};
 use yellowstone_grpc_client::{
@@ -265,7 +265,7 @@ impl DriftGrpcClient {
     /// This may be called many times to define multiple callbacks
     ///
     /// * `on_transaction` - fn to receive callback on accounts
-    pub fn on_transaction<T: Fn(TransactionUpdate) + Send + Sync + 'static>(
+    pub fn on_transaction<T: Fn(&TransactionUpdate) + Send + Sync + 'static>(
         &mut self,
         on_transaction: T,
     ) {
@@ -434,7 +434,7 @@ impl DriftGrpcClient {
                                         transaction: transaction.clone(),
                                         meta: meta.clone(),
                                     };
-                                    hook(update);
+                                    hook(&update);
                                 }
                             }
                             Some(UpdateOneof::Slot(msg)) => {

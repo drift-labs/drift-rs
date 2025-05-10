@@ -10,7 +10,7 @@ use grpc_subscriber::{AccountFilter, GrpcConnectionOpts};
 use yellowstone_grpc_proto::prelude::{Transaction, TransactionStatusMeta};
 
 /// grpc transaction update callback
-pub type OnTransactionFn = dyn Fn(TransactionUpdate) + Send + Sync + 'static;
+pub type OnTransactionFn = dyn Fn(&TransactionUpdate) + Send + Sync + 'static;
 /// grpc account update callback
 pub type OnAccountFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
 /// grpc slot update callback
