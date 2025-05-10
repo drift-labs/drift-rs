@@ -7,7 +7,10 @@ use solana_sdk::{
 };
 pub mod grpc_subscriber;
 use grpc_subscriber::{AccountFilter, GrpcConnectionOpts};
+use yellowstone_grpc_proto::prelude::{Transaction, TransactionStatusMeta};
 
+/// grpc transaction update callback
+pub type OnTransactionFn = dyn Fn(&TransactionUpdate) + Send + Sync + 'static;
 /// grpc account update callback
 pub type OnAccountFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
 /// grpc slot update callback
@@ -30,6 +33,16 @@ pub struct AccountUpdate<'a> {
     pub rent_epoch: Epoch,
     /// Slot the update was retrieved
     pub slot: Slot,
+}
+/// Transaction update from gRPC
+#[derive(Clone, Debug)]
+pub struct TransactionUpdate {
+    /// slot of the transaction
+    pub slot: u64,
+    /// true if this is a vote transaction
+    pub is_vote: bool,
+    pub transaction: Transaction,
+    pub meta: TransactionStatusMeta,
 }
 
 /// Config options for drift gRPC subscription
