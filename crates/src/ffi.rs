@@ -895,7 +895,7 @@ mod tests {
 
     #[test]
     fn ffi_simulate_place_perp_order() {
-        // smoke test for ffi compatability, logic tested in `math::` module
+        // smoke test for ffi compatibility, logic tested in `math::` module
         let btc_perp_index = 1_u16;
         let mut user = User::default();
         user.spot_positions[1] = SpotPosition {

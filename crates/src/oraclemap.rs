@@ -6,7 +6,10 @@ use std::sync::{
 use ahash::HashSet;
 use dashmap::{DashMap, ReadOnlyView};
 use drift_pubsub_client::PubsubClient;
-use futures_util::{stream::FuturesUnordered, StreamExt};
+use futures_util::{
+    stream::{FuturesOrdered, FuturesUnordered},
+    StreamExt,
+};
 use log::warn;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
@@ -285,8 +288,9 @@ impl OracleMap {
             self.oraclemap
                 .entry((*oracle_pubkey, oracle_source as u8))
                 .and_modify(|o| {
+                    log::debug!(target: LOG_TARGET, "sync oracle update: {:?}/{}", oracle_source, oracle_pubkey);
                     let price_data = get_oracle_price(
-                        o.source,
+                        oracle_source,
                         &mut (*oracle_pubkey, oracle_account.clone()),
                         latest_slot,
                     )
@@ -297,6 +301,7 @@ impl OracleMap {
                     o.slot = latest_slot;
                 })
                 .or_insert({
+                    log::debug!(target: LOG_TARGET, "sync oracle new: {:?}/{}", oracle_source, oracle_pubkey);
                     let price_data = get_oracle_price(
                         oracle_source,
                         &mut (*oracle_pubkey, oracle_account.clone()),
@@ -496,9 +501,9 @@ async fn get_multi_account_data_with_fallback(
     let mut account_data = Vec::with_capacity(pubkeys.len());
 
     // try 'getMultipleAccounts'
-    let mut gma_requests = FuturesUnordered::new();
+    let mut gma_requests = FuturesOrdered::new();
     for keys in pubkeys.chunks(64) {
-        gma_requests.push(async move {
+        gma_requests.push_back(async move {
             let response = rpc
                 .get_multiple_accounts_with_commitment(keys, rpc.commitment())
                 .await;
@@ -536,7 +541,7 @@ async fn get_multi_account_data_with_fallback(
     log::debug!(target: LOG_TARGET, "syncing with getMultipleAccounts failed");
 
     // try multiple 'getAccount's
-    let mut account_requests = FuturesUnordered::from_iter(pubkeys.iter().map(|p| async move {
+    let mut account_requests = FuturesOrdered::from_iter(pubkeys.iter().map(|p| async move {
         (
             p,
             rpc.get_account_with_commitment(p, rpc.commitment()).await,

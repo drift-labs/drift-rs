@@ -9,7 +9,10 @@ use std::{
 use anchor_lang::{AccountDeserialize, AnchorDeserialize};
 use dashmap::DashMap;
 use drift_pubsub_client::PubsubClient;
-use futures_util::{stream::FuturesUnordered, StreamExt};
+use futures_util::{
+    stream::{FuturesOrdered, FuturesUnordered},
+    StreamExt,
+};
 use serde_json::json;
 use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
@@ -317,10 +320,10 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
     };
 
     // try 'getMultipleAccounts'
-    let mut market_requests = FuturesUnordered::new();
+    let mut market_requests = FuturesOrdered::new();
     for market_chunk in market_pdas.chunks(64) {
         market_requests
-            .push(rpc.get_multiple_accounts_with_commitment(market_chunk, rpc.commitment()));
+            .push_back(rpc.get_multiple_accounts_with_commitment(market_chunk, rpc.commitment()));
     }
 
     while let Some(market_response) = market_requests.next().await {
@@ -354,7 +357,7 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
 
     // try multiple 'getAccount's
     let mut market_requests =
-        FuturesUnordered::from_iter(market_pdas.iter().map(|acc| rpc.get_account_data(acc)));
+        FuturesOrdered::from_iter(market_pdas.iter().map(|acc| rpc.get_account_data(acc)));
 
     while let Some(market_response) = market_requests.next().await {
         match market_response {

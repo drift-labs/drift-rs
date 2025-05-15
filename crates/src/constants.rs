@@ -232,7 +232,7 @@ impl ProgramData {
     }
 }
 
-/// Map oracle `source` to its owner pubkey (network depdendent)
+/// Map oracle `source` to its owner pubkey (network dependent)
 pub fn oracle_source_to_owner(context: Context, source: OracleSource) -> Pubkey {
     match source {
         OracleSource::Pyth
