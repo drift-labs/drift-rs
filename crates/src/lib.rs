@@ -1053,11 +1053,13 @@ impl DriftClientBackend {
             .grpc_connection_opts(opts.connection_opts.clone());
 
         if sync {
-            tokio::try_join!(
-                self.spot_market_map.sync(&self.rpc_client),
-                self.perp_market_map.sync(&self.rpc_client),
-            )?;
-
+            // the DriftClientBackend syncs marketmaps by default
+            if self.perp_market_map.len() == 0 {
+                self.perp_market_map.sync(&self.rpc_client).await?;
+            }
+            if self.spot_market_map.len() == 0 {
+                self.spot_market_map.sync(&self.rpc_client).await?;
+            }
             let spot_markets = self
                 .spot_market_map
                 .marketmap

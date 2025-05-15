@@ -6,9 +6,7 @@ use drift_rs::{
     event_subscriber::RpcClient,
     grpc::grpc_subscriber::AccountFilter,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
-    types::{
-        accounts::User, Context, MarketId, NewOrder, OracleSource, PostOnlyParam, SettlePnlMode,
-    },
+    types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam, SettlePnlMode},
     utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
     DriftClient, GrpcSubscribeOpts, Pubkey, TransactionBuilder, Wallet,
 };
@@ -145,33 +143,19 @@ async fn client_sync_subscribe_mainnet_grpc() {
     for market in client.get_all_spot_market_ids() {
         let rpc_fetched_price = client.oracle_price(market).await.unwrap();
         log::info!("fetching market: {market:?}");
-        match client.try_get_oracle_price_data_and_slot(market) {
-            Some(x) => assert!(x.data.price == rpc_fetched_price),
-            // there was no gRPC synced data since the test started
-            // this is acceptable for switchboard on demand oracle (seems to update slowly)
-            None => assert!(client
-                .program_data()
-                .spot_market_config_by_index(market.index())
-                .is_some_and(|m| m.oracle_source == OracleSource::SwitchboardOnDemand)),
-        }
+        let x = client.try_get_oracle_price_data_and_slot(market).unwrap();
+        assert!(x.data.price == rpc_fetched_price);
     }
 
     for market in client.get_all_perp_market_ids() {
         let rpc_fetched_price = client.oracle_price(market).await.unwrap();
         log::info!("fetching market: {market:?}");
-        match client.try_get_oracle_price_data_and_slot(market) {
-            Some(x) => assert!(x.data.price == rpc_fetched_price),
-            // there was no gRPC synced data since the test started
-            // this is acceptable for switchboard on demand oracle (seems to update slowly)
-            None => assert!(client
-                .program_data()
-                .spot_market_config_by_index(market.index())
-                .is_some_and(|m| m.oracle_source == OracleSource::SwitchboardOnDemand)),
-        }
+        let x = client.try_get_oracle_price_data_and_slot(market).unwrap();
+        assert!(x.data.price == rpc_fetched_price);
     }
 
     // wait for updates
-    tokio::time::sleep(Duration::from_secs(120)).await;
+    tokio::time::sleep(Duration::from_secs(4)).await;
 
     // markets available
     assert!(client.try_get_perp_market_account(0).is_ok());

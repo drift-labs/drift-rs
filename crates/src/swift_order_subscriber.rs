@@ -433,9 +433,12 @@ where
 
 #[cfg(test)]
 mod tests {
+    use anchor_lang::InstructionData;
+
     use super::*;
-    use crate::types::{
-        MarketType, OrderTriggerCondition, OrderType, PositionDirection, PostOnlyParam,
+    use crate::{
+        drift_idl,
+        types::{MarketType, OrderTriggerCondition, OrderType, PositionDirection, PostOnlyParam},
     };
 
     #[test]
@@ -482,6 +485,20 @@ mod tests {
             signed_message.encode_for_signing().as_slice(),
             b"c8d5a65e2234f55d0001010080841e0000000000000000000000000002000000000000000001320124c6aa950000000001786b2f94000000000000bb64a9150000000074735730364f6d380000"
         );
+    }
+
+    #[test]
+    fn deser_ix_payload() {
+        let data = hex_literal::hex!("204f658b1906620f04010000a79826fba62ae1a29e220e2cd805e76874e109a58fc640ab2d93a96d9e4053ad46ee5213e7cadee57718748eb6886e3916724b5f3869afadf47128ae10dd9b0a522ec49107ab509f412186273ac178383c678a32183dc0c89bb804710115240ba20063386435613635653232333466353564303030313030303066666666666666666666666666666666636233373030303030303030303030303365303030303030303030303030303030313030303030303030303131343031316133373030303030303030303030303031326633383030303030303030303030303030303034306564336331343030303030303030333236393530343335343632343635323030303000");
+        let ix = drift_idl::instructions::PlaceSignedMsgTakerOrder::deserialize(&mut &data[8..])
+            .unwrap();
+        // signature, pubkey, len(u16)
+        let payload = hex::decode(&ix.signed_msg_order_params_message_bytes[98..]).unwrap();
+        dbg!(payload[..8] == *SWIFT_MSG_PREFIX);
+
+        let res: SignedOrder = AnchorDeserialize::deserialize(&mut &payload[8..]).unwrap();
+        dbg!(res);
+        dbg!(core::str::from_utf8(&res.uuid).unwrap());
     }
 
     #[test]
