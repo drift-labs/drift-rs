@@ -28,25 +28,13 @@ use crate::{
 const LOG_TARGET: &str = "oraclemap";
 
 #[allow(dead_code)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 /// Captures shared relationship between oracles and markets/source types
 enum OracleShareMode {
-    /// Oracle is unshared
-    Isolated {
-        market: MarketId,
-        source: OracleSource,
-    },
-    /// Oracle is shared by two markets
-    Dual {
-        spot: MarketId,
-        perp: MarketId,
-        source: OracleSource,
-    },
-    /// Oracle is shared by two markets with mixed sources
-    DualMixed {
-        spot: (MarketId, OracleSource),
-        perp: (MarketId, OracleSource),
-    },
+    /// Oracle is used by 1 or more markets
+    Normal { source: OracleSource },
+    /// Oracle is shared by markets with mixed sources
+    Mixed { sources: Vec<OracleSource> },
 }
 
 #[derive(Clone, Default, Debug)]
@@ -100,41 +88,26 @@ impl OracleMap {
         let oracle_by_market = oracle_by_market.into_read_only();
 
         let shared_oracles = DashMap::<Pubkey, OracleShareMode, ahash::RandomState>::default();
-        for (market, (pubkey, source)) in oracle_by_market.iter() {
+        for (_market, (pubkey, source)) in oracle_by_market.iter() {
             shared_oracles
                 .entry(*pubkey)
-                .and_modify(|m| {
-                    match m {
-                        OracleShareMode::Isolated {
-                            market: isolated_market,
-                            source: isolated_source,
-                        } => {
-                            let (spot, perp) = if isolated_market.is_spot() {
-                                ((*isolated_market, *isolated_source), (*market, *source))
-                            } else {
-                                ((*market, *source), (*isolated_market, *isolated_source))
-                            };
-
-                            if source == isolated_source {
-                                *m = OracleShareMode::Dual {
-                                    spot: spot.0,
-                                    perp: perp.0,
-                                    source: *source,
-                                };
-                            } else {
-                                *m = OracleShareMode::DualMixed { spot, perp };
+                .and_modify(|m| match m {
+                    OracleShareMode::Normal {
+                        source: existing_source,
+                    } => {
+                        if existing_source != source {
+                            *m = OracleShareMode::Mixed {
+                                sources: vec![*existing_source, *source],
                             }
                         }
-                        _ => {
-                            // the oracle is being used by more than 2 markets
-                            panic!("detected unhandled shared oracle mode");
+                    }
+                    OracleShareMode::Mixed { sources } => {
+                        if !sources.contains(source) {
+                            sources.push(*source);
                         }
                     }
                 })
-                .or_insert(OracleShareMode::Isolated {
-                    market: *market,
-                    source: *source,
-                });
+                .or_insert(OracleShareMode::Normal { source: *source });
         }
 
         Self {
@@ -187,31 +160,28 @@ impl OracleMap {
 
         let futs_iter = pending_subscriptions.into_iter().map(|sub_fut| {
             let oraclemap = Arc::clone(&self.oraclemap);
-            let oracle_shared_mode = *(self
+            let oracle_shared_mode = self
                 .shared_oracles
                 .get(&sub_fut.pubkey)
-                .expect("oracle exists"));
+                .expect("oracle exists")
+                .clone();
+            let oracle_shared_mode_ref = oracle_shared_mode.clone();
 
             async move {
-                let unsub =
-                    sub_fut
-                        .subscribe(Self::SUBSCRIPTION_ID, true, move |update| {
-                            match oracle_shared_mode {
-                                OracleShareMode::Isolated { market: _, source } => {
-                                    update_handler(update, source, &oraclemap)
-                                }
-                                OracleShareMode::Dual {
-                                    spot: _,
-                                    perp: _,
-                                    source,
-                                } => update_handler(update, source, &oraclemap),
-                                OracleShareMode::DualMixed { spot, perp } => {
-                                    update_handler(update, spot.1, &oraclemap);
-                                    update_handler(update, perp.1, &oraclemap);
+                let unsub = sub_fut
+                    .subscribe(Self::SUBSCRIPTION_ID, true, move |update| {
+                        match &oracle_shared_mode_ref {
+                            OracleShareMode::Normal { source } => {
+                                update_handler(update, *source, &oraclemap)
+                            }
+                            OracleShareMode::Mixed { sources } => {
+                                for source in sources {
+                                    update_handler(update, *source, &oraclemap);
                                 }
                             }
-                        })
-                        .await;
+                        }
+                    })
+                    .await;
                 ((sub_fut.pubkey, oracle_shared_mode), unsub)
             }
         });
@@ -378,23 +348,17 @@ impl OracleMap {
 
     /// Returns a hook for driving the map with new `Account` updates
     pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
-        let marketmap = self.map();
+        let oraclemap = self.map();
         let oracle_lookup = self.shared_oracles.clone();
 
         move |update: &AccountUpdate| match oracle_lookup.get(&update.pubkey).unwrap() {
-            OracleShareMode::Dual {
-                spot: _,
-                perp: _,
-                source,
-            } => {
-                update_handler_grpc(update, *source, &marketmap);
+            OracleShareMode::Normal { source } => {
+                update_handler_grpc(update, *source, &oraclemap);
             }
-            OracleShareMode::Isolated { market: _, source } => {
-                update_handler_grpc(update, *source, &marketmap);
-            }
-            OracleShareMode::DualMixed { spot, perp } => {
-                update_handler_grpc(update, spot.1, &marketmap);
-                update_handler_grpc(update, perp.1, &marketmap);
+            OracleShareMode::Mixed { sources } => {
+                for source in sources {
+                    update_handler_grpc(update, *source, &oraclemap);
+                }
             }
         }
     }
