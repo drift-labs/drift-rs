@@ -22,7 +22,7 @@ pub struct AccountsListBuilder {
     /// placeholder account values populated with real market & oracle account data
     perp_accounts: ArrayVec<AccountWithKey, 16>,
     spot_accounts: ArrayVec<AccountWithKey, 16>,
-    oracle_accounts: ArrayVec<AccountWithKey, 16>,
+    oracle_accounts: ArrayVec<AccountWithKey, 32>,
 }
 
 impl AccountsListBuilder {
