@@ -903,6 +903,14 @@ impl DriftClient {
     pub fn backend(&self) -> &'static DriftClientBackend {
         self.backend
     }
+
+    pub fn perp_market_watch(&self) -> tokio::sync::watch::Receiver<u16> {
+        self.backend.perp_market_watch_rx.clone()
+    }
+
+    pub fn spot_market_watch(&self) -> tokio::sync::watch::Receiver<u16> {
+        self.backend.spot_market_watch_rx.clone()
+    }
 }
 
 /// Provides the heavy-lifting and network facing features of the SDK
