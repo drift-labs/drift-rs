@@ -917,6 +917,10 @@ pub struct DriftClientBackend {
     spot_market_map: MarketMap<SpotMarket>,
     oracle_map: OracleMap,
     grpc_unsub: RwLock<Option<(UnsubHandle, UnsubHandle)>>,
+    perp_market_watch_tx: tokio::sync::watch::Sender<u16>,
+    spot_market_watch_tx: tokio::sync::watch::Sender<u16>,
+    perp_market_watch_rx: tokio::sync::watch::Receiver<u16>,
+    spot_market_watch_rx: tokio::sync::watch::Receiver<u16>,
 }
 impl DriftClientBackend {
     /// Initialize a new `DriftClientBackend`
@@ -982,6 +986,15 @@ impl DriftClientBackend {
             rpc_client.commitment(),
         );
 
+        let (perp_market_watch_tx, perp_market_watch_rx): (
+            tokio::sync::watch::Sender<u16>,
+            tokio::sync::watch::Receiver<u16>,
+        ) = tokio::sync::watch::channel(0);
+        let (spot_market_watch_tx, spot_market_watch_rx): (
+            tokio::sync::watch::Sender<u16>,
+            tokio::sync::watch::Receiver<u16>,
+        ) = tokio::sync::watch::channel(0);
+
         Ok(Self {
             rpc_client: Arc::clone(&rpc_client),
             pubsub_client,
@@ -997,6 +1010,10 @@ impl DriftClientBackend {
             spot_market_map,
             oracle_map,
             grpc_unsub: RwLock::default(),
+            perp_market_watch_tx,
+            spot_market_watch_tx,
+            perp_market_watch_rx,
+            spot_market_watch_rx,
         })
     }
 
@@ -1079,11 +1096,13 @@ impl DriftClientBackend {
 
         grpc.on_account(
             AccountFilter::partial().with_discriminator(SpotMarket::DISCRIMINATOR),
-            self.spot_market_map.on_account_fn(),
+            self.spot_market_map
+                .on_account_fn(self.spot_market_watch_tx.clone()),
         );
         grpc.on_account(
             AccountFilter::partial().with_discriminator(PerpMarket::DISCRIMINATOR),
-            self.perp_market_map.on_account_fn(),
+            self.perp_market_map
+                .on_account_fn(self.perp_market_watch_tx.clone()),
         );
 
         if opts.usermap {
@@ -1454,6 +1473,14 @@ impl DriftClientBackend {
     #[cfg(feature = "unsafe_pub")]
     pub fn oracle_map(&self) -> &OracleMap {
         &self.oracle_map
+    }
+
+    pub fn perp_market_watch(&self) -> tokio::sync::watch::Receiver<u16> {
+        self.perp_market_watch_rx.clone()
+    }
+
+    pub fn spot_market_watch(&self) -> tokio::sync::watch::Receiver<u16> {
+        self.spot_market_watch_rx.clone()
     }
 }
 

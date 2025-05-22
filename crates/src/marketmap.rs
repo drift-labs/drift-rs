@@ -108,11 +108,15 @@ where
     }
 
     /// Returns a hook for driving the map with new `Account` updates
-    pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
+    pub(crate) fn on_account_fn(
+        &self,
+        watch: tokio::sync::watch::Sender<u16>,
+    ) -> impl Fn(&AccountUpdate) {
         let marketmap = self.map();
         move |update: &AccountUpdate| {
             let market = T::deserialize(&mut &update.data[8..]).expect("deser market");
             let idx = market.market_index();
+            let _ = watch.send(idx);
             marketmap.insert(
                 idx,
                 DataAndSlot {
