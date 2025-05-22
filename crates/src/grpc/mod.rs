@@ -59,7 +59,7 @@ pub struct GrpcSubscribeOpts {
     /// callback for slot updates
     pub on_slot: Option<Box<OnSlotFn>>,
     /// custom callback for account updates
-    pub on_account: Option<(AccountFilter, Box<OnAccountFn>)>,
+    pub on_account: Option<Vec<(AccountFilter, Box<OnAccountFn>)>>,
     /// Network level connection config
     pub connection_opts: GrpcConnectionOpts,
     /// Enable inter-slot update notifications
@@ -117,9 +117,16 @@ impl GrpcSubscribeOpts {
     pub fn on_account(
         mut self,
         filter: AccountFilter,
-        on_account: impl Fn(&AccountUpdate) + Send + Sync + 'static,
+        callback: impl Fn(&AccountUpdate) + Send + Sync + 'static,
     ) -> Self {
-        self.on_account = Some((filter, Box::new(on_account)));
+        match &mut self.on_account {
+            Some(on_account) => {
+                on_account.push((filter, Box::new(callback)));
+            }
+            None => {
+                self.on_account = Some(vec![(filter, Box::new(callback))]);
+            }
+        }
         self
     }
     /// Set network level connection opts

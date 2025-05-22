@@ -30,7 +30,7 @@ use crate::{
     grpc::AccountUpdate,
     memcmp::get_market_filter,
     types::MapOf,
-    websocket_account_subscriber::WebsocketAccountSubscriber,
+    websocket_account_subscriber::{OnAccountFn as WsOnAccountFn, WebsocketAccountSubscriber},
     DataAndSlot, MarketId, MarketType, PerpMarket, SdkResult, SpotMarket, UnsubHandle,
 };
 
@@ -108,15 +108,11 @@ where
     }
 
     /// Returns a hook for driving the map with new `Account` updates
-    pub(crate) fn on_account_fn(
-        &self,
-        watch: tokio::sync::watch::Sender<u16>,
-    ) -> impl Fn(&AccountUpdate) {
+    pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
         let marketmap = self.map();
         move |update: &AccountUpdate| {
             let market = T::deserialize(&mut &update.data[8..]).expect("deser market");
             let idx = market.market_index();
-            let _ = watch.send(idx);
             marketmap.insert(
                 idx,
                 DataAndSlot {
@@ -128,7 +124,11 @@ where
     }
 
     /// Subscribe to market account updates
-    pub async fn subscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
+    pub async fn subscribe(
+        &self,
+        markets: &[MarketId],
+        on_account: Option<Arc<Box<WsOnAccountFn>>>,
+    ) -> SdkResult<()> {
         log::debug!(target: LOG_TARGET, "subscribing: {:?}", T::MARKET_TYPE);
 
         let markets = HashSet::<MarketId>::from_iter(markets.iter().copied());
@@ -155,10 +155,14 @@ where
         let futs_iter = pending_subscriptions.into_iter().map(|(idx, fut)| {
             let marketmap = Arc::clone(&self.marketmap);
             let latest_slot = self.latest_slot.clone();
+            let on_account = on_account.clone();
             async move {
                 let unsub = fut
                     .subscribe(Self::SUBSCRIPTION_ID, false, {
                         move |update| {
+                            if let Some(on_account) = &on_account {
+                                on_account(&update);
+                            }
                             if update.slot > latest_slot.load(Ordering::Relaxed) {
                                 latest_slot.store(update.slot, Ordering::Relaxed);
                             }
@@ -406,7 +410,10 @@ mod tests {
         );
 
         assert!(map
-            .subscribe(&[MarketId::perp(0), MarketId::perp(1), MarketId::perp(1)])
+            .subscribe(
+                &[MarketId::perp(0), MarketId::perp(1), MarketId::perp(1)],
+                None
+            )
             .await
             .is_ok());
         assert!(map.is_subscribed(0));
