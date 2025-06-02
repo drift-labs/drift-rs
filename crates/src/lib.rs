@@ -2790,17 +2790,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_place_orders_high_leverage() {
-        use solana_sdk::pubkey::Pubkey;
-        use std::borrow::Cow;
-        use types::accounts::{MarginMode, MarketType, OrderParams, OrderType, PositionDirection};
-
         // Create a test user with high leverage mode
         let mut user = User::default();
         user.margin_mode = MarginMode::HighLeverage;
         let user = Cow::Owned(user);
 
         // Create program data
-        let program_data = ProgramData::uninitialized();
+        let program_data = ProgramData::new(
+            vec![SpotMarket::default()],
+            vec![PerpMarket::default()],
+            vec![],
+            State::default(),
+        );
         let sub_account = Pubkey::new_unique();
 
         // Create transaction builder
@@ -2819,14 +2820,11 @@ mod tests {
 
         // Check that high leverage mode account is included
         let high_leverage_account = *high_leverage_mode_account();
-        assert!(tx
-            .message
-            .static_account_keys()
-            .contains(&high_leverage_account));
+        assert!(tx.static_account_keys().contains(&high_leverage_account));
 
         // Test case 2: Place orders with high leverage mode account included due to order params
         let mut user = User::default();
-        user.margin_mode = MarginMode::Cross; // Not high leverage
+        user.margin_mode = MarginMode::Default; // Not high leverage
         let user = Cow::Owned(user);
         let builder = TransactionBuilder::new(&program_data, sub_account, user, false);
 
@@ -2835,16 +2833,13 @@ mod tests {
             market_type: MarketType::Perp,
             direction: PositionDirection::Long,
             order_type: OrderType::Limit,
-            high_leverage: true, // Enable high leverage for this order
+            bit_flags: OrderParams::HIGH_LEVERAGE_MODE_FLAG,
             ..Default::default()
         }];
 
         let tx = builder.place_orders(orders).build();
 
         // Check that high leverage mode account is included
-        assert!(tx
-            .message
-            .static_account_keys()
-            .contains(&high_leverage_account));
+        assert!(tx.static_account_keys().contains(&high_leverage_account));
     }
 }
