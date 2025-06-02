@@ -551,11 +551,11 @@ impl ReferrerInfo {
 impl OrderParams {
     /// true if 'immediate or cancel' bit is set
     pub fn immediate_or_cancel(&self) -> bool {
-        (self.bit_flags & 0b0000_00001) > 0
+        (self.bit_flags & 0b0000_0001) > 0
     }
     /// true if HLM bit is set
     pub fn high_leverage_mode(&self) -> bool {
-        (self.bit_flags & 0b0000_00010) > 0
+        (self.bit_flags & 0b0000_0010) > 0
     }
 }
 
