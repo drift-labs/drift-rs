@@ -549,13 +549,15 @@ impl ReferrerInfo {
 }
 
 impl OrderParams {
+    pub const IMMEDIATE_OR_CANCEL_FLAG: u8 = 0b0000_0001;
+    pub const HIGH_LEVERAGE_MODE_FLAG: u8 = 0b0000_0010;
     /// true if 'immediate or cancel' bit is set
     pub fn immediate_or_cancel(&self) -> bool {
-        (self.bit_flags & 0b0000_00001) > 0
+        (self.bit_flags & Self::IMMEDIATE_OR_CANCEL_FLAG) > 0
     }
     /// true if HLM bit is set
     pub fn high_leverage_mode(&self) -> bool {
-        (self.bit_flags & 0b0000_00010) > 0
+        (self.bit_flags & Self::HIGH_LEVERAGE_MODE_FLAG) > 0
     }
 }
 
