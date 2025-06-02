@@ -2015,7 +2015,9 @@ impl<'a> TransactionBuilder<'a> {
             .chain(self.force_markets.writeable.iter()),
         );
 
-        if order.high_leverage_mode() || maker_info.1.margin_mode == MarginMode::HighLeverage {
+        if order.high_leverage_mode()
+            || maker_info.is_some_and(|(_, m)| m.margin_mode == MarginMode::HighLeverage)
+        {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
@@ -2784,5 +2786,65 @@ mod tests {
         let (spot, perp) = client.all_positions(&user).await.unwrap();
         assert_eq!(spot.len(), 1);
         assert_eq!(perp.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_place_orders_high_leverage() {
+        use solana_sdk::pubkey::Pubkey;
+        use std::borrow::Cow;
+        use types::accounts::{MarginMode, MarketType, OrderParams, OrderType, PositionDirection};
+
+        // Create a test user with high leverage mode
+        let mut user = User::default();
+        user.margin_mode = MarginMode::HighLeverage;
+        let user = Cow::Owned(user);
+
+        // Create program data
+        let program_data = ProgramData::uninitialized();
+        let sub_account = Pubkey::new_unique();
+
+        // Create transaction builder
+        let builder = TransactionBuilder::new(&program_data, sub_account, user, false);
+
+        // Test case 1: Place orders with high leverage mode account included due to user margin mode
+        let orders = vec![OrderParams {
+            market_index: 0,
+            market_type: MarketType::Perp,
+            direction: PositionDirection::Long,
+            order_type: OrderType::Limit,
+            ..Default::default()
+        }];
+
+        let tx = builder.place_orders(orders).build();
+
+        // Check that high leverage mode account is included
+        let high_leverage_account = *high_leverage_mode_account();
+        assert!(tx
+            .message
+            .static_account_keys()
+            .contains(&high_leverage_account));
+
+        // Test case 2: Place orders with high leverage mode account included due to order params
+        let mut user = User::default();
+        user.margin_mode = MarginMode::Cross; // Not high leverage
+        let user = Cow::Owned(user);
+        let builder = TransactionBuilder::new(&program_data, sub_account, user, false);
+
+        let orders = vec![OrderParams {
+            market_index: 0,
+            market_type: MarketType::Perp,
+            direction: PositionDirection::Long,
+            order_type: OrderType::Limit,
+            high_leverage: true, // Enable high leverage for this order
+            ..Default::default()
+        }];
+
+        let tx = builder.place_orders(orders).build();
+
+        // Check that high leverage mode account is included
+        assert!(tx
+            .message
+            .static_account_keys()
+            .contains(&high_leverage_account));
     }
 }
