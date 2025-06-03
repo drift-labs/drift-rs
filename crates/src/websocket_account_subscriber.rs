@@ -26,6 +26,8 @@ pub struct AccountUpdate {
     pub slot: u64,
 }
 
+pub type OnAccountFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
+
 #[derive(Clone)]
 pub struct WebsocketAccountSubscriber {
     pubsub: Arc<PubsubClient>,

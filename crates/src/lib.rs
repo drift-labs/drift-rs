@@ -31,6 +31,7 @@ use solana_sdk::{
     signature::Signature,
 };
 pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
+use websocket_account_subscriber::OnAccountFn;
 
 use crate::{
     account_map::AccountMap,
@@ -156,32 +157,45 @@ impl DriftClient {
     /// * `markets` - list of markets to subscribe
     ///
     /// This is a no-op if already subscribed
-    pub async fn subscribe_markets(&self, markets: &[MarketId]) -> SdkResult<()> {
-        self.backend.subscribe_markets(markets).await
+    pub async fn subscribe_markets(
+        &self,
+        markets: &[MarketId],
+        on_account: Option<Arc<Box<OnAccountFn>>>,
+    ) -> SdkResult<()> {
+        self.backend.subscribe_markets(markets, on_account).await
     }
 
     /// Subscribe to all spot and perp markets
     ///
     /// This is a no-op if already subscribed
-    pub async fn subscribe_all_markets(&self) -> SdkResult<()> {
+    pub async fn subscribe_all_markets(
+        &self,
+        on_account: Option<Arc<Box<OnAccountFn>>>,
+    ) -> SdkResult<()> {
         let markets = self.get_all_market_ids();
-        self.backend.subscribe_markets(&markets).await
+        self.backend.subscribe_markets(&markets, on_account).await
     }
 
     /// Subscribe to all spot markets
     ///
     /// This is a no-op if already subscribed
-    pub async fn subscribe_all_spot_markets(&self) -> SdkResult<()> {
+    pub async fn subscribe_all_spot_markets(
+        &self,
+        on_account: Option<Arc<Box<OnAccountFn>>>,
+    ) -> SdkResult<()> {
         let markets = self.get_all_spot_market_ids();
-        self.backend.subscribe_markets(&markets).await
+        self.backend.subscribe_markets(&markets, on_account).await
     }
 
     /// Subscribe to all perp markets
     ///
     /// This is a no-op if already subscribed
-    pub async fn subscribe_all_perp_markets(&self) -> SdkResult<()> {
+    pub async fn subscribe_all_perp_markets(
+        &self,
+        on_account: Option<Arc<Box<OnAccountFn>>>,
+    ) -> SdkResult<()> {
         let markets = self.get_all_perp_market_ids();
-        self.backend.subscribe_markets(&markets).await
+        self.backend.subscribe_markets(&markets, on_account).await
     }
 
     /// Starts background subscriptions for live oracle account updates by market
@@ -1013,7 +1027,11 @@ impl DriftClientBackend {
     }
 
     /// Start subscriptions for market accounts
-    async fn subscribe_markets(&self, markets: &[MarketId]) -> SdkResult<()> {
+    async fn subscribe_markets(
+        &self,
+        markets: &[MarketId],
+        on_account: Option<Arc<Box<OnAccountFn>>>,
+    ) -> SdkResult<()> {
         if self.is_grpc_subscribed() {
             log::info!("already subscribed markets via gRPC");
             return Err(SdkError::AlreadySubscribed);
@@ -1023,8 +1041,8 @@ impl DriftClientBackend {
             .iter()
             .partition::<Vec<MarketId>, _>(|x| x.is_perp());
         let _ = tokio::try_join!(
-            self.perp_market_map.subscribe(&perps),
-            self.spot_market_map.subscribe(&spot),
+            self.perp_market_map.subscribe(&perps, on_account.clone()),
+            self.spot_market_map.subscribe(&spot, on_account.clone()),
         )?;
 
         Ok(())
@@ -1110,8 +1128,10 @@ impl DriftClientBackend {
         }
 
         // set custom callbacks
-        if let Some((filter, on_account)) = opts.on_account {
-            grpc.on_account(filter, on_account);
+        if let Some(callbacks) = opts.on_account {
+            for (filter, on_account) in callbacks {
+                grpc.on_account(filter, on_account)
+            }
         }
         if let Some(f) = opts.on_slot {
             grpc.on_slot(f);
