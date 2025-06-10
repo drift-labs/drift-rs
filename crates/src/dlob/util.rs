@@ -1,7 +1,5 @@
 use crate::types::{accounts::User, Order, OrderStatus};
-use ahash::HashMap;
 use solana_sdk::pubkey::Pubkey;
-use std::collections::BTreeMap;
 
 #[derive(Debug, PartialEq)]
 pub enum OrderDelta {
@@ -92,10 +90,13 @@ mod tests {
     }
 
     fn create_test_user(orders: Vec<Order>) -> User {
-        User {
-            orders: orders.try_into().unwrap(),
-            ..Default::default()
+        let mut user = User::default();
+        for (i, order) in orders.into_iter().enumerate() {
+            if i < 32 {
+                user.orders[i] = order;
+            }
         }
+        user
     }
 
     #[test]
@@ -147,7 +148,7 @@ mod tests {
     #[test]
     fn test_update_order() {
         let pubkey = Pubkey::new_unique();
-        let mut old_order = create_test_order(1, OrderStatus::Open);
+        let old_order = create_test_order(1, OrderStatus::Open);
         let mut new_order = create_test_order(1, OrderStatus::Open);
         new_order.price = 200; // Change the price
 

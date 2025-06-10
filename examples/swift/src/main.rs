@@ -42,7 +42,7 @@ async fn setup_grpc(drift: DriftClient) {
                                             dlob.insert_order(&user, order, slot);
                                         }
                                         OrderDelta::Update { user, order } => {
-                                            dlob.update_order(&user, order);
+                                            dlob.update_order(&user, order, 0);
                                         }
                                         OrderDelta::Remove { user, order } => {
                                             dlob.remove_order(&user, order);
