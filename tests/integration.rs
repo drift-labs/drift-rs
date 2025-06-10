@@ -6,7 +6,10 @@ use drift_rs::{
     event_subscriber::RpcClient,
     grpc::grpc_subscriber::AccountFilter,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
-    types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam, SettlePnlMode},
+    types::{
+        accounts::User, Context, MarketId, MarketType, NewOrder, OrderParams,
+        OrderTriggerCondition, OrderType, PositionDirection, PostOnlyParam, SettlePnlMode,
+    },
     utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
     DriftClient, GrpcSubscribeOpts, Pubkey, TransactionBuilder, Wallet,
 };
@@ -349,6 +352,72 @@ async fn settle_pnl_txs() {
             None,
             None,
         )
+        .build();
+
+    let result = client.simulate_tx(tx).await;
+    dbg!(&result);
+    assert!(result.is_ok_and(|x| x.err.is_none()));
+}
+
+#[tokio::test]
+async fn sim_failed_swift_order() {
+    let wallet = Wallet::read_only(
+        "7Z8MENPDFRFbWjfXDTYhkQVuWwoGJJY5admKkXX6736W"
+            .parse()
+            .unwrap(),
+    );
+    let client = DriftClient::new(
+        Context::MainNet,
+        RpcClient::new(mainnet_endpoint()),
+        wallet.clone(),
+    )
+    .await
+    .expect("connects");
+
+    let op = OrderParams {
+        order_type: OrderType::Market,
+        market_type: MarketType::Perp,
+        direction: PositionDirection::Short,
+        user_order_id: 0,
+        base_asset_amount: 664000000,
+        price: 0,
+        market_index: 0,
+        reduce_only: false,
+        post_only: PostOnlyParam::None,
+        bit_flags: OrderParams::HIGH_LEVERAGE_MODE_FLAG,
+        max_ts: None,
+        trigger_price: None,
+        trigger_condition: OrderTriggerCondition::Above,
+        oracle_price_offset: None,
+        auction_duration: Some(60),
+        auction_start_price: Some(155689757),
+        auction_end_price: Some(155503098),
+    };
+    let tx = client
+        .init_tx(&wallet.default_sub_account(), false)
+        .await
+        .unwrap()
+        .place_orders(vec![
+            op, //  OrderParams {
+               //     order_type: drift_rs::types::OrderType::Market,
+               //     market_type: MarketType::Perp,
+               //     direction: drift_rs::types::PositionDirection::Long,
+               //     user_order_id: 0,
+               //     base_asset_amount: 714458648,
+               //     price: 0,
+               //     market_index: 0,
+               //     reduce_only: false,
+               //     post_only: PostOnlyParam::None,
+               //     bit_flags: OrderParams::HIGH_LEVERAGE_MODE_FLAG,
+               //     max_ts: None,
+               //     trigger_price: None,
+               //     trigger_condition: drift_rs::types::OrderTriggerCondition::Above,
+               //     oracle_price_offset: None,
+               //     auction_duration: Some(50),
+               //     auction_start_price: Some(155366643),
+               //     auction_end_price: Some(155677688)
+               // }
+        ])
         .build();
 
     let result = client.simulate_tx(tx).await;

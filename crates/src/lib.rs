@@ -88,7 +88,6 @@ pub mod oraclemap;
 pub mod slot_subscriber;
 pub mod usermap;
 
-#[cfg(feature = "dlob")]
 pub mod dlob;
 
 /// DriftClient
