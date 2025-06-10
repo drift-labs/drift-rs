@@ -2,13 +2,69 @@
 //!
 //! The `TODO:` comments should be altered depending on individual maker strategy
 //!
+use std::sync::{atomic::AtomicU64, Arc};
+
+use anchor_lang::prelude::*;
 use drift_rs::{
-    swift_order_subscriber::SignedOrderInfo,
-    types::{MarketId, OrderParams, OrderType, PositionDirection, PostOnlyParam},
-    DriftClient, Pubkey, RpcClient, Wallet,
+    dlob::{util::OrderDelta, Orderbook}, grpc::grpc_subscriber::AccountFilter, swift_order_subscriber::SignedOrderInfo, types::{accounts::User, MarketId, OrderParams, OrderType, PositionDirection, PostOnlyParam}, DriftClient, GrpcSubscribeOpts, Pubkey, RpcClient, Wallet
 };
 use futures_util::StreamExt;
 use solana_sdk::signature::Keypair;
+
+async fn setup_grpc(drift: DriftClient) {
+    let drift_ref = drift.clone();
+
+    let mut dlob = Orderbook::default();
+
+    let latest_slot = Arc::new(AtomicU64::default());
+    let latest_slot_ref = Arc::clone(&latest_slot);
+
+    let res = drift
+        .grpc_subscribe(
+            "https://api.rpcpool.com".into(),
+            std::env::var("TEST_GRPC_X_TOKEN").expect("TEST_GRPC_X_TOKEN set"),
+            GrpcSubscribeOpts::default()
+                .usermap_on()
+                .on_slot(move |new_slot| {
+                    latest_slot_ref.store(new_slot, std::sync::atomic::Ordering::Relaxed);
+                    dlob.update_slot_and_oracle_price(new_slot, oracle_price);
+                })
+                .on_account(
+                    AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
+                    move |account| {
+                        let new_user = User::try_deserialize_unchecked(&mut &account.data).expect("deser user");
+                        let slot = latest_slot.load(std::sync::atomic::Ordering::Relaxed);
+                        match drift_ref.try_get_account::<User>(&account.pubkey) {
+                            Ok(old_user) => {
+                                for order_delta in drift_rs::dlob::util::compare_user_orders(account.pubkey, &old_user, &new_user) {
+                                    match order_delta {
+                                        OrderDelta::Create { user, order } => {
+                                            dlob.insert_order(&user, order, slot);
+                                        }
+                                        OrderDelta::Update { user, order } => {
+                                            dlob.update_order(&user, order);
+                                        }
+                                        OrderDelta::Remove { user, order } => {
+                                            dlob.remove_order(&user, order);
+                                        }
+                                    }
+                                }
+                            }
+                            Err(_err) => {
+                                // assume clean dlob build and insert
+                                for order in new_user.orders {
+                                    dlob.insert_order(&account.pubkey, order, slot);
+                                }
+                            }
+                        }
+                    }
+                ),
+            true,
+        )
+        .await;
+    log::info!("grpc subscribed");
+
+}
 
 #[tokio::main]
 async fn main() {

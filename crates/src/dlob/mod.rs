@@ -11,6 +11,8 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::types::{Order, OrderTriggerCondition, OrderType, PositionDirection};
 
+pub mod util;
+
 type Direction = PositionDirection;
 
 /// Helper function to generate unique order Id hash
@@ -577,6 +579,16 @@ pub struct Orderbook {
     metadata: DashMap<u64, OrderMetadata, ahash::RandomState>,
 }
 
+impl Default for Orderbook {
+    fn default() -> Self {
+        Self {
+            inner: OrderbookData::default(),
+            l2_snapshot: Snapshot::default(),
+            metadata: DashMap::default(),
+        }
+    }
+}
+
 struct OrderbookData {
     // market auctions with fixed price bounds, changes by slot
     market_orders: DynamicOrders<MarketOrder>,
@@ -590,6 +602,17 @@ struct OrderbookData {
     trigger_orders: Orders<TriggerOrder>,
 }
 
+impl Default for OrderbookData {
+    fn default() -> Self {
+        Self {
+            market_orders: DynamicOrders::default(),
+            oracle_orders: DynamicOrders::default(),
+            resting_limit_orders: Orders::default(),
+            floating_limit_orders: DynamicOrders::default(),
+            trigger_orders: Orders::default(),
+        }
+    }
+}
 /*
 avoid explosion of orderlists
 - taking limit orders
@@ -657,6 +680,31 @@ impl Orderbook {
                 }
                 OrderKind::FloatingLimit => {
                     self.inner.floating_limit_orders.update(order_id, order);
+                }
+                OrderKind::Trigger => {
+                    log::trace!(target: "dlob", "skipping unhandled trigger order: {order:?}");
+                }
+            }
+        }
+    }
+
+    pub fn remove_order(&mut self, user: &Pubkey, order: Order) {
+        log::trace!(target: "dlob", "remove order: {user:?},{order:?}");
+        let order_id = order_hash(user, order.order_id);
+        if let Some((_, metadata)) = self.metadata.remove(&order_id) {
+            match metadata.kind {
+                OrderKind::Market => {
+                    self.inner.market_orders.remove(order_id, order);
+                }
+                OrderKind::Oracle => {
+                    self.inner.oracle_orders.remove(order_id, order);
+                }
+                OrderKind::Limit => {
+                    // TODO: move expired auction to resting
+                    self.inner.resting_limit_orders.remove(order_id, order);
+                }
+                OrderKind::FloatingLimit => {
+                    self.inner.floating_limit_orders.remove(order_id, order);
                 }
                 OrderKind::Trigger => {
                     log::trace!(target: "dlob", "skipping unhandled trigger order: {order:?}");
@@ -843,20 +891,6 @@ mod tests {
     use super::*;
     use solana_sdk::pubkey::Pubkey;
 
-    fn empty_orderbook() -> Orderbook {
-        Orderbook {
-            inner: OrderbookData {
-                market_orders: DynamicOrders::default(),
-                oracle_orders: DynamicOrders::default(),
-                resting_limit_orders: Orders::default(),
-                floating_limit_orders: DynamicOrders::default(),
-                trigger_orders: Orders::default(),
-            },
-            l2_snapshot: Snapshot::default(),
-            metadata: DashMap::default(),
-        }
-    }
-
     fn create_test_order(
         order_id: u32,
         order_type: OrderType,
@@ -881,7 +915,7 @@ mod tests {
 
     #[test]
     fn test_dlob_market_order_sorting() {
-        let mut orderbook = empty_orderbook();
+        let mut orderbook = Orderbook::default();
         let user = Pubkey::new_unique();
         let slot = 100;
 
@@ -928,7 +962,7 @@ mod tests {
 
     #[test]
     fn test_dlob_limit_order_sorting() {
-        let mut orderbook = empty_orderbook();
+        let mut orderbook = Orderbook::default();
         let user = Pubkey::new_unique();
         let slot = 100;
 
@@ -981,7 +1015,7 @@ mod tests {
 
     #[test]
     fn test_dlob_floating_limit_order_sorting() {
-        let mut orderbook = empty_orderbook();
+        let mut orderbook = Orderbook::default();
         let user = Pubkey::new_unique();
         let slot = 100;
 
@@ -1035,7 +1069,7 @@ mod tests {
 
     #[test]
     fn test_dlob_oracle_order_sorting() {
-        let mut orderbook = empty_orderbook();
+        let mut orderbook = Orderbook::default();
         let user = Pubkey::new_unique();
         let slot = 100;
 
@@ -1107,7 +1141,7 @@ mod tests {
 
     #[test]
     fn test_dlob_same_order_different_users() {
-        let mut orderbook = empty_orderbook();
+        let mut orderbook = Orderbook::default();
         let user1 = Pubkey::new_unique();
         let user2 = Pubkey::new_unique();
         let slot = 100;
@@ -1144,7 +1178,7 @@ mod tests {
 
     #[test]
     fn test_dlob_l2_snapshot() {
-        let mut orderbook = empty_orderbook();
+        let mut orderbook = Orderbook::default();
         let user = Pubkey::new_unique();
         let slot = 100;
         let oracle_price = 1000;
@@ -1251,7 +1285,7 @@ mod tests {
 
     #[test]
     fn test_find_crosses_for_taker_order_full_fill() {
-        let mut orderbook = empty_orderbook();
+        let mut orderbook = Orderbook::default();
         let user = Pubkey::new_unique();
         let slot = 100;
         let oracle_price = 1000;
@@ -1285,7 +1319,7 @@ mod tests {
 
     #[test]
     fn test_find_crosses_for_taker_order_partial_fill() {
-        let mut orderbook = empty_orderbook();
+        let mut orderbook = Orderbook::default();
         let user = Pubkey::new_unique();
         let slot = 100;
         let oracle_price = 1000;
@@ -1314,7 +1348,7 @@ mod tests {
 
     #[test]
     fn test_find_crosses_for_taker_order_no_cross() {
-        let mut orderbook = empty_orderbook();
+        let mut orderbook = Orderbook::default();
         let user = Pubkey::new_unique();
         let slot = 100;
         let oracle_price = 1000;
@@ -1342,7 +1376,7 @@ mod tests {
 
     #[test]
     fn test_find_crosses_for_taker_order_floating_limit() {
-        let mut orderbook = empty_orderbook();
+        let mut orderbook = Orderbook::default();
         let user = Pubkey::new_unique();
         let slot = 100;
         let oracle_price = 1000;
@@ -1372,7 +1406,7 @@ mod tests {
 
     #[test]
     fn test_find_crosses_for_taker_order_price_priority() {
-        let mut orderbook = empty_orderbook();
+        let mut orderbook = Orderbook::default();
         let user = Pubkey::new_unique();
         let slot = 100;
         let oracle_price = 1000;

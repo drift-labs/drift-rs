@@ -1085,6 +1085,21 @@ impl DriftClientBackend {
             self.perp_market_map.on_account_fn(),
         );
 
+        if opts.user_stats_map {
+            grpc.on_account(
+                AccountFilter::partial().with_discriminator(UserStats::DISCRIMINATOR),
+                self.account_map.on_account_fn(),
+            );
+        }
+
+        // set custom callbacks
+        if let Some((filter, on_account)) = opts.on_account {
+            grpc.on_account(filter, on_account);
+        }
+        if let Some(f) = opts.on_slot {
+            grpc.on_slot(f);
+        }
+
         if opts.usermap {
             grpc.on_account(
                 AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
@@ -1099,21 +1114,6 @@ impl DriftClientBackend {
                     .with_accounts(opts.user_accounts.into_iter()),
                 self.account_map.on_account_fn(),
             );
-        }
-
-        if opts.user_stats_map {
-            grpc.on_account(
-                AccountFilter::partial().with_discriminator(UserStats::DISCRIMINATOR),
-                self.account_map.on_account_fn(),
-            );
-        }
-
-        // set custom callbacks
-        if let Some((filter, on_account)) = opts.on_account {
-            grpc.on_account(filter, on_account);
-        }
-        if let Some(f) = opts.on_slot {
-            grpc.on_slot(f);
         }
 
         // start subscription
