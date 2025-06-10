@@ -772,12 +772,12 @@ avoid explosion of orderlists
 
 impl DLOB {
     /// run function on a market Orderbook
-    fn with_orderbook_mut(&self, market_id: MarketId, handler_fn: impl Fn(&mut Orderbook)) {
+    fn with_orderbook_mut(&self, market_id: MarketId, f: impl Fn(&mut Orderbook)) {
         let mut orderbook = self
             .markets
             .entry(market_id)
             .or_insert(Orderbook::default());
-        handler_fn(orderbook.value_mut())
+        f(orderbook.value_mut())
     }
 
     /// Update orderbook slot and oracle price for market
@@ -1605,6 +1605,7 @@ mod tests {
         assert_eq!(book.market_orders.asks.len(), 1);
         assert_eq!(book.resting_limit_orders.bids.len(), 0);
         assert_eq!(book.resting_limit_orders.asks.len(), 0);
+        drop(book);
 
         // Update to slot 105 - first order should expire
         dlob.update_slot_and_oracle_price(0, MarketType::Perp, 105, oracle_price);
@@ -1616,6 +1617,7 @@ mod tests {
         assert_eq!(book.market_orders.asks.len(), 1);
         assert_eq!(book.resting_limit_orders.bids.len(), 1);
         assert_eq!(book.resting_limit_orders.asks.len(), 0);
+        drop(book);
 
         // Update to slot 110 - second order should expire
         dlob.update_slot_and_oracle_price(0, MarketType::Perp, 110, oracle_price);
@@ -1657,7 +1659,7 @@ mod tests {
         assert_eq!(book.oracle_orders.asks.len(), 1);
         assert_eq!(book.floating_limit_orders.bids.len(), 0);
         assert_eq!(book.floating_limit_orders.asks.len(), 0);
-
+        drop(book);
         // Update to slot 105 - first order should expire
         dlob.update_slot_and_oracle_price(0, MarketType::Perp, 105, oracle_price);
         let book = dlob
@@ -1668,6 +1670,7 @@ mod tests {
         assert_eq!(book.oracle_orders.asks.len(), 1);
         assert_eq!(book.floating_limit_orders.bids.len(), 1);
         assert_eq!(book.floating_limit_orders.asks.len(), 0);
+        drop(book);
 
         // Update to slot 110 - second order should expire
         dlob.update_slot_and_oracle_price(0, MarketType::Perp, 110, oracle_price);
@@ -1707,6 +1710,7 @@ mod tests {
         assert_eq!(book.market_orders.asks.len(), 1);
         assert_eq!(book.resting_limit_orders.bids.len(), 0);
         assert_eq!(book.resting_limit_orders.asks.len(), 0);
+        drop(book);
 
         // Update to slot 105 - first order should expire and be removed
         dlob.update_slot_and_oracle_price(0, MarketType::Perp, 105, oracle_price);
@@ -1718,6 +1722,7 @@ mod tests {
         assert_eq!(book.market_orders.asks.len(), 1);
         assert_eq!(book.resting_limit_orders.bids.len(), 0);
         assert_eq!(book.resting_limit_orders.asks.len(), 0);
+        drop(book);
 
         // Update to slot 110 - second order should expire and be removed
         dlob.update_slot_and_oracle_price(0, MarketType::Perp, 110, oracle_price);
