@@ -1,4 +1,5 @@
 use ahash::AHasher;
+use arrayvec::ArrayVec;
 use std::cmp::Reverse;
 use std::collections::BTreeMap;
 use std::hash::{Hash, Hasher};
@@ -731,121 +732,108 @@ impl Orderbook {
         }
     }
 
-    fn collect_taker_bids(&self, slot: u64, oracle_price: u64) -> Vec<(u64, u64)> {
-        let mut result = Vec::new();
-        result.extend(
-            self.inner
-                .market_orders
-                .bids
-                .iter()
-                .map(|o| (o.get_price(slot, oracle_price), o.size())),
+    fn get_limit_bids(&self, slot: u64, oracle_price: u64) -> Vec<(u64, u64, u64)> {
+        let mut result = Vec::with_capacity(
+            self.inner.resting_limit_orders.bids.len()
+                + self.inner.floating_limit_orders.bids.len(),
         );
-        result.extend(
-            self.inner
-                .oracle_orders
-                .bids
-                .iter()
-                .map(|o| (o.get_price(slot, oracle_price), o.size())),
-        );
-        // Sort descending so best price comes first
-        result.sort_unstable_by(|a, b| b.0.cmp(&a.0));
-        result
-    }
-
-    fn collect_taker_asks(&self, slot: u64, oracle_price: u64) -> Vec<(u64, u64)> {
-        let mut result = Vec::new();
-        result.extend(
-            self.inner
-                .market_orders
-                .asks
-                .iter()
-                .map(|o| (o.get_price(slot, oracle_price), o.size())),
-        );
-        result.extend(
-            self.inner
-                .oracle_orders
-                .asks
-                .iter()
-                .map(|o| (o.get_price(slot, oracle_price), o.size())),
-        );
-        // Sort ascending so best price comes first
-        result.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-        result
-    }
-
-    fn collect_limit_bids(&self, slot: u64, oracle_price: u64) -> Vec<(u64, u64)> {
-        let mut result = Vec::new();
 
         result.extend(
             self.inner
                 .resting_limit_orders
                 .bids
                 .iter()
-                .map(|(_, o)| (o.get_price(), o.size)),
+                .map(|(_, o)| (o.id, o.get_price(), o.size)),
         );
         result.extend(
             self.inner
                 .floating_limit_orders
                 .bids
                 .iter()
-                .map(|o| (o.get_price(slot, oracle_price), o.size())),
+                .map(|o| (o.id, o.get_price(slot, oracle_price), o.size())),
         );
 
-        // Sort descending for bid priority
-        result.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+        result.sort();
         result
     }
 
-    fn collect_limit_asks(&self, slot: u64, oracle_price: u64) -> Vec<(u64, u64)> {
-        let mut result = Vec::new();
+    fn get_limit_asks(&self, slot: u64, oracle_price: u64) -> Vec<(u64, u64, u64)> {
+        let mut result = Vec::with_capacity(
+            self.inner.resting_limit_orders.asks.len()
+                + self.inner.floating_limit_orders.asks.len(),
+        );
 
         result.extend(
             self.inner
                 .resting_limit_orders
                 .asks
                 .iter()
-                .map(|(_, o)| (o.get_price(), o.size)),
+                .map(|(_, o)| (o.id, o.get_price(), o.size)),
         );
         result.extend(
             self.inner
                 .floating_limit_orders
                 .asks
                 .iter()
-                .map(|o| (o.get_price(slot, oracle_price), o.size())),
+                .map(|o| (o.id, o.get_price(slot, oracle_price), o.size())),
         );
 
-        // Sort ascending for ask priority
-        result.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+        result.sort();
         result
     }
 
-    pub fn find_crosses(&self, slot: u64, oracle_price: u64) -> Vec<(u64, u64, u64, u64)> {
-        let taker_bids = self.collect_taker_bids(slot, oracle_price);
-        let taker_asks = self.collect_taker_asks(slot, oracle_price);
-        let limit_bids = self.collect_limit_bids(slot, oracle_price);
-        let limit_asks = self.collect_limit_asks(slot, oracle_price);
+    /// Finds best limit order crosses for a given `taker_order`
+    pub fn find_crosses_for_taker_order(
+        &self,
+        slot: u64,
+        oracle_price: u64,
+        taker_order: TakerOrder,
+    ) -> Result<TakerCrosses, ()> {
+        let mut candidates = ArrayVec::<(u64, u64), 16>::new();
+        let mut remaining_size = taker_order.size;
 
-        // Helper function to find crosses between two sorted price lists
-        let find_crosses = |bids: &[(u64, u64)], asks: &[(u64, u64)]| {
-            bids.iter()
-                .flat_map(|&(bid_price, bid_size)| {
-                    asks.iter()
-                        .take_while(move |(ask_price, _)| bid_price >= *ask_price)
-                        .map(move |&(ask_price, ask_size)| {
-                            (bid_price, ask_price, bid_size, ask_size)
-                        })
-                })
-                .collect::<Vec<_>>()
+        let resting_orders = match taker_order.direction {
+            Direction::Long => self.get_limit_asks(slot, oracle_price),
+            Direction::Short => self.get_limit_bids(slot, oracle_price),
         };
 
-        // Combine all crosses
-        let mut crosses = Vec::new();
-        crosses.extend(find_crosses(&taker_bids, &limit_asks));
-        crosses.extend(find_crosses(&limit_bids, &taker_asks));
-        crosses.extend(find_crosses(&limit_bids, &limit_asks));
+        for (order_id, maker_price, maker_size) in resting_orders {
+            let is_cross = match taker_order.direction {
+                Direction::Long => taker_order.price >= maker_price,
+                Direction::Short => taker_order.price <= maker_price,
+            };
+            if is_cross {
+                let fill_size = remaining_size.min(maker_size);
+                candidates.push((order_id, fill_size));
+                remaining_size -= fill_size;
+                if remaining_size == 0 {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
 
-        crosses
+        Ok(TakerCrosses {
+            orders: candidates,
+            is_partial: remaining_size != 0,
+        })
     }
+}
+
+/// Minimal taker order info
+pub struct TakerOrder {
+    pub price: u64,
+    pub size: u64,
+    pub direction: Direction,
+}
+
+/// Best fills for a taker order
+/// Returns (candidates, is_partial)
+pub struct TakerCrosses {
+    /// (order_id, fill_size)
+    pub orders: ArrayVec<(u64, u64), 16>,
+    pub is_partial: bool,
 }
 
 #[cfg(test)]
