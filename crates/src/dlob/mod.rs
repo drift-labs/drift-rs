@@ -753,7 +753,8 @@ impl Orderbook {
                 .map(|o| (o.id, o.get_price(slot, oracle_price), o.size())),
         );
 
-        result.sort();
+        // Sort by price in descending order (best bid first)
+        result.sort_by(|a, b| b.1.cmp(&a.1));
         result
     }
 
@@ -778,7 +779,8 @@ impl Orderbook {
                 .map(|o| (o.id, o.get_price(slot, oracle_price), o.size())),
         );
 
-        result.sort();
+        // Sort by price in ascending order (best ask first)
+        result.sort_by(|a, b| a.1.cmp(&b.1));
         result
     }
 
@@ -1245,5 +1247,160 @@ mod tests {
         assert_eq!(l2book.bids.get(&1050), None);
         assert_eq!(l2book.bids.len(), 2);
         dbg!(&l2book);
+    }
+
+    #[test]
+    fn test_find_crosses_for_taker_order_full_fill() {
+        let mut orderbook = empty_orderbook();
+        let user = Pubkey::new_unique();
+        let slot = 100;
+        let oracle_price = 1000;
+
+        // Insert resting limit orders
+        let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 900, 5, slot);
+        order.post_only = true;
+        orderbook.insert_order(&user, order, slot);
+
+        let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 950, 3, slot);
+        order.post_only = true;
+        orderbook.insert_order(&user, order, slot);
+
+        // Create taker order to buy 7 units at 1000
+        let taker_order = TakerOrder {
+            price: 1000,
+            size: 7,
+            direction: Direction::Long,
+        };
+
+        let result = orderbook
+            .find_crosses_for_taker_order(slot, oracle_price, taker_order)
+            .unwrap();
+
+        // Should fill both orders, 5 from first order and 2 from second
+        assert_eq!(result.orders.len(), 2);
+        assert_eq!(result.orders[0], (order_hash(&user, 1), 5));
+        assert_eq!(result.orders[1], (order_hash(&user, 2), 2));
+        assert!(!result.is_partial);
+    }
+
+    #[test]
+    fn test_find_crosses_for_taker_order_partial_fill() {
+        let mut orderbook = empty_orderbook();
+        let user = Pubkey::new_unique();
+        let slot = 100;
+        let oracle_price = 1000;
+
+        // Insert resting limit orders
+        let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 900, 3, slot);
+        order.post_only = true;
+        orderbook.insert_order(&user, order, slot);
+
+        // Create taker order to buy 5 units at 1000
+        let taker_order = TakerOrder {
+            price: 1000,
+            size: 5,
+            direction: Direction::Long,
+        };
+
+        let result = orderbook
+            .find_crosses_for_taker_order(slot, oracle_price, taker_order)
+            .unwrap();
+
+        // Should only fill 3 units from the first order
+        assert_eq!(result.orders.len(), 1);
+        assert_eq!(result.orders[0], (order_hash(&user, 1), 3));
+        assert!(result.is_partial);
+    }
+
+    #[test]
+    fn test_find_crosses_for_taker_order_no_cross() {
+        let mut orderbook = empty_orderbook();
+        let user = Pubkey::new_unique();
+        let slot = 100;
+        let oracle_price = 1000;
+
+        // Insert resting limit orders
+        let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 1100, 5, slot);
+        order.post_only = true;
+        orderbook.insert_order(&user, order, slot);
+
+        // Create taker order to buy at 1000
+        let taker_order = TakerOrder {
+            price: 1000,
+            size: 5,
+            direction: Direction::Long,
+        };
+
+        let result = orderbook
+            .find_crosses_for_taker_order(slot, oracle_price, taker_order)
+            .unwrap();
+
+        // Should not fill any orders
+        assert_eq!(result.orders.len(), 0);
+        assert!(result.is_partial);
+    }
+
+    #[test]
+    fn test_find_crosses_for_taker_order_floating_limit() {
+        let mut orderbook = empty_orderbook();
+        let user = Pubkey::new_unique();
+        let slot = 100;
+        let oracle_price = 1000;
+
+        // Insert floating limit order with -50 offset
+        let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 0, 5, slot);
+        order.oracle_price_offset = -50; // Will be 950 with oracle_price
+        order.post_only = true;
+        orderbook.insert_order(&user, order, slot);
+
+        // Create taker order to buy at 1000
+        let taker_order = TakerOrder {
+            price: 1000,
+            size: 5,
+            direction: Direction::Long,
+        };
+
+        let result = orderbook
+            .find_crosses_for_taker_order(slot, oracle_price, taker_order)
+            .unwrap();
+
+        // Should fill the floating limit order
+        assert_eq!(result.orders.len(), 1);
+        assert_eq!(result.orders[0], (order_hash(&user, 1), 5));
+        assert!(!result.is_partial);
+    }
+
+    #[test]
+    fn test_find_crosses_for_taker_order_price_priority() {
+        let mut orderbook = empty_orderbook();
+        let user = Pubkey::new_unique();
+        let slot = 100;
+        let oracle_price = 1000;
+
+        // Insert resting limit orders at different prices
+        let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 950, 3, slot);
+        order.post_only = true;
+        orderbook.insert_order(&user, order, slot);
+
+        let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 900, 3, slot);
+        order.post_only = true;
+        orderbook.insert_order(&user, order, slot);
+
+        // Create taker order to buy 5 units at 1000
+        let taker_order = TakerOrder {
+            price: 1000,
+            size: 5,
+            direction: Direction::Long,
+        };
+
+        let result = orderbook
+            .find_crosses_for_taker_order(slot, oracle_price, taker_order)
+            .unwrap();
+
+        // Should fill the better price first (900)
+        assert_eq!(result.orders.len(), 2);
+        assert_eq!(result.orders[0], (order_hash(&user, 2), 3));
+        assert_eq!(result.orders[1], (order_hash(&user, 1), 2));
+        assert!(!result.is_partial);
     }
 }
