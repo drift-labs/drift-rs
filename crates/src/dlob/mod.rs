@@ -1,11 +1,15 @@
+use std::{
+    cmp::Reverse,
+    collections::BTreeMap,
+    hash::{Hash, Hasher},
+    sync::{
+        atomic::{AtomicBool, AtomicPtr},
+        Arc,
+    },
+};
+
 use ahash::AHasher;
 use arrayvec::ArrayVec;
-use std::cmp::Reverse;
-use std::collections::BTreeMap;
-use std::hash::{Hash, Hasher};
-use std::sync::atomic::{AtomicBool, AtomicPtr};
-use std::sync::Arc;
-
 use dashmap::DashMap;
 use solana_sdk::pubkey::Pubkey;
 
@@ -106,7 +110,7 @@ impl std::fmt::Display for L2Book {
 
 impl L2Book {
     /// Bootstrap L2Book from resting limit orders
-    pub fn from_limit_orders(resting_limit_orders: &Orders<LimitOrder>) -> Self {
+    fn from_limit_orders(resting_limit_orders: &Orders<LimitOrder>) -> Self {
         let mut bids: BTreeMap<u64, u64> = BTreeMap::new();
         let mut asks: BTreeMap<u64, u64> = BTreeMap::new();
         for (price_rev, order) in &resting_limit_orders.bids {
@@ -203,6 +207,7 @@ struct MarketOrder {
     duration: u8,
     price_slope: i64,
     slot: u64,
+    is_limit: bool,
 }
 
 #[derive(Default, Clone, PartialEq, Eq)]
@@ -214,6 +219,7 @@ struct OracleOrder {
     duration: u8,
     price_slope: i64,
     slot: u64,
+    is_limit: bool,
 }
 
 #[derive(Default, Clone, PartialEq, Eq)]
@@ -271,6 +277,7 @@ impl From<(u64, Order)> for MarketOrder {
             duration: order.auction_duration,
             price_slope,
             slot: order.slot,
+            is_limit: order.order_type == OrderType::Limit,
         }
     }
 }
@@ -306,6 +313,7 @@ impl From<(u64, Order)> for OracleOrder {
             duration: order.auction_duration,
             price_slope,
             slot: order.slot,
+            is_limit: order.order_type == OrderType::Limit,
         }
     }
 }
@@ -406,18 +414,17 @@ where
         self.mark_clean();
     }
 
-    pub fn insert(&mut self, order_id: u64, order: Order) {
-        match order.direction {
-            Direction::Long => {
-                let order: T = (order_id, order).into();
-                self.bids.push(order);
-            }
-            Direction::Short => {
-                let order: T = (order_id, order).into();
-                self.asks.push(order);
-            }
+    fn insert_raw(&mut self, is_bid: bool, order: T) {
+        if is_bid {
+            self.bids.push(order);
+        } else {
+            self.asks.push(order);
         }
         self.mark_dirty();
+    }
+
+    pub fn insert(&mut self, order_id: u64, order: Order) {
+        self.insert_raw(Direction::Long == order.direction, (order_id, order).into());
     }
 
     pub fn remove(&mut self, order_id: u64, order: Order) -> bool {
@@ -490,17 +497,15 @@ impl<T: OrderKey + Clone> Default for Orders<T> {
 }
 
 impl<T: Clone + From<(u64, Order)> + OrderKey> Orders<T> {
-    pub fn insert(&mut self, order_id: u64, order: Order) {
-        match order.direction {
-            Direction::Long => {
-                let order: T = (order_id, order).into();
-                self.bids.insert(Reverse(order.key()), order);
-            }
-            Direction::Short => {
-                let order: T = (order_id, order).into();
-                self.asks.insert(order.key(), order);
-            }
+    fn insert_raw(&mut self, is_bid: bool, order: T) {
+        if is_bid {
+            self.bids.insert(Reverse(order.key()), order);
+        } else {
+            self.asks.insert(order.key(), order);
         }
+    }
+    pub fn insert(&mut self, order_id: u64, order: Order) {
+        self.insert_raw(Direction::Long == order.direction, (order_id, order).into());
     }
 
     pub fn remove(&mut self, order_id: u64, order: Order) -> bool {
@@ -573,7 +578,7 @@ impl OrderMetadata {
     }
 }
 
-/// An orderbook per market
+/// _the_ decentralized limit orderbooks
 pub struct DLOB {
     /// Map from market to orderbook
     markets: DashMap<MarketId, Orderbook, ahash::RandomState>,
@@ -622,6 +627,7 @@ impl Orderbook {
     /// Evaluate dynamic order prices for some `slot` and `oracle_price`
     pub fn update_slot_and_oracle_price(&mut self, slot: u64, oracle_price: u64) {
         log::debug!(target: "dlob", "update orders @ slot: {slot:?}, oracle: {oracle_price:?}");
+        self.expire_auction_orders(slot);
         self.market_orders.sort(slot, oracle_price);
         self.oracle_orders.sort(slot, oracle_price);
         self.floating_limit_orders.sort(slot, oracle_price);
@@ -629,8 +635,71 @@ impl Orderbook {
         self.update_l2_view(slot, oracle_price);
     }
 
-    pub fn expire_orders() -> Self {
-        todo!("remove expired orders");
+    /// Expire all auctions past current `slot`
+    ///
+    /// limit orders with finishing auctions are moved to resting orders
+    fn expire_auction_orders(&mut self, slot: u64) {
+        // TODO: expire limits orders by ts, for now removal via User account changes good enough
+        self.market_orders.asks.retain(|x| {
+            let is_auction_complete = (x.slot + x.duration as u64) <= slot;
+            if is_auction_complete && x.is_limit {
+                self.resting_limit_orders.insert_raw(
+                    false,
+                    LimitOrder {
+                        id: x.id,
+                        size: x.size,
+                        price: x.end_price as u64,
+                        slot: x.slot,
+                    },
+                );
+            }
+            !is_auction_complete
+        });
+        self.market_orders.bids.retain(|x| {
+            let is_auction_complete = (x.slot + x.duration as u64) <= slot;
+            if is_auction_complete && x.is_limit {
+                self.resting_limit_orders.insert_raw(
+                    true,
+                    LimitOrder {
+                        id: x.id,
+                        size: x.size,
+                        price: x.end_price as u64,
+                        slot: x.slot,
+                    },
+                );
+            }
+            !is_auction_complete
+        });
+        self.oracle_orders.asks.retain(|x| {
+            let is_auction_complete = (x.slot + x.duration as u64) <= slot;
+            if is_auction_complete && x.is_limit {
+                self.floating_limit_orders.insert_raw(
+                    false,
+                    FloatingLimitOrder {
+                        id: x.id,
+                        slot: x.slot,
+                        size: x.size,
+                        offset_price: x.end_price_offset as i32,
+                    },
+                );
+            }
+            !is_auction_complete
+        });
+        self.oracle_orders.bids.retain(|x| {
+            let is_auction_complete = (x.slot + x.duration as u64) <= slot;
+            if is_auction_complete && x.is_limit {
+                self.floating_limit_orders.insert_raw(
+                    true,
+                    FloatingLimitOrder {
+                        id: x.id,
+                        slot: x.slot,
+                        size: x.size,
+                        offset_price: x.end_price_offset as i32,
+                    },
+                );
+            }
+            !is_auction_complete
+        });
     }
 
     /// Update the L2 snapshot
@@ -747,7 +816,6 @@ impl DLOB {
                         orderbook.oracle_orders.update(order_id, order);
                     }
                     OrderKind::Limit => {
-                        // TODO: move expired auction to resting
                         orderbook.resting_limit_orders.update(order_id, order);
                     }
                     OrderKind::FloatingLimit => {
@@ -775,7 +843,6 @@ impl DLOB {
                         orderbook.oracle_orders.remove(order_id, order);
                     }
                     OrderKind::Limit => {
-                        // TODO: move expired auction to resting
                         orderbook.resting_limit_orders.remove(order_id, order);
                     }
                     OrderKind::FloatingLimit => {
@@ -789,7 +856,7 @@ impl DLOB {
         });
     }
 
-    pub fn insert_order(&self, user: &Pubkey, order: Order, slot: u64) {
+    pub fn insert_order(&self, user: &Pubkey, order: Order) {
         log::trace!(target: "dlob", "update order: {user:?},{order:?}");
         let order_id = order_hash(user, order.order_id);
 
@@ -801,14 +868,24 @@ impl DLOB {
                         orderbook.market_orders.insert(order_id, order);
                         self.metadata.insert(
                             order_id,
-                            OrderMetadata::new(*user, OrderKind::Market, order.direction, slot),
+                            OrderMetadata::new(
+                                *user,
+                                OrderKind::Market,
+                                order.direction,
+                                order.slot,
+                            ),
                         );
                     }
                     OrderType::Oracle => {
                         orderbook.oracle_orders.insert(order_id, order);
                         self.metadata.insert(
                             order_id,
-                            OrderMetadata::new(*user, OrderKind::Oracle, order.direction, slot),
+                            OrderMetadata::new(
+                                *user,
+                                OrderKind::Oracle,
+                                order.direction,
+                                order.slot,
+                            ),
                         );
                     }
                     OrderType::Limit => {
@@ -851,15 +928,16 @@ impl DLOB {
 
                         self.metadata.insert(
                             order_id,
-                            OrderMetadata::new(*user, OrderKind::Limit, order.direction, slot),
+                            OrderMetadata::new(
+                                *user,
+                                OrderKind::Limit,
+                                order.direction,
+                                order.slot,
+                            ),
                         );
                     }
                     OrderType::TriggerLimit | OrderType::TriggerMarket => {
-                        orderbook.trigger_orders.insert(order_id, order);
-                        self.metadata.insert(
-                            order_id,
-                            OrderMetadata::new(*user, OrderKind::Trigger, order.direction, slot),
-                        );
+                        log::trace!(target: "dlob", "skipping unhandled trigger order: {order:?}");
                     }
                 }
             },
@@ -969,26 +1047,27 @@ mod tests {
         // Insert bids in random order
         let mut order = create_test_order(1, OrderType::Market, Direction::Long, 100, 1, slot);
         order.auction_duration = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
         let mut order = create_test_order(2, OrderType::Market, Direction::Long, 200, 1, slot);
         order.auction_duration = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
         let mut order = create_test_order(3, OrderType::Market, Direction::Long, 150, 1, slot);
         order.auction_duration = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         // Insert asks in random order
         let mut order = create_test_order(4, OrderType::Market, Direction::Short, 300, 1, slot);
         order.auction_duration = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
         let mut order = create_test_order(5, OrderType::Market, Direction::Short, 250, 1, slot);
         order.auction_duration = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
         let mut order = create_test_order(6, OrderType::Market, Direction::Short, 350, 1, slot);
         order.auction_duration = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
-        dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, 0);
+        let oracle_price = 100_000;
+        dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
         let book = dlob
             .markets
             .get(&MarketId::new(0, MarketType::Perp))
@@ -999,14 +1078,14 @@ mod tests {
             .market_orders
             .bids
             .iter()
-            .map(|x| x.start_price)
+            .map(|x| x.get_price(slot, oracle_price))
             .eq([200, 150, 100]));
         // Verify asks are sorted lowest to highest
         assert!(book
             .market_orders
             .asks
             .iter()
-            .map(|x| x.start_price)
+            .map(|x| x.get_price(slot, oracle_price))
             .eq([250, 300, 350]));
     }
 
@@ -1019,28 +1098,28 @@ mod tests {
         // Insert bids in random order
         let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 100, 1, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(2, OrderType::Limit, Direction::Long, 200, 1, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(3, OrderType::Limit, Direction::Long, 150, 1, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         // Insert asks in random order
         let mut order = create_test_order(4, OrderType::Limit, Direction::Short, 300, 1, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(5, OrderType::Limit, Direction::Short, 250, 1, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(6, OrderType::Limit, Direction::Short, 350, 1, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let book = dlob
             .markets
@@ -1075,28 +1154,28 @@ mod tests {
         // Insert bids in random order
         let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 100, 1, slot);
         order.oracle_price_offset = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(2, OrderType::Limit, Direction::Long, 200, 1, slot);
         order.oracle_price_offset = 30;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(3, OrderType::Limit, Direction::Long, 150, 1, slot);
         order.oracle_price_offset = 20;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         // Insert asks in random order
         let mut order = create_test_order(4, OrderType::Limit, Direction::Short, 300, 1, slot);
         order.oracle_price_offset = -30;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(5, OrderType::Limit, Direction::Short, 250, 1, slot);
         order.oracle_price_offset = -20;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(6, OrderType::Limit, Direction::Short, 350, 1, slot);
         order.oracle_price_offset = -10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, 0);
         let book = dlob
@@ -1135,21 +1214,21 @@ mod tests {
         order.auction_start_price = 10;
         order.auction_end_price = 20;
         order.auction_duration = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(2, OrderType::Oracle, Direction::Long, 200, 1, slot);
         order.oracle_price_offset = 30;
         order.auction_start_price = 30;
         order.auction_end_price = 40;
         order.auction_duration = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(3, OrderType::Oracle, Direction::Long, 150, 1, slot);
         order.oracle_price_offset = 20;
         order.auction_start_price = 20;
         order.auction_end_price = 30;
         order.auction_duration = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         // Insert asks in random order
         let mut order = create_test_order(4, OrderType::Oracle, Direction::Short, 300, 1, slot);
@@ -1157,21 +1236,21 @@ mod tests {
         order.auction_start_price = -30;
         order.auction_end_price = -20;
         order.auction_duration = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(5, OrderType::Oracle, Direction::Short, 250, 1, slot);
         order.oracle_price_offset = -20;
         order.auction_start_price = -20;
         order.auction_end_price = -10;
         order.auction_duration = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(6, OrderType::Oracle, Direction::Short, 350, 1, slot);
         order.oracle_price_offset = -10;
         order.auction_start_price = -10;
         order.auction_end_price = 0;
         order.auction_duration = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, 1);
         let book = dlob
@@ -1208,11 +1287,11 @@ mod tests {
         // Create identical orders for different users
         let mut order1 = create_test_order(1, OrderType::Limit, Direction::Long, 100, 1, slot);
         order1.post_only = true;
-        dlob.insert_order(&user1, order1, slot);
+        dlob.insert_order(&user1, order1);
 
         let mut order2 = create_test_order(1, OrderType::Limit, Direction::Long, 100, 1, slot);
         order2.post_only = true;
-        dlob.insert_order(&user2, order2, slot);
+        dlob.insert_order(&user2, order2);
 
         let book = dlob
             .markets
@@ -1248,29 +1327,29 @@ mod tests {
         // Insert resting limit orders
         let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 2, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 900, 3, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         // Insert market orders (dynamic price)
         let mut order = create_test_order(3, OrderType::Market, Direction::Long, 1050, 4, slot);
         order.auction_duration = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(4, OrderType::Market, Direction::Short, 950, 5, slot);
         order.auction_duration = 10;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         // Insert floating limit orders (dynamic price)
         let mut order = create_test_order(5, OrderType::Limit, Direction::Long, 0, 6, slot);
         order.oracle_price_offset = 100; // Will be 1100 with oracle_price
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(6, OrderType::Limit, Direction::Short, 0, 7, slot);
         order.oracle_price_offset = -100; // Will be 900 with oracle_price
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         // Update slot and oracle price to calculate dynamic prices
         dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
@@ -1298,7 +1377,7 @@ mod tests {
         // Add a new limit order
         let mut order = create_test_order(7, OrderType::Limit, Direction::Long, 1075, 8, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         // Get updated L2 snapshot
         dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
@@ -1345,11 +1424,11 @@ mod tests {
         // Insert resting limit orders
         let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 900, 5, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 950, 3, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         // Create taker order to buy 7 units at 1000
         let taker_order = TakerOrder {
@@ -1381,7 +1460,7 @@ mod tests {
         // Insert resting limit orders
         let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 900, 3, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         // Create taker order to buy 5 units at 1000
         let taker_order = TakerOrder {
@@ -1412,7 +1491,7 @@ mod tests {
         // Insert resting limit orders
         let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 1100, 5, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         // Create taker order to buy at 1000
         let taker_order = TakerOrder {
@@ -1443,7 +1522,7 @@ mod tests {
         let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 0, 5, slot);
         order.oracle_price_offset = -50; // Will be 950 with oracle_price
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         // Create taker order to buy at 1000
         let taker_order = TakerOrder {
@@ -1474,11 +1553,11 @@ mod tests {
         // Insert resting limit orders at different prices
         let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 950, 3, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 900, 3, slot);
         order.post_only = true;
-        dlob.insert_order(&user, order, slot);
+        dlob.insert_order(&user, order);
 
         // Create taker order to buy 5 units at 1000
         let taker_order = TakerOrder {
@@ -1498,5 +1577,202 @@ mod tests {
         assert_eq!(result.orders[0], (order_hash(&user, 2), 3));
         assert_eq!(result.orders[1], (order_hash(&user, 1), 2));
         assert!(!result.is_partial);
+    }
+
+    #[test]
+    fn dlob_auction_expiry_market_orders() {
+        let dlob = DLOB::default();
+        let user = Pubkey::new_unique();
+        let slot = 100;
+        let oracle_price = 1000;
+
+        // Insert market orders with different auction durations
+        let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 2, slot);
+        order.auction_duration = 5; // Will expire at slot 105
+        dlob.insert_order(&user, order);
+
+        let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 900, 3, slot);
+        order.auction_duration = 10; // Will expire at slot 110
+        dlob.insert_order(&user, order);
+
+        // Update to slot 104 - no orders should expire
+        dlob.update_slot_and_oracle_price(0, MarketType::Perp, 104, oracle_price);
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.market_orders.bids.len(), 1);
+        assert_eq!(book.market_orders.asks.len(), 1);
+        assert_eq!(book.resting_limit_orders.bids.len(), 0);
+        assert_eq!(book.resting_limit_orders.asks.len(), 0);
+
+        // Update to slot 105 - first order should expire
+        dlob.update_slot_and_oracle_price(0, MarketType::Perp, 105, oracle_price);
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.market_orders.bids.len(), 0);
+        assert_eq!(book.market_orders.asks.len(), 1);
+        assert_eq!(book.resting_limit_orders.bids.len(), 1);
+        assert_eq!(book.resting_limit_orders.asks.len(), 0);
+
+        // Update to slot 110 - second order should expire
+        dlob.update_slot_and_oracle_price(0, MarketType::Perp, 110, oracle_price);
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.market_orders.bids.len(), 0);
+        assert_eq!(book.market_orders.asks.len(), 0);
+        assert_eq!(book.resting_limit_orders.bids.len(), 1);
+        assert_eq!(book.resting_limit_orders.asks.len(), 1);
+    }
+
+    #[test]
+    fn dlob_auction_expiry_oracle_orders() {
+        let dlob = DLOB::default();
+        let user = Pubkey::new_unique();
+        let slot = 100;
+        let oracle_price = 1000;
+
+        // Insert oracle orders with different auction durations
+        let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 0, 2, slot);
+        order.auction_duration = 5; // Will expire at slot 105
+        order.oracle_price_offset = 100;
+        dlob.insert_order(&user, order);
+
+        let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 0, 3, slot);
+        order.auction_duration = 10; // Will expire at slot 110
+        order.oracle_price_offset = -100;
+        dlob.insert_order(&user, order);
+
+        // Update to slot 104 - no orders should expire
+        dlob.update_slot_and_oracle_price(0, MarketType::Perp, 104, oracle_price);
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.oracle_orders.bids.len(), 1);
+        assert_eq!(book.oracle_orders.asks.len(), 1);
+        assert_eq!(book.floating_limit_orders.bids.len(), 0);
+        assert_eq!(book.floating_limit_orders.asks.len(), 0);
+
+        // Update to slot 105 - first order should expire
+        dlob.update_slot_and_oracle_price(0, MarketType::Perp, 105, oracle_price);
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.oracle_orders.bids.len(), 0);
+        assert_eq!(book.oracle_orders.asks.len(), 1);
+        assert_eq!(book.floating_limit_orders.bids.len(), 1);
+        assert_eq!(book.floating_limit_orders.asks.len(), 0);
+
+        // Update to slot 110 - second order should expire
+        dlob.update_slot_and_oracle_price(0, MarketType::Perp, 110, oracle_price);
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.oracle_orders.bids.len(), 0);
+        assert_eq!(book.oracle_orders.asks.len(), 0);
+        assert_eq!(book.floating_limit_orders.bids.len(), 1);
+        assert_eq!(book.floating_limit_orders.asks.len(), 1);
+    }
+
+    #[test]
+    fn dlob_auction_expiry_non_limit_orders() {
+        let dlob = DLOB::default();
+        let user = Pubkey::new_unique();
+        let slot = 100;
+        let oracle_price = 1000;
+
+        // Insert market orders that are not limit orders
+        let mut order = create_test_order(1, OrderType::Market, Direction::Long, 1100, 2, slot);
+        order.auction_duration = 5; // Will expire at slot 105
+        dlob.insert_order(&user, order);
+
+        let mut order = create_test_order(2, OrderType::Market, Direction::Short, 900, 3, slot);
+        order.auction_duration = 10; // Will expire at slot 110
+        dlob.insert_order(&user, order);
+
+        // Update to slot 104 - no orders should expire
+        dlob.update_slot_and_oracle_price(0, MarketType::Perp, 104, oracle_price);
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.market_orders.bids.len(), 1);
+        assert_eq!(book.market_orders.asks.len(), 1);
+        assert_eq!(book.resting_limit_orders.bids.len(), 0);
+        assert_eq!(book.resting_limit_orders.asks.len(), 0);
+
+        // Update to slot 105 - first order should expire and be removed
+        dlob.update_slot_and_oracle_price(0, MarketType::Perp, 105, oracle_price);
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.market_orders.bids.len(), 0);
+        assert_eq!(book.market_orders.asks.len(), 1);
+        assert_eq!(book.resting_limit_orders.bids.len(), 0);
+        assert_eq!(book.resting_limit_orders.asks.len(), 0);
+
+        // Update to slot 110 - second order should expire and be removed
+        dlob.update_slot_and_oracle_price(0, MarketType::Perp, 110, oracle_price);
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.market_orders.bids.len(), 0);
+        assert_eq!(book.market_orders.asks.len(), 0);
+        assert_eq!(book.resting_limit_orders.bids.len(), 0);
+        assert_eq!(book.resting_limit_orders.asks.len(), 0);
+    }
+
+    #[test]
+    fn dlob_auction_expiry_mixed_orders() {
+        let dlob = DLOB::default();
+        let user = Pubkey::new_unique();
+        let slot = 100;
+        let oracle_price = 1000;
+
+        // Insert a mix of market and oracle orders with different durations
+        let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 2, slot);
+        order.auction_duration = 5;
+        dlob.insert_order(&user, order);
+
+        let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 0, 3, slot);
+        order.auction_duration = 5;
+        order.oracle_price_offset = -100;
+        dlob.insert_order(&user, order);
+
+        let mut order = create_test_order(3, OrderType::Market, Direction::Long, 1100, 2, slot);
+        order.auction_duration = 5;
+        dlob.insert_order(&user, order);
+
+        let mut order = create_test_order(4, OrderType::Market, Direction::Short, 0, 3, slot);
+        order.auction_duration = 5;
+        dlob.insert_order(&user, order);
+
+        // Update to slot 105 - all orders should expire
+        dlob.update_slot_and_oracle_price(0, MarketType::Perp, 105, oracle_price);
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+
+        // Market orders should be moved to resting limit or removed
+        assert_eq!(book.market_orders.bids.len(), 0);
+        assert_eq!(book.market_orders.asks.len(), 0);
+        assert_eq!(book.resting_limit_orders.bids.len(), 1);
+        assert_eq!(book.resting_limit_orders.asks.len(), 0);
+
+        // Oracle orders should be moved to floating limit or removed
+        assert_eq!(book.oracle_orders.bids.len(), 0);
+        assert_eq!(book.oracle_orders.asks.len(), 0);
+        assert_eq!(book.floating_limit_orders.bids.len(), 0);
+        assert_eq!(book.floating_limit_orders.asks.len(), 1);
     }
 }

@@ -6,7 +6,7 @@ use std::sync::{atomic::AtomicU64, Arc};
 
 use anchor_lang::prelude::*;
 use drift_rs::{
-    dlob::{util::OrderDelta, Orderbook}, grpc::grpc_subscriber::AccountFilter, swift_order_subscriber::SignedOrderInfo, types::{accounts::User, MarketId, OrderParams, OrderType, PositionDirection, PostOnlyParam}, DriftClient, GrpcSubscribeOpts, Pubkey, RpcClient, Wallet
+    dlob::{util::OrderDelta, DLOB}, grpc::grpc_subscriber::AccountFilter, swift_order_subscriber::SignedOrderInfo, types::{accounts::User, MarketId, MarketType, OrderParams, OrderType, PositionDirection, PostOnlyParam}, DriftClient, GrpcSubscribeOpts, Pubkey, RpcClient, Wallet
 };
 use futures_util::StreamExt;
 use solana_sdk::signature::Keypair;
@@ -14,7 +14,7 @@ use solana_sdk::signature::Keypair;
 async fn setup_grpc(drift: DriftClient) {
     let drift_ref = drift.clone();
 
-    let mut dlob = Orderbook::default();
+    let mut dlob = DLOB::default();
 
     let latest_slot = Arc::new(AtomicU64::default());
     let latest_slot_ref = Arc::clone(&latest_slot);
@@ -27,7 +27,16 @@ async fn setup_grpc(drift: DriftClient) {
                 .usermap_on()
                 .on_slot(move |new_slot| {
                     latest_slot_ref.store(new_slot, std::sync::atomic::Ordering::Relaxed);
-                    dlob.update_slot_and_oracle_price(new_slot, oracle_price);
+
+                    // TODO: only updating SOL-PERP
+                    if let Some(oracle_price) = drift.try_get_oracle_price_data_and_slot(MarketId::perp(0)) {
+                        dlob.update_slot_and_oracle_price(
+                            0,
+                            MarketType::Perp,
+                            new_slot,
+                            oracle_price.data.price as u64,
+                        );
+                    }
                 })
                 .on_account(
                     AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
@@ -39,10 +48,10 @@ async fn setup_grpc(drift: DriftClient) {
                                 for order_delta in drift_rs::dlob::util::compare_user_orders(account.pubkey, &old_user, &new_user) {
                                     match order_delta {
                                         OrderDelta::Create { user, order } => {
-                                            dlob.insert_order(&user, order, slot);
+                                            dlob.insert_order(&user, order);
                                         }
                                         OrderDelta::Update { user, order } => {
-                                            dlob.update_order(&user, order, 0);
+                                            dlob.update_order(&user, order);
                                         }
                                         OrderDelta::Remove { user, order } => {
                                             dlob.remove_order(&user, order);
@@ -53,7 +62,7 @@ async fn setup_grpc(drift: DriftClient) {
                             Err(_err) => {
                                 // assume clean dlob build and insert
                                 for order in new_user.orders {
-                                    dlob.insert_order(&account.pubkey, order, slot);
+                                    dlob.insert_order(&account.pubkey, order);
                                 }
                             }
                         }
