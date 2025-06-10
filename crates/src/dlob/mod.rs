@@ -12,7 +12,7 @@ use crate::types::{Order, OrderTriggerCondition, OrderType, PositionDirection};
 
 type Direction = PositionDirection;
 
-// Helper function to generate order Id hash
+/// Helper function to generate unique order Id hash
 fn order_hash(user: &Pubkey, order_id: u32) -> u64 {
     let mut hasher = AHasher::default();
     user.hash(&mut hasher);
@@ -551,14 +551,16 @@ pub enum OrderKind {
 }
 
 struct OrderMetadata {
+    user: Pubkey,
     kind: OrderKind,
     direction: Direction,
     slot: u64,
 }
 
 impl OrderMetadata {
-    pub fn new(kind: OrderKind, direction: Direction, slot: u64) -> Self {
+    pub fn new(user: Pubkey, kind: OrderKind, direction: Direction, slot: u64) -> Self {
         Self {
+            user,
             kind,
             direction,
             slot,
@@ -570,7 +572,8 @@ impl OrderMetadata {
 pub struct Orderbook {
     inner: OrderbookData,
     l2_snapshot: Snapshot<L2Book>,
-    metadata: DashMap<(Pubkey, u32), OrderMetadata, ahash::RandomState>,
+    /// Map from DLOB internal order ID to order metadata
+    metadata: DashMap<u64, OrderMetadata, ahash::RandomState>,
 }
 
 struct OrderbookData {
@@ -615,6 +618,7 @@ impl Orderbook {
 
     /// Evaluate dynamic order prices for some `slot` and `oracle_price`
     pub fn update_slot_and_oracle_price(&mut self, slot: u64, oracle_price: u64) {
+        log::debug!(target: "dlob", "update orders @ slot: {slot:?}, oracle: {oracle_price:?}");
         self.inner.market_orders.sort(slot, oracle_price);
         self.inner.oracle_orders.sort(slot, oracle_price);
         self.inner.floating_limit_orders.sort(slot, oracle_price);
@@ -636,8 +640,9 @@ impl Orderbook {
     }
 
     pub fn update_order(&mut self, user: &Pubkey, order: Order) {
+        log::trace!(target: "dlob", "update order: {user:?},{order:?}");
         let order_id = order_hash(user, order.order_id);
-        if let Some(metadata) = self.metadata.get(&(*user, order.order_id)) {
+        if let Some(metadata) = self.metadata.get(&order_id) {
             match metadata.kind {
                 OrderKind::Market => {
                     self.inner.market_orders.update(order_id, order);
@@ -653,27 +658,28 @@ impl Orderbook {
                     self.inner.floating_limit_orders.update(order_id, order);
                 }
                 OrderKind::Trigger => {
-                    self.inner.trigger_orders.update(order_id, order);
+                    log::trace!(target: "dlob", "skipping unhandled trigger order: {order:?}");
                 }
             }
         }
     }
 
     pub fn insert_order(&mut self, user: &Pubkey, order: Order, slot: u64) {
+        log::trace!(target: "dlob", "update order: {user:?},{order:?}");
         let order_id = order_hash(user, order.order_id);
         match order.order_type {
             OrderType::Market => {
                 self.inner.market_orders.insert(order_id, order);
                 self.metadata.insert(
-                    (*user, order.order_id),
-                    OrderMetadata::new(OrderKind::Market, order.direction, slot),
+                    order_id,
+                    OrderMetadata::new(*user, OrderKind::Market, order.direction, slot),
                 );
             }
             OrderType::Oracle => {
                 self.inner.oracle_orders.insert(order_id, order);
                 self.metadata.insert(
-                    (*user, order.order_id),
-                    OrderMetadata::new(OrderKind::Oracle, order.direction, slot),
+                    order_id,
+                    OrderMetadata::new(*user, OrderKind::Oracle, order.direction, slot),
                 );
             }
             OrderType::Limit => {
@@ -704,24 +710,22 @@ impl Orderbook {
                 } else {
                     // post only cannot have an auction (maker side only)
                     if is_floating {
-                        // Floating limit order
                         self.inner.floating_limit_orders.insert(order_id, order);
                     } else {
-                        // Resting limit order
                         self.inner.resting_limit_orders.insert(order_id, order);
                     }
                 }
 
                 self.metadata.insert(
-                    (*user, order.order_id),
-                    OrderMetadata::new(OrderKind::Limit, order.direction, slot),
+                    order_id,
+                    OrderMetadata::new(*user, OrderKind::Limit, order.direction, slot),
                 );
             }
             OrderType::TriggerLimit | OrderType::TriggerMarket => {
                 self.inner.trigger_orders.insert(order_id, order);
                 self.metadata.insert(
-                    (*user, order.order_id),
-                    OrderMetadata::new(OrderKind::Trigger, order.direction, slot),
+                    order_id,
+                    OrderMetadata::new(*user, OrderKind::Trigger, order.direction, slot),
                 );
             }
         }
@@ -826,7 +830,7 @@ impl Orderbook {
             bids.iter()
                 .flat_map(|&(bid_price, bid_size)| {
                     asks.iter()
-                        .take_while(|&&(ask_price, _)| bid_price >= ask_price)
+                        .take_while(move |(ask_price, _)| bid_price >= *ask_price)
                         .map(move |&(ask_price, ask_size)| {
                             (bid_price, ask_price, bid_size, ask_size)
                         })
