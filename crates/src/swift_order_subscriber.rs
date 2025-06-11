@@ -407,13 +407,16 @@ pub fn deser_signed_msg_type<'de, D>(deserializer: D) -> Result<SignedOrderType,
 where
     D: serde::Deserializer<'de>,
 {
-    let payload: &[u8] = serde::Deserialize::deserialize(deserializer)?;
+    let payload: &str = serde::Deserialize::deserialize(deserializer)?;
     if payload.len() % 2 != 0 {
         return Err(serde::de::Error::custom("Hex string length must be even"));
     }
 
     // decode expecting the largest possible variant
     let mut borsh_buf = [0u8; SignedDelegateOrder::INIT_SPACE + 8];
+    if (payload.len() / 2) > borsh_buf.len() {
+        return Err(serde::de::Error::custom("invalid signed message hex"));
+    }
 
     hex::decode_to_slice(payload, &mut borsh_buf[..payload.len() / 2])
         .map_err(serde::de::Error::custom)?;
