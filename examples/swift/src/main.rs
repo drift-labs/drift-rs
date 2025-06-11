@@ -95,8 +95,9 @@ async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) {
         )
         .await;
 
+    // dlob printer
     std::thread::spawn(|| loop {
-        let l2_book = dlob.get_l2_snapshot(0, MarketType::Perp);
+        let l2_book = dlob.get_l3_snapshot(0, MarketType::Perp);
         dbg!(&l2_book);
         drop(l2_book);
         std::thread::sleep(Duration::from_secs(1));
