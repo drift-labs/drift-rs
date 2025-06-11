@@ -407,14 +407,17 @@ pub fn deser_signed_msg_type<'de, D>(deserializer: D) -> Result<SignedOrderType,
 where
     D: serde::Deserializer<'de>,
 {
-    let payload: &[u8] = serde::Deserialize::deserialize(deserializer)?;
+    let payload: &str = serde::Deserialize::deserialize(deserializer)?;
     if payload.len() % 2 != 0 {
         return Err(serde::de::Error::custom("Hex string length must be even"));
     }
 
     // decode expecting the largest possible variant
-    let mut borsh_buf = [0u8; SignedDelegateOrder::INIT_SPACE + 8];
+    if (payload.len() / 2) > SignedDelegateOrder::INIT_SPACE + 8 || payload.len() == 0 {
+        return Err(serde::de::Error::custom("invalid signed message hex"));
+    }
 
+    let mut borsh_buf = [0u8; SignedDelegateOrder::INIT_SPACE + 8];
     hex::decode_to_slice(payload, &mut borsh_buf[..payload.len() / 2])
         .map_err(serde::de::Error::custom)?;
 
@@ -433,13 +436,46 @@ where
 
 #[cfg(test)]
 mod tests {
-    use anchor_lang::InstructionData;
-
     use super::*;
     use crate::{
         drift_idl,
         types::{MarketType, OrderTriggerCondition, OrderType, PositionDirection, PostOnlyParam},
     };
+
+    #[test]
+    fn test_swift_order_deser_bad_message() {
+        let msg = r#"{
+            "channel":"signed_orders_perp_1",
+            "order":{
+                "market_index":1,
+                "market_type":"perp",
+                "order_message":"b9c165ffdf70594d0001010080841e00000000000000000000000000010000000000000000013201a4e99abc16000000011ab2f982160000000300900f84150000000072753959424c52740000b9c165ffdf70594d0001010080841e00000000000000000000000000010000000000000000013201a4e99abc16000000011ab2f982160000000300900f84150000000072753959424c52740000aabbccaabbccaabbccaabbcc",
+                "order_signature":"FIgxWlW+C0abvtE8esSko7At1YGM8h66T0u5lJpwXirW63CuvEllVWZ68NNVFsaqcj4jqgQInXUnLPjIf/PQDA==",
+                "signing_authority":"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE",
+                "taker_authority":"DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2",
+                "ts":1739518796400,
+                "uuid":"ru9YBLRt"
+            }
+        }"#;
+        let result: Result<OrderNotification, _> = serde_json::from_str(&msg);
+        assert!(result.is_err());
+
+        let msg = r#"{
+            "channel":"signed_orders_perp_1",
+            "order":{
+                "market_index":1,
+                "market_type":"perp",
+                "order_message":"",
+                "order_signature":"FIgxWlW+C0abvtE8esSko7At1YGM8h66T0u5lJpwXirW63CuvEllVWZ68NNVFsaqcj4jqgQInXUnLPjIf/PQDA==",
+                "signing_authority":"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE",
+                "taker_authority":"DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2",
+                "ts":1739518796400,
+                "uuid":"ru9YBLRt"
+            }
+        }"#;
+        let result: Result<OrderNotification, _> = serde_json::from_str(&msg);
+        assert!(result.is_err());
+    }
 
     #[test]
     fn test_swift_order_deser() {
