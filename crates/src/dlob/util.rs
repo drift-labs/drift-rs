@@ -1,7 +1,7 @@
 use crate::types::{accounts::User, Order, OrderStatus};
 use solana_sdk::pubkey::Pubkey;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum OrderDelta {
     Create { user: Pubkey, order: Order },
     Update { user: Pubkey, order: Order },

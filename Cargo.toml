@@ -56,6 +56,7 @@ yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc",
 yellowstone-grpc-proto = { git = "https://github.com/rpcpool/yellowstone-grpc", rev = "bb3a44a" }
 
 drift-pubsub-client = { version = "0.1.1", path = "crates/pubsub-client" }
+crossbeam = "0.8.4"
 
 [dev-dependencies]
 bytes = "1"

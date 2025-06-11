@@ -13,15 +13,12 @@ use arrayvec::ArrayVec;
 use dashmap::DashMap;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::{
-    ffi::calculate_auction_price,
-    types::{
-        MarketId, MarketType, Order, OrderParams, OrderTriggerCondition, OrderType,
-        PositionDirection,
-    },
+use crate::types::{
+    MarketId, MarketType, Order, OrderParams, OrderTriggerCondition, OrderType, PositionDirection,
 };
 
 pub mod util;
+pub use util::OrderDelta;
 
 type Direction = PositionDirection;
 
@@ -91,6 +88,8 @@ pub struct L3Order {
 
 #[derive(Debug, Default)]
 pub struct L3Book {
+    pub slot: u64,
+    pub oracle_price: u64,
     pub bids: Vec<L3Order>,
     pub asks: Vec<L3Order>,
 }
@@ -133,7 +132,7 @@ impl L3Book {
         for order in &floating_limit_orders.bids {
             if let Some(meta) = metadata.get(&order.id) {
                 bids.push(L3Order {
-                    price: order.get_price(slot, oracle_price),
+                    price: order.get_price(slot, oracle_price, 0),
                     size: order.size(),
                     maker: meta.user,
                     order_id: meta.order_id,
@@ -144,7 +143,7 @@ impl L3Book {
         for order in &floating_limit_orders.asks {
             if let Some(meta) = metadata.get(&order.id) {
                 asks.push(L3Order {
-                    price: order.get_price(slot, oracle_price),
+                    price: order.get_price(slot, oracle_price, 0),
                     size: order.size(),
                     maker: meta.user,
                     order_id: meta.order_id,
@@ -157,7 +156,12 @@ impl L3Book {
         // Sort asks in ascending order (lowest first)
         asks.sort_by(|a, b| a.price.cmp(&b.price));
 
-        Self { bids, asks }
+        Self {
+            bids,
+            asks,
+            slot,
+            oracle_price,
+        }
     }
 }
 
@@ -215,14 +219,15 @@ impl L2Book {
         orders: &DynamicOrders<T>,
         slot: u64,
         oracle_price: u64,
+        market_tick_size: u64,
     ) {
         for order in &orders.bids {
-            let price = order.get_price(slot, oracle_price);
+            let price = order.get_price(slot, oracle_price, market_tick_size);
             *self.bids.entry(price).or_insert(0) += order.size();
         }
 
         for order in &orders.asks {
-            let price = order.get_price(slot, oracle_price);
+            let price = order.get_price(slot, oracle_price, market_tick_size);
             *self.asks.entry(price).or_insert(0) += order.size();
         }
     }
@@ -237,7 +242,7 @@ type TriggerOrderKey = (u64, u64, u64);
 
 /// Order with dynamic price calculation
 trait DynamicPrice {
-    fn get_price(&self, slot: u64, oracle_price: u64) -> u64;
+    fn get_price(&self, slot: u64, oracle_price: u64, tick_size: u64) -> u64;
     fn size(&self) -> u64;
 }
 
@@ -335,7 +340,8 @@ impl DynamicPrice for MarketOrder {
     fn size(&self) -> u64 {
         self.size
     }
-    fn get_price(&self, slot: u64, _oracle_price: u64) -> u64 {
+    fn get_price(&self, slot: u64, _oracle_price: u64, market_tick_size: u64) -> u64 {
+        // TODO: use calculate_auction_price
         if slot >= self.slot + self.duration as u64 {
             self.end_price as u64
         } else {
@@ -370,7 +376,8 @@ impl DynamicPrice for OracleOrder {
     fn size(&self) -> u64 {
         self.size
     }
-    fn get_price(&self, slot: u64, oracle_price: u64) -> u64 {
+    fn get_price(&self, slot: u64, oracle_price: u64, market_tick_size: u64) -> u64 {
+        // TODO: use calculate_auction_price
         if slot >= self.slot + self.duration as u64 {
             oracle_price + self.end_price_offset as u64
         } else {
@@ -424,7 +431,7 @@ impl DynamicPrice for FloatingLimitOrder {
     fn size(&self) -> u64 {
         self.size
     }
-    fn get_price(&self, _slot: u64, oracle_price: u64) -> u64 {
+    fn get_price(&self, _slot: u64, oracle_price: u64, _market_tick_size: u64) -> u64 {
         (oracle_price as i64 + self.offset_price as i64) as u64
     }
 }
@@ -692,6 +699,8 @@ struct Orderbook {
     l2_snapshot: Snapshot<L2Book>,
     /// L3 book snapshot
     l3_snapshot: Snapshot<L3Book>,
+    /// market tick size
+    market_tick_size: u64,
 }
 
 impl Default for Orderbook {
@@ -704,6 +713,7 @@ impl Default for Orderbook {
             trigger_orders: Orders::default(),
             l2_snapshot: Snapshot::default(),
             l3_snapshot: Snapshot::default(),
+            market_tick_size: 0,
         }
     }
 }
@@ -791,9 +801,9 @@ impl Orderbook {
     /// Update the L2 snapshot
     fn update_l2_view(&self, slot: u64, oracle_price: u64) {
         let mut l2book = L2Book::from_limit_orders(&self.resting_limit_orders);
-        l2book.insert_dynamic_orders(&self.market_orders, slot, oracle_price);
-        l2book.insert_dynamic_orders(&self.oracle_orders, slot, oracle_price);
-        l2book.insert_dynamic_orders(&self.floating_limit_orders, slot, oracle_price);
+        l2book.insert_dynamic_orders(&self.market_orders, slot, oracle_price, self.market_tick_size);
+        l2book.insert_dynamic_orders(&self.oracle_orders, slot, oracle_price, self.market_tick_size);
+        l2book.insert_dynamic_orders(&self.floating_limit_orders, slot, oracle_price, self.market_tick_size);
         self.l2_snapshot.update(Arc::new(l2book));
     }
 
@@ -829,7 +839,7 @@ impl Orderbook {
             self.floating_limit_orders
                 .bids
                 .iter()
-                .map(|o| (o.id, o.get_price(slot, oracle_price), o.size())),
+                .map(|o| (o.id, o.get_price(slot, oracle_price, 0), o.size())),
         );
 
         // Sort by price in descending order (best bid first)
@@ -852,7 +862,7 @@ impl Orderbook {
             self.floating_limit_orders
                 .asks
                 .iter()
-                .map(|o| (o.id, o.get_price(slot, oracle_price), o.size())),
+                .map(|o| (o.id, o.get_price(slot, oracle_price, 0), o.size())),
         );
 
         // Sort by price in ascending order (best ask first)
@@ -874,9 +884,58 @@ avoid explosion of orderlists
     -> DLOB builder needs to filter this or risk incorrect results
  */
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum DLOBEvent {
+    SlotOrPriceUpdate {
+        slot: u64,
+        market_index: u16,
+        market_type: MarketType,
+        oracle_price: u64,
+    },
+    Order(OrderDelta),
+}
+
 impl DLOB {
+    /// Provides a writer channel into the DLOB which acts as a sink for external events
+    pub fn spawn_notifier(&self) -> crossbeam::channel::Sender<DLOBEvent> {
+        let (tx, rx) = crossbeam::channel::bounded(2048);
+        std::thread::spawn(|| {
+            while let Ok(event) = rx.recv() {
+                match event {
+                    DLOBEvent::SlotOrPriceUpdate {
+                        slot,
+                        market_index,
+                        market_type,
+                        oracle_price,
+                    } => {
+                        self.update_slot_and_oracle_price(
+                            market_index,
+                            market_type,
+                            slot,
+                            oracle_price,
+                        );
+                    }
+                    DLOBEvent::Order(order_delta) => match order_delta {
+                        OrderDelta::Create { user, order } => {
+                            self.insert_order(&user, order);
+                        }
+                        OrderDelta::Update { user, order } => {
+                            self.update_order(&user, order);
+                        }
+                        OrderDelta::Remove { user, order } => {
+                            self.remove_order(&user, order);
+                        }
+                    },
+                }
+            }
+            log::error!(target: "DLOB", "notifier thread finished");
+        });
+
+        tx
+    }
     /// run function on a market Orderbook
     fn with_orderbook_mut(&self, market_id: MarketId, f: impl Fn(&mut Orderbook)) {
+        todo!("insert market tick_size here from ProgramData on dlob");
         let mut orderbook = self
             .markets
             .entry(market_id)
@@ -885,7 +944,7 @@ impl DLOB {
     }
 
     /// Update orderbook slot and oracle price for market
-    pub fn update_slot_and_oracle_price(
+    fn update_slot_and_oracle_price(
         &self,
         market_index: u16,
         market_type: MarketType,
@@ -916,7 +975,7 @@ impl DLOB {
             .unwrap_or_default()
     }
 
-    pub fn update_order(&self, user: &Pubkey, order: Order) {
+    fn update_order(&self, user: &Pubkey, order: Order) {
         log::trace!(target: "dlob", "update order: {user:?},{order:?}");
         let order_id = order_hash(user, order.order_id);
 
@@ -949,7 +1008,7 @@ impl DLOB {
         });
     }
 
-    pub fn remove_order(&self, user: &Pubkey, order: Order) {
+    fn remove_order(&self, user: &Pubkey, order: Order) {
         log::trace!(target: "dlob", "remove order: {user:?},{order:?}");
         let order_id = order_hash(user, order.order_id);
 
@@ -976,7 +1035,7 @@ impl DLOB {
         });
     }
 
-    pub fn insert_order(&self, user: &Pubkey, order: Order) {
+    fn insert_order(&self, user: &Pubkey, order: Order) {
         log::trace!(target: "dlob", "update order: {user:?},{order:?}");
 
         // Don't insert fully filled orders

@@ -24,6 +24,14 @@ use solana_sdk::signature::Keypair;
 async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) {
     let latest_slot = Arc::new(AtomicU64::default());
 
+    /// Sync all User accounts with `filter` e.g. non-idle,has-auctions
+    let accounts = self.rpc.get_program_accounts_with_config(&PROGRAM_ID, RpcProgramAccountsConfig {
+        filters: Some(vec![
+            drift_rs::memcmp::get_user_with_order_filter(),
+        ]),
+        ..Default::default()
+    });
+
     let res = drift
         .grpc_subscribe(
             "https://api.rpcpool.com".into(),
