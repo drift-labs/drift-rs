@@ -2,22 +2,27 @@
 //!
 //! The `TODO:` comments should be altered depending on individual maker strategy
 //!
-use std::sync::{atomic::AtomicU64, Arc};
+use std::{
+    sync::{atomic::AtomicU64, Arc},
+    time::Duration,
+};
 
 use anchor_lang::prelude::*;
 use drift_rs::{
-    dlob::{util::OrderDelta, DLOB}, grpc::grpc_subscriber::AccountFilter, swift_order_subscriber::SignedOrderInfo, types::{accounts::User, MarketId, MarketType, OrderParams, OrderType, PositionDirection, PostOnlyParam}, DriftClient, GrpcSubscribeOpts, Pubkey, RpcClient, Wallet
+    dlob::{util::OrderDelta, TakerOrder, DLOB},
+    grpc::grpc_subscriber::AccountFilter,
+    swift_order_subscriber::SignedOrderInfo,
+    types::{
+        accounts::User, MarketId, MarketType, OrderParams, OrderType, PositionDirection,
+        PostOnlyParam,
+    },
+    DriftClient, GrpcSubscribeOpts, Pubkey, RpcClient, Wallet,
 };
 use futures_util::StreamExt;
 use solana_sdk::signature::Keypair;
 
-async fn setup_grpc(drift: DriftClient) {
-    let drift_ref = drift.clone();
-
-    let mut dlob = DLOB::default();
-
+async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) {
     let latest_slot = Arc::new(AtomicU64::default());
-    let latest_slot_ref = Arc::clone(&latest_slot);
 
     let res = drift
         .grpc_subscribe(
@@ -25,54 +30,77 @@ async fn setup_grpc(drift: DriftClient) {
             std::env::var("TEST_GRPC_X_TOKEN").expect("TEST_GRPC_X_TOKEN set"),
             GrpcSubscribeOpts::default()
                 .usermap_on()
-                .on_slot(move |new_slot| {
-                    latest_slot_ref.store(new_slot, std::sync::atomic::Ordering::Relaxed);
+                .on_slot({
+                    let drift = drift.clone();
+                    let latest_slot = Arc::clone(&latest_slot);
 
-                    // TODO: only updating SOL-PERP
-                    if let Some(oracle_price) = drift.try_get_oracle_price_data_and_slot(MarketId::perp(0)) {
-                        dlob.update_slot_and_oracle_price(
-                            0,
-                            MarketType::Perp,
-                            new_slot,
-                            oracle_price.data.price as u64,
-                        );
+                    move |new_slot| {
+                        latest_slot.store(new_slot, std::sync::atomic::Ordering::Relaxed);
+
+                        // TODO: only updating SOL-PERP
+                        if let Some(oracle_price) =
+                            drift.try_get_oracle_price_data_and_slot(MarketId::perp(0))
+                        {
+                            dlob.update_slot_and_oracle_price(
+                                0,
+                                MarketType::Perp,
+                                new_slot,
+                                oracle_price.data.price as u64,
+                            );
+                        }
                     }
                 })
                 .on_account(
                     AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
-                    move |account| {
-                        let new_user = User::try_deserialize_unchecked(&mut &account.data).expect("deser user");
-                        let slot = latest_slot.load(std::sync::atomic::Ordering::Relaxed);
-                        match drift_ref.try_get_account::<User>(&account.pubkey) {
-                            Ok(old_user) => {
-                                for order_delta in drift_rs::dlob::util::compare_user_orders(account.pubkey, &old_user, &new_user) {
-                                    match order_delta {
-                                        OrderDelta::Create { user, order } => {
-                                            dlob.insert_order(&user, order);
-                                        }
-                                        OrderDelta::Update { user, order } => {
-                                            dlob.update_order(&user, order);
-                                        }
-                                        OrderDelta::Remove { user, order } => {
-                                            dlob.remove_order(&user, order);
+                    {
+                        let drift = drift.clone();
+                        let latest_slot = Arc::clone(&latest_slot);
+
+                        move |account| {
+                            let new_user = User::try_deserialize_unchecked(
+                                &mut account.data.to_vec().as_slice(),
+                            )
+                            .expect("deser user");
+                            match drift.try_get_account::<User>(&account.pubkey) {
+                                Ok(old_user) => {
+                                    for order_delta in drift_rs::dlob::util::compare_user_orders(
+                                        account.pubkey,
+                                        &old_user,
+                                        &new_user,
+                                    ) {
+                                        match order_delta {
+                                            OrderDelta::Create { user, order } => {
+                                                dlob.insert_order(&user, order);
+                                            }
+                                            OrderDelta::Update { user, order } => {
+                                                dlob.update_order(&user, order);
+                                            }
+                                            OrderDelta::Remove { user, order } => {
+                                                dlob.remove_order(&user, order);
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            Err(_err) => {
-                                // assume clean dlob build and insert
-                                for order in new_user.orders {
-                                    dlob.insert_order(&account.pubkey, order);
+                                Err(_err) => {
+                                    // assume clean dlob build and insert
+                                    for order in new_user.orders {
+                                        dlob.insert_order(&account.pubkey, order);
+                                    }
                                 }
                             }
                         }
-                    }
+                    },
                 ),
             true,
         )
         .await;
-    log::info!("grpc subscribed");
 
+    std::thread::spawn(|| loop {
+        let l2_book = dlob.get_l2_snapshot(0, MarketType::Perp);
+        dbg!(&l2_book);
+        drop(l2_book);
+        std::thread::sleep(Duration::from_secs(1));
+    });
 }
 
 #[tokio::main]
@@ -97,6 +125,10 @@ async fn main() {
     let drift = DriftClient::new(context, RpcClient::new(rpc_url), wallet)
         .await
         .expect("initialized client");
+
+    let dlob: &'static DLOB = Box::leak(Box::new(DLOB::default()));
+    setup_grpc(drift.clone(), dlob).await;
+
     let _ = drift
         .subscribe_blockhashes()
         .await
@@ -130,7 +162,9 @@ async fn main() {
             swift_order = swift_order_stream.next() => {
                 match swift_order {
                     Some(order) => {
-                        let _handle = tokio::spawn(try_fill(drift.clone(), filler_subaccount, order));
+                        // let _handle = tokio::spawn(try_fill(drift.clone(), filler_subaccount, order));
+                        // let res = dlob.find_crosses_for_taker_order(slot, oracle_price, TakerOrder::from_order_params(order.order_params(), current_price));
+                        // dbg!("crosses", res);
                     }
                     None => {
                         println!("swift order stream finished");

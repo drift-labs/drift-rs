@@ -13,8 +13,12 @@ use arrayvec::ArrayVec;
 use dashmap::DashMap;
 use solana_sdk::pubkey::Pubkey;
 
-use crate::types::{
-    MarketId, MarketType, Order, OrderTriggerCondition, OrderType, PositionDirection,
+use crate::{
+    ffi::calculate_auction_price,
+    types::{
+        MarketId, MarketType, Order, OrderParams, OrderTriggerCondition, OrderType,
+        PositionDirection,
+    },
 };
 
 pub mod util;
@@ -642,7 +646,7 @@ impl Orderbook {
         // TODO: expire limits orders by ts, for now removal via User account changes good enough
         self.market_orders.asks.retain(|x| {
             let is_auction_complete = (x.slot + x.duration as u64) <= slot;
-            if is_auction_complete && x.is_limit {
+            if is_auction_complete && x.is_limit && x.size > 0 {
                 self.resting_limit_orders.insert_raw(
                     false,
                     LimitOrder {
@@ -657,7 +661,7 @@ impl Orderbook {
         });
         self.market_orders.bids.retain(|x| {
             let is_auction_complete = (x.slot + x.duration as u64) <= slot;
-            if is_auction_complete && x.is_limit {
+            if is_auction_complete && x.is_limit && x.size > 0 {
                 self.resting_limit_orders.insert_raw(
                     true,
                     LimitOrder {
@@ -672,7 +676,7 @@ impl Orderbook {
         });
         self.oracle_orders.asks.retain(|x| {
             let is_auction_complete = (x.slot + x.duration as u64) <= slot;
-            if is_auction_complete && x.is_limit {
+            if is_auction_complete && x.is_limit && x.size > 0 {
                 self.floating_limit_orders.insert_raw(
                     false,
                     FloatingLimitOrder {
@@ -687,7 +691,7 @@ impl Orderbook {
         });
         self.oracle_orders.bids.retain(|x| {
             let is_auction_complete = (x.slot + x.duration as u64) <= slot;
-            if is_auction_complete && x.is_limit {
+            if is_auction_complete && x.is_limit && x.size > 0 {
                 self.floating_limit_orders.insert_raw(
                     true,
                     FloatingLimitOrder {
@@ -806,6 +810,12 @@ impl DLOB {
         log::trace!(target: "dlob", "update order: {user:?},{order:?}");
         let order_id = order_hash(user, order.order_id);
 
+        // If order is fully filled, remove it instead of updating
+        if order.base_asset_amount <= order.base_asset_amount_filled {
+            self.remove_order(user, order);
+            return;
+        }
+
         self.with_orderbook_mut(MarketId::new(order.market_index, order.market_type), |orderbook| {
             if let Some(metadata) = self.metadata.get(&order_id) {
                 match metadata.kind {
@@ -858,6 +868,13 @@ impl DLOB {
 
     pub fn insert_order(&self, user: &Pubkey, order: Order) {
         log::trace!(target: "dlob", "update order: {user:?},{order:?}");
+
+        // Don't insert fully filled orders
+        if order.base_asset_amount <= order.base_asset_amount_filled {
+            log::trace!(target: "dlob", "skipping fully filled order: {order:?}");
+            return;
+        }
+
         let order_id = order_hash(user, order.order_id);
 
         self.with_orderbook_mut(
@@ -970,8 +987,8 @@ impl DLOB {
 
         for (order_id, maker_price, maker_size) in resting_orders {
             let is_cross = match taker_order.direction {
-                Direction::Long => taker_order.price >= maker_price,
-                Direction::Short => taker_order.price <= maker_price,
+                Direction::Long => taker_order.price as u64 >= maker_price,
+                Direction::Short => taker_order.price as u64 <= maker_price,
             };
             if is_cross {
                 let fill_size = remaining_size.min(maker_size);
@@ -993,16 +1010,36 @@ impl DLOB {
 }
 
 /// Minimal taker order info
+#[derive(Debug)]
 pub struct TakerOrder {
-    pub price: u64,
+    price: i64,
+    pub order_type: OrderType,
     pub size: u64,
     pub direction: Direction,
     pub market_index: u16,
     pub market_type: MarketType,
 }
 
+impl TakerOrder {
+    pub fn from_order_params(order: OrderParams, current_price: u64) -> Self {
+        Self {
+            price: if order.price > 0 {
+                order.price as i64
+            } else {
+                order.oracle_price_offset.unwrap_or_default() as i64
+            },
+            order_type: order.order_type,
+            size: order.base_asset_amount,
+            direction: order.direction,
+            market_index: order.market_index,
+            market_type: order.market_type,
+        }
+    }
+}
+
 /// Best fills for a taker order
 /// Returns (candidates, is_partial)
+#[derive(Debug)]
 pub struct TakerCrosses {
     /// (order_id, fill_size)
     pub orders: ArrayVec<(u64, u64), 16>,
