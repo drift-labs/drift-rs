@@ -12,8 +12,8 @@ use drift_rs::{
     grpc::grpc_subscriber::AccountFilter,
     swift_order_subscriber::SignedOrderInfo,
     types::{
-        accounts::User, MarketId, MarketType, Order, OrderParams, OrderStatus, OrderType,
-        PositionDirection, PostOnlyParam,
+        accounts::User, MarketId, Order, OrderParams, OrderStatus, OrderType, PositionDirection,
+        PostOnlyParam,
     },
     DriftClient, GrpcSubscribeOpts, Pubkey, RpcClient, Wallet,
 };
@@ -21,6 +21,15 @@ use futures_util::StreamExt;
 use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_rpc_client_api::config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
 use solana_sdk::signature::Keypair;
+
+/// Active market IDs to fill for
+const MARKET_IDS: [MarketId; 5] = [
+    MarketId::perp(0),
+    MarketId::perp(1),
+    MarketId::perp(2),
+    MarketId::perp(9),
+    MarketId::perp(59),
+];
 
 async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) -> tokio::sync::mpsc::Receiver<u64> {
     // TODO: IncrementalDLOBBuilder
@@ -69,7 +78,7 @@ async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) -> tokio::sync::mps
 
     log::info!(target: "dlob", "synced initial orders");
 
-    let (slot_tx, mut slot_rx) = tokio::sync::mpsc::channel(64);
+    let (slot_tx, slot_rx) = tokio::sync::mpsc::channel(64);
 
     let res = drift
         .grpc_subscribe(
@@ -82,16 +91,20 @@ async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) -> tokio::sync::mps
                     let drift = drift.clone();
 
                     move |new_slot| {
-                        // TODO: only updating SOL-PERP
-                        if let Some(oracle_price) =
-                            drift.try_get_oracle_price_data_and_slot(MarketId::perp(0))
-                        {
-                            dlob.send(DLOBEvent::SlotOrPriceUpdate {
-                                slot: new_slot,
-                                market_index: 0,
-                                market_type: MarketType::Perp,
-                                oracle_price: oracle_price.data.price as u64,
-                            });
+                        // TODO: only updating auction orders for active market IDs
+                        // still building the orderbook for every market
+                        // filter updates for non-active markets
+                        for market in MARKET_IDS {
+                            if let Some(oracle_price) =
+                                drift.try_get_oracle_price_data_and_slot(market)
+                            {
+                                dlob.send(DLOBEvent::SlotOrPriceUpdate {
+                                    slot: new_slot,
+                                    market_index: market.index(),
+                                    market_type: market.kind(),
+                                    oracle_price: oracle_price.data.price as u64,
+                                });
+                            }
                         }
                         slot_tx.try_send(new_slot);
                     }
@@ -151,12 +164,12 @@ async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) -> tokio::sync::mps
         .await;
 
     // dlob printer
-    std::thread::spawn(|| loop {
-        let l2_book = dlob.get_l2_snapshot(0, MarketType::Perp);
-        dbg!(&l2_book);
-        drop(l2_book);
-        std::thread::sleep(Duration::from_secs(1));
-    });
+    // std::thread::spawn(|| loop {
+    //     let l2_book = dlob.get_l2_snapshot(0, MarketType::Perp);
+    //     dbg!(&l2_book);
+    //     drop(l2_book);
+    //     std::thread::sleep(Duration::from_secs(1));
+    // });
 
     slot_rx
 }
@@ -192,20 +205,8 @@ async fn main() {
         .await
         .expect("subscribed blockhashes");
 
-    // subscribe to filler account (used when building Txs)
-    let _ = drift
-        .subscribe_account(&filler_subaccount)
-        .await
-        .expect("subscribed");
-
-    // choose some markets by symbol
-    let market_ids: Vec<MarketId> = ["sol-perp", "eth-perp"]
-        .iter()
-        .map(|m| drift.market_lookup(m).expect("market found"))
-        .collect();
-
     let mut swift_order_stream = drift
-        .subscribe_swift_orders(&market_ids, None)
+        .subscribe_swift_orders(&MARKET_IDS, Some(true))
         .await
         .expect("subscribed swift orders");
 
@@ -216,17 +217,18 @@ async fn main() {
     // - new swift order
 
     /*
-    assuming a placer bot is running
-    - we try to fill with resting immediately, if that fails then we should be checking for crosses with jit bot + DLOB
-     */
+       assume a placer bot is running:
+        - swift filler (tries to fill immediately at slot offset or slot offset + 1)
+
+       assume that later than 1 slot the order is placed onchain already
+        - every slot uncross auctions with resting limit orders
+        - JIT filler (tries to fill onchain auctions at slot offset > 1)
+    */
 
     // TODO:
     // - build cross ixs/txs
-    // - handle retrying txs / rate-limits
-    //
-    // - recheck pending auctions on new slot
-    // - recheck pending auctions on oracle price update (slot)
-    // - recheck pending auctions on oracle price update (intrslot) :ooooo:
+    // - handle retrying txs / rate-limits (light version)
+
     let mut slot = 0;
     loop {
         tokio::select! {
@@ -236,11 +238,12 @@ async fn main() {
                 break;
             }
             swift_order = swift_order_stream.next() => {
+                log::info!(target: "swift", "new swift order: {swift_order:?}");
                 match swift_order {
                     Some(order) => {
                         let order_params = order.order_params();
                         let tick_size = drift.program_data().perp_market_config_by_index(order_params.market_index).unwrap().amm.order_tick_size;
-                        // TODO: run on intraslot oracle price updates
+                        // TODO: run on intra-slot oracle price updates
                         let oracle_price = drift.try_get_oracle_price_data_and_slot(MarketId::perp(order_params.market_index)).expect("got oracle price").data.price;
 
                         let order = Order {
@@ -292,11 +295,20 @@ async fn main() {
                             }
                         };
                         let taker_order = TakerOrder::from_order_params(order_params, price);
-                        let crosses = dlob.find_crosses_for_taker_order(slot, oracle_price as u64, taker_order);
-                        log::info!(target: "dlob", "found crosses: {crosses:?}");
+
+                        let lookahead = 1;
+                        for offset in 0..=lookahead {
+                            if let Ok(crosses) = dlob.find_crosses_for_taker_order(slot + offset, oracle_price as u64, taker_order) {
+                                if !crosses.is_empty() {
+                                    log::info!(target: "swift", "found resting cross|offset={offset}|crosses={crosses:?}");
+                                    // TODO: build fills
+                                    break;
+                                }
+                            }
+                        }
                     }
                     None => {
-                        println!("swift order stream finished");
+                        log::error!("swift order stream finished");
                         break;
                     }
                 }

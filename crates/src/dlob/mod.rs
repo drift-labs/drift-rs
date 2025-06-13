@@ -654,6 +654,7 @@ impl<T: Clone + From<(u64, Order)> + OrderKey> Orders<T> {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum OrderKind {
     Market,
@@ -663,10 +664,11 @@ pub enum OrderKind {
     Trigger,
 }
 
-struct OrderMetadata {
-    order_id: u32,
-    user: Pubkey,
-    kind: OrderKind,
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub struct OrderMetadata {
+    pub order_id: u32,
+    pub user: Pubkey,
+    pub kind: OrderKind,
 }
 
 impl OrderMetadata {
@@ -715,6 +717,10 @@ struct Orderbook {
     l3_snapshot: Snapshot<L3Book>,
     /// market tick size
     market_tick_size: u64,
+    /// slot where dynamic orders where last checked
+    last_modified_slot: u64,
+    /// market index of this book
+    market_index: u16,
 }
 
 impl Default for Orderbook {
@@ -728,6 +734,8 @@ impl Default for Orderbook {
             l2_snapshot: Snapshot::default(),
             l3_snapshot: Snapshot::default(),
             market_tick_size: 0,
+            last_modified_slot: 0,
+            market_index: 0,
         }
     }
 }
@@ -735,7 +743,7 @@ impl Default for Orderbook {
 impl Orderbook {
     /// Evaluate dynamic order prices for some `slot` and `oracle_price`
     pub fn update_slot_and_oracle_price(&mut self, slot: u64, oracle_price: u64) {
-        log::debug!(target: "dlob", "update orders @ slot: {slot:?}, oracle: {oracle_price:?}");
+        log::debug!(target: "dlob","update book. market:{},slot:{slot},oracle:{oracle_price}",self.market_index);
         self.expire_auction_orders(slot);
         self.market_orders
             .sort(slot, oracle_price, self.market_tick_size);
@@ -746,6 +754,7 @@ impl Orderbook {
 
         // Update snapshots after sorting dynamic orders
         self.update_l2_view(slot, oracle_price);
+        self.last_modified_slot = slot;
     }
 
     /// Expire all auctions past current `slot`
@@ -971,6 +980,7 @@ impl DLOB {
     /// run function on a market Orderbook
     fn with_orderbook_mut(&self, market_id: MarketId, f: impl Fn(&mut Orderbook)) {
         let mut orderbook = self.markets.entry(market_id).or_insert({
+            // initialize book on first write
             let market_tick_size: u64 = match market_id.kind() {
                 MarketType::Perp => self
                     .program_data
@@ -985,6 +995,7 @@ impl DLOB {
             };
             Orderbook {
                 market_tick_size,
+                market_index: market_id.index(),
                 ..Default::default()
             }
         });
@@ -1025,8 +1036,8 @@ impl DLOB {
     }
 
     fn update_order(&self, user: &Pubkey, order: Order) {
-        log::trace!(target: "dlob", "update order: {user:?},{order:?}");
         let order_id = order_hash(user, order.order_id);
+        log::trace!(target: "dlob", "update order: {order_id}");
 
         // If order is fully filled, remove it instead of updating
         if order.base_asset_amount <= order.base_asset_amount_filled {
@@ -1058,8 +1069,8 @@ impl DLOB {
     }
 
     fn remove_order(&self, user: &Pubkey, order: Order) {
-        log::trace!(target: "dlob", "remove order: {user:?},{order:?}");
         let order_id = order_hash(user, order.order_id);
+        log::trace!(target: "dlob", "remove order: {order_id}");
 
         self.with_orderbook_mut(MarketId::new(order.market_index, order.market_type), |orderbook| {
             if let Some((_, metadata)) = self.metadata.remove(&order_id) {
@@ -1085,15 +1096,13 @@ impl DLOB {
     }
 
     fn insert_order(&self, user: &Pubkey, order: Order) {
-        log::trace!(target: "dlob", "update order: {user:?},{order:?}");
+        let order_id = order_hash(user, order.order_id);
+        log::trace!(target: "dlob", "insert order: {order_id}");
 
-        // Don't insert fully filled orders
         if order.base_asset_amount <= order.base_asset_amount_filled {
             log::trace!(target: "dlob", "skipping fully filled order: {order:?}");
             return;
         }
-
-        let order_id = order_hash(user, order.order_id);
 
         self.with_orderbook_mut(
             MarketId::new(order.market_index, order.market_type),
@@ -1171,34 +1180,42 @@ impl DLOB {
         oracle_price: u64,
         taker_order: TakerOrder,
     ) -> Result<TakerCrosses, ()> {
-        let mut candidates = ArrayVec::<(u64, u64), 16>::new();
+        let mut candidates = ArrayVec::<(OrderMetadata, u64, u64), 16>::new();
         let mut remaining_size = taker_order.size;
 
         let market = MarketId::new(taker_order.market_index, taker_order.market_type);
-        let resting_orders = match taker_order.direction {
-            Direction::Long => self
-                .markets
-                .get(&market)
-                .unwrap()
-                .get_limit_asks(slot, oracle_price),
-            Direction::Short => self
-                .markets
-                .get(&market)
-                .unwrap()
-                .get_limit_bids(slot, oracle_price),
+        let (book_slot, resting_orders) = match taker_order.direction {
+            Direction::Long => {
+                let book = self.markets.get(&market).unwrap();
+                (
+                    book.last_modified_slot,
+                    book.get_limit_asks(slot, oracle_price),
+                )
+            }
+            Direction::Short => {
+                let book = self.markets.get(&market).unwrap();
+                (
+                    book.last_modified_slot,
+                    book.get_limit_bids(slot, oracle_price),
+                )
+            }
         };
 
-        for (order_id, maker_price, maker_size) in resting_orders {
+        for (internal_order_id, maker_price, maker_size) in resting_orders {
             let is_cross = match taker_order.direction {
                 Direction::Long => taker_order.price >= maker_price,
                 Direction::Short => taker_order.price <= maker_price,
             };
             if is_cross {
                 let fill_size = remaining_size.min(maker_size);
-                candidates.push((order_id, fill_size));
-                remaining_size -= fill_size;
-                if remaining_size == 0 {
-                    break;
+                if let Some(metadata) = self.metadata.get(&internal_order_id) {
+                    candidates.push((*metadata.value(), maker_price, fill_size));
+                    remaining_size -= fill_size;
+                    if remaining_size == 0 {
+                        break;
+                    }
+                } else {
+                    log::warn!(target: "dlob", "metadata missing. order:{internal_order_id},check_slot:{slot},book_slot:{book_slot}");
                 }
             } else {
                 break;
@@ -1213,7 +1230,7 @@ impl DLOB {
 }
 
 /// Minimal taker order info
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct TakerOrder {
     price: u64,
     pub order_type: OrderType,
@@ -1240,9 +1257,16 @@ impl TakerOrder {
 /// Returns (candidates, is_partial)
 #[derive(Debug)]
 pub struct TakerCrosses {
-    /// (order_id, fill_size)
-    pub orders: ArrayVec<(u64, u64), 16>,
+    /// (metadata, maker_price, fill_size)
+    pub orders: ArrayVec<(OrderMetadata, u64, u64), 16>,
     pub is_partial: bool,
+}
+
+impl TakerCrosses {
+    /// Returns True if there were not crosses found
+    pub fn is_empty(&self) -> bool {
+        self.orders.is_empty()
+    }
 }
 
 #[cfg(test)]
