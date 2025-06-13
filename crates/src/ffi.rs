@@ -14,7 +14,7 @@ use crate::{
         errors::ErrorCode,
         types::{self, ContractType, MarginRequirementType, OracleSource},
     },
-    types::{accounts::HighLeverageModeConfig, SdkError},
+    types::{accounts::HighLeverageModeConfig, ProtectedMakerParams, SdkError},
     SdkResult,
 };
 
@@ -53,6 +53,16 @@ extern "C" {
     pub fn order_is_limit_order(order: &types::Order) -> bool;
     #[allow(improper_ctypes)]
     pub fn order_is_resting_limit_order(order: &types::Order, slot: Slot) -> FfiResult<bool>;
+    #[allow(improper_ctypes)]
+    pub fn order_get_limit_price(
+        order: &types::Order,
+        valid_oracle_price: Option<i64>,
+        fallback_price: Option<u64>,
+        slot: u64,
+        tick_size: u64,
+        is_prediction_market: bool,
+        pmm_params: Option<ProtectedMakerParams>,
+    ) -> FfiResult<Option<u64>>;
 
     #[allow(improper_ctypes)]
     pub fn perp_market_get_margin_ratio(
@@ -63,6 +73,10 @@ extern "C" {
     ) -> FfiResult<u32>;
     #[allow(improper_ctypes)]
     pub fn perp_market_get_open_interest(market: &accounts::PerpMarket) -> u128;
+    #[allow(improper_ctypes)]
+    pub fn perp_market_get_protected_maker_params(
+        market: &accounts::PerpMarket,
+    ) -> ProtectedMakerParams;
 
     #[allow(improper_ctypes)]
     pub fn perp_position_get_unrealized_pnl(
@@ -329,6 +343,27 @@ impl types::Order {
     pub fn is_resting_limit_order(&self, slot: Slot) -> SdkResult<bool> {
         to_sdk_result(unsafe { order_is_resting_limit_order(self, slot) })
     }
+    pub fn get_limit_price(
+        &self,
+        valid_oracle_price: Option<i64>,
+        fallback_price: Option<u64>,
+        slot: u64,
+        tick_size: u64,
+        is_prediction_market: bool,
+        pmm_params: Option<ProtectedMakerParams>,
+    ) -> SdkResult<Option<u64>> {
+        to_sdk_result(unsafe {
+            order_get_limit_price(
+                self,
+                valid_oracle_price,
+                fallback_price,
+                slot,
+                tick_size,
+                is_prediction_market,
+                pmm_params,
+            )
+        })
+    }
 }
 
 impl accounts::SpotMarket {
@@ -366,6 +401,9 @@ impl accounts::PerpMarket {
     }
     pub fn get_open_interest(&self) -> u128 {
         unsafe { perp_market_get_open_interest(self) }
+    }
+    pub fn get_protected_maker_params(&self) -> ProtectedMakerParams {
+        unsafe { perp_market_get_protected_maker_params(self) }
     }
 }
 
@@ -504,8 +542,9 @@ mod tests {
         },
         math::constants::{
             BASE_PRECISION, BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, MARGIN_PRECISION,
-            PRICE_PRECISION_I64, QUOTE_PRECISION, QUOTE_PRECISION_I64, SPOT_BALANCE_PRECISION,
-            SPOT_BALANCE_PRECISION_U64, SPOT_CUMULATIVE_INTEREST_PRECISION, SPOT_WEIGHT_PRECISION,
+            PRICE_PRECISION_I64, PRICE_PRECISION_U64, QUOTE_PRECISION, QUOTE_PRECISION_I64,
+            SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64, SPOT_CUMULATIVE_INTEREST_PRECISION,
+            SPOT_WEIGHT_PRECISION,
         },
         types::{accounts::HighLeverageModeConfig, MarketType},
         utils::test_utils::{get_account_bytes, get_pyth_price},
@@ -1082,5 +1121,91 @@ mod tests {
             false,
         );
         assert!(price.is_ok_and(|p| p > 0));
+    }
+
+    #[test]
+    fn ffi_order_get_limit_price() {
+        let tick_size = 1_000;
+        let oracle_price = Some(100 * PRICE_PRECISION_I64);
+        let fallback_price = Some(95 * PRICE_PRECISION_U64);
+        let slot = 100;
+
+        // Test cases
+        let cases = [
+            // Case 1: Basic limit order with price
+            (
+                Order {
+                    price: 95 * PRICE_PRECISION_U64,
+                    order_type: OrderType::Limit,
+                    direction: PositionDirection::Long,
+                    ..Default::default()
+                },
+                "Basic limit order",
+            ),
+            // Case 2: Order with auction parameters
+            (
+                Order {
+                    slot: 90,
+                    auction_duration: 20,
+                    auction_start_price: 90 * PRICE_PRECISION_I64,
+                    auction_end_price: 100 * PRICE_PRECISION_I64,
+                    order_type: OrderType::Limit,
+                    direction: PositionDirection::Long,
+                    ..Default::default()
+                },
+                "Order with auction parameters",
+            ),
+            // Case 3: Order with oracle price offset
+            (
+                Order {
+                    oracle_price_offset: 5 * PRICE_PRECISION_I64 as i32,
+                    order_type: OrderType::Limit,
+                    direction: PositionDirection::Long,
+                    ..Default::default()
+                },
+                "Order with oracle price offset",
+            ),
+            // Case 4: Order with zero price and fallback
+            (
+                Order {
+                    price: 0,
+                    order_type: OrderType::Limit,
+                    direction: PositionDirection::Long,
+                    ..Default::default()
+                },
+                "Order with zero price and fallback",
+            ),
+        ];
+
+        for (order, case_name) in cases {
+            let result = order
+                .get_limit_price(oracle_price, fallback_price, slot, tick_size, false, None)
+                .unwrap();
+            assert!(result.is_some(), "{} should return a price", case_name);
+            let price = result.unwrap();
+            assert!(price > 0, "{} should return a positive price", case_name);
+        }
+    }
+
+    #[test]
+    fn ffi_perp_market_get_protected_maker_params() {
+        let perp_market = PerpMarket {
+            protected_maker_limit_price_divisor: 100,
+            protected_maker_dynamic_divisor: 2,
+            amm: AMM {
+                oracle_std: 10_000,
+                mark_std: 5_000,
+                order_tick_size: 1_000,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let params = perp_market.get_protected_maker_params();
+
+        // Verify the structure matches what we expect
+        assert_eq!(params.limit_price_divisor, 100);
+        assert_eq!(params.dynamic_offset, 5_000); // max(10_000, 5_000) / 2
+        assert_eq!(params.tick_size, 1_000);
     }
 }

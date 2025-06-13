@@ -9,7 +9,7 @@ use solana_sdk::{
     instruction::Instruction, pubkey::Pubkey, signature::Keypair,
 };
 
-use crate::types::{SdkError, SdkResult};
+use crate::types::{accounts::User, SdkError, SdkResult};
 
 // kudos @wphan
 /// Try to parse secret `key` string
@@ -133,6 +133,10 @@ pub fn zero_account_to_bytes<T: bytemuck::Pod + anchor_lang::Discriminator>(acco
     account_data[0..8].copy_from_slice(T::DISCRIMINATOR);
     account_data[8..].copy_from_slice(bytemuck::bytes_of(&account));
     account_data
+}
+
+pub fn deser_user(data: &[u8]) -> &User {
+    bytemuck::from_bytes::<User>(&data[8..])
 }
 
 pub mod test_envs {

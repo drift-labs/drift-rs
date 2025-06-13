@@ -902,6 +902,10 @@ impl DriftClient {
     pub fn backend(&self) -> &'static DriftClientBackend {
         self.backend
     }
+
+    pub fn account_map(&self) -> &AccountMap {
+        &self.backend.account_map
+    }
 }
 
 /// Provides the heavy-lifting and network facing features of the SDK

@@ -2,35 +2,74 @@
 //!
 //! The `TODO:` comments should be altered depending on individual maker strategy
 //!
-use std::{
-    sync::{atomic::AtomicU64, Arc},
-    time::Duration,
-};
+use std::time::Duration;
 
 use anchor_lang::prelude::*;
 use drift_rs::{
-    dlob::{util::OrderDelta, TakerOrder, DLOB},
+    constants::PROGRAM_ID,
+    dlob::{util::OrderDelta, DLOBEvent, TakerOrder, DLOB},
+    ffi::calculate_auction_price,
     grpc::grpc_subscriber::AccountFilter,
     swift_order_subscriber::SignedOrderInfo,
     types::{
-        accounts::User, MarketId, MarketType, OrderParams, OrderType, PositionDirection,
-        PostOnlyParam,
+        accounts::User, MarketId, MarketType, Order, OrderParams, OrderStatus, OrderType,
+        PositionDirection, PostOnlyParam,
     },
     DriftClient, GrpcSubscribeOpts, Pubkey, RpcClient, Wallet,
 };
 use futures_util::StreamExt;
+use solana_account_decoder_client_types::UiAccountEncoding;
+use solana_rpc_client_api::config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
 use solana_sdk::signature::Keypair;
 
-async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) {
-    let latest_slot = Arc::new(AtomicU64::default());
+async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) -> tokio::sync::mpsc::Receiver<u64> {
+    // TODO: IncrementalDLOBBuilder
+    let dlob_notifier = dlob.spawn_notifier();
 
-    /// Sync all User accounts with `filter` e.g. non-idle,has-auctions
-    let accounts = self.rpc.get_program_accounts_with_config(&PROGRAM_ID, RpcProgramAccountsConfig {
-        filters: Some(vec![
-            drift_rs::memcmp::get_user_with_order_filter(),
-        ]),
-        ..Default::default()
-    });
+    // Sync all User accounts with `filter` e.g. non-idle,has-auctions
+    let sync_result = drift
+        .rpc()
+        .get_program_accounts_with_config(
+            &PROGRAM_ID,
+            RpcProgramAccountsConfig {
+                filters: Some(vec![drift_rs::memcmp::get_user_with_order_filter()]),
+                account_config: RpcAccountInfoConfig {
+                    encoding: Some(UiAccountEncoding::Base64Zstd),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .await;
+
+    // synced accounts
+    match sync_result {
+        Ok(accounts) => {
+            for (pubkey, account) in accounts {
+                let user: &User = drift_rs::utils::deser_user(&account.data);
+                for order in user.orders {
+                    if order.status == OrderStatus::Open
+                        && order.base_asset_amount > order.base_asset_amount_filled
+                    {
+                        dlob_notifier.send(DLOBEvent::Order {
+                            delta: OrderDelta::Create {
+                                user: pubkey,
+                                order,
+                            },
+                            slot: 0, // initial sync value
+                        });
+                    }
+                }
+            }
+        }
+        Err(err) => {
+            log::error!(target: "dlob", "dlob sync error: {err:?}");
+        }
+    }
+
+    log::info!(target: "dlob", "synced initial orders");
+
+    let (slot_tx, mut slot_rx) = tokio::sync::mpsc::channel(64);
 
     let res = drift
         .grpc_subscribe(
@@ -39,60 +78,68 @@ async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) {
             GrpcSubscribeOpts::default()
                 .usermap_on()
                 .on_slot({
+                    let dlob = dlob_notifier.clone();
                     let drift = drift.clone();
-                    let latest_slot = Arc::clone(&latest_slot);
 
                     move |new_slot| {
-                        latest_slot.store(new_slot, std::sync::atomic::Ordering::Relaxed);
-
                         // TODO: only updating SOL-PERP
                         if let Some(oracle_price) =
                             drift.try_get_oracle_price_data_and_slot(MarketId::perp(0))
                         {
-                            dlob.update_slot_and_oracle_price(
-                                0,
-                                MarketType::Perp,
-                                new_slot,
-                                oracle_price.data.price as u64,
-                            );
+                            dlob.send(DLOBEvent::SlotOrPriceUpdate {
+                                slot: new_slot,
+                                market_index: 0,
+                                market_type: MarketType::Perp,
+                                oracle_price: oracle_price.data.price as u64,
+                            });
                         }
+                        slot_tx.try_send(new_slot);
                     }
                 })
                 .on_account(
                     AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
                     {
+                        let dlob = dlob_notifier.clone();
                         let drift = drift.clone();
-                        let latest_slot = Arc::clone(&latest_slot);
 
-                        move |account| {
-                            let new_user = User::try_deserialize_unchecked(
-                                &mut account.data.to_vec().as_slice(),
-                            )
-                            .expect("deser user");
-                            match drift.try_get_account::<User>(&account.pubkey) {
-                                Ok(old_user) => {
-                                    for order_delta in drift_rs::dlob::util::compare_user_orders(
-                                        account.pubkey,
-                                        &old_user,
-                                        &new_user,
-                                    ) {
-                                        match order_delta {
-                                            OrderDelta::Create { user, order } => {
-                                                dlob.insert_order(&user, order);
-                                            }
-                                            OrderDelta::Update { user, order } => {
-                                                dlob.update_order(&user, order);
-                                            }
-                                            OrderDelta::Remove { user, order } => {
-                                                dlob.remove_order(&user, order);
-                                            }
+                        move |update| {
+                            let new_user = drift_rs::utils::deser_user(update.data);
+                            match drift
+                                .account_map()
+                                .account_data_and_slot::<User>(&update.pubkey)
+                            {
+                                Some(stored) => {
+                                    if stored.slot < update.slot {
+                                        let user_order_deltas =
+                                            drift_rs::dlob::util::compare_user_orders(
+                                                update.pubkey,
+                                                &stored.data,
+                                                &new_user,
+                                            );
+                                        for delta in user_order_deltas {
+                                            dlob.send(DLOBEvent::Order {
+                                                delta,
+                                                slot: update.slot,
+                                            });
                                         }
                                     }
+                                    // TODO: insert new user data here, right now we rely on grpc_subscriber to populate account map elsewhere
                                 }
-                                Err(_err) => {
+                                None => {
                                     // assume clean dlob build and insert
                                     for order in new_user.orders {
-                                        dlob.insert_order(&account.pubkey, order);
+                                        if order.status == OrderStatus::Open
+                                            && order.base_asset_amount
+                                                > order.base_asset_amount_filled
+                                        {
+                                            dlob_notifier.send(DLOBEvent::Order {
+                                                delta: OrderDelta::Create {
+                                                    user: update.pubkey,
+                                                    order,
+                                                },
+                                                slot: update.slot,
+                                            });
+                                        }
                                     }
                                 }
                             }
@@ -105,11 +152,13 @@ async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) {
 
     // dlob printer
     std::thread::spawn(|| loop {
-        let l2_book = dlob.get_l3_snapshot(0, MarketType::Perp);
+        let l2_book = dlob.get_l2_snapshot(0, MarketType::Perp);
         dbg!(&l2_book);
         drop(l2_book);
         std::thread::sleep(Duration::from_secs(1));
     });
+
+    slot_rx
 }
 
 #[tokio::main]
@@ -136,7 +185,7 @@ async fn main() {
         .expect("initialized client");
 
     let dlob: &'static DLOB = Box::leak(Box::new(DLOB::default()));
-    setup_grpc(drift.clone(), dlob).await;
+    let mut slot_rx = setup_grpc(drift.clone(), dlob).await;
 
     let _ = drift
         .subscribe_blockhashes()
@@ -161,6 +210,24 @@ async fn main() {
         .expect("subscribed swift orders");
 
     // watch orders
+    // select on:
+    // - pyth price update
+    // - slot update
+    // - new swift order
+
+    /*
+    assuming a placer bot is running
+    - we try to fill with resting immediately, if that fails then we should be checking for crosses with jit bot + DLOB
+     */
+
+    // TODO:
+    // - build cross ixs/txs
+    // - handle retrying txs / rate-limits
+    //
+    // - recheck pending auctions on new slot
+    // - recheck pending auctions on oracle price update (slot)
+    // - recheck pending auctions on oracle price update (intrslot) :ooooo:
+    let mut slot = 0;
     loop {
         tokio::select! {
             biased;
@@ -171,15 +238,71 @@ async fn main() {
             swift_order = swift_order_stream.next() => {
                 match swift_order {
                     Some(order) => {
-                        // let _handle = tokio::spawn(try_fill(drift.clone(), filler_subaccount, order));
-                        // let res = dlob.find_crosses_for_taker_order(slot, oracle_price, TakerOrder::from_order_params(order.order_params(), current_price));
-                        // dbg!("crosses", res);
+                        let order_params = order.order_params();
+                        let tick_size = drift.program_data().perp_market_config_by_index(order_params.market_index).unwrap().amm.order_tick_size;
+                        // TODO: run on intraslot oracle price updates
+                        let oracle_price = drift.try_get_oracle_price_data_and_slot(MarketId::perp(order_params.market_index)).expect("got oracle price").data.price;
+
+                        let order = Order {
+                            slot,
+                            price: order_params.price,
+                            base_asset_amount: order_params.base_asset_amount,
+                            trigger_price: order_params.trigger_price.unwrap_or_default(),
+                            auction_duration: order_params.auction_duration.unwrap_or_default(),
+                            auction_start_price: order_params.auction_start_price.unwrap_or_default(),
+                            auction_end_price: order_params.auction_end_price.unwrap_or_default(),
+                            max_ts: order_params.max_ts.unwrap_or_default(),
+                            oracle_price_offset: order_params.oracle_price_offset.unwrap_or_default(),
+                            market_index: order_params.market_index,
+                            order_type: order_params.order_type,
+                            market_type: order_params.market_type,
+                            user_order_id: order_params.user_order_id,
+                            direction: order_params.direction,
+                            reduce_only: order_params.reduce_only,
+                            post_only: order_params.post_only != PostOnlyParam::None,
+                            immediate_or_cancel: order_params.immediate_or_cancel(),
+                            trigger_condition: order_params.trigger_condition,
+                            bit_flags: order_params.bit_flags,
+                            ..Default::default()
+                        };
+
+                        let price = match order_params.order_type {
+                            OrderType::Market | OrderType::Oracle => {
+                                match calculate_auction_price(&order, slot, tick_size, Some(oracle_price), false) {
+                                    Ok(p) => p,
+                                    Err(err) => {
+                                        log::warn!(target: "dlob", "could not get auction price {err:?}, params: {order_params:?}, skipping...");
+                                        continue;
+                                    }
+                                }
+                            }
+                            OrderType::Limit => {
+                                // assuming PMM is not a taker
+                                match order.get_limit_price(Some(oracle_price), Some(oracle_price as u64), slot, tick_size, false, None) {
+                                    Ok(Some(p)) => p,
+                                    _ => {
+                                        log::warn!(target: "dlob", "could not get limit price: {order_params:?}, skipping...");
+                                        continue;
+                                    },
+                                }
+                            }
+                            _ => {
+                                log::warn!("invalid swift order type");
+                                unreachable!();
+                            }
+                        };
+                        let taker_order = TakerOrder::from_order_params(order_params, price);
+                        let crosses = dlob.find_crosses_for_taker_order(slot, oracle_price as u64, taker_order);
+                        log::info!(target: "dlob", "found crosses: {crosses:?}");
                     }
                     None => {
                         println!("swift order stream finished");
                         break;
                     }
                 }
+            }
+            new_slot = slot_rx.recv() => {
+                slot = new_slot.expect("got slot update");
             }
         }
     }

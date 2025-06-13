@@ -6148,6 +6148,9 @@ dependencies = [
  "drift-rs",
  "env_logger 0.11.8",
  "futures-util",
+ "log",
+ "solana-account-decoder-client-types",
+ "solana-rpc-client-api",
  "solana-sdk",
  "tokio",
 ]

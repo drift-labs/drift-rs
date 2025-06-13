@@ -166,7 +166,7 @@ impl GlobalUserMap {
                 let pubkey = account.pubkey;
                 let user_data = account.account.data.decode().expect("User data");
                 let data = User::try_deserialize_unchecked(&mut user_data.as_slice())
-                    .expect("User desrializes");
+                    .expect("User deserializes");
                 self.usermap.insert(pubkey, data);
             }
 
