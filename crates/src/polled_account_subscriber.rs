@@ -7,20 +7,7 @@ use solana_rpc_client_api::config::RpcAccountInfoConfig;
 use solana_sdk::pubkey::Pubkey;
 use tokio::sync::oneshot;
 
-use crate::UnsubHandle;
-
-#[derive(Clone, Debug)]
-pub struct AccountUpdate {
-    /// Address of the account
-    pub pubkey: Pubkey,
-    /// Owner of the account
-    pub owner: Pubkey,
-    pub lamports: u64,
-    /// Serialized account data (e.g. Anchor/Borsh)
-    pub data: Vec<u8>,
-    /// Slot retrieved
-    pub slot: u64,
-}
+use crate::{AccountUpdate, UnsubHandle};
 
 /// Subscribes to account updates at regular polled intervals
 pub struct PolledAccountSubscriber {

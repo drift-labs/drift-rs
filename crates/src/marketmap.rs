@@ -29,7 +29,7 @@ use crate::{
     drift_idl::types::OracleSource,
     grpc::AccountUpdate,
     memcmp::get_market_filter,
-    types::MapOf,
+    types::{MapOf, OnAccountFn},
     websocket_account_subscriber::WebsocketAccountSubscriber,
     DataAndSlot, MarketId, MarketType, PerpMarket, SdkResult, SpotMarket, UnsubHandle,
 };
@@ -124,7 +124,11 @@ where
     }
 
     /// Subscribe to market account updates
-    pub async fn subscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
+    pub async fn subscribe(
+        &self,
+        markets: &[MarketId],
+        on_account: Option<Arc<Box<OnAccountFn>>>,
+    ) -> SdkResult<()> {
         log::debug!(target: LOG_TARGET, "subscribing: {:?}", T::MARKET_TYPE);
 
         let markets = HashSet::<MarketId>::from_iter(markets.iter().copied());
@@ -151,6 +155,7 @@ where
         let futs_iter = pending_subscriptions.into_iter().map(|(idx, fut)| {
             let marketmap = Arc::clone(&self.marketmap);
             let latest_slot = self.latest_slot.clone();
+            let on_account = on_account.clone();
             async move {
                 let unsub = fut
                     .subscribe(Self::SUBSCRIPTION_ID, false, {
@@ -166,6 +171,9 @@ where
                                         .expect("valid market"),
                                 },
                             );
+                            if let Some(on_account) = &on_account {
+                                on_account(&update);
+                            }
                         }
                     })
                     .await;
@@ -402,7 +410,10 @@ mod tests {
         );
 
         assert!(map
-            .subscribe(&[MarketId::perp(0), MarketId::perp(1), MarketId::perp(1)])
+            .subscribe(
+                &[MarketId::perp(0), MarketId::perp(1), MarketId::perp(1)],
+                None
+            )
             .await
             .is_ok());
         assert!(map.is_subscribed(0));

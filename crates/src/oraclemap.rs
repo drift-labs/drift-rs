@@ -19,9 +19,9 @@ use solana_sdk::{
 use crate::{
     drift_idl::types::OracleSource,
     ffi::{get_oracle_price, OraclePriceData},
-    grpc::AccountUpdate,
-    types::MapOf,
-    websocket_account_subscriber::{AccountUpdate as WsAccountUpdate, WebsocketAccountSubscriber},
+    grpc::AccountUpdate as GrpcAccountUpdate,
+    types::{AccountUpdate, MapOf, OnAccountFn},
+    websocket_account_subscriber::WebsocketAccountSubscriber,
     MarketId, SdkError, SdkResult, UnsubHandle,
 };
 
@@ -128,7 +128,11 @@ impl OracleMap {
     /// Panics
     ///
     /// If the `market` oracle pubkey is not loaded
-    pub async fn subscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
+    pub async fn subscribe(
+        &self,
+        markets: &[MarketId],
+        on_account: Option<Arc<Box<OnAccountFn>>>,
+    ) -> SdkResult<()> {
         let markets = HashSet::from_iter(markets);
         log::debug!(target: LOG_TARGET, "subscribe market oracles: {markets:?}");
 
@@ -166,7 +170,7 @@ impl OracleMap {
                 .expect("oracle exists")
                 .clone();
             let oracle_shared_mode_ref = oracle_shared_mode.clone();
-
+            let on_account = on_account.clone();
             async move {
                 let unsub = sub_fut
                     .subscribe(Self::SUBSCRIPTION_ID, true, move |update| {
@@ -179,6 +183,9 @@ impl OracleMap {
                                     update_handler(update, *source, &oraclemap);
                                 }
                             }
+                        }
+                        if let Some(on_account) = &on_account {
+                            on_account(&update);
                         }
                     })
                     .await;
@@ -347,11 +354,11 @@ impl OracleMap {
     }
 
     /// Returns a hook for driving the map with new `Account` updates
-    pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
+    pub(crate) fn on_account_fn(&self) -> impl Fn(&GrpcAccountUpdate) {
         let oraclemap = self.map();
         let oracle_lookup = self.shared_oracles.clone();
 
-        move |update: &AccountUpdate| match oracle_lookup.get(&update.pubkey).unwrap() {
+        move |update: &GrpcAccountUpdate| match oracle_lookup.get(&update.pubkey).unwrap() {
             OracleShareMode::Normal { source } => {
                 update_handler_grpc(update, *source, &oraclemap);
             }
@@ -367,7 +374,7 @@ impl OracleMap {
 /// Handler fn for new oracle account data
 #[inline]
 fn update_handler_grpc(
-    update: &AccountUpdate,
+    update: &GrpcAccountUpdate,
     oracle_source: OracleSource,
     oracle_map: &DashMap<(Pubkey, u8), Oracle, ahash::RandomState>,
 ) {
@@ -411,7 +418,7 @@ fn update_handler_grpc(
 
 /// Handler fn for new oracle account data
 fn update_handler(
-    update: &WsAccountUpdate,
+    update: &AccountUpdate,
     oracle_source: OracleSource,
     oracle_map: &DashMap<(Pubkey, u8), Oracle, ahash::RandomState>,
 ) {
@@ -423,7 +430,7 @@ fn update_handler(
             oracle_pubkey,
             Account {
                 owner: update.owner,
-                data: update.data.clone(),
+                data: update.data.clone().to_vec(),
                 lamports,
                 ..Default::default()
             },
@@ -436,14 +443,14 @@ fn update_handler(
                 .and_modify(|o| {
                     o.data = price_data;
                     o.slot = update.slot;
-                    o.raw.clone_from(&update.data);
+                    o.raw = update.data.to_vec();
                 })
                 .or_insert(Oracle {
                     pubkey: oracle_pubkey,
                     source: oracle_source,
                     data: price_data,
                     slot: update.slot,
-                    raw: update.data.clone(),
+                    raw: update.data.to_vec(),
                 });
         }
         Err(err) => {
@@ -608,7 +615,7 @@ mod tests {
         let map = OracleMap::new(pubsub, &all_oracles, CommitmentConfig::confirmed());
 
         let markets = [MarketId::perp(0), MarketId::spot(32), MarketId::perp(4)];
-        map.subscribe(&markets).await.expect("subd");
+        map.subscribe(&markets, None).await.expect("subd");
         assert_eq!(map.len(), 3);
         assert!(map.is_subscribed(&MarketId::spot(32)));
         assert!(map.is_subscribed(&MarketId::perp(4)));
@@ -646,10 +653,10 @@ mod tests {
             MarketId::perp(1),
             MarketId::spot(1),
         ];
-        map.subscribe(&markets).await.expect("subd");
+        map.subscribe(&markets, None).await.expect("subd");
         assert_eq!(map.len(), 2);
         let markets = [MarketId::perp(0), MarketId::spot(1)];
-        map.subscribe(&markets).await.expect("subd");
+        map.subscribe(&markets, None).await.expect("subd");
         assert_eq!(map.len(), 2);
 
         assert!(map.is_subscribed(&MarketId::perp(0)));
@@ -683,7 +690,7 @@ mod tests {
             &all_oracles,
             CommitmentConfig::confirmed(),
         );
-        map.subscribe(&[MarketId::spot(0), MarketId::perp(1)])
+        map.subscribe(&[MarketId::spot(0), MarketId::perp(1)], None)
             .await
             .expect("subd");
         assert!(map.unsubscribe_all().is_ok());
