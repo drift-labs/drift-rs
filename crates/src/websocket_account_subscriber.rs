@@ -9,24 +9,9 @@ use solana_rpc_client_api::config::RpcAccountInfoConfig;
 use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use tokio::sync::oneshot;
 
-use crate::{utils::get_http_url, SdkError, SdkResult, UnsubHandle};
+use crate::{utils::get_http_url, AccountUpdate, SdkError, SdkResult, UnsubHandle};
 
 const LOG_TARGET: &str = "wsaccsub";
-
-#[derive(Clone, Debug)]
-pub struct AccountUpdate {
-    /// Address of the account
-    pub pubkey: Pubkey,
-    /// Owner of the account
-    pub owner: Pubkey,
-    pub lamports: u64,
-    /// Serialized account data (e.g. Anchor/Borsh)
-    pub data: Vec<u8>,
-    /// Slot retrieved
-    pub slot: u64,
-}
-
-pub type OnAccountFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
 
 #[derive(Clone)]
 pub struct WebsocketAccountSubscriber {

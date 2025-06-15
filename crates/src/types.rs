@@ -689,3 +689,18 @@ mod tests {
         )
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct AccountUpdate {
+    /// Address of the account
+    pub pubkey: Pubkey,
+    /// Owner of the account
+    pub owner: Pubkey,
+    pub lamports: u64,
+    /// Serialized account data (e.g. Anchor/Borsh)
+    pub data: Vec<u8>,
+    /// Slot retrieved
+    pub slot: u64,
+}
+
+pub type OnAccountFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;

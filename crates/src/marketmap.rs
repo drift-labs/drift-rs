@@ -29,8 +29,8 @@ use crate::{
     drift_idl::types::OracleSource,
     grpc::AccountUpdate,
     memcmp::get_market_filter,
-    types::MapOf,
-    websocket_account_subscriber::{OnAccountFn as WsOnAccountFn, WebsocketAccountSubscriber},
+    types::{MapOf, OnAccountFn},
+    websocket_account_subscriber::WebsocketAccountSubscriber,
     DataAndSlot, MarketId, MarketType, PerpMarket, SdkResult, SpotMarket, UnsubHandle,
 };
 
@@ -127,7 +127,7 @@ where
     pub async fn subscribe(
         &self,
         markets: &[MarketId],
-        on_account: Option<Arc<Box<WsOnAccountFn>>>,
+        on_account: Option<Arc<Box<OnAccountFn>>>,
     ) -> SdkResult<()> {
         log::debug!(target: LOG_TARGET, "subscribing: {:?}", T::MARKET_TYPE);
 
@@ -160,9 +160,6 @@ where
                 let unsub = fut
                     .subscribe(Self::SUBSCRIPTION_ID, false, {
                         move |update| {
-                            if let Some(on_account) = &on_account {
-                                on_account(&update);
-                            }
                             if update.slot > latest_slot.load(Ordering::Relaxed) {
                                 latest_slot.store(update.slot, Ordering::Relaxed);
                             }
@@ -174,6 +171,9 @@ where
                                         .expect("valid market"),
                                 },
                             );
+                            if let Some(on_account) = &on_account {
+                                on_account(&update);
+                            }
                         }
                     })
                     .await;

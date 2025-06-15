@@ -18,18 +18,20 @@ use yellowstone_grpc_proto::{
         subscribe_request_filter_accounts_filter_memcmp::Data as AccountsFilterMemcmpOneof,
         subscribe_update::UpdateOneof, SubscribeRequest, SubscribeRequestFilterAccounts,
         SubscribeRequestFilterAccountsFilter, SubscribeRequestFilterAccountsFilterMemcmp,
-        SubscribeRequestFilterSlots, SubscribeRequestPing,
+        SubscribeRequestFilterSlots, SubscribeRequestFilterTransactions, SubscribeRequestPing,
     },
     tonic::{transport::Certificate, Status},
 };
 
 use crate::types::UnsubHandle;
 
-use super::{AccountUpdate, OnAccountFn};
+use super::{AccountUpdate, OnAccountFn, OnTransactionFn, TransactionUpdate};
 
 type SlotsFilterMap = HashMap<String, SubscribeRequestFilterSlots>;
 type AccountFilterMap = HashMap<String, SubscribeRequestFilterAccounts>;
+type TransactionFilterMap = HashMap<String, SubscribeRequestFilterTransactions>;
 type Hooks = Vec<(AccountFilter, Box<OnAccountFn>)>;
+type TransactionHooks = Vec<Box<OnTransactionFn>>;
 
 /// Provides filter criteria for accounts over gRPC
 ///
@@ -185,6 +187,12 @@ pub struct GeyserSubscribeOpts {
     pub ping: Option<i32>,
     /// Enable interslot updates
     pub interslot_updates: Option<bool>,
+    /// Transaction filters: Filter txs that use any of these accounts
+    pub transactions_accounts_include: Vec<String>,
+    /// Transaction filters: Filter out txs that use any of these accounts
+    pub transactions_accounts_exclude: Vec<String>,
+    /// Transaction filters: Txs must include all of these accounts
+    pub transactions_accounts_required: Vec<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -205,6 +213,7 @@ pub struct DriftGrpcClient {
     grpc_opts: Option<GrpcConnectionOpts>,
     on_account_hooks: Hooks,
     on_slot: Box<dyn Fn(Slot) + Send + Sync + 'static>,
+    on_transaction_hooks: TransactionHooks,
 }
 
 impl DriftGrpcClient {
@@ -216,6 +225,7 @@ impl DriftGrpcClient {
             endpoint,
             x_token,
             on_account_hooks: Default::default(),
+            on_transaction_hooks: Default::default(),
             grpc_opts: None,
             on_slot: Box::new(move |_slot| {}),
         }
@@ -248,6 +258,18 @@ impl DriftGrpcClient {
         on_account: T,
     ) {
         self.on_account_hooks.push((filter, Box::new(on_account)));
+    }
+
+    /// Add a callback on transaction updates matching `filter`
+    ///
+    /// This may be called many times to define multiple callbacks
+    ///
+    /// * `on_transaction` - fn to receive callback on accounts
+    pub fn on_transaction<T: Fn(&TransactionUpdate) + Send + Sync + 'static>(
+        &mut self,
+        on_transaction: T,
+    ) {
+        self.on_transaction_hooks.push(Box::new(on_transaction));
     }
 
     /// Start subscription for geyser updates
@@ -287,6 +309,7 @@ impl DriftGrpcClient {
                 grpc_client,
                 request,
                 self.on_account_hooks,
+                self.on_transaction_hooks,
                 self.on_slot,
             ));
             let mut waiter = FuturesUnordered::new();
@@ -321,6 +344,7 @@ impl DriftGrpcClient {
         mut client: GeyserGrpcClient<impl Interceptor>,
         request: SubscribeRequest,
         on_account: Hooks,
+        on_transaction: TransactionHooks,
         on_slot: impl Fn(Slot),
     ) -> Option<GrpcError> {
         let max_retries = 3;
@@ -379,6 +403,38 @@ impl DriftGrpcClient {
                                     if filter.matches(&pubkey, account) {
                                         hook(&update);
                                     }
+                                }
+                            }
+                            Some(UpdateOneof::Transaction(tx_update)) => {
+                                let tx = match tx_update.transaction {
+                                    Some(ref tx) => tx,
+                                    None => {
+                                        warn!(target: "grpc", "empty transaction update: {tx_update:?}");
+                                        continue;
+                                    }
+                                };
+                                let transaction = match tx.transaction {
+                                    Some(ref tx) => tx,
+                                    None => {
+                                        warn!(target: "grpc", "empty transaction update: {tx_update:?}");
+                                        continue;
+                                    }
+                                };
+                                let meta = match tx.meta {
+                                    Some(ref meta) => meta,
+                                    None => {
+                                        warn!(target: "grpc", "empty transaction meta: {tx_update:?}");
+                                        continue;
+                                    }
+                                };
+                                for hook in &on_transaction {
+                                    let update = TransactionUpdate {
+                                        slot: tx_update.slot,
+                                        is_vote: tx.is_vote,
+                                        transaction: transaction.clone(),
+                                        meta: meta.clone(),
+                                    };
+                                    hook(&update);
                                 }
                             }
                             Some(UpdateOneof::Slot(msg)) => {
@@ -459,15 +515,17 @@ impl GeyserSubscribeOpts {
             });
         }
 
-        accounts.insert(
-            "client".to_owned(),
-            SubscribeRequestFilterAccounts {
-                account: self.accounts_pubkeys.clone(),
-                owner: self.accounts_owners.clone(),
-                filters,
-                ..Default::default()
-            },
-        );
+        if !self.accounts_pubkeys.is_empty() || !self.accounts_owners.is_empty() {
+            accounts.insert(
+                "client".to_owned(),
+                SubscribeRequestFilterAccounts {
+                    account: self.accounts_pubkeys.clone(),
+                    owner: self.accounts_owners.clone(),
+                    filters,
+                    ..Default::default()
+                },
+            );
+        }
 
         let mut slots = SlotsFilterMap::default();
         slots.insert(
@@ -478,11 +536,30 @@ impl GeyserSubscribeOpts {
             },
         );
 
+        let mut transactions = TransactionFilterMap::default();
+        if !self.transactions_accounts_include.is_empty()
+            || !self.transactions_accounts_exclude.is_empty()
+            || !self.transactions_accounts_required.is_empty()
+        {
+            transactions.insert(
+                "client".to_owned(),
+                SubscribeRequestFilterTransactions {
+                    vote: Some(false),
+                    failed: Some(false),
+                    account_include: self.transactions_accounts_include.clone(),
+                    account_exclude: self.transactions_accounts_exclude.clone(),
+                    account_required: self.transactions_accounts_required.clone(),
+                    ..Default::default()
+                },
+            );
+        }
+
         let ping = self.ping.map(|id| SubscribeRequestPing { id });
 
         SubscribeRequest {
             slots,
             accounts,
+            transactions,
             commitment: Some(match commitment {
                 CommitmentLevel::Confirmed => GeyserCommitmentLevel::Confirmed,
                 CommitmentLevel::Processed => GeyserCommitmentLevel::Processed,
