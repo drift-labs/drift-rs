@@ -13,7 +13,8 @@ use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubke
 
 use crate::{
     grpc::AccountUpdate, polled_account_subscriber::PolledAccountSubscriber, types::DataAndSlot,
-    websocket_account_subscriber::WebsocketAccountSubscriber, SdkResult, UnsubHandle,
+    websocket_account_subscriber::WebsocketAccountSubscriber, SdkResult,
+    UnsubHandle,
 };
 
 const LOG_TARGET: &str = "accountmap";
@@ -54,17 +55,29 @@ impl AccountMap {
     /// * `account` pubkey to subscribe
     ///
     pub async fn subscribe_account(&self, account: &Pubkey) -> SdkResult<()> {
+        self.subscribe_account_with_callback(account, None::<fn(&crate::AccountUpdate)>).await
+    }
+
+    pub async fn subscribe_account_with_callback<F>(
+        &self,
+        account: &Pubkey,
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         if self.inner.contains_key(account) {
             return Ok(());
         }
         debug!(target: LOG_TARGET, "subscribing: {account:?}");
 
         let user = AccountSub::new(Arc::clone(&self.pubsub), self.commitment, *account);
-        let sub = user.subscribe(Arc::clone(&self.inner)).await?;
+        let sub = user.subscribe(Arc::clone(&self.inner), on_account).await?;
         self.subscriptions.insert(*account, sub);
 
         Ok(())
     }
+
     /// Subscribe account with RPC polling
     ///
     /// * `account` pubkey to subscribe
@@ -75,17 +88,31 @@ impl AccountMap {
         account: &Pubkey,
         interval: Option<Duration>,
     ) -> SdkResult<()> {
+        self.subscribe_account_polled_with_callback(account, interval, None::<fn(&crate::AccountUpdate)>)
+            .await
+    }
+
+    pub async fn subscribe_account_polled_with_callback<F>(
+        &self,
+        account: &Pubkey,
+        interval: Option<Duration>,
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         if self.inner.contains_key(account) {
             return Ok(());
         }
         debug!(target: LOG_TARGET, "subscribing: {account:?} @ {interval:?}");
 
         let user = AccountSub::polled(Arc::clone(&self.rpc), *account, interval);
-        let sub = user.subscribe(Arc::clone(&self.inner)).await?;
+        let sub = user.subscribe(Arc::clone(&self.inner), on_account).await?;
         self.subscriptions.insert(*account, sub);
 
         Ok(())
     }
+
     /// On account update callback for gRPC hook
     pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
         let accounts = Arc::clone(&self.inner);
@@ -185,10 +212,15 @@ impl AccountSub<Unsubscribed> {
     }
 
     /// Start the subscriber task
-    pub async fn subscribe(
+    pub async fn subscribe<F>(
         self,
         accounts: Arc<DashMap<Pubkey, AccountSlot, ahash::RandomState>>,
-    ) -> SdkResult<AccountSub<Subscribed>> {
+        on_account: Option<F>,
+    ) -> SdkResult<AccountSub<Subscribed>>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
+        let on_account = on_account.clone();
         let unsub = match self.subscription {
             SubscriptionImpl::Ws(ref ws) => {
                 let unsub = ws
@@ -206,6 +238,10 @@ impl AccountSub<Unsubscribed> {
                                 raw: update.data.clone(),
                                 slot: update.slot,
                             });
+
+                        if let Some(on_account) = &on_account {
+                            on_account(&update);
+                        }
                     })
                     .await?;
                 Some(unsub)
@@ -225,6 +261,10 @@ impl AccountSub<Unsubscribed> {
                             raw: update.data.clone(),
                             slot: update.slot,
                         });
+
+                    if let Some(on_account) = &on_account {
+                        on_account(update);
+                    }
                 });
                 Some(unsub)
             }
