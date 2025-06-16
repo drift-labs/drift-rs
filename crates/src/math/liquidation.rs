@@ -13,8 +13,9 @@ use crate::{
     math::{
         account_list_builder::AccountsListBuilder,
         constants::{
-            AMM_RESERVE_PRECISION_I128, BASE_PRECISION_I128, MARGIN_PRECISION,
-            QUOTE_PRECISION_I128, QUOTE_PRECISION_I64, SPOT_WEIGHT_PRECISION,
+            AMM_RESERVE_PRECISION_I128, BASE_PRECISION_I128, LIQUIDATION_PCT_PRECISION,
+            MARGIN_PRECISION, QUOTE_PRECISION, QUOTE_PRECISION_I128, QUOTE_PRECISION_I64,
+            SPOT_WEIGHT_PRECISION,
         },
     },
     types::{
@@ -328,6 +329,37 @@ fn calculate_margin_requirements_inner(
         maintenance: maintenance_result.margin_requirement,
         initial: initial_result.margin_requirement,
     })
+}
+
+pub fn calculate_max_pct_to_liquidate(
+    user: &User,
+    margin_shortage: u128,
+    slot: u64,
+    initial_pct_to_liquidate: u128,
+    liquidation_duration: u128,
+) -> SdkResult<u128> {
+    // if margin shortage is tiny, accelerate liquidation
+    if margin_shortage < 50 * QUOTE_PRECISION {
+        return Ok(LIQUIDATION_PCT_PRECISION);
+    }
+
+    if slot < user.last_active_slot {
+        return Err(SdkError::MathError("slot < user.last_active_slot"));
+    }
+    let slots_elapsed = slot - user.last_active_slot;
+
+    let pct_freeable = slots_elapsed as u128 * LIQUIDATION_PCT_PRECISION
+        .checked_div(liquidation_duration) // ~ 1 minute if per slot is 400ms
+        .unwrap_or(LIQUIDATION_PCT_PRECISION) // if divide by zero, default to 100%
+        + initial_pct_to_liquidate
+        .min(LIQUIDATION_PCT_PRECISION);
+
+    let total_margin_shortage = margin_shortage + user.liquidation_margin_freed as u128;
+    let max_margin_freed = total_margin_shortage * pct_freeable / LIQUIDATION_PCT_PRECISION;
+
+    let margin_freeable = max_margin_freed.saturating_sub(user.liquidation_margin_freed as u128);
+
+    Ok((margin_freeable * LIQUIDATION_PCT_PRECISION) / margin_shortage)
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
