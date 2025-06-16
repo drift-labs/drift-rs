@@ -108,7 +108,7 @@ impl WebsocketProgramAccountSubscriber {
                                     }
                                 },
                                 None => {
-                                    log::error!("{subscription_name}: Ws GPA stream ended unexpectedly");
+                                    log::warn!("{subscription_name}: Ws GPA stream ended unexpectedly");
                                     break Err(());
                                 }
                             }
