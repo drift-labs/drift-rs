@@ -323,7 +323,7 @@ pub enum SdkError {
     #[error("Couldn't send unsubscribe message")]
     CouldntUnsubscribe,
     #[error("MathError")]
-    MathError(String),
+    MathError(&'static str),
     #[error("{0}")]
     BorrowMutError(#[from] BorrowMutError),
     #[error("{0}")]

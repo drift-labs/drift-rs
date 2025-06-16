@@ -31,7 +31,7 @@ pub fn get_leverage(client: &DriftClient, user: &User) -> SdkResult<u128> {
 
     if net_asset_value == i128::MIN {
         return Err(SdkError::MathError(
-            "Net asset value is less than i128::MIN".to_string(),
+            "Net asset value is less than i128::MIN",
         ));
     }
 
@@ -185,7 +185,7 @@ impl UserMargin for DriftClient {
         let free_collateral = margin_info
             .get_free_collateral()
             .checked_sub(collateral_buffer as u128)
-            .ok_or(SdkError::MathError("underflow".to_string()))?;
+            .ok_or(SdkError::MathError("underflow"))?;
 
         let margin_ratio = market
             .get_margin_ratio(

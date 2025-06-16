@@ -413,7 +413,7 @@ where
     }
 
     // decode expecting the largest possible variant
-    if (payload.len() / 2) > SignedDelegateOrder::INIT_SPACE + 8 || payload.len() == 0 {
+    if (payload.len() / 2) > SignedDelegateOrder::INIT_SPACE + 8 || payload.is_empty() {
         return Err(serde::de::Error::custom("invalid signed message hex"));
     }
 
