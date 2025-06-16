@@ -20,7 +20,7 @@ use crate::{
     drift_idl::types::OracleSource,
     ffi::{get_oracle_price, OraclePriceData},
     grpc::AccountUpdate as GrpcAccountUpdate,
-    types::{AccountUpdate, MapOf, OnAccountFn},
+    types::{AccountUpdate, MapOf},
     websocket_account_subscriber::WebsocketAccountSubscriber,
     MarketId, SdkError, SdkResult, UnsubHandle,
 };
@@ -128,11 +128,14 @@ impl OracleMap {
     /// Panics
     ///
     /// If the `market` oracle pubkey is not loaded
-    pub async fn subscribe(
+    pub async fn subscribe<F>(
         &self,
         markets: &[MarketId],
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<()> {
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         let markets = HashSet::from_iter(markets);
         log::debug!(target: LOG_TARGET, "subscribe market oracles: {markets:?}");
 
@@ -144,10 +147,13 @@ impl OracleMap {
                 self.oracle_by_market.get(market).expect("oracle exists");
 
             // markets can share oracle pubkeys, only want one sub per oracle pubkey
-            if self.subscriptions.contains_key(oracle_pubkey)
+            // TEMP FIX: Allow multiple callbacks by allowing duplicate subscriptions
+            // TODO: Implement proper multi-callback support
+            if false && // Disable this check temporarily
+                (self.subscriptions.contains_key(oracle_pubkey)
                 || pending_subscriptions
                     .iter()
-                    .any(|sub| &sub.pubkey == oracle_pubkey)
+                    .any(|sub| &sub.pubkey == oracle_pubkey))
             {
                 log::debug!(target: LOG_TARGET, "subscription exists: {market:?}/{oracle_pubkey:?}");
                 continue;
@@ -615,7 +621,7 @@ mod tests {
         let map = OracleMap::new(pubsub, &all_oracles, CommitmentConfig::confirmed());
 
         let markets = [MarketId::perp(0), MarketId::spot(32), MarketId::perp(4)];
-        map.subscribe(&markets, None).await.expect("subd");
+        map.subscribe(&markets, None::<fn(&crate::AccountUpdate)>).await.expect("subd");
         assert_eq!(map.len(), 3);
         assert!(map.is_subscribed(&MarketId::spot(32)));
         assert!(map.is_subscribed(&MarketId::perp(4)));
@@ -653,10 +659,10 @@ mod tests {
             MarketId::perp(1),
             MarketId::spot(1),
         ];
-        map.subscribe(&markets, None).await.expect("subd");
+        map.subscribe(&markets, None::<fn(&crate::AccountUpdate)>).await.expect("subd");
         assert_eq!(map.len(), 2);
         let markets = [MarketId::perp(0), MarketId::spot(1)];
-        map.subscribe(&markets, None).await.expect("subd");
+        map.subscribe(&markets, None::<fn(&crate::AccountUpdate)>).await.expect("subd");
         assert_eq!(map.len(), 2);
 
         assert!(map.is_subscribed(&MarketId::perp(0)));
@@ -690,7 +696,7 @@ mod tests {
             &all_oracles,
             CommitmentConfig::confirmed(),
         );
-        map.subscribe(&[MarketId::spot(0), MarketId::perp(1)], None)
+        map.subscribe(&[MarketId::spot(0), MarketId::perp(1)], None::<fn(&crate::AccountUpdate)>)
             .await
             .expect("subd");
         assert!(map.unsubscribe_all().is_ok());

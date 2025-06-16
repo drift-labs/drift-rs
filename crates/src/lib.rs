@@ -47,7 +47,7 @@ use crate::{
     swift_order_subscriber::{SignedOrderInfo, SwiftOrderStream},
     types::{
         accounts::{PerpMarket, SpotMarket, State, User, UserStats},
-        DataAndSlot, MarketType, OnAccountFn, *,
+        DataAndSlot, MarketType, AccountUpdate, *,
     },
     utils::{get_http_url, get_ws_url},
 };
@@ -71,6 +71,9 @@ pub mod types;
 pub mod grpc;
 pub mod polled_account_subscriber;
 pub mod websocket_account_subscriber;
+
+#[cfg(test)]
+mod generic_callback_test;
 pub mod websocket_program_account_subscriber;
 
 // subscribers
@@ -157,14 +160,17 @@ impl DriftClient {
     ///
     /// This is a no-op if already subscribed
     pub async fn subscribe_markets(&self, markets: &[MarketId]) -> SdkResult<()> {
-        self.backend.subscribe_markets(markets, None).await
+        self.backend.subscribe_markets(markets, None::<fn(&crate::AccountUpdate)>).await
     }
 
-    pub async fn subscribe_markets_with_callback(
+    pub async fn subscribe_markets_with_callback<F>(
         &self,
         markets: &[MarketId],
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<()> {
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         self.backend.subscribe_markets(markets, on_account).await
     }
 
@@ -173,13 +179,16 @@ impl DriftClient {
     /// This is a no-op if already subscribed
     pub async fn subscribe_all_markets(&self) -> SdkResult<()> {
         let markets = self.get_all_market_ids();
-        self.backend.subscribe_markets(&markets, None).await
+        self.backend.subscribe_markets(&markets, None::<fn(&crate::AccountUpdate)>).await
     }
 
-    pub async fn subscribe_all_markets_with_callback(
+    pub async fn subscribe_all_markets_with_callback<F>(
         &self,
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<()> {
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         let markets = self.get_all_market_ids();
         self.backend.subscribe_markets(&markets, on_account).await
     }
@@ -189,13 +198,16 @@ impl DriftClient {
     /// This is a no-op if already subscribed
     pub async fn subscribe_all_spot_markets(&self) -> SdkResult<()> {
         let markets = self.get_all_spot_market_ids();
-        self.backend.subscribe_markets(&markets, None).await
+        self.backend.subscribe_markets(&markets, None::<fn(&crate::AccountUpdate)>).await
     }
 
-    pub async fn subscribe_all_spot_markets_with_callback(
+    pub async fn subscribe_all_spot_markets_with_callback<F>(
         &self,
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<()> {
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         let markets = self.get_all_spot_market_ids();
         self.backend.subscribe_markets(&markets, on_account).await
     }
@@ -205,13 +217,16 @@ impl DriftClient {
     /// This is a no-op if already subscribed
     pub async fn subscribe_all_perp_markets(&self) -> SdkResult<()> {
         let markets = self.get_all_perp_market_ids();
-        self.backend.subscribe_markets(&markets, None).await
+        self.backend.subscribe_markets(&markets, None::<fn(&crate::AccountUpdate)>).await
     }
 
-    pub async fn subscribe_all_perp_markets_with_callback(
+    pub async fn subscribe_all_perp_markets_with_callback<F>(
         &self,
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<()> {
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         let markets = self.get_all_perp_market_ids();
         self.backend.subscribe_markets(&markets, on_account).await
     }
@@ -222,14 +237,17 @@ impl DriftClient {
     ///
     /// This is a no-op if already subscribed
     pub async fn subscribe_oracles(&self, markets: &[MarketId]) -> SdkResult<()> {
-        self.backend.subscribe_oracles(markets, None).await
+        self.backend.subscribe_oracles(markets, None::<fn(&crate::AccountUpdate)>).await
     }
 
-    pub async fn subscribe_oracles_with_callback(
+    pub async fn subscribe_oracles_with_callback<F>(
         &self,
         markets: &[MarketId],
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<()> {
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         self.backend.subscribe_oracles(markets, on_account).await
     }
 
@@ -238,13 +256,16 @@ impl DriftClient {
     /// This is a no-op if already subscribed
     pub async fn subscribe_all_oracles(&self) -> SdkResult<()> {
         let markets = self.get_all_market_ids();
-        self.backend.subscribe_oracles(&markets, None).await
+        self.backend.subscribe_oracles(&markets, None::<fn(&crate::AccountUpdate)>).await
     }
 
-    pub async fn subscribe_all_oracles_with_callback(
+    pub async fn subscribe_all_oracles_with_callback<F>(
         &self,
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<()> {
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         let markets = self.get_all_market_ids();
         self.backend.subscribe_oracles(&markets, on_account).await
     }
@@ -254,13 +275,16 @@ impl DriftClient {
     /// This is a no-op if already subscribed
     pub async fn subscribe_all_spot_oracles(&self) -> SdkResult<()> {
         let markets = self.get_all_spot_market_ids();
-        self.backend.subscribe_oracles(&markets, None).await
+        self.backend.subscribe_oracles(&markets, None::<fn(&crate::AccountUpdate)>).await
     }
 
-    pub async fn subscribe_all_spot_oracles_with_callback(
+    pub async fn subscribe_all_spot_oracles_with_callback<F>(
         &self,
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<()> {
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         let markets = self.get_all_spot_market_ids();
         self.backend.subscribe_oracles(&markets, on_account).await
     }
@@ -270,13 +294,16 @@ impl DriftClient {
     /// This is a no-op if already subscribed
     pub async fn subscribe_all_perp_oracles(&self) -> SdkResult<()> {
         let markets = self.get_all_perp_market_ids();
-        self.backend.subscribe_oracles(&markets, None).await
+        self.backend.subscribe_oracles(&markets, None::<fn(&crate::AccountUpdate)>).await
     }
 
-    pub async fn subscribe_all_perp_oracles_with_callback(
+    pub async fn subscribe_all_perp_oracles_with_callback<F>(
         &self,
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<()> {
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         let markets = self.get_all_perp_market_ids();
         self.backend.subscribe_oracles(&markets, on_account).await
     }
@@ -1077,11 +1104,14 @@ impl DriftClientBackend {
     }
 
     /// Start subscriptions for market accounts
-    async fn subscribe_markets(
+    async fn subscribe_markets<F>(
         &self,
         markets: &[MarketId],
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<()> {
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         if self.is_grpc_subscribed() {
             log::info!("already subscribed markets via gRPC");
             return Err(SdkError::AlreadySubscribed);
@@ -1092,18 +1122,21 @@ impl DriftClientBackend {
             .partition::<Vec<MarketId>, _>(|x| x.is_perp());
         let _ = tokio::try_join!(
             self.perp_market_map.subscribe(&perps, on_account.clone()),
-            self.spot_market_map.subscribe(&spot, on_account.clone()),
+            self.spot_market_map.subscribe(&spot, on_account),
         )?;
 
         Ok(())
     }
 
     /// Start subscriptions for market oracle accounts
-    async fn subscribe_oracles(
+    async fn subscribe_oracles<F>(
         &self,
         markets: &[MarketId],
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<()> {
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         if self.is_grpc_subscribed() {
             log::info!("already subscribed oracles via gRPC");
             return Err(SdkError::AlreadySubscribed);

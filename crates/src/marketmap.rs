@@ -29,7 +29,7 @@ use crate::{
     drift_idl::types::OracleSource,
     grpc::AccountUpdate,
     memcmp::get_market_filter,
-    types::{MapOf, OnAccountFn},
+    types::MapOf,
     websocket_account_subscriber::WebsocketAccountSubscriber,
     DataAndSlot, MarketId, MarketType, PerpMarket, SdkResult, SpotMarket, UnsubHandle,
 };
@@ -124,11 +124,14 @@ where
     }
 
     /// Subscribe to market account updates
-    pub async fn subscribe(
+    pub async fn subscribe<F>(
         &self,
         markets: &[MarketId],
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<()> {
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         log::debug!(target: LOG_TARGET, "subscribing: {:?}", T::MARKET_TYPE);
 
         let markets = HashSet::<MarketId>::from_iter(markets.iter().copied());
@@ -412,7 +415,7 @@ mod tests {
         assert!(map
             .subscribe(
                 &[MarketId::perp(0), MarketId::perp(1), MarketId::perp(1)],
-                None
+                None::<fn(&crate::AccountUpdate)>
             )
             .await
             .is_ok());

@@ -13,7 +13,7 @@ use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubke
 
 use crate::{
     grpc::AccountUpdate, polled_account_subscriber::PolledAccountSubscriber, types::DataAndSlot,
-    types::OnAccountFn, websocket_account_subscriber::WebsocketAccountSubscriber, SdkResult,
+    websocket_account_subscriber::WebsocketAccountSubscriber, SdkResult,
     UnsubHandle,
 };
 
@@ -55,14 +55,17 @@ impl AccountMap {
     /// * `account` pubkey to subscribe
     ///
     pub async fn subscribe_account(&self, account: &Pubkey) -> SdkResult<()> {
-        self.subscribe_account_with_callback(account, None).await
+        self.subscribe_account_with_callback(account, None::<fn(&crate::AccountUpdate)>).await
     }
 
-    pub async fn subscribe_account_with_callback(
+    pub async fn subscribe_account_with_callback<F>(
         &self,
         account: &Pubkey,
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<()> {
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         if self.inner.contains_key(account) {
             return Ok(());
         }
@@ -85,16 +88,19 @@ impl AccountMap {
         account: &Pubkey,
         interval: Option<Duration>,
     ) -> SdkResult<()> {
-        self.subscribe_account_polled_with_callback(account, interval, None)
+        self.subscribe_account_polled_with_callback(account, interval, None::<fn(&crate::AccountUpdate)>)
             .await
     }
 
-    pub async fn subscribe_account_polled_with_callback(
+    pub async fn subscribe_account_polled_with_callback<F>(
         &self,
         account: &Pubkey,
         interval: Option<Duration>,
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<()> {
+        on_account: Option<F>,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         if self.inner.contains_key(account) {
             return Ok(());
         }
@@ -206,11 +212,14 @@ impl AccountSub<Unsubscribed> {
     }
 
     /// Start the subscriber task
-    pub async fn subscribe(
+    pub async fn subscribe<F>(
         self,
         accounts: Arc<DashMap<Pubkey, AccountSlot, ahash::RandomState>>,
-        on_account: Option<Arc<Box<OnAccountFn>>>,
-    ) -> SdkResult<AccountSub<Subscribed>> {
+        on_account: Option<F>,
+    ) -> SdkResult<AccountSub<Subscribed>>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         let on_account = on_account.clone();
         let unsub = match self.subscription {
             SubscriptionImpl::Ws(ref ws) => {
