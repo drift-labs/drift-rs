@@ -7,19 +7,21 @@ use std::time::Duration;
 use anchor_lang::prelude::*;
 use drift_rs::{
     constants::PROGRAM_ID,
-    dlob::{util::OrderDelta, DLOBEvent, TakerOrder, DLOB},
+    dlob::{util::OrderDelta, DLOBEvent, TakerCrosses, TakerOrder, DLOB},
     ffi::calculate_auction_price,
     grpc::grpc_subscriber::AccountFilter,
     swift_order_subscriber::SignedOrderInfo,
     types::{
         accounts::User, MarketId, Order, OrderParams, OrderStatus, OrderType, PositionDirection,
-        PostOnlyParam,
+        PostOnlyParam, RpcSendTransactionConfig,
     },
     DriftClient, GrpcSubscribeOpts, Pubkey, RpcClient, Wallet,
 };
 use futures_util::StreamExt;
 use solana_account_decoder_client_types::UiAccountEncoding;
-use solana_rpc_client_api::config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
+use solana_rpc_client_api::config::{
+    RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcTransactionConfig,
+};
 use solana_sdk::signature::Keypair;
 
 /// Active market IDs to fill for
@@ -240,8 +242,8 @@ async fn main() {
             swift_order = swift_order_stream.next() => {
                 log::info!(target: "swift", "new swift order: {swift_order:?}");
                 match swift_order {
-                    Some(order) => {
-                        let order_params = order.order_params();
+                    Some(signed_order) => {
+                        let order_params = signed_order.order_params();
                         let tick_size = drift.program_data().perp_market_config_by_index(order_params.market_index).unwrap().amm.order_tick_size;
                         // TODO: run on intra-slot oracle price updates
                         let oracle_price = drift.try_get_oracle_price_data_and_slot(MarketId::perp(order_params.market_index)).expect("got oracle price").data.price;
@@ -301,7 +303,9 @@ async fn main() {
                             if let Ok(crosses) = dlob.find_crosses_for_taker_order(slot + offset, oracle_price as u64, taker_order) {
                                 if !crosses.is_empty() {
                                     log::info!(target: "swift", "found resting cross|offset={offset}|crosses={crosses:?}");
-                                    // TODO: build fills
+                                    tokio::spawn(
+                                        try_fill(drift.clone(), filler_subaccount, signed_order, crosses)
+                                    );
                                     break;
                                 }
                             }
@@ -321,57 +325,70 @@ async fn main() {
 }
 
 /// Try to fill a swift order
-async fn try_fill(drift: DriftClient, filler_subaccount: Pubkey, swift_order: SignedOrderInfo) {
-    // TODO: filter `swift_order.order_params()` depending on strategy params
-    println!("new swift order: {swift_order:?}");
+async fn try_fill(
+    drift: DriftClient,
+    filler_subaccount: Pubkey,
+    swift_order: SignedOrderInfo,
+    crosses: TakerCrosses,
+) {
+    log::info!("try fill swift order: {}", swift_order.order_uuid_str());
     let taker_order = swift_order.order_params();
     let taker_subaccount = swift_order.taker_subaccount();
 
     // fetching taker accounts inline
     // TODO: for better fills maintain a gRPC map of user accounts
     let (taker_account_data, taker_stats, tx_builder) = tokio::try_join!(
-        drift.get_user_account(&taker_subaccount), // always hits RPC
-        drift.get_user_stats(&swift_order.taker_authority), // always hits RPC
+        drift.get_user_account(&taker_subaccount),
+        drift.get_user_stats(&swift_order.taker_authority),
         drift.init_tx(&filler_subaccount, false)
     )
     .unwrap();
 
-    // built the taker tx
-    // It places the swift order for the taker and fills it
+    let makers: Vec<User> = crosses
+        .orders
+        .iter()
+        .map(|(m, _, _)| {
+            drift
+                .try_get_account::<User>(&m.user)
+                .expect("user account syncd")
+        })
+        .collect();
+
     let tx = tx_builder
-        .place_and_make_swift_order(
-            OrderParams {
-                order_type: OrderType::Limit,
-                market_index: taker_order.market_index,
-                market_type: taker_order.market_type,
-                direction: match taker_order.direction {
-                    PositionDirection::Long => PositionDirection::Short,
-                    PositionDirection::Short => PositionDirection::Long,
-                },
-                // TODO: fill at price depending on strategy params
-                // this always attempts to fill at the best price for the _taker_
-                price: taker_order
-                    .auction_start_price
-                    .expect("start price set")
-                    .unsigned_abs(),
-                // try fill the whole order amount
-                base_asset_amount: taker_order.base_asset_amount,
-                post_only: PostOnlyParam::MustPostOnly,
-                bit_flags: 0,
-                ..Default::default()
-            },
-            &swift_order,
+        .with_priority_fee(2_000, Some(160_000))
+        .place_swift_order(&swift_order, &taker_account_data)
+        .fill_perp_order(
+            taker_order.market_index,
+            taker_subaccount,
             &taker_account_data,
-            &taker_stats.referrer,
+            &taker_stats,
+            None,
+            makers.as_slice(),
         )
         .build();
 
-    match drift.sign_and_send(tx).await {
-        Ok(sig) => {
-            println!("sent fill: {sig}");
-        }
-        Err(err) => {
-            println!("fill failed: {err}");
+    // send twice
+    for _ in 0..=1 {
+        match drift
+            .sign_and_send_with_config(
+                tx.clone(),
+                None,
+                RpcSendTransactionConfig {
+                    skip_preflight: true,
+                    max_retries: Some(0),
+                    ..Default::default()
+                },
+            )
+            .await
+        {
+            Ok(sig) => {
+                log::info!(target: "swift", "sent fill ⚡️: {sig:?}");
+                break;
+            }
+            Err(err) => {
+                log::info!(target: "swift", "fill failed 🐢: {err}");
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            }
         }
     }
 }

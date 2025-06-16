@@ -167,7 +167,7 @@ impl JitProxyClient {
                 authority: maker_authority,
                 drift_program: constants::PROGRAM_ID,
             },
-            &[&taker_params.taker, account_data],
+            [&taker_params.taker, account_data].into_iter(),
             std::iter::empty(),
             writable_markets.iter(),
         );
@@ -274,7 +274,7 @@ impl JitProxyClient {
                 ),
                 drift_program: constants::PROGRAM_ID,
             },
-            &[&taker_params.taker, account_data],
+            [&taker_params.taker, account_data].into_iter(),
             std::iter::empty(),
             writable_markets.iter(),
         );
