@@ -1,6 +1,7 @@
 use std::{
     cmp::Reverse,
     collections::BTreeMap,
+    fmt::Debug,
     iter::Peekable,
     sync::{atomic::AtomicBool, Arc},
 };
@@ -28,14 +29,14 @@ type Direction = PositionDirection;
 /// Collection of orders with dynamic prices e.g. oracle auctions
 ///
 /// priority changes with every slot and oracle price change
-struct DynamicOrders<T: DynamicPrice + OrderKey> {
+struct DynamicOrders<T: DynamicPrice + OrderKey + Debug> {
     pub bids: Vec<T>,
     pub asks: Vec<T>,
     /// True if the orderbook requires sorting before use
     is_dirty: AtomicBool,
 }
 
-impl<T: DynamicPrice + OrderKey> Default for DynamicOrders<T> {
+impl<T: DynamicPrice + OrderKey + Debug> Default for DynamicOrders<T> {
     fn default() -> Self {
         Self {
             bids: Vec::new(),
@@ -47,7 +48,7 @@ impl<T: DynamicPrice + OrderKey> Default for DynamicOrders<T> {
 
 impl<T> DynamicOrders<T>
 where
-    T: DynamicPrice + OrderKey + Clone + From<(u64, Order)>,
+    T: DynamicPrice + OrderKey + Clone + From<(u64, Order)> + Debug,
 {
     /// True if the orderbook was updated and needs to be sorted before use
     pub fn is_dirty(&self) -> bool {
@@ -65,6 +66,7 @@ where
     }
     pub fn sort(&mut self, slot: u64, oracle_price: u64, market_tick_size: u64) {
         if self.is_dirty() {
+            log::trace!(target: "dlob", "sorting dynamic orders");
             self.bids
                 .sort_by_key(|x| Reverse(x.get_price(slot, oracle_price, market_tick_size)));
             self.asks
@@ -1018,7 +1020,7 @@ impl L2Book {
     }
 
     /// Add dynamic order types to this `L2Book`
-    fn insert_dynamic_orders<T: OrderKey + DynamicPrice>(
+    fn insert_dynamic_orders<T: OrderKey + DynamicPrice + Debug>(
         &mut self,
         orders: &DynamicOrders<T>,
         slot: u64,

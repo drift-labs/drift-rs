@@ -150,7 +150,7 @@ impl OrderKey for TriggerOrder {
     }
 }
 
-#[derive(Default, Clone, PartialEq)]
+#[derive(Default, Clone, PartialEq, Debug)]
 pub(crate) struct MarketOrder {
     pub id: u64,
     pub size: u64,
@@ -162,7 +162,7 @@ pub(crate) struct MarketOrder {
     pub direction: Direction,
 }
 
-#[derive(Default, Clone, PartialEq)]
+#[derive(Default, Clone, PartialEq, Debug)]
 pub(crate) struct OracleOrder {
     pub id: u64,
     pub size: u64,
@@ -182,7 +182,7 @@ pub(crate) struct LimitOrder {
     pub slot: u64,
 }
 
-#[derive(Default, Clone, PartialEq, Eq)]
+#[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub(crate) struct FloatingLimitOrder {
     pub id: u64,
     pub size: u64,
@@ -206,7 +206,7 @@ impl DynamicPrice for MarketOrder {
     fn get_price(&self, slot: u64, _oracle_price: u64, market_tick_size: u64) -> u64 {
         calculate_auction_price(
             &Order {
-                slot,
+                slot: self.slot,
                 auction_duration: self.duration,
                 auction_start_price: self.start_price,
                 auction_end_price: self.end_price,
@@ -244,21 +244,26 @@ impl DynamicPrice for OracleOrder {
         self.size
     }
     fn get_price(&self, slot: u64, oracle_price: u64, market_tick_size: u64) -> u64 {
-        calculate_auction_price(
+        match calculate_auction_price(
             &Order {
-                slot,
                 auction_duration: self.duration,
                 auction_start_price: self.start_price_offset,
                 auction_end_price: self.end_price_offset,
                 direction: self.direction,
+                slot: self.slot,
                 ..Default::default()
             },
             slot,
             market_tick_size,
             Some(oracle_price as i64),
             false,
-        )
-        .unwrap_or(0)
+        ) {
+            Ok(p) => p,
+            Err(err) => {
+                log::warn!(target: "dlob", "invalid auction price: {err:?}");
+                0
+            }
+        }
     }
 }
 

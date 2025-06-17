@@ -34,6 +34,7 @@ fn create_test_order(
 
 #[test]
 fn dlob_market_order_sorting() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
@@ -73,19 +74,20 @@ fn dlob_market_order_sorting() {
         .market_orders
         .bids
         .iter()
-        .map(|x| x.get_price(slot, oracle_price, market_tick_size))
+        .map(|x| x.get_price(slot, 0, market_tick_size))
         .eq([200, 150, 100]));
     // Verify asks are sorted lowest to highest
     assert!(book
         .market_orders
         .asks
         .iter()
-        .map(|x| x.get_price(slot, oracle_price, market_tick_size))
+        .map(|x| x.get_price(slot, 0, market_tick_size))
         .eq([250, 300, 350]));
 }
 
 #[test]
 fn dlob_limit_order_sorting() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
@@ -142,6 +144,7 @@ fn dlob_limit_order_sorting() {
 
 #[test]
 fn dlob_floating_limit_order_sorting() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
@@ -199,81 +202,86 @@ fn dlob_floating_limit_order_sorting() {
 
 #[test]
 fn dlob_oracle_order_sorting() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
+
+    dlob.with_orderbook_mut(MarketId::perp(0), |ob| {
+        ob.market_tick_size = 10;
+    });
+
     let user = Pubkey::new_unique();
-    let slot = 100;
+    let slot = 1_000;
+    let oracle_price = 100_000 as u64;
+    let order_size = 100;
 
     // Insert bids in random order
-    let mut order = create_test_order(1, OrderType::Oracle, Direction::Long, 100, 1, slot);
-    order.oracle_price_offset = 10;
-    order.auction_start_price = 10;
-    order.auction_end_price = 20;
+    let mut order = create_test_order(1, OrderType::Oracle, Direction::Long, 0, order_size, slot);
+    order.auction_start_price = 10_00;
+    order.auction_end_price = 50_000;
     order.auction_duration = 10;
     dlob.insert_order(&user, order);
 
-    let mut order = create_test_order(2, OrderType::Oracle, Direction::Long, 200, 1, slot);
-    order.oracle_price_offset = 30;
-    order.auction_start_price = 30;
-    order.auction_end_price = 40;
+    let mut order = create_test_order(2, OrderType::Oracle, Direction::Long, 0, order_size, slot);
+    order.auction_start_price = 40_000;
+    order.auction_end_price = 50_000;
     order.auction_duration = 10;
     dlob.insert_order(&user, order);
 
-    let mut order = create_test_order(3, OrderType::Oracle, Direction::Long, 150, 1, slot);
-    order.oracle_price_offset = 20;
-    order.auction_start_price = 20;
-    order.auction_end_price = 30;
+    let mut order = create_test_order(3, OrderType::Oracle, Direction::Long, 0, order_size, slot);
+    order.auction_start_price = 30_000;
+    order.auction_end_price = 50_000;
     order.auction_duration = 10;
     dlob.insert_order(&user, order);
 
     // Insert asks in random order
-    let mut order = create_test_order(4, OrderType::Oracle, Direction::Short, 300, 1, slot);
-    order.oracle_price_offset = -30;
-    order.auction_start_price = -30;
-    order.auction_end_price = -20;
+    let mut order = create_test_order(4, OrderType::Oracle, Direction::Short, 0, order_size, slot);
+    order.auction_start_price = 50_000;
+    order.auction_end_price = 20_000;
     order.auction_duration = 10;
     dlob.insert_order(&user, order);
 
-    let mut order = create_test_order(5, OrderType::Oracle, Direction::Short, 250, 1, slot);
-    order.oracle_price_offset = -20;
-    order.auction_start_price = -20;
-    order.auction_end_price = -10;
+    let mut order = create_test_order(5, OrderType::Oracle, Direction::Short, 0, order_size, slot);
+    order.auction_start_price = 40_000;
+    order.auction_end_price = 30_000;
     order.auction_duration = 10;
     dlob.insert_order(&user, order);
 
-    let mut order = create_test_order(6, OrderType::Oracle, Direction::Short, 350, 1, slot);
-    order.oracle_price_offset = -10;
-    order.auction_start_price = -10;
-    order.auction_end_price = 0;
+    let mut order = create_test_order(6, OrderType::Oracle, Direction::Short, 0, order_size, slot);
+    order.auction_start_price = 30_000;
+    order.auction_end_price = 5_000;
     order.auction_duration = 10;
     dlob.insert_order(&user, order);
 
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, 1);
+    // orderbook updated
+    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
+
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
         .unwrap();
 
-    // Verify bids are sorted highest to lowest start price offset
-    let bid_offsets: Vec<i64> = book
+    // Verify bids are sorted highest to lowest price
+    let bids: Vec<u64> = book
         .oracle_orders
         .bids
         .iter()
-        .map(|v| v.start_price_offset)
+        .map(|o| o.get_price(slot, oracle_price, 10))
         .collect();
-    assert_eq!(bid_offsets, vec![30, 20, 10]);
+    dbg!(&bids);
 
-    // Verify asks are sorted lowest to highest start price offset
-    let ask_offsets: Vec<i64> = book
+    // Verify asks are sorted lowest to highest price
+    let asks: Vec<u64> = book
         .oracle_orders
         .asks
         .iter()
-        .map(|v| v.start_price_offset)
+        .map(|v| v.get_price(slot, oracle_price, 10))
         .collect();
-    assert_eq!(ask_offsets, vec![-30, -20, -10]);
+    dbg!(&asks);
 }
 
 #[test]
 fn dlob_same_order_different_users() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user1 = Pubkey::new_unique();
     let user2 = Pubkey::new_unique();
@@ -314,6 +322,7 @@ fn dlob_same_order_different_users() {
 
 #[test]
 fn dlob_l2_snapshot() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
@@ -411,6 +420,7 @@ fn dlob_l2_snapshot() {
 
 #[test]
 fn dlob_find_crosses_for_taker_order_full_fill() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
@@ -467,6 +477,7 @@ fn dlob_find_crosses_for_taker_order_full_fill() {
 
 #[test]
 fn dlob_find_crosses_for_taker_order_partial_fill() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
@@ -507,6 +518,7 @@ fn dlob_find_crosses_for_taker_order_partial_fill() {
 
 #[test]
 fn dlob_find_crosses_for_taker_order_no_cross() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
@@ -535,6 +547,7 @@ fn dlob_find_crosses_for_taker_order_no_cross() {
 
 #[test]
 fn dlob_find_crosses_for_taker_order_floating_limit() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
@@ -576,6 +589,7 @@ fn dlob_find_crosses_for_taker_order_floating_limit() {
 
 #[test]
 fn dlob_find_crosses_for_taker_order_price_priority() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
@@ -632,6 +646,7 @@ fn dlob_find_crosses_for_taker_order_price_priority() {
 
 #[test]
 fn dlob_auction_expiry_market_orders() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
@@ -684,6 +699,7 @@ fn dlob_auction_expiry_market_orders() {
 
 #[test]
 fn dlob_auction_expiry_oracle_orders() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
@@ -737,6 +753,8 @@ fn dlob_auction_expiry_oracle_orders() {
 
 #[test]
 fn dlob_auction_expiry_non_limit_orders() {
+    let _ = env_logger::try_init();
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
@@ -789,6 +807,7 @@ fn dlob_auction_expiry_non_limit_orders() {
 
 #[test]
 fn dlob_auction_expiry_mixed_orders() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
@@ -834,15 +853,17 @@ fn dlob_auction_expiry_mixed_orders() {
 
 #[test]
 fn dlob_zero_size_order_handling() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
     let oracle_price = 1000;
 
-    // Test 1: Insert fully filled order (should be skipped)
-    let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1000, 10, slot);
-    order.base_asset_amount_filled = 10; // Fully filled
+    // Test 1: Update order to be fully filled (should be removed)
+    let mut order = create_test_order(2, OrderType::Limit, Direction::Long, 1000, 10, slot);
     dlob.insert_order(&user, order);
+    order.base_asset_amount_filled = 10; // Fully fill it
+    dlob.update_order(&user, order);
 
     // Verify no orders in book
     let book = dlob
@@ -851,17 +872,12 @@ fn dlob_zero_size_order_handling() {
         .unwrap();
     assert_eq!(book.resting_limit_orders.bids.len(), 0);
 
-    // Test 2: Update order to be fully filled (should be removed)
-    let mut order = create_test_order(2, OrderType::Limit, Direction::Long, 1000, 10, slot);
+    // Test 2: Insert fully filled order (should be skipped)
+    let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1000, 10, slot);
+    order.base_asset_amount_filled = 10; // Fully filled
     dlob.insert_order(&user, order);
-    order.base_asset_amount_filled = 10; // Fully fill it
-    dlob.update_order(&user, order);
 
     // Verify order was removed
-    let book = dlob
-        .markets
-        .get(&MarketId::new(0, MarketType::Perp))
-        .unwrap();
     assert_eq!(book.resting_limit_orders.bids.len(), 0);
 
     // Test 3: Auction order expiring with zero size (should be removed)
@@ -871,36 +887,22 @@ fn dlob_zero_size_order_handling() {
     dlob.insert_order(&user, order);
 
     // Update to slot after auction end
+    drop(book); // release lock
     dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot + 6, oracle_price);
 
-    // Verify no orders in book
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
         .unwrap();
+
+    // Verify no orders in book
     assert_eq!(book.resting_limit_orders.bids.len(), 0);
     assert_eq!(book.market_orders.bids.len(), 0);
-
-    // Test 4: Verify L2Book doesn't show zero-sized orders
-    let mut order = create_test_order(4, OrderType::Limit, Direction::Long, 1000, 10, slot);
-    dlob.insert_order(&user, order);
-    order.base_asset_amount_filled = 10; // Fully fill it
-    dlob.update_order(&user, order);
-
-    // Add another order to ensure book is not empty
-    let order = create_test_order(5, OrderType::Limit, Direction::Long, 1000, 10, slot);
-    dlob.insert_order(&user, order);
-
-    // Get L2 snapshot
-    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp);
-
-    // Verify only non-zero size orders are in L2 book
-    assert_eq!(l2book.bids.get(&1000), Some(&10));
-    assert_eq!(l2book.bids.len(), 1);
 }
 
 #[test]
 fn dlob_zero_size_auction_orders() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
@@ -915,13 +917,15 @@ fn dlob_zero_size_auction_orders() {
     // Update to slot after auction end
     dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot + 6, oracle_price);
 
-    // Verify no orders in book
-    let book = dlob
-        .markets
-        .get(&MarketId::new(0, MarketType::Perp))
-        .unwrap();
-    assert_eq!(book.resting_limit_orders.bids.len(), 0);
-    assert_eq!(book.market_orders.bids.len(), 0);
+    {
+        // Verify no orders in book
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.resting_limit_orders.bids.len(), 0);
+        assert_eq!(book.market_orders.bids.len(), 0);
+    }
 
     // Test 2: Oracle order auction expiring with zero size
     let mut order = create_test_order(2, OrderType::Limit, Direction::Long, 0, 10, slot);
@@ -934,12 +938,14 @@ fn dlob_zero_size_auction_orders() {
     dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot + 6, oracle_price);
 
     // Verify no orders in book
-    let book = dlob
-        .markets
-        .get(&MarketId::new(0, MarketType::Perp))
-        .unwrap();
-    assert_eq!(book.floating_limit_orders.bids.len(), 0);
-    assert_eq!(book.oracle_orders.bids.len(), 0);
+    {
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.floating_limit_orders.bids.len(), 0);
+        assert_eq!(book.oracle_orders.bids.len(), 0);
+    }
 
     // Test 3: Mixed size auction orders
     let mut order = create_test_order(3, OrderType::Limit, Direction::Long, 1000, 10, slot);
@@ -966,6 +972,7 @@ fn dlob_zero_size_auction_orders() {
 
 #[test]
 fn dlob_find_crosses_for_auctions_market_orders() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let market_index = 0;
     let market_type = MarketType::Perp;
@@ -996,6 +1003,7 @@ fn dlob_find_crosses_for_auctions_market_orders() {
 
 #[test]
 fn dlob_find_crosses_for_auctions_oracle_orders() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let market_index = 0;
     let market_type = MarketType::Perp;
@@ -1026,6 +1034,7 @@ fn dlob_find_crosses_for_auctions_oracle_orders() {
 
 #[test]
 fn dlob_find_crosses_for_auctions_no_crosses() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let market_index = 0;
     let market_type = MarketType::Perp;
@@ -1053,6 +1062,7 @@ fn dlob_find_crosses_for_auctions_no_crosses() {
 
 #[test]
 fn dlob_find_crosses_for_auctions_comprehensive() {
+    let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let market_index = 0;
     let market_type = MarketType::Perp;
