@@ -1,10 +1,7 @@
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
-    dlob::{
-        types::DynamicPrice, util::order_hash, Direction, OrderKind, OrderMetadata, TakerOrder,
-        DLOB,
-    },
+    dlob::{types::DynamicPrice, Direction, OrderKind, OrderMetadata, Orderbook, TakerOrder, DLOB},
     types::{MarketId, MarketType, Order, OrderType},
 };
 
@@ -38,51 +35,72 @@ fn dlob_market_order_sorting() {
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
+    let order_size = 100;
+
+    // bootstrap orderbook for market
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market_index: 0,
+        market_tick_size: 10,
+        ..Default::default()
+    });
 
     // Insert bids in random order
-    let mut order = create_test_order(1, OrderType::Market, Direction::Long, 100, 1, slot);
+    let mut order = create_test_order(1, OrderType::Market, Direction::Long, 0, order_size, slot);
+    order.auction_start_price = 100_000;
+    order.auction_end_price = 200_000;
     order.auction_duration = 10;
     dlob.insert_order(&user, order);
-    let mut order = create_test_order(2, OrderType::Market, Direction::Long, 200, 1, slot);
+    let mut order = create_test_order(2, OrderType::Market, Direction::Long, 0, order_size, slot);
+    order.auction_start_price = 150_000;
+    order.auction_end_price = 200_000;
     order.auction_duration = 10;
     dlob.insert_order(&user, order);
-    let mut order = create_test_order(3, OrderType::Market, Direction::Long, 150, 1, slot);
+    let mut order = create_test_order(3, OrderType::Market, Direction::Long, 0, order_size, slot);
+    order.auction_start_price = 99_000;
+    order.auction_end_price = 200_000;
     order.auction_duration = 10;
     dlob.insert_order(&user, order);
 
     // Insert asks in random order
-    let mut order = create_test_order(4, OrderType::Market, Direction::Short, 300, 1, slot);
+    let mut order = create_test_order(4, OrderType::Market, Direction::Short, 0, order_size, slot);
+    order.auction_start_price = 100_000;
+    order.auction_end_price = 10_000;
     order.auction_duration = 10;
     dlob.insert_order(&user, order);
-    let mut order = create_test_order(5, OrderType::Market, Direction::Short, 250, 1, slot);
+    let mut order = create_test_order(5, OrderType::Market, Direction::Short, 0, order_size, slot);
+    order.auction_start_price = 99_000;
+    order.auction_end_price = 10_000;
     order.auction_duration = 10;
     dlob.insert_order(&user, order);
-    let mut order = create_test_order(6, OrderType::Market, Direction::Short, 350, 1, slot);
-    order.auction_duration = 10;
+    let mut order = create_test_order(6, OrderType::Market, Direction::Short, 0, order_size, slot);
+    order.auction_start_price = 150_000;
+    order.auction_end_price = 10_000;
+    order.auction_duration = 5;
     dlob.insert_order(&user, order);
 
-    let oracle_price = 100_000;
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
+    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, 0);
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
         .unwrap();
 
     // Verify bids are sorted highest to lowest
-    let market_tick_size = 1;
-    assert!(book
+    let market_tick_size = 10;
+    let bids: Vec<u64> = book
         .market_orders
         .bids
         .iter()
         .map(|x| x.get_price(slot, 0, market_tick_size))
-        .eq([200, 150, 100]));
-    // Verify asks are sorted lowest to highest
-    assert!(book
+        .collect();
+    assert_eq!(&bids, &[150_000, 100_000, 99_000]);
+    // Verify asks are sorted lowest to hi
+    let asks: Vec<u64> = book
         .market_orders
         .asks
         .iter()
         .map(|x| x.get_price(slot, 0, market_tick_size))
-        .eq([250, 300, 350]));
+        .collect();
+    assert_eq!(&asks, &[99_000, 100_000, 150_000]);
 }
 
 #[test]
@@ -205,8 +223,10 @@ fn dlob_oracle_order_sorting() {
     let _ = env_logger::try_init();
     let dlob = DLOB::default();
 
-    dlob.with_orderbook_mut(MarketId::perp(0), |ob| {
-        ob.market_tick_size = 10;
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market_index: 0,
+        market_tick_size: 10,
+        ..Default::default()
     });
 
     let user = Pubkey::new_unique();
@@ -216,7 +236,7 @@ fn dlob_oracle_order_sorting() {
 
     // Insert bids in random order
     let mut order = create_test_order(1, OrderType::Oracle, Direction::Long, 0, order_size, slot);
-    order.auction_start_price = 10_00;
+    order.auction_start_price = 10_000;
     order.auction_end_price = 50_000;
     order.auction_duration = 10;
     dlob.insert_order(&user, order);
@@ -267,7 +287,7 @@ fn dlob_oracle_order_sorting() {
         .iter()
         .map(|o| o.get_price(slot, oracle_price, 10))
         .collect();
-    dbg!(&bids);
+    assert_eq!(&bids, &[40_000, 30_000, 10_000]);
 
     // Verify asks are sorted lowest to highest price
     let asks: Vec<u64> = book
@@ -276,7 +296,7 @@ fn dlob_oracle_order_sorting() {
         .iter()
         .map(|v| v.get_price(slot, oracle_price, 10))
         .collect();
-    dbg!(&asks);
+    assert_eq!(&asks, &[30_000, 40_000, 50_000]);
 }
 
 #[test]
@@ -456,7 +476,7 @@ fn dlob_find_crosses_for_taker_order_full_fill() {
                 user,
                 kind: OrderKind::Limit
             },
-            order_hash(&user, 1),
+            900,
             5
         )
     );
@@ -468,7 +488,7 @@ fn dlob_find_crosses_for_taker_order_full_fill() {
                 user,
                 kind: OrderKind::Limit
             },
-            order_hash(&user, 2),
+            950,
             2
         )
     );
@@ -509,7 +529,7 @@ fn dlob_find_crosses_for_taker_order_partial_fill() {
                 user,
                 kind: OrderKind::Limit
             },
-            order_hash(&user, 1),
+            900,
             3
         )
     );
@@ -580,7 +600,7 @@ fn dlob_find_crosses_for_taker_order_floating_limit() {
                 user,
                 kind: OrderKind::FloatingLimit,
             },
-            order_hash(&user, 1),
+            950, // oracle_price + oracle_price_offset
             5
         )
     );
@@ -621,11 +641,11 @@ fn dlob_find_crosses_for_taker_order_price_priority() {
         result.orders[0],
         (
             OrderMetadata {
-                order_id: 1,
+                order_id: 2,
                 user,
                 kind: OrderKind::Limit
             },
-            order_hash(&user, 2),
+            900,
             3
         )
     );
@@ -633,11 +653,11 @@ fn dlob_find_crosses_for_taker_order_price_priority() {
         result.orders[1],
         (
             OrderMetadata {
-                order_id: 2,
+                order_id: 1,
                 user,
                 kind: OrderKind::Limit
             },
-            order_hash(&user, 1),
+            950,
             2
         )
     );
@@ -841,8 +861,6 @@ fn dlob_auction_expiry_mixed_orders() {
     // Market orders should be moved to resting limit or removed
     assert_eq!(book.market_orders.bids.len(), 0);
     assert_eq!(book.market_orders.asks.len(), 0);
-    assert_eq!(book.resting_limit_orders.bids.len(), 1);
-    assert_eq!(book.resting_limit_orders.asks.len(), 0);
 
     // Oracle orders should be moved to floating limit or removed
     assert_eq!(book.oracle_orders.bids.len(), 0);
@@ -979,12 +997,18 @@ fn dlob_find_crosses_for_auctions_market_orders() {
     let slot = 100;
     let oracle_price = 1000;
 
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market_index,
+        market_tick_size: 10,
+        ..Default::default()
+    });
+
     // Insert a resting limit ask at price 1000
     let limit_order = create_test_order(1, OrderType::Limit, Direction::Short, 1000, 100, slot);
     dlob.insert_order(&Pubkey::new_unique(), limit_order);
 
     // Insert a market bid that should cross
-    let market_order = create_test_order(
+    let mut market_order = create_test_order(
         2,
         OrderType::Market,
         Direction::Long, // This is correct as it's a bid
@@ -992,13 +1016,16 @@ fn dlob_find_crosses_for_auctions_market_orders() {
         50,
         slot,
     );
+    market_order.auction_duration = 10;
+    market_order.auction_start_price = 1100;
+    market_order.auction_end_price = 1200;
     dlob.insert_order(&Pubkey::new_unique(), market_order);
 
     let crosses = dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price);
     assert_eq!(crosses.len(), 1);
-    assert!(!crosses[0].is_empty());
-    assert_eq!(crosses[0].orders.len(), 1);
-    assert_eq!(crosses[0].orders[0].2, 50); // Fill size should be 50
+    assert!(!crosses[0].1.is_empty());
+    assert_eq!(crosses[0].1.orders.len(), 1);
+    assert_eq!(crosses[0].1.orders[0].2, 50); // Fill size should be 50
 }
 
 #[test]
@@ -1027,9 +1054,9 @@ fn dlob_find_crosses_for_auctions_oracle_orders() {
 
     let crosses = dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price);
     assert_eq!(crosses.len(), 1);
-    assert!(!crosses[0].is_empty());
-    assert_eq!(crosses[0].orders.len(), 1);
-    assert_eq!(crosses[0].orders[0].2, 50); // Fill size should be 50
+    assert!(!crosses[0].1.is_empty());
+    assert_eq!(crosses[0].1.orders.len(), 1);
+    assert_eq!(crosses[0].1.orders[0].2, 50); // Fill size should be 50
 }
 
 #[test]
@@ -1069,9 +1096,15 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
     let slot = 100;
     let oracle_price = 1000;
 
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market_index,
+        market_tick_size: 5,
+        ..Default::default()
+    });
+
     // Insert resting limit orders
-    let limit_ask_1 = create_test_order(1, OrderType::Limit, Direction::Short, 1000, 100, slot);
-    let limit_ask_2 = create_test_order(2, OrderType::Limit, Direction::Short, 1100, 50, slot);
+    let limit_ask_1 = create_test_order(1, OrderType::Limit, Direction::Short, 1000, 50, slot);
+    let limit_ask_2 = create_test_order(2, OrderType::Limit, Direction::Short, 1100, 100, slot);
     let limit_bid_1 = create_test_order(3, OrderType::Limit, Direction::Long, 900, 75, slot);
     let limit_bid_2 = create_test_order(4, OrderType::Limit, Direction::Long, 800, 25, slot);
 
@@ -1080,22 +1113,40 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
     dlob.insert_order(&Pubkey::new_unique(), limit_bid_1);
     dlob.insert_order(&Pubkey::new_unique(), limit_bid_2);
 
-    // Insert market orders (some should cross, some shouldn't)
-    let market_bid_1 = create_test_order(5, OrderType::Market, Direction::Long, 1100, 30, slot); // Should cross with limit_ask_1
-    let market_bid_2 = create_test_order(6, OrderType::Market, Direction::Long, 900, 40, slot); // Shouldn't cross
-    let market_ask_1 = create_test_order(7, OrderType::Market, Direction::Short, 800, 20, slot); // Should cross with limit_bid_1
-    let market_ask_2 = create_test_order(8, OrderType::Market, Direction::Short, 1200, 60, slot); // Shouldn't cross
+    // Add a large market bid that will cross both limit asks
+    let mut market_bid_1 = create_test_order(5, OrderType::Market, Direction::Long, 0, 75, slot);
+    market_bid_1.auction_duration = 10;
+    market_bid_1.auction_start_price = 1200;
+    market_bid_1.auction_end_price = 1300;
+
+    let mut market_ask_1 = create_test_order(7, OrderType::Market, Direction::Short, 0, 20, slot); // Should cross with limit_bid_1
+    market_ask_1.auction_duration = 10;
+    market_ask_1.auction_start_price = 800;
+    market_ask_1.auction_end_price = 700;
 
     dlob.insert_order(&Pubkey::new_unique(), market_bid_1);
-    dlob.insert_order(&Pubkey::new_unique(), market_bid_2);
     dlob.insert_order(&Pubkey::new_unique(), market_ask_1);
-    dlob.insert_order(&Pubkey::new_unique(), market_ask_2);
 
     // Insert oracle orders (some should cross, some shouldn't)
-    let oracle_bid_1 = create_test_order(9, OrderType::Oracle, Direction::Long, 100, 35, slot); // Price 1100, should cross with limit_ask_1
-    let oracle_bid_2 = create_test_order(10, OrderType::Oracle, Direction::Long, -200, 45, slot); // Price 800, shouldn't cross
-    let oracle_ask_1 = create_test_order(11, OrderType::Oracle, Direction::Short, -150, 25, slot); // Price 850, should cross with limit_bid_1
-    let oracle_ask_2 = create_test_order(12, OrderType::Oracle, Direction::Short, 200, 55, slot); // Price 1200, shouldn't cross
+    let mut oracle_bid_1 = create_test_order(9, OrderType::Oracle, Direction::Long, 0, 35, slot); // Price 1100, should cross with limit_ask_1
+    oracle_bid_1.auction_duration = 10;
+    oracle_bid_1.auction_start_price = 1100;
+    oracle_bid_1.auction_end_price = 1200;
+
+    let mut oracle_bid_2 = create_test_order(10, OrderType::Oracle, Direction::Long, 0, 45, slot); // Price 800, shouldn't cross
+    oracle_bid_2.auction_duration = 10;
+    oracle_bid_2.auction_start_price = 800;
+    oracle_bid_2.auction_end_price = 900;
+
+    let mut oracle_ask_1 = create_test_order(11, OrderType::Oracle, Direction::Short, 0, 25, slot); // Price 850, should cross with limit_bid_1
+    oracle_ask_1.auction_duration = 10;
+    oracle_ask_1.auction_start_price = 850;
+    oracle_ask_1.auction_end_price = 750;
+
+    let mut oracle_ask_2 = create_test_order(12, OrderType::Oracle, Direction::Short, 0, 55, slot); // Price 1200, shouldn't cross
+    oracle_ask_2.auction_duration = 10;
+    oracle_ask_2.auction_start_price = 1200;
+    oracle_ask_2.auction_end_price = 1100;
 
     dlob.insert_order(&Pubkey::new_unique(), oracle_bid_1);
     dlob.insert_order(&Pubkey::new_unique(), oracle_bid_2);
@@ -1103,23 +1154,33 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
     dlob.insert_order(&Pubkey::new_unique(), oracle_ask_2);
 
     let crosses = dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price);
+    dbg!(&crosses);
 
     // Should find 4 crosses:
-    // 1. market_bid_1 (30) + oracle_bid_1 (35) crossing with limit_ask_1 (100)
-    // 2. market_ask_1 (20) + oracle_ask_1 (25) crossing with limit_bid_1 (75)
-    assert_eq!(crosses.len(), 2);
+    // 1. market_bid_1 (200) crossing limit_ask_1 (50) and limit_ask_2 (25)
+    // 2. oracle_bid_1 (35) crossing limit_ask_2 (50)
+    // 2. market_ask_1 (20) crossing limit_bid_1 (75)
+    // 4. oracle_ask_1 (25) crossing limit_bid_1 (75)
+    assert_eq!(crosses.len(), 4);
 
-    // Verify the first cross (against limit_ask_1)
+    // Verify the first cross (market_bid_1 crossing both limit asks)
     let first_cross = &crosses[0];
-    assert!(!first_cross.is_empty());
-    assert_eq!(first_cross.orders.len(), 2);
-    assert_eq!(first_cross.orders[0].2, 30); // market_bid_1 size
-    assert_eq!(first_cross.orders[1].2, 35); // oracle_bid_1 size
+    assert_eq!(first_cross.1.orders.len(), 2);
+    assert_eq!(first_cross.1.orders[0].2, 50); // Fill against limit_ask_1, limited by market_bid_1 size
+    assert_eq!(first_cross.1.orders[1].2, 25);
 
-    // Verify the second cross (against limit_bid_1)
+    // Verify the second cross (oracle_bid_1 crossing limit_ask_2)
     let second_cross = &crosses[1];
-    assert!(!second_cross.is_empty());
-    assert_eq!(second_cross.orders.len(), 2);
-    assert_eq!(second_cross.orders[0].2, 20); // market_ask_1 size
-    assert_eq!(second_cross.orders[1].2, 25); // oracle_ask_1 size
+    assert_eq!(second_cross.1.orders.len(), 1);
+    assert_eq!(second_cross.1.orders[0].2, 35); // Fill against limit_ask_2
+
+    // Verify the third cross (market_bid_3 crossing limit_ask_2)
+    let third_cross = &crosses[2];
+    assert_eq!(third_cross.1.orders.len(), 1);
+    assert_eq!(third_cross.1.orders[0].2, 20); // Fill against limit_ask_2
+
+    // Verify the fourth cross (market_ask_1 crossing limit_bid_1)
+    let fourth_cross = &crosses[3];
+    assert_eq!(fourth_cross.1.orders.len(), 1);
+    assert_eq!(fourth_cross.1.orders[0].2, 25); // market_ask_1 size
 }

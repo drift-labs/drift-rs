@@ -76,13 +76,13 @@ impl TakerOrder {
 /// Best fills for a taker order
 /// Returns (candidates, is_partial)
 #[derive(Debug)]
-pub struct TakerCrosses {
+pub struct MakerCrosses {
     /// (metadata, maker_price, fill_size)
     pub orders: ArrayVec<(OrderMetadata, u64, u64), 16>,
     pub is_partial: bool,
 }
 
-impl TakerCrosses {
+impl MakerCrosses {
     /// Returns True if there were not crosses found
     pub fn is_empty(&self) -> bool {
         self.orders.is_empty()

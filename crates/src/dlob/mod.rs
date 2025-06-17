@@ -732,19 +732,23 @@ impl DLOB {
         market_type: MarketType,
         slot: u64,
         oracle_price: u64,
-    ) -> Vec<TakerCrosses> {
+    ) -> Vec<(OrderMetadata, MakerCrosses)> {
         let market = MarketId::new(market_index, market_type);
         let book = self.markets.get(&market).expect("market lob exists");
 
-        let mut all_crosses = Vec::<TakerCrosses>::new();
+        let mut all_crosses = Vec::<(OrderMetadata, MakerCrosses)>::new();
 
         let taker_asks = book.get_taker_asks(slot, oracle_price);
+        dbg!(&taker_asks);
         let taker_bids = book.get_taker_bids(slot, oracle_price);
+        dbg!(&taker_bids);
         let mut resting_asks = book.get_limit_asks(slot, oracle_price);
+        dbg!(&resting_asks);
         let mut resting_bids = book.get_limit_bids(slot, oracle_price);
+        dbg!(&resting_bids);
 
         // Check for crosses between auction bids and resting asks
-        for (_oid, price, size) in taker_bids {
+        for (oid, price, size) in taker_bids {
             let taker_order = TakerOrder {
                 price,
                 size,
@@ -755,20 +759,23 @@ impl DLOB {
 
             let new_crosses = self.find_crosses_for_taker_order_inner(
                 slot,
-                oracle_price,
+                book.last_modified_slot,
                 taker_order,
                 resting_asks.iter_mut().peekable(),
             );
 
-            if !new_crosses.is_empty() {
-                all_crosses.push(new_crosses);
+            if let Some(metadata) = self.metadata.get(&oid) {
+                if !new_crosses.is_empty() {
+                    all_crosses.push((*metadata.value(), new_crosses));
+                }
             } else {
-                break;
+                log::warn!(target: "dlob", "missing metadata for order: {oid}");
+                continue;
             }
         }
 
         // Check for crosses between auction asks and resting bids
-        for (_oid, price, size) in taker_asks {
+        for (oid, price, size) in taker_asks {
             let taker_order = TakerOrder {
                 price,
                 size,
@@ -779,14 +786,18 @@ impl DLOB {
 
             let new_crosses = self.find_crosses_for_taker_order_inner(
                 slot,
-                oracle_price,
+                book.last_modified_slot,
                 taker_order,
                 resting_bids.iter_mut().peekable(),
             );
-            if !new_crosses.is_empty() {
-                all_crosses.push(new_crosses);
+
+            if let Some(metadata) = self.metadata.get(&oid) {
+                if !new_crosses.is_empty() {
+                    all_crosses.push((*metadata.value(), new_crosses));
+                }
             } else {
-                break;
+                log::warn!(target: "dlob", "missing metadata for order: {oid}");
+                continue;
             }
         }
 
@@ -801,7 +812,7 @@ impl DLOB {
         current_slot: u64,
         oracle_price: u64,
         taker_order: TakerOrder,
-    ) -> TakerCrosses {
+    ) -> MakerCrosses {
         let market = MarketId::new(taker_order.market_index, taker_order.market_type);
         let (book_slot, mut resting_orders) = match taker_order.direction {
             Direction::Long => {
@@ -835,7 +846,7 @@ impl DLOB {
         resting_order_slot: u64,
         taker_order: TakerOrder,
         mut resting_limit_orders: Peekable<impl Iterator<Item = &'a mut (u64, u64, u64)>>,
-    ) -> TakerCrosses {
+    ) -> MakerCrosses {
         let mut candidates = ArrayVec::<(OrderMetadata, u64, u64), 16>::new();
         let mut remaining_size = taker_order.size;
 
@@ -877,7 +888,7 @@ impl DLOB {
             }
         }
 
-        TakerCrosses {
+        MakerCrosses {
             orders: candidates,
             is_partial: remaining_size != 0,
         }
