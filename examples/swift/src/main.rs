@@ -9,19 +9,17 @@ use drift_rs::{
     constants::PROGRAM_ID,
     dlob::{util::OrderDelta, DLOBEvent, TakerCrosses, TakerOrder, DLOB},
     ffi::calculate_auction_price,
-    grpc::grpc_subscriber::AccountFilter,
+    grpc::{grpc_subscriber::AccountFilter, AccountUpdate},
     swift_order_subscriber::SignedOrderInfo,
     types::{
-        accounts::User, MarketId, Order, OrderParams, OrderStatus, OrderType, PositionDirection,
-        PostOnlyParam, RpcSendTransactionConfig,
+        accounts::{User, UserStats},
+        MarketId, Order, OrderStatus, OrderType, PostOnlyParam, RpcSendTransactionConfig,
     },
-    DriftClient, GrpcSubscribeOpts, Pubkey, RpcClient, Wallet,
+    DriftClient, GrpcSubscribeOpts, Pubkey, RpcClient, TransactionBuilder, Wallet,
 };
 use futures_util::StreamExt;
 use solana_account_decoder_client_types::UiAccountEncoding;
-use solana_rpc_client_api::config::{
-    RpcAccountInfoConfig, RpcProgramAccountsConfig, RpcTransactionConfig,
-};
+use solana_rpc_client_api::config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
 use solana_sdk::signature::Keypair;
 
 /// Active market IDs to fill for
@@ -37,13 +35,12 @@ async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) -> tokio::sync::mps
     // TODO: IncrementalDLOBBuilder
     let dlob_notifier = dlob.spawn_notifier();
 
-    // Sync all User accounts with `filter` e.g. non-idle,has-auctions
-    let sync_result = drift
+    let stats_sync_result = drift
         .rpc()
         .get_program_accounts_with_config(
             &PROGRAM_ID,
             RpcProgramAccountsConfig {
-                filters: Some(vec![drift_rs::memcmp::get_user_with_order_filter()]),
+                filters: Some(vec![drift_rs::memcmp::get_user_stats_filter()]),
                 account_config: RpcAccountInfoConfig {
                     encoding: Some(UiAccountEncoding::Base64Zstd),
                     ..Default::default()
@@ -54,10 +51,51 @@ async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) -> tokio::sync::mps
         .await;
 
     // synced accounts
+    match stats_sync_result {
+        Ok(accounts) => {
+            for (pubkey, account) in accounts {
+                drift.account_map().on_account_fn()(&AccountUpdate {
+                    pubkey,
+                    data: &account.data,
+                    lamports: account.lamports,
+                    owner: PROGRAM_ID,
+                    rent_epoch: u64::MAX,
+                    executable: false,
+                    slot: 0,
+                });
+            }
+        }
+        Err(err) => {
+            log::error!(target: "dlob", "dlob sync error: {err:?}");
+        }
+    }
+    log::info!(target: "dlob", "sync stats accounts");
+
+    // Sync all User accounts with `filter` e.g. non-idle,has-auctions
+    let sync_result = drift
+        .rpc()
+        .get_program_accounts_with_config(
+            &PROGRAM_ID,
+            RpcProgramAccountsConfig {
+                filters: Some(vec![
+                    drift_rs::memcmp::get_non_idle_user_filter(),
+                    drift_rs::memcmp::get_user_filter(),
+                ]),
+                account_config: RpcAccountInfoConfig {
+                    encoding: Some(UiAccountEncoding::Base64Zstd),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .await;
+
+    // sync User accounts with orders
     match sync_result {
         Ok(accounts) => {
             for (pubkey, account) in accounts {
                 let user: &User = drift_rs::utils::deser_user(&account.data);
+                // load user orders
                 for order in user.orders {
                     if order.status == OrderStatus::Open
                         && order.base_asset_amount > order.base_asset_amount_filled
@@ -71,6 +109,17 @@ async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) -> tokio::sync::mps
                         });
                     }
                 }
+
+                // cache User sub-account
+                drift.account_map().on_account_fn()(&AccountUpdate {
+                    pubkey,
+                    data: &account.data,
+                    lamports: account.lamports,
+                    owner: PROGRAM_ID,
+                    rent_epoch: u64::MAX,
+                    executable: false,
+                    slot: 0,
+                });
             }
         }
         Err(err) => {
@@ -87,6 +136,7 @@ async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) -> tokio::sync::mps
             "https://api.rpcpool.com".into(),
             std::env::var("TEST_GRPC_X_TOKEN").expect("TEST_GRPC_X_TOKEN set"),
             GrpcSubscribeOpts::default()
+                .commitment(solana_sdk::commitment_config::CommitmentLevel::Processed)
                 .usermap_on()
                 .on_slot({
                     let dlob = dlob_notifier.clone();
@@ -207,6 +257,11 @@ async fn main() {
         .await
         .expect("subscribed blockhashes");
 
+    let _ = drift
+        .subscribe_account(&filler_subaccount)
+        .await
+        .expect("subscribed filler subaccount");
+
     let mut swift_order_stream = drift
         .subscribe_swift_orders(&MARKET_IDS, Some(true))
         .await
@@ -236,7 +291,7 @@ async fn main() {
         tokio::select! {
             biased;
             _ = tokio::signal::ctrl_c() => {
-                println!("swift maker shutting down...");
+                log::warn!("swift maker shutting down...");
                 break;
             }
             swift_order = swift_order_stream.next() => {
@@ -300,6 +355,7 @@ async fn main() {
 
                         let lookahead = 1;
                         for offset in 0..=lookahead {
+                            // TODO: if we don't find a cross schedule it to be checked later
                             if let Ok(crosses) = dlob.find_crosses_for_taker_order(slot + offset, oracle_price as u64, taker_order) {
                                 if !crosses.is_empty() {
                                     log::info!(target: "swift", "found resting cross|offset={offset}|crosses={crosses:?}");
@@ -336,13 +392,23 @@ async fn try_fill(
     let taker_subaccount = swift_order.taker_subaccount();
 
     // fetching taker accounts inline
-    // TODO: for better fills maintain a gRPC map of user accounts
-    let (taker_account_data, taker_stats, tx_builder) = tokio::try_join!(
-        drift.get_user_account(&taker_subaccount),
-        drift.get_user_stats(&swift_order.taker_authority),
-        drift.init_tx(&filler_subaccount, false)
-    )
-    .unwrap();
+    let t0 = std::time::SystemTime::now();
+    let filler_account_data = drift
+        .try_get_account::<User>(&filler_subaccount)
+        .expect("filler account");
+    let taker_account_data = drift
+        .get_account_value::<User>(&taker_subaccount)
+        .await
+        .expect("taker account");
+    let taker_stats = drift
+        .try_get_account::<UserStats>(&Wallet::derive_stats_account(&swift_order.taker_authority))
+        .expect("taker stats");
+    let tx_builder = TransactionBuilder::new(
+        drift.program_data(),
+        filler_subaccount,
+        std::borrow::Cow::Borrowed(&filler_account_data),
+        false,
+    );
 
     let makers: Vec<User> = crosses
         .orders
@@ -350,24 +416,33 @@ async fn try_fill(
         .map(|(m, _, _)| {
             drift
                 .try_get_account::<User>(&m.user)
-                .expect("user account syncd")
+                .expect("maker account syncd")
         })
         .collect();
 
+    let taker_order_id = taker_account_data.next_order_id;
     let tx = tx_builder
-        .with_priority_fee(2_000, Some(160_000))
+        .with_priority_fee(1_000, Some(420_000))
         .place_swift_order(&swift_order, &taker_account_data)
         .fill_perp_order(
             taker_order.market_index,
             taker_subaccount,
             &taker_account_data,
             &taker_stats,
-            None,
+            None, // Some(taker_order_id), // assuming we're fast enough that its the taker_order_id, should be ok for retail
             makers.as_slice(),
         )
         .build();
 
-    // send twice
+    log::info!(
+        "tx build time: {:?}ms",
+        std::time::SystemTime::now()
+            .duration_since(t0)
+            .unwrap()
+            .as_millis()
+    );
+
+    // send twice assume, it may succeed on next slot
     for _ in 0..=1 {
         match drift
             .sign_and_send_with_config(

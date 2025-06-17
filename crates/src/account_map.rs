@@ -87,7 +87,7 @@ impl AccountMap {
         Ok(())
     }
     /// On account update callback for gRPC hook
-    pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
+    pub fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
         let accounts = Arc::clone(&self.inner);
         let subscriptions = Arc::clone(&self.subscriptions);
         move |update| {

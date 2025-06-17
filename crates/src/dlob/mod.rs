@@ -137,7 +137,7 @@ impl L3Book {
         for order in &floating_limit_orders.bids {
             if let Some(meta) = metadata.get(&order.id) {
                 bids.push(L3Order {
-                    price: order.get_price(slot, oracle_price, 0),
+                    price: order.get_price(slot, oracle_price, 0), // tick_size unused
                     size: order.size(),
                     maker: meta.user,
                     order_id: meta.order_id,
@@ -148,7 +148,7 @@ impl L3Book {
         for order in &floating_limit_orders.asks {
             if let Some(meta) = metadata.get(&order.id) {
                 asks.push(L3Order {
-                    price: order.get_price(slot, oracle_price, 0),
+                    price: order.get_price(slot, oracle_price, 0), // tick_size unused
                     size: order.size(),
                     maker: meta.user,
                     order_id: meta.order_id,
@@ -657,9 +657,17 @@ impl<T: Clone + From<(u64, Order)> + OrderKey> Orders<T> {
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
 pub enum OrderKind {
+    /// auction fixed price offset
     Market,
+    /// auction oracle offset
     Oracle,
+    /// transient state before oracle limit order becomes resting
+    FloatingLimitAuction,
+    /// transient state before fixed limit order becomes resting
+    LimitAuction,
+    /// resting limit order
     Limit,
+    /// resting oracle limit order
     FloatingLimit,
     Trigger,
 }
@@ -899,31 +907,19 @@ impl Orderbook {
                 .iter()
                 .map(|(_, o)| (o.id, o.get_price(), o.size)),
         );
-        result.extend(
-            self.floating_limit_orders
-                .asks
-                .iter()
-                .map(|o| (o.id, o.get_price(slot, oracle_price, 0), o.size())),
-        );
+        result.extend(self.floating_limit_orders.asks.iter().map(|o| {
+            (
+                o.id,
+                o.get_price(slot, oracle_price, 0), // tick_size unused
+                o.size(),
+            )
+        }));
 
         // Sort by price in ascending order (best ask first)
         result.sort_by(|a, b| a.1.cmp(&b.1));
         result
     }
 }
-/*
-avoid explosion of orderlists
-- taking limit orders
-=> auction duration of 0 store in market orders and oracle orders
-    -> simple to implement
-    -> can't easily do 'taker' limit orders (oldest becomes maker)
-=> store in resting_limit and floating_limit
-    -> auction complete NON-post-only orders can make for any other taker order type
-    -> auction complete NON-post-only orders can make for older NON-post only limit orders too
-    -> check for crosses must check post_only=False/auction_complete on each order (overhead)
-    -> no expiry step moving from auction to limit, crosses checked naturally
-    -> DLOB builder needs to filter this or risk incorrect results
- */
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum DLOBEvent {
@@ -1048,10 +1044,10 @@ impl DLOB {
         self.with_orderbook_mut(MarketId::new(order.market_index, order.market_type), |orderbook| {
             if let Some(metadata) = self.metadata.get(&order_id) {
                 match metadata.kind {
-                    OrderKind::Market => {
+                    OrderKind::Market | OrderKind::LimitAuction => {
                         orderbook.market_orders.update(order_id, order);
                     }
-                    OrderKind::Oracle => {
+                    OrderKind::Oracle | OrderKind::FloatingLimitAuction => {
                         orderbook.oracle_orders.update(order_id, order);
                     }
                     OrderKind::Limit => {
@@ -1075,10 +1071,10 @@ impl DLOB {
         self.with_orderbook_mut(MarketId::new(order.market_index, order.market_type), |orderbook| {
             if let Some((_, metadata)) = self.metadata.remove(&order_id) {
                 match metadata.kind {
-                    OrderKind::Market => {
+                    OrderKind::Market | OrderKind::LimitAuction => {
                         orderbook.market_orders.remove(order_id, order);
                     }
-                    OrderKind::Oracle => {
+                    OrderKind::Oracle | OrderKind::FloatingLimitAuction => {
                         orderbook.oracle_orders.remove(order_id, order);
                     }
                     OrderKind::Limit => {
@@ -1137,32 +1133,42 @@ impl DLOB {
                         let is_floating = order.oracle_price_offset != 0;
                         let is_post_only = order.post_only;
                         let is_auction = order.auction_duration != 0;
-                        if !is_post_only {
+                        let order_kind = if !is_post_only {
                             // taker orders but can be maker in some circumstances, namely:
                             // 1) auction is complete and taker order is market/oracle
                             // 2) auction is complete, and taker order is limit and newer
                             match (is_auction, is_floating) {
-                                (true, true) => orderbook.oracle_orders.insert(order_id, order),
-                                (true, false) => orderbook.market_orders.insert(order_id, order),
+                                (true, true) => {
+                                    orderbook.oracle_orders.insert(order_id, order);
+                                    OrderKind::FloatingLimitAuction
+                                }
+                                (true, false) => {
+                                    orderbook.market_orders.insert(order_id, order);
+                                    OrderKind::LimitAuction
+                                }
                                 (false, true) => {
-                                    orderbook.floating_limit_orders.insert(order_id, order)
+                                    orderbook.floating_limit_orders.insert(order_id, order);
+                                    OrderKind::FloatingLimit
                                 }
                                 (false, false) => {
-                                    orderbook.resting_limit_orders.insert(order_id, order)
+                                    orderbook.resting_limit_orders.insert(order_id, order);
+                                    OrderKind::Limit
                                 }
                             }
                         } else {
                             // post only cannot have an auction (maker side only)
                             if is_floating {
                                 orderbook.floating_limit_orders.insert(order_id, order);
+                                OrderKind::FloatingLimit
                             } else {
                                 orderbook.resting_limit_orders.insert(order_id, order);
+                                OrderKind::Limit
                             }
-                        }
+                        };
 
                         self.metadata.insert(
                             order_id,
-                            OrderMetadata::new(*user, OrderKind::Limit, order.order_id),
+                            OrderMetadata::new(*user, order_kind, order.order_id),
                         );
                     }
                     OrderType::TriggerLimit | OrderType::TriggerMarket => {
@@ -1174,6 +1180,8 @@ impl DLOB {
     }
 
     /// Finds best limit order crosses for a given `taker_order`
+    ///
+    /// Limited to 16 orders
     pub fn find_crosses_for_taker_order(
         &self,
         slot: u64,
@@ -1211,7 +1219,8 @@ impl DLOB {
                 if let Some(metadata) = self.metadata.get(&internal_order_id) {
                     candidates.push((*metadata.value(), maker_price, fill_size));
                     remaining_size -= fill_size;
-                    if remaining_size == 0 {
+                    if remaining_size == 0 || candidates.len() == candidates.capacity() {
+                        log::debug!(target: "dlob", "reached max number crosses");
                         break;
                     }
                 } else {
@@ -1707,8 +1716,30 @@ mod tests {
 
         // Should fill both orders, 5 from first order and 2 from second
         assert_eq!(result.orders.len(), 2);
-        assert_eq!(result.orders[0], (order_hash(&user, 1), 5));
-        assert_eq!(result.orders[1], (order_hash(&user, 2), 2));
+        assert_eq!(
+            result.orders[0],
+            (
+                OrderMetadata {
+                    order_id: 1,
+                    user,
+                    kind: OrderKind::Limit
+                },
+                order_hash(&user, 1),
+                5
+            )
+        );
+        assert_eq!(
+            result.orders[1],
+            (
+                OrderMetadata {
+                    order_id: 2,
+                    user,
+                    kind: OrderKind::Limit
+                },
+                order_hash(&user, 2),
+                2
+            )
+        );
         assert!(!result.is_partial);
     }
 
@@ -1740,7 +1771,18 @@ mod tests {
 
         // Should only fill 3 units from the first order
         assert_eq!(result.orders.len(), 1);
-        assert_eq!(result.orders[0], (order_hash(&user, 1), 3));
+        assert_eq!(
+            result.orders[0],
+            (
+                OrderMetadata {
+                    order_id: 1,
+                    user,
+                    kind: OrderKind::Limit
+                },
+                order_hash(&user, 1),
+                3
+            )
+        );
         assert!(result.is_partial);
     }
 
@@ -1804,7 +1846,18 @@ mod tests {
 
         // Should fill the floating limit order
         assert_eq!(result.orders.len(), 1);
-        assert_eq!(result.orders[0], (order_hash(&user, 1), 5));
+        assert_eq!(
+            result.orders[0],
+            (
+                OrderMetadata {
+                    order_id: 1,
+                    user,
+                    kind: OrderKind::FloatingLimit,
+                },
+                order_hash(&user, 1),
+                5
+            )
+        );
         assert!(!result.is_partial);
     }
 
@@ -1840,8 +1893,30 @@ mod tests {
 
         // Should fill the better price first (900)
         assert_eq!(result.orders.len(), 2);
-        assert_eq!(result.orders[0], (order_hash(&user, 2), 3));
-        assert_eq!(result.orders[1], (order_hash(&user, 1), 2));
+        assert_eq!(
+            result.orders[0],
+            (
+                OrderMetadata {
+                    order_id: 1,
+                    user,
+                    kind: OrderKind::Limit
+                },
+                order_hash(&user, 2),
+                3
+            )
+        );
+        assert_eq!(
+            result.orders[1],
+            (
+                OrderMetadata {
+                    order_id: 2,
+                    user,
+                    kind: OrderKind::Limit
+                },
+                order_hash(&user, 1),
+                2
+            )
+        );
         assert!(!result.is_partial);
     }
 
