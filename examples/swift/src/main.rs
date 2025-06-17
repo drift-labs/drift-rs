@@ -2,12 +2,16 @@
 //!
 //! The `TODO:` comments should be altered depending on individual maker strategy
 //!
-use std::time::Duration;
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    hash::RandomState,
+    time::Duration,
+};
 
 use anchor_lang::prelude::*;
 use drift_rs::{
     constants::PROGRAM_ID,
-    dlob::{util::OrderDelta, DLOBEvent, TakerCrosses, TakerOrder, DLOB},
+    dlob::{util::OrderDelta, DLOBEvent, MakerCrosses, OrderMetadata, TakerOrder, DLOB},
     ffi::calculate_auction_price,
     grpc::{grpc_subscriber::AccountFilter, AccountUpdate},
     swift_order_subscriber::SignedOrderInfo,
@@ -136,10 +140,10 @@ async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) -> tokio::sync::mps
             "https://api.rpcpool.com".into(),
             std::env::var("TEST_GRPC_X_TOKEN").expect("TEST_GRPC_X_TOKEN set"),
             GrpcSubscribeOpts::default()
-                .commitment(solana_sdk::commitment_config::CommitmentLevel::Processed)
+                .commitment(solana_sdk::commitment_config::CommitmentLevel::Confirmed)
                 .usermap_on()
                 .on_slot({
-                    let dlob = dlob_notifier.clone();
+                    let dlob_notifier = dlob_notifier.clone();
                     let drift = drift.clone();
 
                     move |new_slot| {
@@ -150,7 +154,7 @@ async fn setup_grpc(drift: DriftClient, dlob: &'static DLOB) -> tokio::sync::mps
                             if let Some(oracle_price) =
                                 drift.try_get_oracle_price_data_and_slot(market)
                             {
-                                dlob.send(DLOBEvent::SlotOrPriceUpdate {
+                                dlob_notifier.send(DLOBEvent::SlotOrPriceUpdate {
                                     slot: new_slot,
                                     market_index: market.index(),
                                     market_type: market.kind(),
@@ -285,6 +289,7 @@ async fn main() {
     // TODO:
     // - build cross ixs/txs
     // - handle retrying txs / rate-limits (light version)
+    let mut limiter = OrderSlotLimiter::new();
 
     let mut slot = 0;
     loop {
@@ -358,7 +363,7 @@ async fn main() {
                             if !crosses.is_empty() {
                                 log::info!(target: "swift", "found resting cross|offset={offset}|crosses={crosses:?}");
                                 tokio::spawn(
-                                    try_fill(drift.clone(), filler_subaccount, signed_order, crosses)
+                                    try_swift_fill(drift.clone(), filler_subaccount, signed_order, crosses)
                                 );
                                 break;
                             }
@@ -372,17 +377,33 @@ async fn main() {
             }
             new_slot = slot_rx.recv() => {
                 slot = new_slot.expect("got slot update");
+
+                for market in MARKET_IDS {
+                    let oracle_price = drift.try_get_oracle_price_data_and_slot(market).expect("got oracle price").data.price;
+                    let mut crosses = dlob.find_crosses_for_auctions(market.index(), market.kind(), slot, oracle_price as u64);
+                    crosses.retain(|(o, _)| limiter.allow_event(slot, o.order_id));
+
+                    if !crosses.is_empty() {
+                        log::info!(target: "filler", "found auction crosses. market: {},{crosses:?}", market.index());
+                        tokio::spawn({
+                            let drift = drift.clone();
+                            async move {
+                                try_auction_fill(drift, market.index(), filler_subaccount, crosses).await
+                            }
+                        });
+                    }
+                }
             }
         }
     }
 }
 
 /// Try to fill a swift order
-async fn try_fill(
+async fn try_swift_fill(
     drift: DriftClient,
     filler_subaccount: Pubkey,
     swift_order: SignedOrderInfo,
-    crosses: TakerCrosses,
+    crosses: MakerCrosses,
 ) {
     log::info!("try fill swift order: {}", swift_order.order_uuid_str());
     let taker_order = swift_order.order_params();
@@ -398,7 +419,7 @@ async fn try_fill(
         .await
         .expect("taker account");
     let taker_stats = drift
-        .try_get_account::<UserStats>(&Wallet::derive_stats_account(&swift_order.taker_authority))
+        .try_get_account::<UserStats>(&Wallet::derive_stats_account(&taker_account_data.authority))
         .expect("taker stats");
     let tx_builder = TransactionBuilder::new(
         drift.program_data(),
@@ -417,7 +438,7 @@ async fn try_fill(
         })
         .collect();
 
-    let taker_order_id = taker_account_data.next_order_id;
+    // let taker_order_id = taker_account_data.next_order_id;
     let tx = tx_builder
         .with_priority_fee(1_000, Some(420_000))
         .place_swift_order(&swift_order, &taker_account_data)
@@ -460,6 +481,145 @@ async fn try_fill(
             Err(err) => {
                 log::info!(target: "swift", "fill failed 🐢: {err}");
                 tokio::time::sleep(Duration::from_millis(200)).await;
+            }
+        }
+    }
+}
+
+/// Try to fill an auction order
+async fn try_auction_fill(
+    drift: DriftClient,
+    market_index: u16,
+    filler_subaccount: Pubkey,
+    auction_crosses: Vec<(OrderMetadata, MakerCrosses)>,
+) {
+    let filler_account_data = drift
+        .try_get_account::<User>(&filler_subaccount)
+        .expect("filler account");
+
+    for (taker_order_metadata, makers) in auction_crosses {
+        log::info!("try fill auction order: {taker_order_metadata:?}");
+        let taker_subaccount = taker_order_metadata.user;
+
+        // fetching taker accounts inline
+        let t0 = std::time::SystemTime::now();
+
+        let taker_account_data = drift
+            .try_get_account::<User>(&taker_subaccount)
+            .expect("taker account");
+        let taker_stats = drift
+            .try_get_account::<UserStats>(&Wallet::derive_stats_account(
+                &taker_account_data.authority,
+            ))
+            .expect("taker stats");
+        let tx_builder = TransactionBuilder::new(
+            drift.program_data(),
+            filler_subaccount,
+            std::borrow::Cow::Borrowed(&filler_account_data),
+            false,
+        );
+
+        let makers: Vec<User> = makers
+            .orders
+            .iter()
+            .map(|(m, _, _)| {
+                drift
+                    .try_get_account::<User>(&m.user)
+                    .expect("maker account syncd")
+            })
+            .collect();
+
+        // let taker_order_id = taker_account_data.next_order_id;
+        let tx = tx_builder
+            .with_priority_fee(1_000, Some(320_000))
+            .fill_perp_order(
+                market_index,
+                taker_subaccount,
+                &taker_account_data,
+                &taker_stats,
+                None, // Some(taker_order_id), // assuming we're fast enough that its the taker_order_id, should be ok for retail
+                makers.as_slice(),
+            )
+            .build();
+
+        log::info!(
+            "tx build time: {:?}ms",
+            std::time::SystemTime::now()
+                .duration_since(t0)
+                .unwrap()
+                .as_millis()
+        );
+
+        for _ in 0..=1 {
+            match drift
+                .sign_and_send_with_config(
+                    tx.clone(),
+                    None,
+                    RpcSendTransactionConfig {
+                        skip_preflight: true,
+                        max_retries: Some(0),
+                        ..Default::default()
+                    },
+                )
+                .await
+            {
+                Ok(sig) => {
+                    log::info!(target: "filler", "sent auction fill 🧑‍⚖️: {sig:?}");
+                    break;
+                }
+                Err(err) => {
+                    log::info!(target: "filler", "auction fill failed 🐢: {err}");
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                }
+            }
+        }
+    }
+}
+
+use std::cmp::Ordering;
+
+const WINDOW: usize = 40;
+
+pub struct OrderSlotLimiter {
+    slots: [Vec<u32>; WINDOW],
+    generations: [u64; WINDOW],
+}
+
+impl OrderSlotLimiter {
+    pub fn new() -> Self {
+        let slots = std::array::from_fn(|_| Vec::new());
+        let generations = [0; WINDOW];
+        Self { slots, generations }
+    }
+
+    pub fn allow_event(&mut self, g: u64, id: u32) -> bool {
+        let idx = (g % WINDOW as u64) as usize;
+
+        // Replace old generation
+        if self.generations[idx] != g {
+            self.slots[idx].clear();
+            self.generations[idx] = g;
+        }
+
+        // Check generations g - 1 and g - 2
+        for i in 1..=4 {
+            let past_g = g.saturating_sub(i);
+            let past_idx = (past_g % WINDOW as u64) as usize;
+
+            if self.generations[past_idx] == past_g {
+                if self.slots[past_idx].binary_search(&id).is_ok() {
+                    return false;
+                }
+            }
+        }
+
+        // Insert in sorted order
+        let slot = &mut self.slots[idx];
+        match slot.binary_search(&id) {
+            Ok(_) => false, // Already present — shouldn't happen
+            Err(pos) => {
+                slot.insert(pos, id);
+                true
             }
         }
     }

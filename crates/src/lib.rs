@@ -2560,7 +2560,7 @@ impl<'a> TransactionBuilder<'a> {
         if taker_stats.is_referred() {
             accounts.extend([
                 AccountMeta::new(taker_stats.referrer, false),
-                AccountMeta::new(Wallet::derive_stats_account(&taker_stats.authority), false),
+                AccountMeta::new(Wallet::derive_stats_account(&taker_stats.referrer), false),
             ]);
         }
 

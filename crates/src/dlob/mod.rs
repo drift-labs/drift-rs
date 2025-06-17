@@ -720,7 +720,7 @@ impl DLOB {
         );
     }
 
-    /// At the current slot return all crossing auctions crossing resting limit orders
+    /// At the current slot return all auctions crossing resting limit orders
     ///
     /// ## Panics
     ///
@@ -735,27 +735,26 @@ impl DLOB {
     ) -> Vec<(OrderMetadata, MakerCrosses)> {
         let market = MarketId::new(market_index, market_type);
         let book = self.markets.get(&market).expect("market lob exists");
-
-        let mut all_crosses = Vec::<(OrderMetadata, MakerCrosses)>::new();
+        let mut all_crosses = Vec::with_capacity(16);
 
         let taker_asks = book.get_taker_asks(slot, oracle_price);
-        dbg!(&taker_asks);
         let taker_bids = book.get_taker_bids(slot, oracle_price);
-        dbg!(&taker_bids);
         let mut resting_asks = book.get_limit_asks(slot, oracle_price);
-        dbg!(&resting_asks);
         let mut resting_bids = book.get_limit_bids(slot, oracle_price);
-        dbg!(&resting_bids);
+
+        let mut taker_order = TakerOrder {
+            price: 0,
+            size: 0,
+            direction: Direction::Long,
+            market_index,
+            market_type,
+        };
 
         // Check for crosses between auction bids and resting asks
         for (oid, price, size) in taker_bids {
-            let taker_order = TakerOrder {
-                price,
-                size,
-                direction: Direction::Long,
-                market_index,
-                market_type,
-            };
+            taker_order.price = price;
+            taker_order.size = size;
+            taker_order.direction = Direction::Long;
 
             let new_crosses = self.find_crosses_for_taker_order_inner(
                 slot,
@@ -776,13 +775,9 @@ impl DLOB {
 
         // Check for crosses between auction asks and resting bids
         for (oid, price, size) in taker_asks {
-            let taker_order = TakerOrder {
-                price,
-                size,
-                direction: Direction::Short,
-                market_index,
-                market_type,
-            };
+            taker_order.price = price;
+            taker_order.size = size;
+            taker_order.direction = Direction::Short;
 
             let new_crosses = self.find_crosses_for_taker_order_inner(
                 slot,

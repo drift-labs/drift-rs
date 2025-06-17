@@ -243,27 +243,36 @@ impl DynamicPrice for OracleOrder {
     fn size(&self) -> u64 {
         self.size
     }
-    fn get_price(&self, slot: u64, oracle_price: u64, market_tick_size: u64) -> u64 {
-        match calculate_auction_price(
-            &Order {
-                auction_duration: self.duration,
-                auction_start_price: self.start_price_offset,
-                auction_end_price: self.end_price_offset,
-                direction: self.direction,
-                slot: self.slot,
-                ..Default::default()
-            },
-            slot,
-            market_tick_size,
-            Some(oracle_price as i64),
-            false,
-        ) {
-            Ok(p) => p,
-            Err(err) => {
-                log::warn!(target: "dlob", "invalid auction price: {err:?}");
-                0
-            }
+    fn get_price(&self, slot: u64, oracle_price: u64, _market_tick_size: u64) -> u64 {
+        let slots_elapsed = slot.saturating_sub(self.slot) as i64;
+        let delta_denominator = self.duration as i64;
+        let delta_numerator = slots_elapsed.min(delta_denominator);
+
+        if delta_denominator == 0 {
+            return (oracle_price as i64 + self.end_price_offset) as u64;
         }
+
+        let delta = if self.direction == Direction::Long {
+            (self
+                .end_price_offset
+                .saturating_sub(self.start_price_offset)
+                * delta_numerator)
+                / delta_denominator
+        } else {
+            (self
+                .start_price_offset
+                .saturating_sub(self.end_price_offset)
+                * delta_numerator)
+                / delta_denominator
+        };
+
+        let price_offset = if self.direction == Direction::Long {
+            self.start_price_offset.saturating_add(delta)
+        } else {
+            self.start_price_offset.saturating_sub(delta)
+        };
+
+        (oracle_price as i64 + price_offset) as u64
     }
 }
 
