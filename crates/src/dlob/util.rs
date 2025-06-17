@@ -1,11 +1,23 @@
+use std::hash::{Hash, Hasher};
+
 use crate::types::{accounts::User, Order, OrderStatus};
+use ahash::AHasher;
 use solana_sdk::pubkey::Pubkey;
 
+/// change of order signal dlob
 #[derive(Debug, PartialEq, Clone)]
 pub enum OrderDelta {
     Create { user: Pubkey, order: Order },
     Update { user: Pubkey, order: Order },
     Remove { user: Pubkey, order: Order },
+}
+
+/// Helper function to generate unique order Id hash for internal DLOB use
+pub(crate) fn order_hash(user: &Pubkey, order_id: u32) -> u64 {
+    let mut hasher = AHasher::default();
+    user.hash(&mut hasher);
+    order_id.hash(&mut hasher);
+    hasher.finish()
 }
 
 pub fn compare_user_orders(pubkey: Pubkey, old: &User, new: &User) -> Vec<OrderDelta> {
