@@ -326,44 +326,41 @@ async fn main() {
                             ..Default::default()
                         };
 
-                        let price = match order_params.order_type {
-                            OrderType::Market | OrderType::Oracle => {
-                                match calculate_auction_price(&order, slot, tick_size, Some(oracle_price), false) {
-                                    Ok(p) => p,
-                                    Err(err) => {
-                                        log::warn!(target: "dlob", "could not get auction price {err:?}, params: {order_params:?}, skipping...");
-                                        continue;
-                                    }
-                                }
-                            }
-                            OrderType::Limit => {
-                                // assuming PMM is not a taker
-                                match order.get_limit_price(Some(oracle_price), Some(oracle_price as u64), slot, tick_size, false, None) {
-                                    Ok(Some(p)) => p,
-                                    _ => {
-                                        log::warn!(target: "dlob", "could not get limit price: {order_params:?}, skipping...");
-                                        continue;
-                                    },
-                                }
-                            }
-                            _ => {
-                                log::warn!("invalid swift order type");
-                                unreachable!();
-                            }
-                        };
-                        let taker_order = TakerOrder::from_order_params(order_params, price);
-
                         let lookahead = 1;
                         for offset in 0..=lookahead {
-                            // TODO: if we don't find a cross schedule it to be checked later
-                            if let Ok(crosses) = dlob.find_crosses_for_taker_order(slot + offset, oracle_price as u64, taker_order) {
-                                if !crosses.is_empty() {
-                                    log::info!(target: "swift", "found resting cross|offset={offset}|crosses={crosses:?}");
-                                    tokio::spawn(
-                                        try_fill(drift.clone(), filler_subaccount, signed_order, crosses)
-                                    );
-                                    break;
+                            let price = match order_params.order_type {
+                                OrderType::Market | OrderType::Oracle => {
+                                    match calculate_auction_price(&order, slot, tick_size, Some(oracle_price), false) {
+                                        Ok(p) => p,
+                                        Err(err) => {
+                                            log::warn!(target: "dlob", "could not get auction price {err:?}, params: {order_params:?}, skipping...");
+                                            continue;
+                                        }
+                                    }
                                 }
+                                OrderType::Limit => {
+                                    // assuming PMM is not a taker
+                                    match order.get_limit_price(Some(oracle_price), Some(oracle_price as u64), slot, tick_size, false, None) {
+                                        Ok(Some(p)) => p,
+                                        _ => {
+                                            log::warn!(target: "dlob", "could not get limit price: {order_params:?}, skipping...");
+                                            continue;
+                                        },
+                                    }
+                                }
+                                _ => {
+                                    log::warn!("invalid swift order type");
+                                    unreachable!();
+                                }
+                            };
+                            let taker_order = TakerOrder::from_order_params(order_params, price);
+                            let crosses = dlob.find_crosses_for_taker_order(slot + offset, oracle_price as u64, taker_order);
+                            if !crosses.is_empty() {
+                                log::info!(target: "swift", "found resting cross|offset={offset}|crosses={crosses:?}");
+                                tokio::spawn(
+                                    try_fill(drift.clone(), filler_subaccount, signed_order, crosses)
+                                );
+                                break;
                             }
                         }
                     }

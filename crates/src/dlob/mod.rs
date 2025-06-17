@@ -2,6 +2,7 @@ use std::{
     cmp::Reverse,
     collections::BTreeMap,
     hash::{Hash, Hasher},
+    iter::Peekable,
     sync::{
         atomic::{AtomicBool, AtomicPtr},
         Arc,
@@ -919,6 +920,52 @@ impl Orderbook {
         result.sort_by(|a, b| a.1.cmp(&b.1));
         result
     }
+
+    pub fn get_taker_asks(&self, slot: u64, oracle_price: u64) -> Vec<(u64, u64, u64)> {
+        let mut result =
+            Vec::with_capacity(self.market_orders.asks.len() + self.oracle_orders.asks.len());
+
+        result.extend(
+            self.market_orders
+                .asks
+                .iter()
+                .map(|o| (o.id, o.get_price(slot, 0, self.market_tick_size), o.size)), // oracle price unused
+        );
+        result.extend(self.oracle_orders.asks.iter().map(|o| {
+            (
+                o.id,
+                o.get_price(slot, oracle_price, self.market_tick_size), // tick_size unused
+                o.size(),
+            )
+        }));
+
+        // Sort by price in ascending order (best ask first)
+        result.sort_by(|a, b| a.1.cmp(&b.1));
+        result
+    }
+
+    pub fn get_taker_bids(&self, slot: u64, oracle_price: u64) -> Vec<(u64, u64, u64)> {
+        let mut result =
+            Vec::with_capacity(self.market_orders.bids.len() + self.oracle_orders.bids.len());
+
+        result.extend(
+            self.market_orders
+                .bids
+                .iter()
+                .map(|o| (o.id, o.get_price(slot, 0, self.market_tick_size), o.size)), // oracle price unused
+        );
+        result.extend(self.oracle_orders.bids.iter().map(|o| {
+            (
+                o.id,
+                o.get_price(slot, oracle_price, self.market_tick_size), // tick_size unused
+                o.size(),
+            )
+        }));
+
+        // Sort by price in descending order (best bid first)
+        result.sort_by(|a, b| b.1.cmp(&a.1));
+        result
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -1179,62 +1226,167 @@ impl DLOB {
         );
     }
 
-    /// Finds best limit order crosses for a given `taker_order`
+    /// At the current slot return all crossing auctions crossing resting limit orders
     ///
-    /// Limited to 16 orders
-    pub fn find_crosses_for_taker_order(
+    /// ## Panics
+    ///
+    /// if market_index,market_type has not been initialized on this dlob instance
+    ///
+    pub fn find_crosses_for_auctions(
         &self,
+        market_index: u16,
+        market_type: MarketType,
         slot: u64,
         oracle_price: u64,
-        taker_order: TakerOrder,
-    ) -> Result<TakerCrosses, ()> {
-        let mut candidates = ArrayVec::<(OrderMetadata, u64, u64), 16>::new();
-        let mut remaining_size = taker_order.size;
+    ) -> Vec<TakerCrosses> {
+        let market = MarketId::new(market_index, market_type);
+        let book = self.markets.get(&market).expect("market lob exists");
 
-        let market = MarketId::new(taker_order.market_index, taker_order.market_type);
-        let (book_slot, resting_orders) = match taker_order.direction {
-            Direction::Long => {
-                let book = self.markets.get(&market).unwrap();
-                (
-                    book.last_modified_slot,
-                    book.get_limit_asks(slot, oracle_price),
-                )
-            }
-            Direction::Short => {
-                let book = self.markets.get(&market).unwrap();
-                (
-                    book.last_modified_slot,
-                    book.get_limit_bids(slot, oracle_price),
-                )
-            }
-        };
+        let mut all_crosses = Vec::<TakerCrosses>::new();
 
-        for (internal_order_id, maker_price, maker_size) in resting_orders {
-            let is_cross = match taker_order.direction {
-                Direction::Long => taker_order.price >= maker_price,
-                Direction::Short => taker_order.price <= maker_price,
+        let taker_asks = book.get_taker_asks(slot, oracle_price);
+        let taker_bids = book.get_taker_bids(slot, oracle_price);
+        let mut resting_asks = book.get_limit_asks(slot, oracle_price);
+        let mut resting_bids = book.get_limit_bids(slot, oracle_price);
+
+        // Check for crosses between auction bids and resting asks
+        for (_oid, price, size) in taker_bids {
+            let taker_order = TakerOrder {
+                price,
+                size,
+                direction: Direction::Long,
+                market_index,
+                market_type,
             };
-            if is_cross {
-                let fill_size = remaining_size.min(maker_size);
-                if let Some(metadata) = self.metadata.get(&internal_order_id) {
-                    candidates.push((*metadata.value(), maker_price, fill_size));
-                    remaining_size -= fill_size;
-                    if remaining_size == 0 || candidates.len() == candidates.capacity() {
-                        log::debug!(target: "dlob", "reached max number crosses");
-                        break;
-                    }
-                } else {
-                    log::warn!(target: "dlob", "metadata missing. order:{internal_order_id},check_slot:{slot},book_slot:{book_slot}");
-                }
+
+            let new_crosses = self.find_crosses_for_taker_order_inner(
+                slot,
+                oracle_price,
+                taker_order,
+                resting_asks.iter_mut().peekable(),
+            );
+
+            if !new_crosses.is_empty() {
+                all_crosses.push(new_crosses);
             } else {
                 break;
             }
         }
 
-        Ok(TakerCrosses {
+        // Check for crosses between auction asks and resting bids
+        for (_oid, price, size) in taker_asks {
+            let taker_order = TakerOrder {
+                price,
+                size,
+                direction: Direction::Short,
+                market_index,
+                market_type,
+            };
+
+            let new_crosses = self.find_crosses_for_taker_order_inner(
+                slot,
+                oracle_price,
+                taker_order,
+                resting_bids.iter_mut().peekable(),
+            );
+            if !new_crosses.is_empty() {
+                all_crosses.push(new_crosses);
+            } else {
+                break;
+            }
+        }
+
+        all_crosses
+    }
+
+    /// Finds best limit order crosses for a given `taker_order`
+    ///
+    /// Limited to 16 orders
+    pub fn find_crosses_for_taker_order(
+        &self,
+        current_slot: u64,
+        oracle_price: u64,
+        taker_order: TakerOrder,
+    ) -> TakerCrosses {
+        let market = MarketId::new(taker_order.market_index, taker_order.market_type);
+        let (book_slot, mut resting_orders) = match taker_order.direction {
+            Direction::Long => {
+                let book = self.markets.get(&market).expect("market lob exists");
+                (
+                    book.last_modified_slot,
+                    book.get_limit_asks(current_slot, oracle_price),
+                )
+            }
+            Direction::Short => {
+                let book = self.markets.get(&market).expect("market lob exists");
+                (
+                    book.last_modified_slot,
+                    book.get_limit_bids(current_slot, oracle_price),
+                )
+            }
+        };
+
+        self.find_crosses_for_taker_order_inner(
+            current_slot,
+            book_slot,
+            taker_order,
+            resting_orders.iter_mut().peekable(),
+        )
+    }
+
+    /// Find crosses for given `taker_order` consuming or updating `resting_limit_orders` upon finding a match
+    fn find_crosses_for_taker_order_inner<'a>(
+        &self,
+        current_slot: u64,
+        resting_order_slot: u64,
+        taker_order: TakerOrder,
+        mut resting_limit_orders: Peekable<impl Iterator<Item = &'a mut (u64, u64, u64)>>,
+    ) -> TakerCrosses {
+        let mut candidates = ArrayVec::<(OrderMetadata, u64, u64), 16>::new();
+        let mut remaining_size = taker_order.size;
+
+        let price_crosses = match taker_order.direction {
+            Direction::Long => |taker_price: u64, maker_price: u64| taker_price >= maker_price,
+            Direction::Short => |taker_price: u64, maker_price: u64| taker_price <= maker_price,
+        };
+
+        while let Some(peeked) = resting_limit_orders.peek_mut() {
+            let (internal_order_id, maker_price, maker_size) = peeked;
+            if !price_crosses(taker_order.price, *maker_price) {
+                break;
+            }
+
+            let fill_size = remaining_size.min(*maker_size);
+
+            if let Some(metadata) = self.metadata.get(&internal_order_id) {
+                candidates.push((*metadata.value(), *maker_price, fill_size));
+                remaining_size -= fill_size;
+
+                if fill_size == *maker_size {
+                    // Fully consumed — advance the iterator
+                    resting_limit_orders.next();
+                } else {
+                    // Partially filled — decrement in-place, do NOT advance
+                    peeked.2 -= fill_size;
+                }
+
+                if remaining_size == 0 || candidates.len() == candidates.capacity() {
+                    log::debug!(target: "dlob", "reached max number crosses");
+                    break;
+                }
+            } else {
+                log::warn!(
+                    target: "dlob",
+                    "metadata missing. order:{internal_order_id},check_slot:{current_slot},book_slot:{resting_order_slot}"
+                );
+                resting_limit_orders.next();
+            }
+        }
+
+        TakerCrosses {
             orders: candidates,
             is_partial: remaining_size != 0,
-        })
+        }
     }
 }
 
@@ -1242,7 +1394,6 @@ impl DLOB {
 #[derive(Copy, Clone, Debug)]
 pub struct TakerOrder {
     price: u64,
-    pub order_type: OrderType,
     pub size: u64,
     pub direction: Direction,
     pub market_index: u16,
@@ -1253,7 +1404,6 @@ impl TakerOrder {
     pub fn from_order_params(order: OrderParams, price: u64) -> Self {
         Self {
             price,
-            order_type: order.order_type,
             size: order.base_asset_amount,
             direction: order.direction,
             market_index: order.market_index,
@@ -1707,12 +1857,9 @@ mod tests {
             direction: Direction::Long,
             market_index: 0,
             market_type: MarketType::Perp,
-            order_type: OrderType::Market,
         };
 
-        let result = dlob
-            .find_crosses_for_taker_order(slot, oracle_price, taker_order)
-            .unwrap();
+        let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order);
 
         // Should fill both orders, 5 from first order and 2 from second
         assert_eq!(result.orders.len(), 2);
@@ -1762,12 +1909,9 @@ mod tests {
             direction: Direction::Long,
             market_index: 0,
             market_type: MarketType::Perp,
-            order_type: OrderType::Market,
         };
 
-        let result = dlob
-            .find_crosses_for_taker_order(slot, oracle_price, taker_order)
-            .unwrap();
+        let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order);
 
         // Should only fill 3 units from the first order
         assert_eq!(result.orders.len(), 1);
@@ -1805,12 +1949,9 @@ mod tests {
             direction: Direction::Long,
             market_index: 0,
             market_type: MarketType::Perp,
-            order_type: OrderType::Market,
         };
 
-        let result = dlob
-            .find_crosses_for_taker_order(slot, oracle_price, taker_order)
-            .unwrap();
+        let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order);
 
         // Should not fill any orders
         assert_eq!(result.orders.len(), 0);
@@ -1837,12 +1978,9 @@ mod tests {
             direction: Direction::Long,
             market_index: 0,
             market_type: MarketType::Perp,
-            order_type: OrderType::Market,
         };
 
-        let result = dlob
-            .find_crosses_for_taker_order(slot, oracle_price, taker_order)
-            .unwrap();
+        let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order);
 
         // Should fill the floating limit order
         assert_eq!(result.orders.len(), 1);
@@ -1884,12 +2022,9 @@ mod tests {
             direction: Direction::Long,
             market_index: 0,
             market_type: MarketType::Perp,
-            order_type: OrderType::Market,
         };
 
-        let result = dlob
-            .find_crosses_for_taker_order(slot, oracle_price, taker_order)
-            .unwrap();
+        let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order);
 
         // Should fill the better price first (900)
         assert_eq!(result.orders.len(), 2);
