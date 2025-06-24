@@ -96,7 +96,7 @@ impl AccountMap {
                 .entry(update.pubkey)
                 .and_modify(|x| {
                     x.slot = update.slot;
-                    x.raw = Arc::from(update.data);
+                    x.raw = Arc::from(&update.data[8..]);
                     if update.lamports == 0 {
                         accounts.remove(&update.pubkey);
                     }
@@ -114,7 +114,7 @@ impl AccountMap {
                     );
                     AccountSlot {
                         slot: update.slot,
-                        raw: Arc::from(update.data),
+                        raw: Arc::from(&update.data[8..]),
                     }
                 });
         }
@@ -200,13 +200,13 @@ impl AccountSub<Unsubscribed> {
                             .entry(update.pubkey)
                             .and_modify(|x| {
                                 x.slot = update.slot;
-                                x.raw = Arc::from(update.data.as_slice());
+                                x.raw = Arc::from(&update.data[8..]);
                                 if update.lamports == 0 {
                                     accounts.remove(&update.pubkey);
                                 }
                             })
                             .or_insert(AccountSlot {
-                                raw: Arc::from(update.data.as_slice()),
+                                raw: Arc::from(&update.data[8..]),
                                 slot: update.slot,
                             });
                     })
@@ -219,13 +219,13 @@ impl AccountSub<Unsubscribed> {
                         .entry(update.pubkey)
                         .and_modify(|x| {
                             x.slot = update.slot;
-                            x.raw = Arc::from(update.data.as_slice());
+                            x.raw = Arc::from(&update.data[8..]);
                             if update.lamports == 0 {
                                 accounts.remove(&update.pubkey);
                             }
                         })
                         .or_insert(AccountSlot {
-                            raw: Arc::from(update.data.as_slice()),
+                            raw: Arc::from(&update.data[8..]),
                             slot: update.slot,
                         });
                 });
