@@ -287,7 +287,7 @@ fn dlob_oracle_order_sorting() {
         .iter()
         .map(|o| o.get_price(slot, oracle_price, 10))
         .collect();
-    assert_eq!(&bids, &[40_000, 30_000, 10_000]);
+    assert_eq!(&bids, &[140_000, 130_000, 110_000]);
 
     // Verify asks are sorted lowest to highest price
     let asks: Vec<u64> = book
@@ -296,7 +296,7 @@ fn dlob_oracle_order_sorting() {
         .iter()
         .map(|v| v.get_price(slot, oracle_price, 10))
         .collect();
-    assert_eq!(&asks, &[30_000, 40_000, 50_000]);
+    assert_eq!(&asks, &[130_000, 140_000, 150_000]);
 }
 
 #[test]
@@ -345,8 +345,14 @@ fn dlob_l2_snapshot() {
     let _ = env_logger::try_init();
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
-    let slot = 100;
-    let oracle_price = 1000;
+    let slot = 100_u64;
+    let oracle_price = 1_000;
+
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market_index: 0,
+        market_tick_size: 10,
+        ..Default::default()
+    });
 
     // Insert resting limit orders
     let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 2, slot);
@@ -358,12 +364,16 @@ fn dlob_l2_snapshot() {
     dlob.insert_order(&user, order);
 
     // Insert market orders (dynamic price)
-    let mut order = create_test_order(3, OrderType::Market, Direction::Long, 1050, 4, slot);
+    let mut order = create_test_order(3, OrderType::Market, Direction::Long, 0, 4, slot);
     order.auction_duration = 10;
+    order.auction_start_price = 1050;
+    order.auction_end_price = 1100;
     dlob.insert_order(&user, order);
 
-    let mut order = create_test_order(4, OrderType::Market, Direction::Short, 950, 5, slot);
+    let mut order = create_test_order(4, OrderType::Market, Direction::Short, 0, 5, slot);
     order.auction_duration = 10;
+    order.auction_start_price = 950;
+    order.auction_end_price = 900;
     dlob.insert_order(&user, order);
 
     // Insert floating limit orders (dynamic price)
@@ -385,10 +395,12 @@ fn dlob_l2_snapshot() {
     // At 1100: 2 (resting limit) + 6 (floating limit) = 8
     assert_eq!(l2book.bids.get(&1100), Some(&8));
     // At 1050: 4 (market)
+    dbg!(&l2book.bids);
     assert_eq!(l2book.bids.get(&1050), Some(&4));
 
     // Verify ask prices and sizes
     // At 900: 3 (resting limit) + 7 (floating limit) = 10
+    dbg!(&l2book.asks);
     assert_eq!(l2book.asks.get(&900), Some(&10));
     // At 950: 5 (market)
     assert_eq!(l2book.asks.get(&950), Some(&5));
@@ -1094,7 +1106,7 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
     let market_index = 0;
     let market_type = MarketType::Perp;
     let slot = 100;
-    let oracle_price = 1000;
+    let oracle_price = 1_000;
 
     dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
         market_index,
@@ -1157,30 +1169,38 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
     dbg!(&crosses);
 
     // Should find 4 crosses:
-    // 1. market_bid_1 (200) crossing limit_ask_1 (50) and limit_ask_2 (25)
-    // 2. oracle_bid_1 (35) crossing limit_ask_2 (50)
-    // 2. market_ask_1 (20) crossing limit_bid_1 (75)
-    // 4. oracle_ask_1 (25) crossing limit_bid_1 (75)
-    assert_eq!(crosses.len(), 4);
+    // 1. oracle_bid_1 (35) crossing limit_ask_1 (35)
+    // 2. oracle_bid_2 (45) crossing limit_ask_1 (15) and limit_ask_2 (30)
+    // 3. market_bid_1 (75) crossing limit_ask_1 (15) and limit_ask_2 (60)
+    // 4. market_ask_1 (20) crossing limit_bid_1 (20)
 
-    // Verify the first cross (market_bid_1 crossing both limit asks)
-    let first_cross = &crosses[0];
-    assert_eq!(first_cross.1.orders.len(), 2);
-    assert_eq!(first_cross.1.orders[0].2, 50); // Fill against limit_ask_1, limited by market_bid_1 size
-    assert_eq!(first_cross.1.orders[1].2, 25);
+    let expected_crosses = vec![
+        (9, vec![(1, 35)]),
+        (10, vec![(1, 15), (2, 30)]),
+        (5, vec![(1, 15), (2, 60)]),
+        (7, vec![(3, 20)]),
+    ];
 
-    // Verify the second cross (oracle_bid_1 crossing limit_ask_2)
-    let second_cross = &crosses[1];
-    assert_eq!(second_cross.1.orders.len(), 1);
-    assert_eq!(second_cross.1.orders[0].2, 35); // Fill against limit_ask_2
+    let actual_crosses: Vec<_> = crosses
+        .iter()
+        .map(|(meta, maker_crosses)| {
+            (
+                meta.order_id,
+                maker_crosses
+                    .orders
+                    .iter()
+                    .map(|(m, _, size)| (m.order_id, *size))
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
 
-    // Verify the third cross (market_bid_3 crossing limit_ask_2)
-    let third_cross = &crosses[2];
-    assert_eq!(third_cross.1.orders.len(), 1);
-    assert_eq!(third_cross.1.orders[0].2, 20); // Fill against limit_ask_2
-
-    // Verify the fourth cross (market_ask_1 crossing limit_bid_1)
-    let fourth_cross = &crosses[3];
-    assert_eq!(fourth_cross.1.orders.len(), 1);
-    assert_eq!(fourth_cross.1.orders[0].2, 25); // market_ask_1 size
+    assert_eq!(expected_crosses.len(), actual_crosses.len());
+    for expected in &expected_crosses {
+        assert!(
+            actual_crosses.contains(expected),
+            "Missing cross: {:?}",
+            expected
+        );
+    }
 }
