@@ -260,7 +260,7 @@ impl DriftGrpcClient {
         self.on_account_hooks.push((filter, Box::new(on_account)));
     }
 
-    /// Add a callback on transaction updates matching `filter`
+    /// Add a callback for transaction updates
     ///
     /// This may be called many times to define multiple callbacks
     ///

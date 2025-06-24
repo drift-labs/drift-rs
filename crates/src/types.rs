@@ -32,6 +32,7 @@ use crate::{
     constants::{ids, LUTS_DEVNET, LUTS_MAINNET, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID},
     drift_idl::errors::ErrorCode,
     grpc::grpc_subscriber::GrpcError,
+    types::accounts::UserStats,
     Wallet,
 };
 
@@ -595,6 +596,21 @@ impl FromStr for MarketType {
     }
 }
 
+#[derive(Clone, Copy, Default)]
+pub struct ProtectedMakerParams {
+    pub limit_price_divisor: u8,
+    pub dynamic_offset: u64,
+    pub tick_size: u64,
+}
+
+impl UserStats {
+    pub fn is_referrer(&self) -> bool {
+        self.referrer_status & 0b0000_0001 != 0
+    }
+    pub fn is_referred(&self) -> bool {
+        self.referrer_status & 0b0000_0010 != 0
+    }
+}
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;

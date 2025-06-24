@@ -1,10 +1,11 @@
 //! Hybrid solana account map backed by Ws or RPC polling
 use std::{
+    ops::Deref,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
-use anchor_lang::AccountDeserialize;
+use bytemuck::Pod;
 use dashmap::DashMap;
 use drift_pubsub_client::PubsubClient;
 use log::debug;
@@ -20,7 +21,7 @@ const LOG_TARGET: &str = "accountmap";
 
 #[derive(Clone, Default)]
 pub struct AccountSlot {
-    raw: Vec<u8>,
+    raw: Arc<[u8]>,
     slot: Slot,
 }
 
@@ -87,7 +88,7 @@ impl AccountMap {
         Ok(())
     }
     /// On account update callback for gRPC hook
-    pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
+    pub fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
         let accounts = Arc::clone(&self.inner);
         let subscriptions = Arc::clone(&self.subscriptions);
         move |update| {
@@ -95,8 +96,7 @@ impl AccountMap {
                 .entry(update.pubkey)
                 .and_modify(|x| {
                     x.slot = update.slot;
-                    x.raw.resize(update.data.len(), 0);
-                    x.raw.clone_from_slice(update.data);
+                    x.raw = Arc::from(&update.data[8..]);
                     if update.lamports == 0 {
                         accounts.remove(&update.pubkey);
                     }
@@ -114,7 +114,7 @@ impl AccountMap {
                     );
                     AccountSlot {
                         slot: update.slot,
-                        raw: update.data.to_vec(),
+                        raw: Arc::from(&update.data[8..]),
                     }
                 });
         }
@@ -128,17 +128,20 @@ impl AccountMap {
         }
     }
     /// Return data of the given `account` as T, if it exists
-    pub fn account_data<T: AccountDeserialize>(&self, account: &Pubkey) -> Option<T> {
+    pub fn account_data<T: Pod>(&self, account: &Pubkey) -> Option<T> {
         self.account_data_and_slot(account).map(|x| x.data)
     }
     /// Return data of the given `account` as T and slot, if it exists
-    pub fn account_data_and_slot<T: AccountDeserialize>(
-        &self,
-        account: &Pubkey,
-    ) -> Option<DataAndSlot<T>> {
-        self.inner.get(account).map(|x| DataAndSlot {
-            slot: x.slot,
-            data: T::try_deserialize_unchecked(&mut x.raw.as_slice()).expect("deserializes"),
+    pub fn account_data_and_slot<T: Pod>(&self, account: &Pubkey) -> Option<DataAndSlot<T>> {
+        self.inner.get(account).map(|x| {
+            let arc = x.raw.clone();
+            DataAndSlot {
+                slot: x.slot,
+                data: *AccountRef {
+                    arc,
+                    _marker: std::marker::PhantomData,
+                },
+            }
         })
     }
 }
@@ -197,13 +200,13 @@ impl AccountSub<Unsubscribed> {
                             .entry(update.pubkey)
                             .and_modify(|x| {
                                 x.slot = update.slot;
-                                x.raw.clone_from(&update.data);
+                                x.raw = Arc::from(&update.data[8..]);
                                 if update.lamports == 0 {
                                     accounts.remove(&update.pubkey);
                                 }
                             })
                             .or_insert(AccountSlot {
-                                raw: update.data.clone(),
+                                raw: Arc::from(&update.data[8..]),
                                 slot: update.slot,
                             });
                     })
@@ -216,13 +219,13 @@ impl AccountSub<Unsubscribed> {
                         .entry(update.pubkey)
                         .and_modify(|x| {
                             x.slot = update.slot;
-                            x.raw.clone_from(&update.data);
+                            x.raw = Arc::from(&update.data[8..]);
                             if update.lamports == 0 {
                                 accounts.remove(&update.pubkey);
                             }
                         })
                         .or_insert(AccountSlot {
-                            raw: update.data.clone(),
+                            raw: Arc::from(&update.data[8..]),
                             slot: update.slot,
                         });
                 });
@@ -263,6 +266,19 @@ enum SubscriptionImpl {
     Ws(WebsocketAccountSubscriber),
     Polled(PolledAccountSubscriber),
     Grpc,
+}
+
+/// Wrapper type that keeps the Arc alive and provides access to T
+pub struct AccountRef<T> {
+    arc: Arc<[u8]>,
+    _marker: std::marker::PhantomData<T>,
+}
+
+impl<T: Pod> Deref for AccountRef<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        bytemuck::from_bytes(&self.arc)
+    }
 }
 
 #[cfg(test)]
