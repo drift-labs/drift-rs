@@ -6,6 +6,7 @@ use solana_sdk::pubkey::Pubkey;
 use crate::{
     dlob::{Direction, OrderDelta},
     ffi::calculate_auction_price,
+    math::standardize_price,
     types::{MarketType, Order, OrderParams, OrderTriggerCondition, OrderType},
 };
 
@@ -245,36 +246,36 @@ impl DynamicPrice for OracleOrder {
     fn size(&self) -> u64 {
         self.size
     }
-    fn get_price(&self, slot: u64, oracle_price: u64, _market_tick_size: u64) -> u64 {
+    fn get_price(&self, slot: u64, oracle_price: u64, tick_size: u64) -> u64 {
         let slots_elapsed = slot.saturating_sub(self.slot) as i64;
         let delta_denominator = self.duration as i64;
         let delta_numerator = slots_elapsed.min(delta_denominator);
 
         if delta_denominator == 0 {
-            return (oracle_price as i64 + self.end_price_offset) as u64;
+            let price = ((oracle_price as i64 + self.end_price_offset) as u64).max(tick_size);
+
+            return standardize_price(price, tick_size, self.direction);
         }
 
-        let delta = if self.direction == Direction::Long {
-            (self
+        let price_offset = if self.direction == Direction::Long {
+            let delta = (self
                 .end_price_offset
                 .saturating_sub(self.start_price_offset)
                 * delta_numerator)
-                / delta_denominator
+                / delta_denominator;
+            self.start_price_offset.saturating_add(delta)
         } else {
-            (self
+            let delta = (self
                 .start_price_offset
                 .saturating_sub(self.end_price_offset)
                 * delta_numerator)
-                / delta_denominator
-        };
-
-        let price_offset = if self.direction == Direction::Long {
-            self.start_price_offset.saturating_add(delta)
-        } else {
+                / delta_denominator;
             self.start_price_offset.saturating_sub(delta)
         };
 
-        (oracle_price as i64 + price_offset) as u64
+        let price = ((oracle_price as i64 + price_offset) as u64).max(tick_size);
+
+        standardize_price(price, tick_size, self.direction)
     }
 }
 

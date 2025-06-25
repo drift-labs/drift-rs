@@ -61,6 +61,11 @@ pub fn compare_user_orders(pubkey: Pubkey, old: &User, new: &User) -> Vec<OrderD
                         user: pubkey,
                         order: *new_order,
                     });
+                } else {
+                    deltas.push(OrderDelta::Remove {
+                        user: pubkey,
+                        order: *new_order,
+                    });
                 }
             }
         }
