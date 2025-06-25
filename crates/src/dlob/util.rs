@@ -25,11 +25,13 @@ pub fn compare_user_orders(pubkey: Pubkey, old: &User, new: &User) -> Vec<OrderD
 
     // Find orders to remove (in existing but not in new)
     for existing in old.orders.iter().filter(|o| o.status == OrderStatus::Open) {
+        // order is no longer open, remove it
         if !new
             .orders
             .iter()
             .any(|o| o.order_id == existing.order_id && o.status == OrderStatus::Open)
         {
+            // Status::Open => !Status::Open = remove
             deltas.push(OrderDelta::Remove {
                 user: pubkey,
                 order: *existing,
@@ -38,28 +40,29 @@ pub fn compare_user_orders(pubkey: Pubkey, old: &User, new: &User) -> Vec<OrderD
     }
 
     // Find orders to create or update
-    for new_order in new.orders.iter().filter(|o| o.status == OrderStatus::Open) {
-        // new open orders
-        match old
-            .orders
-            .iter()
-            .find(|o| o.order_id == new_order.order_id && o.status == OrderStatus::Open)
-        {
-            Some(existing) if existing != new_order => {
-                // Order exists but is different - update
-                deltas.push(OrderDelta::Update {
-                    user: pubkey,
-                    order: *new_order,
-                });
+    for new_order in new.orders.iter().filter(|o| o.status != OrderStatus::Init) {
+        match old.orders.iter().find(|o| o.order_id == new_order.order_id) {
+            Some(existing) => {
+                if let (OrderStatus::Open, OrderStatus::Open) = (existing.status, new_order.status)
+                {
+                    // open still open, maybe updated
+                    if new_order != existing {
+                        deltas.push(OrderDelta::Update {
+                            user: pubkey,
+                            order: *new_order,
+                        });
+                    }
+                }
             }
             None => {
-                // Order doesn't exist - create
-                deltas.push(OrderDelta::Create {
-                    user: pubkey,
-                    order: *new_order,
-                });
+                // new order
+                if new_order.status == OrderStatus::Open {
+                    deltas.push(OrderDelta::Create {
+                        user: pubkey,
+                        order: *new_order,
+                    });
+                }
             }
-            _ => {} // Order exists and is identical - no change needed
         }
     }
 
@@ -113,7 +116,7 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_orders() {
+    fn dlob_util_test_empty_orders() {
         let pubkey = Pubkey::new_unique();
         let old = create_test_user(vec![]);
         let new = create_test_user(vec![]);
@@ -123,7 +126,7 @@ mod tests {
     }
 
     #[test]
-    fn test_create_order() {
+    fn dlob_util_test_create_order() {
         let pubkey = Pubkey::new_unique();
         let old = create_test_user(vec![]);
         let new = create_test_user(vec![create_test_order(1, OrderStatus::Open)]);
@@ -141,7 +144,7 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_order() {
+    fn dlob_util_test_remove_order() {
         let pubkey = Pubkey::new_unique();
         let old = create_test_user(vec![create_test_order(1, OrderStatus::Open)]);
         let new = create_test_user(vec![]);
@@ -159,7 +162,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update_order() {
+    fn dlob_util_test_update_order() {
         let pubkey = Pubkey::new_unique();
         let old_order = create_test_order(1, OrderStatus::Open);
         let mut new_order = create_test_order(1, OrderStatus::Open);
@@ -182,7 +185,7 @@ mod tests {
     }
 
     #[test]
-    fn test_multiple_operations() {
+    fn dlob_util_test_multiple_operations() {
         let pubkey = Pubkey::new_unique();
         let old = create_test_user(vec![
             create_test_order(1, OrderStatus::Open),
@@ -196,5 +199,19 @@ mod tests {
 
         let deltas = compare_user_orders(pubkey, &old, &new);
         assert_eq!(deltas.len(), 3);
+    }
+
+    #[test]
+    fn dlob_util_test_init_to_filled_removes_order() {
+        let pubkey = Pubkey::new_unique();
+        // Old user has an order in Init status
+        let old_order = create_test_order(0, OrderStatus::Init);
+        let old = create_test_user(vec![old_order]);
+        // New user has the same order_id but status is now Filled
+        let filled_order = create_test_order(1, OrderStatus::Filled);
+        let new = create_test_user(vec![filled_order]);
+
+        let deltas = compare_user_orders(pubkey, &old, &new);
+        assert!(deltas.is_empty());
     }
 }

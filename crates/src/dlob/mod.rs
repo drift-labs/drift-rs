@@ -501,12 +501,15 @@ impl DLOB {
                     }
                     DLOBEvent::Order { slot: _, delta } => match delta {
                         OrderDelta::Create { user, order } => {
+                            log::trace!(target: "dlob", "insert order: {:?}", order.order_id);
                             self.insert_order(&user, order);
                         }
                         OrderDelta::Update { user, order } => {
+                            log::trace!(target: "dlob", "update order: {:?}", order.order_id);
                             self.update_order(&user, order);
                         }
                         OrderDelta::Remove { user, order } => {
+                            log::trace!(target: "dlob", "remove order: {:?}", order.order_id);
                             self.remove_order(&user, order);
                         }
                     },
@@ -588,11 +591,25 @@ impl DLOB {
         self.with_orderbook_mut(MarketId::new(order.market_index, order.market_type), |orderbook| {
             if let Some(metadata) = self.metadata.get(&order_id) {
                 match metadata.kind {
-                    OrderKind::Market | OrderKind::LimitAuction => {
+                    OrderKind::Market => {
                         orderbook.market_orders.update(order_id, order);
                     }
-                    OrderKind::Oracle | OrderKind::FloatingLimitAuction => {
+                    OrderKind::LimitAuction => {
+                        // if the auction completed, check if order moved to resting
+                        if !orderbook.market_orders.update(order_id, order) {
+                            log::trace!(target: "dlob", "update market limit order: {order_id}");
+                            orderbook.resting_limit_orders.update(order_id, order);
+                        }
+                    }
+                    OrderKind::Oracle => {
                         orderbook.oracle_orders.update(order_id, order);
+                    }
+                    OrderKind::FloatingLimitAuction => {
+                        // if the auction completed, check if order moved to resting
+                        if !orderbook.oracle_orders.update(order_id, order) {
+                            log::trace!(target: "dlob", "update oracle limit order: {order_id}");
+                            orderbook.floating_limit_orders.update(order_id, order);
+                        }
                     }
                     OrderKind::Limit => {
                         orderbook.resting_limit_orders.update(order_id, order);
@@ -621,7 +638,7 @@ impl DLOB {
                     OrderKind::LimitAuction => {
                         // if the auction completed, check if order moved to resting
                         if !orderbook.market_orders.remove(order_id, order) {
-                            log::trace!(target: "dlob", "remove limit order: {order_id}");
+                            log::trace!(target: "dlob", "remove market limit order: {order_id}");
                             orderbook.resting_limit_orders.remove(order_id, order);
                         }
                     }
@@ -631,7 +648,7 @@ impl DLOB {
                     OrderKind::FloatingLimitAuction => {
                         // if the auction completed, check if order moved to resting
                         if !orderbook.oracle_orders.remove(order_id, order) {
-                            log::trace!(target: "dlob", "remove limit order: {order_id}");
+                            log::trace!(target: "dlob", "remove oracle limit order: {order_id}");
                             orderbook.floating_limit_orders.remove(order_id, order);
                         }
                     }
@@ -887,8 +904,11 @@ impl DLOB {
                     peeked.2 -= fill_size;
                 }
 
-                if remaining_size == 0 || candidates.len() == candidates.capacity() {
+                if candidates.len() == candidates.capacity() {
                     log::debug!(target: "dlob", "reached max number crosses");
+                    break;
+                }
+                if remaining_size == 0 {
                     break;
                 }
             } else {
