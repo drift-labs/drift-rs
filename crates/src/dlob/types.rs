@@ -163,6 +163,7 @@ pub(crate) struct MarketOrder {
     pub slot: u64,
     pub is_limit: bool,
     pub direction: Direction,
+    pub max_ts: u64,
 }
 
 #[derive(Default, Clone, PartialEq, Debug)]
@@ -175,6 +176,7 @@ pub(crate) struct OracleOrder {
     pub slot: u64,
     pub is_limit: bool,
     pub direction: Direction,
+    pub max_ts: u64,
 }
 
 #[derive(Default, Clone, PartialEq, Eq)]
@@ -183,6 +185,7 @@ pub(crate) struct LimitOrder {
     pub size: u64,
     pub price: u64,
     pub slot: u64,
+    pub max_ts: u64,
 }
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
@@ -191,6 +194,7 @@ pub(crate) struct FloatingLimitOrder {
     pub size: u64,
     pub offset_price: i32,
     pub slot: u64,
+    pub max_ts: u64,
 }
 
 #[derive(Default, Clone)]
@@ -238,6 +242,7 @@ impl From<(u64, Order)> for MarketOrder {
             direction: order.direction,
             slot: order.slot,
             is_limit: order.order_type == OrderType::Limit,
+            max_ts: order.max_ts as u64,
         }
     }
 }
@@ -291,6 +296,7 @@ impl From<(u64, Order)> for OracleOrder {
             slot: order.slot,
             is_limit: order.order_type == OrderType::Limit,
             direction: order.direction,
+            max_ts: order.max_ts as u64,
         }
     }
 }
@@ -298,6 +304,9 @@ impl From<(u64, Order)> for OracleOrder {
 impl LimitOrder {
     pub fn get_price(&self) -> u64 {
         self.price
+    }
+    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
+        self.max_ts > now_unix_seconds
     }
 }
 
@@ -309,7 +318,14 @@ impl From<(u64, Order)> for LimitOrder {
             size: order.base_asset_amount - order.base_asset_amount_filled,
             price: order.price,
             slot: order.slot,
+            max_ts: order.max_ts as u64,
         }
+    }
+}
+
+impl FloatingLimitOrder {
+    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
+        self.max_ts > now_unix_seconds
     }
 }
 
@@ -330,6 +346,7 @@ impl From<(u64, Order)> for FloatingLimitOrder {
             size: order.base_asset_amount - order.base_asset_amount_filled,
             offset_price: order.oracle_price_offset,
             slot: order.slot,
+            max_ts: order.max_ts as u64,
         }
     }
 }

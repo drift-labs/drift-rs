@@ -611,6 +611,7 @@ impl UserStats {
         self.referrer_status & 0b0000_0010 != 0
     }
 }
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
