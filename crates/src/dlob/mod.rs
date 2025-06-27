@@ -391,7 +391,13 @@ impl Orderbook {
                 .bids
                 .iter()
                 .filter(|o| !o.is_expired(now_unix_s))
-                .map(|o| (o.id, o.get_price(slot, oracle_price, self.market_tick_size), o.size())),
+                .map(|o| {
+                    (
+                        o.id,
+                        o.get_price(slot, oracle_price, self.market_tick_size),
+                        o.size(),
+                    )
+                }),
         );
 
         // Sort by price in descending order (best bid first)
@@ -1008,7 +1014,7 @@ impl L3Book {
         for order in &floating_limit_orders.bids {
             if let Some(meta) = metadata.get(&order.id) {
                 bids.push(L3Order {
-                    price: order.get_price(slot, oracle_price,0), // tick_size unused
+                    price: order.get_price(slot, oracle_price, 0), // tick_size unused
                     size: order.size(),
                     maker: meta.user,
                     order_id: meta.order_id,
