@@ -9,7 +9,7 @@ use crate::{
         LIQUIDATION_FEE_TO_MARGIN_PRECISION_RATIO, PRICE_PRECISION,
         PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO,
     },
-    types::{OracleSource, SdkError, SdkResult},
+    types::{OracleSource, PositionDirection, SdkError, SdkResult},
 };
 
 pub mod account_list_builder;
@@ -136,6 +136,25 @@ fn get_oracle_normalization_factor(a: OracleSource, b: OracleSource) -> (u64, u6
         (OracleSource::PythLazer1K, OracleSource::PythLazer)
         | (OracleSource::Pyth1KPull, OracleSource::PythPull) => (1, 1_000),
         _ => (1, 1),
+    }
+}
+
+/// ## panics if `tick_size` is 0
+#[inline]
+pub fn standardize_price(price: u64, tick_size: u64, direction: PositionDirection) -> u64 {
+    if price == 0 {
+        return 0;
+    }
+
+    let remainder = price.rem_euclid(tick_size);
+
+    if remainder == 0 {
+        return price;
+    }
+
+    match direction {
+        PositionDirection::Long => price - remainder,
+        PositionDirection::Short => (price + tick_size) - remainder,
     }
 }
 

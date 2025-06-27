@@ -4,6 +4,7 @@ use std::{
     fmt::Debug,
     iter::Peekable,
     sync::{atomic::AtomicBool, Arc},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use arrayvec::ArrayVec;
@@ -270,6 +271,7 @@ impl Orderbook {
                         size: x.size,
                         price: x.end_price as u64,
                         slot: x.slot,
+                        max_ts: x.max_ts,
                     },
                 );
             }
@@ -285,6 +287,7 @@ impl Orderbook {
                         size: x.size,
                         price: x.end_price as u64,
                         slot: x.slot,
+                        max_ts: x.max_ts,
                     },
                 );
             }
@@ -300,6 +303,7 @@ impl Orderbook {
                         slot: x.slot,
                         size: x.size,
                         offset_price: x.end_price_offset as i32,
+                        max_ts: x.max_ts,
                     },
                 );
             }
@@ -315,6 +319,7 @@ impl Orderbook {
                         slot: x.slot,
                         size: x.size,
                         offset_price: x.end_price_offset as i32,
+                        max_ts: x.max_ts,
                     },
                 );
             }
@@ -367,18 +372,32 @@ impl Orderbook {
         let mut result = Vec::with_capacity(
             self.resting_limit_orders.bids.len() + self.floating_limit_orders.bids.len(),
         );
+        let buffer_s = 5;
+        let now_unix_s = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + buffer_s;
 
         result.extend(
             self.resting_limit_orders
                 .bids
                 .values()
+                .filter(|o| !o.is_expired(now_unix_s))
                 .map(|o| (o.id, o.get_price(), o.size)),
         );
         result.extend(
             self.floating_limit_orders
                 .bids
                 .iter()
-                .map(|o| (o.id, o.get_price(slot, oracle_price, 0), o.size())),
+                .filter(|o| !o.is_expired(now_unix_s))
+                .map(|o| {
+                    (
+                        o.id,
+                        o.get_price(slot, oracle_price, self.market_tick_size),
+                        o.size(),
+                    )
+                }),
         );
 
         // Sort by price in descending order (best bid first)
@@ -390,20 +409,33 @@ impl Orderbook {
         let mut result = Vec::with_capacity(
             self.resting_limit_orders.asks.len() + self.floating_limit_orders.asks.len(),
         );
+        let buffer_s = 5;
+        let now_unix_s = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + buffer_s;
 
         result.extend(
             self.resting_limit_orders
                 .asks
                 .values()
+                .filter(|o| !o.is_expired(now_unix_s))
                 .map(|o| (o.id, o.get_price(), o.size)),
         );
-        result.extend(self.floating_limit_orders.asks.iter().map(|o| {
-            (
-                o.id,
-                o.get_price(slot, oracle_price, 0), // tick_size unused
-                o.size(),
-            )
-        }));
+        result.extend(
+            self.floating_limit_orders
+                .asks
+                .iter()
+                .filter(|o| !o.is_expired(now_unix_s))
+                .map(|o| {
+                    (
+                        o.id,
+                        o.get_price(slot, oracle_price, self.market_tick_size), // tick_size unused
+                        o.size(),
+                    )
+                }),
+        );
 
         // Sort by price in ascending order (best ask first)
         result.sort_by(|a, b| a.1.cmp(&b.1));
@@ -423,7 +455,7 @@ impl Orderbook {
         result.extend(self.oracle_orders.asks.iter().map(|o| {
             (
                 o.id,
-                o.get_price(slot, oracle_price, self.market_tick_size), // tick_size unused
+                o.get_price(slot, oracle_price, self.market_tick_size),
                 o.size(),
             )
         }));
@@ -446,7 +478,7 @@ impl Orderbook {
         result.extend(self.oracle_orders.bids.iter().map(|o| {
             (
                 o.id,
-                o.get_price(slot, oracle_price, self.market_tick_size), // tick_size unused
+                o.get_price(slot, oracle_price, self.market_tick_size),
                 o.size(),
             )
         }));
@@ -529,12 +561,12 @@ impl DLOB {
                     .program_data
                     .perp_market_config_by_index(market_id.index())
                     .map(|m| m.amm.order_tick_size)
-                    .unwrap_or(0),
+                    .unwrap_or(1),
                 MarketType::Spot => self
                     .program_data
                     .spot_market_config_by_index(market_id.index())
                     .map(|m| m.order_tick_size)
-                    .unwrap_or(0),
+                    .unwrap_or(1),
             };
             Orderbook {
                 market_tick_size,

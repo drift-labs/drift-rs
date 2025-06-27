@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc,
+use std::{
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    u64,
 };
 
 use ahash::HashSet;
@@ -381,7 +384,8 @@ fn update_handler_grpc(
                 owner: update.owner,
                 data: update.data.to_vec(),
                 lamports,
-                ..Default::default()
+                executable: false,
+                rent_epoch: u64::MAX,
             },
         ),
         slot,

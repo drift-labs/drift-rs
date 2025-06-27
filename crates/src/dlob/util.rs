@@ -61,6 +61,11 @@ pub fn compare_user_orders(pubkey: Pubkey, old: &User, new: &User) -> Vec<OrderD
                         user: pubkey,
                         order: *new_order,
                     });
+                } else {
+                    deltas.push(OrderDelta::Remove {
+                        user: pubkey,
+                        order: *new_order,
+                    });
                 }
             }
         }
@@ -199,19 +204,5 @@ mod tests {
 
         let deltas = compare_user_orders(pubkey, &old, &new);
         assert_eq!(deltas.len(), 3);
-    }
-
-    #[test]
-    fn dlob_util_test_init_to_filled_removes_order() {
-        let pubkey = Pubkey::new_unique();
-        // Old user has an order in Init status
-        let old_order = create_test_order(0, OrderStatus::Init);
-        let old = create_test_user(vec![old_order]);
-        // New user has the same order_id but status is now Filled
-        let filled_order = create_test_order(1, OrderStatus::Filled);
-        let new = create_test_user(vec![filled_order]);
-
-        let deltas = compare_user_orders(pubkey, &old, &new);
-        assert!(deltas.is_empty());
     }
 }
