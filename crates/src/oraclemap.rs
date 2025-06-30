@@ -1,9 +1,6 @@
-use std::{
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
-    u64,
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
 };
 
 use ahash::HashSet;

@@ -1,7 +1,4 @@
-use std::{
-    cell::LazyCell,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use anchor_lang::{
     prelude::borsh::{self},
@@ -27,18 +24,13 @@ use crate::{
 };
 
 /// Swift message discriminator (Anchor)
-const SWIFT_MSG_PREFIX: LazyCell<[u8; 8]> = LazyCell::new(|| {
-    solana_sdk::hash::hash(b"global:SignedMsgOrderParamsMessage").to_bytes()[..8]
-        .try_into()
-        .unwrap()
-});
-
-/// Swift message discriminator (Anchor)
-const SWIFT_DELEGATE_MSG_PREFIX: LazyCell<[u8; 8]> = LazyCell::new(|| {
-    solana_sdk::hash::hash(b"global:SignedMsgOrderParamsDelegateMessage").to_bytes()[..8]
-        .try_into()
-        .unwrap()
-});
+///
+/// sha256("global:SignedMsgOrderParamsMessage")[..8]
+const SWIFT_MSG_PREFIX: [u8; 8] = [0xc8, 0xd5, 0xa6, 0x5e, 0x22, 0x34, 0xf5, 0x5d];
+/// Swift delegate message discriminator (Anchor)
+///
+/// sha256("global:/// sha256("global:SignedMsgOrderParamsDelegatedMessage")[..8]
+const SWIFT_DELEGATE_MSG_PREFIX: [u8; 8] = [0x42, 0x65, 0x66, 0x38, 0xc7, 0x25, 0x9e, 0x23];
 
 pub const SWIFT_DEVNET_WS_URL: &str = "wss://master.swift.drift.trade";
 pub const SWIFT_MAINNET_WS_URL: &str = "wss://swift.drift.trade";
@@ -77,11 +69,11 @@ impl SignedOrderType {
         let mut buf = ArrayVec::new();
         match self {
             Self::Authority(ref x) => {
-                (*SWIFT_MSG_PREFIX).serialize(&mut buf).unwrap();
+                (SWIFT_MSG_PREFIX).serialize(&mut buf).unwrap();
                 x.serialize(&mut buf).unwrap();
             }
             Self::Delegated(ref x) => {
-                (*SWIFT_DELEGATE_MSG_PREFIX).serialize(&mut buf).unwrap();
+                (SWIFT_DELEGATE_MSG_PREFIX).serialize(&mut buf).unwrap();
                 x.serialize(&mut buf).unwrap();
             }
         }
@@ -251,7 +243,7 @@ pub async fn subscribe_swift_orders(
         .await
         .map_err(|err| {
             log::error!(target: LOG_TARGET, "couldn't connect to server: {err:?}");
-            SdkError::WsClient(err)
+            SdkError::WsClient(Box::new(err))
         })?;
 
     let (mut outgoing, mut incoming) = ws_stream.split();
@@ -260,7 +252,7 @@ pub async fn subscribe_swift_orders(
     while let Some(msg) = incoming.next().await {
         let msg = msg.map_err(|err| {
             log::error!(target: LOG_TARGET, "failed reading swift msg: {err:?}");
-            SdkError::WsClient(err)
+            SdkError::WsClient(Box::new(err))
         })?;
 
         if let Message::Text(text) = msg {
@@ -423,7 +415,7 @@ where
 
     // this is basically the same as if we derived AnchorDeserialize on `SignedOrderType` _expect_ it does not
     // add a u8 to distinguish the enum
-    if borsh_buf[..8] == *SWIFT_DELEGATE_MSG_PREFIX {
+    if borsh_buf[..8] == SWIFT_DELEGATE_MSG_PREFIX {
         AnchorDeserialize::deserialize(&mut &borsh_buf[8..])
             .map(SignedOrderType::Delegated)
             .map_err(serde::de::Error::custom)

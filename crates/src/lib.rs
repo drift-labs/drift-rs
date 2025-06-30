@@ -8,7 +8,6 @@ use std::{
 };
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
-use arrayvec::ArrayString;
 use bytemuck::Pod;
 use constants::{
     high_leverage_mode_account, ASSOCIATED_TOKEN_PROGRAM_ID, PROGRAM_ID, SYSTEM_PROGRAM_ID,
@@ -1143,7 +1142,7 @@ impl DriftClientBackend {
                 },
             )
             .await
-            .map_err(SdkError::Grpc)?;
+            .map_err(|err| SdkError::Grpc(Box::new(err)))?;
 
         // oracle pubkeys are subscribed individually
         // due to ownership differences
@@ -1167,7 +1166,7 @@ impl DriftClientBackend {
                 },
             )
             .await
-            .map_err(SdkError::Grpc)?;
+            .map_err(|err| SdkError::Grpc(Box::new(err)))?;
 
         let mut unsub = self.grpc_unsub.write().unwrap();
         let _ = unsub.insert((grpc_unsub, oracles_grpc_unsub));
@@ -1348,7 +1347,7 @@ impl DriftClientBackend {
                 .rpc_client
                 .get_latest_blockhash()
                 .await
-                .map_err(SdkError::Rpc),
+                .map_err(|err| SdkError::Rpc(Box::new(err))),
         }
     }
 
