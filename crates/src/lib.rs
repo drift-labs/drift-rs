@@ -8,6 +8,7 @@ use std::{
 };
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
+use arrayvec::ArrayString;
 use bytemuck::Pod;
 use constants::{
     high_leverage_mode_account, ASSOCIATED_TOKEN_PROGRAM_ID, PROGRAM_ID, SYSTEM_PROGRAM_ID,
@@ -38,7 +39,7 @@ use crate::{
     blockhash_subscriber::BlockhashSubscriber,
     constants::{
         derive_perp_market_account, derive_spot_market_account, state_account, MarketExt,
-        ProgramData, DEFAULT_PUBKEY, SYSVAR_INSTRUCTIONS_PUBKEY,
+        ProgramData, DEFAULT_PUBKEY, SYSVAR_INSTRUCTIONS_PUBKEY, SYSVAR_RENT_PUBKEY,
     },
     drift_idl::traits::ToAccountMetas,
     grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, GeyserSubscribeOpts},
@@ -1607,14 +1608,19 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
-    /// Deposit collateral into account
-    pub fn deposit(
-        mut self,
-        amount: u64,
-        market_index: u16,
-        user_token_account: Pubkey,
-        reduce_only: Option<bool>,
-    ) -> Self {
+    /// Deposit collateral into the user's account for a given spot market.
+    ///
+    /// Automatically derives the user's associated token account. Optionally supports reduce-only deposits.
+    ///
+    /// # Parameters
+    /// - `amount`: The amount of collateral to deposit (in native units).
+    /// - `market_index`: The spot market index to deposit into.
+    /// - `reduce_only`: If `Some(true)`, only reduces an existing borrow; otherwise, acts as a normal deposit.
+    pub fn deposit(mut self, amount: u64, market_index: u16, reduce_only: Option<bool>) -> Self {
+        let spot_market = self
+            .program_data
+            .spot_market_config_by_index(market_index)
+            .expect("spot markets syncd");
         let accounts = build_accounts(
             self.program_data,
             types::accounts::Deposit {
@@ -1622,13 +1628,12 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.authority),
                 authority: self.authority,
-                spot_market_vault: constants::derive_spot_market_vault(market_index),
-                user_token_account,
-                token_program: self
-                    .program_data
-                    .spot_market_config_by_index(market_index)
-                    .unwrap()
-                    .token_program(),
+                spot_market_vault: spot_market.vault,
+                user_token_account: Wallet::derive_associated_token_address(
+                    &self.authority,
+                    spot_market,
+                ),
+                token_program: spot_market.token_program(),
             },
             [self.account_data.as_ref()].into_iter(),
             self.force_markets.readable.iter(),
@@ -1650,14 +1655,19 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
-    /// Withdraw collateral from the account
-    pub fn withdraw(
-        mut self,
-        amount: u64,
-        market_index: u16,
-        user_token_account: Pubkey,
-        reduce_only: Option<bool>,
-    ) -> Self {
+    /// Withdraw collateral from the user's account for a given spot market.
+    ///
+    /// Automatically derives the user's associated token account. Optionally supports reduce-only withdrawals.
+    ///
+    /// # Parameters
+    /// - `amount`: The amount of collateral to withdraw (in native units).
+    /// - `market_index`: The spot market index to withdraw from.
+    /// - `reduce_only`: If `Some(true)`, only reduces an existing deposit; otherwise, acts as a normal withdrawal.
+    pub fn withdraw(mut self, amount: u64, market_index: u16, reduce_only: Option<bool>) -> Self {
+        let spot_market = self
+            .program_data
+            .spot_market_config_by_index(market_index)
+            .expect("spot markets syncd");
         let accounts = build_accounts(
             self.program_data,
             types::accounts::Withdraw {
@@ -1665,8 +1675,11 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.authority),
                 authority: self.authority,
-                spot_market_vault: constants::derive_spot_market_vault(market_index),
-                user_token_account,
+                spot_market_vault: spot_market.vault,
+                user_token_account: Wallet::derive_associated_token_address(
+                    &self.authority,
+                    spot_market,
+                ),
                 drift_signer: constants::derive_drift_signer(),
                 token_program: self
                     .program_data
@@ -2533,6 +2546,18 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
+    /// Fill a perpetual order by matching it against maker orders
+    ///
+    /// This instruction allows a filler to execute a taker's order by matching it against
+    /// existing maker orders in the order book. The filler receives a fee for providing
+    /// liquidity and executing the trade.
+    ///
+    /// * `market_index` - the perpetual market index to fill orders on
+    /// * `taker` - the taker's subaccount pubkey
+    /// * `taker_account` - the taker's user account data
+    /// * `taker_stats` - the taker's user stats account data
+    /// * `taker_order_id` - optional order ID to fill, if None fills the best available order
+    /// * `makers` - list of maker user accounts that will provide liquidity
     pub fn fill_perp_order(
         mut self,
         market_index: u16,
@@ -2584,6 +2609,146 @@ impl<'a> TransactionBuilder<'a> {
         };
 
         self.ixs.push(ix);
+        self
+    }
+
+    /// Trigger a conditional order (stop loss, take profit, etc.)
+    ///
+    /// This instruction allows a filler to trigger a conditional order when the specified
+    /// market conditions are met. Conditional orders include stop losses, take profits,
+    /// and other trigger-based order types.
+    ///
+    /// * `user` - the user's subaccount pubkey that owns the conditional order
+    /// * `user_account` - the user's account data containing the conditional order
+    /// * `order_id` - the ID of the conditional order to trigger
+    /// * `market` - tuple of (market_index, market_type) for the market the order is on
+    pub fn trigger_order(
+        mut self,
+        user: Pubkey,
+        user_account: &User,
+        order_id: u32,
+        market: (u16, MarketType),
+    ) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::TriggerOrder {
+                state: *state_account(),
+                authority: self.authority,
+                user,
+                filler: self.sub_account,
+            },
+            std::iter::once(user_account),
+            std::iter::empty(),
+            std::iter::once(&MarketId::from(market)),
+        );
+
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::TriggerOrder { order_id }),
+        };
+
+        self.ixs.push(ix);
+
+        self
+    }
+
+    /// Initialize a Swift (signed message) order account for the authority/wallet.
+    ///
+    /// Prepares the account for off-chain signed order flow.
+    pub fn initialize_swift_account(mut self) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::InitializeSignedMsgUserOrders {
+                signed_msg_user_orders: Wallet::derive_swift_order_account(&self.authority),
+                authority: self.authority,
+                payer: self.authority,
+                rent: SYSVAR_RENT_PUBKEY,
+                system_program: SYSTEM_PROGRAM_ID,
+            },
+            std::iter::empty(),
+            std::iter::empty(),
+            std::iter::empty(),
+        );
+
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::InitializeSignedMsgUserOrders {
+                num_orders: 16,
+            }),
+        };
+        self.ixs.push(ix);
+
+        self
+    }
+
+    /// Initialize a new user account (subaccount) for the authority/wallet.
+    ///
+    /// Optionally set a custom name and referrer.
+    /// For sub_account_id=0, also initializes the user stats account.
+    ///
+    /// # Parameters
+    /// - `sub_account_id`: The subaccount index to initialize (0 for main account).
+    /// - `name`: Optional custom name for the account. If `None`, a default name is used.
+    /// - `referrer`: Optional referrer pubkey to for the account.
+    pub fn initialize_user_account(
+        mut self,
+        sub_account_id: u16,
+        name: Option<String>,
+        referrer: Option<Pubkey>,
+    ) -> Self {
+        let mut accounts = build_accounts(
+            self.program_data,
+            types::accounts::InitializeUser {
+                state: *state_account(),
+                authority: self.authority,
+                user: Wallet::derive_user_account(&self.authority, sub_account_id),
+                user_stats: Wallet::derive_stats_account(&self.authority),
+                payer: self.authority,
+                rent: SYSVAR_RENT_PUBKEY,
+                system_program: SYSTEM_PROGRAM_ID,
+            },
+            std::iter::empty(),
+            std::iter::empty(),
+            std::iter::empty(),
+        );
+
+        if let Some(referrer) = referrer {
+            accounts.extend_from_slice(&[
+                AccountMeta::new(Wallet::derive_user_account(&referrer, 0), false),
+                AccountMeta::new(Wallet::derive_stats_account(&referrer), false),
+            ]);
+        }
+
+        if sub_account_id == 0 {
+            let ix = Instruction {
+                program_id: constants::PROGRAM_ID,
+                accounts: accounts.clone(),
+                data: InstructionData::data(&drift_idl::instructions::InitializeUserStats {}),
+            };
+            self.ixs.push(ix);
+        }
+
+        let name = name.unwrap_or_else(|| {
+            if sub_account_id == 0 {
+                "Main Account".into()
+            } else {
+                format!("Subaccount {}", sub_account_id + 1)
+            }
+        });
+
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::InitializeUser {
+                sub_account_id,
+                name: name.as_bytes()[..32].try_into().unwrap(),
+            }),
+        };
+
+        self.ixs.push(ix);
+
         self
     }
 

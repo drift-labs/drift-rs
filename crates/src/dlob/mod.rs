@@ -370,9 +370,11 @@ impl Orderbook {
 
     pub fn get_limit_bids(&self, slot: u64, oracle_price: u64) -> Vec<(u64, u64, u64)> {
         let mut result = Vec::with_capacity(
-            self.resting_limit_orders.bids.len() + self.floating_limit_orders.bids.len(),
+            self.resting_limit_orders.bids.len()
+                + self.floating_limit_orders.bids.len()
+                + self.trigger_orders.bids.len(),
         );
-        let buffer_s = 5;
+        let buffer_s = 4;
         let now_unix_s = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -399,6 +401,12 @@ impl Orderbook {
                     )
                 }),
         );
+        result.extend(
+            self.trigger_orders
+                .bids
+                .values()
+                .map(|o| (o.id, o.price, o.size)),
+        );
 
         // Sort by price in descending order (best bid first)
         result.sort_by(|a, b| b.1.cmp(&a.1));
@@ -407,9 +415,11 @@ impl Orderbook {
 
     pub fn get_limit_asks(&self, slot: u64, oracle_price: u64) -> Vec<(u64, u64, u64)> {
         let mut result = Vec::with_capacity(
-            self.resting_limit_orders.asks.len() + self.floating_limit_orders.asks.len(),
+            self.resting_limit_orders.asks.len()
+                + self.floating_limit_orders.asks.len()
+                + self.trigger_orders.asks.len(),
         );
-        let buffer_s = 5;
+        let buffer_s = 4;
         let now_unix_s = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -435,6 +445,12 @@ impl Orderbook {
                         o.size(),
                     )
                 }),
+        );
+        result.extend(
+            self.trigger_orders
+                .asks
+                .values()
+                .map(|o| (o.id, o.price, o.size)),
         );
 
         // Sort by price in ascending order (best ask first)
@@ -779,7 +795,11 @@ impl DLOB {
                         );
                     }
                     OrderType::TriggerLimit | OrderType::TriggerMarket => {
-                        log::trace!(target: "dlob", "skipping unhandled trigger order: {order:?}");
+                        orderbook.trigger_orders.insert(order_id, order);
+                        self.metadata.insert(
+                            order_id,
+                            OrderMetadata::new(*user, OrderKind::Trigger, order.order_id),
+                        );
                     }
                 }
             },
