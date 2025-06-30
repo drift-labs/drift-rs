@@ -2686,12 +2686,29 @@ impl<'a> TransactionBuilder<'a> {
     /// Initialize a new user account (subaccount) for the authority/wallet.
     ///
     /// Optionally set a custom name and referrer.
-    /// For sub_account_id=0, also initializes the user stats account.
+    /// For `sub_account_id = 0`, also initializes the user stats account.
     ///
     /// # Parameters
     /// - `sub_account_id`: The subaccount index to initialize (0 for main account).
     /// - `name`: Optional custom name for the account. If `None`, a default name is used.
-    /// - `referrer`: Optional referrer pubkey to for the account.
+    /// - `referrer`: Optional referrer pubkey for the account.
+    ///
+    /// # Example
+    /// ```
+    /// use drift_rs::{TransactionBuilder, Wallet};
+    /// use solana_sdk::pubkey::Pubkey;
+    ///
+    /// let wallet = Wallet::new_random();
+    /// let program_data = /* obtain ProgramData */;
+    /// let sub_account_id = 0;
+    /// let mut builder = TransactionBuilder::new(&program_data, wallet.default_sub_account(), /* user data */, false);
+    ///
+    /// // Initialize the user account and the swift account, then deposit 100_000 USDC (spot market 0)
+    /// builder = builder
+    ///     .initialize_user_account(sub_account_id, None, None)
+    ///     .initialize_swift_account()
+    ///     .deposit(100_000, 0, None);
+    /// ```
     pub fn initialize_user_account(
         mut self,
         sub_account_id: u16,
