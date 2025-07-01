@@ -957,7 +957,7 @@ impl DLOB {
         let vamm_ask = perp_market
             .map(|m| m.calculate_ask_price())
             .unwrap_or_default();
-        log::debug!(target: "filler", "VAMM market={} bid={vamm_bid} ask={vamm_ask}", market_index);
+        log::trace!(target: "dlob", "VAMM market={} bid={vamm_bid} ask={vamm_ask}", market_index);
 
         let taker_asks = book.get_taker_asks(slot, oracle_price, perp_market);
         let taker_bids = book.get_taker_bids(slot, oracle_price, perp_market);
@@ -984,7 +984,8 @@ impl DLOB {
         let top_3_maker_bids: ArrayVec<Pubkey, 3> = taker_bids
             .iter()
             .by_ref()
-            .map(|o| self.metadata.get(&o.0).unwrap().user)
+            .take(3)
+            .filter_map(|o| self.metadata.get(&o.0).map(|m| m.user))
             .collect();
         // Check for crosses between auction bids and resting asks
         for (oid, price, size) in taker_bids {
@@ -1013,7 +1014,8 @@ impl DLOB {
         let top_3_maker_asks: ArrayVec<Pubkey, 3> = taker_asks
             .iter()
             .by_ref()
-            .map(|o| self.metadata.get(&o.0).unwrap().user)
+            .take(3)
+            .filter_map(|o| self.metadata.get(&o.0).map(|m| m.user))
             .collect();
         // Check for crosses between auction asks and resting bids
         for (oid, price, size) in taker_asks {
