@@ -11,7 +11,34 @@ use tokio::sync::oneshot;
 pub const DEFAULT_REFRESH_FREQUENCY: Duration = Duration::from_millis(5 * 400);
 pub const DEFAULT_SLOT_WINDOW: Slot = 30;
 
-/// Subscribes to network priority fees given some accounts
+/// Subscribes to network priority fees given some accounts.
+///
+/// This subscriber periodically fetches recent prioritization fees for a set of Solana accounts in a background task.
+/// If fetching fails, it will retry up to 3 times before stopping the background task and marking itself as unsubscribed.
+/// After unsubscribing (either manually or due to repeated failures), queries for the priority fee can be checked safely using `priority_fee_safe()`.
+///
+/// # Example
+/// ```rust
+/// # use drift_rs::PriorityFeeSubscriber;
+/// # use solana_sdk::pubkey::Pubkey;
+/// let endpoint = "https://api.mainnet-beta.solana.com".to_string();
+/// let accounts = vec![Pubkey::new_unique()];
+/// let subscriber = PriorityFeeSubscriber::new(endpoint, &accounts);
+/// let subscriber = subscriber.subscribe();
+/// // ... later, after the background task has populated fees ...
+/// if subscriber.is_subscribed() {
+///     let fee = subscriber.priority_fee(); // may panic if not yet populated
+///     // use fee
+/// } else {
+///     // handle unsubscribed or stopped state
+/// }
+/// // Or, use the safe method:
+/// if let Some(fee) = subscriber.priority_fee_safe() {
+///     // use fee
+/// } else {
+///     // handle unsubscribed or stopped state
+/// }
+/// ```
 pub struct PriorityFeeSubscriber {
     config: PriorityFeeSubscriberConfig,
     /// Accounts to lock for the priority fee calculation
@@ -110,7 +137,8 @@ impl PriorityFeeSubscriber {
                             warn!("failed to fetch priority fee: {err:?}");
                             attempts += 1;
                             if attempts > max_attempts {
-                                panic!("unable to fetch priority fees");
+                                log::error!("unable to fetch priority fees: reached retry limit");
+                                break;
                             }
                         }
                     }
@@ -136,21 +164,53 @@ impl PriorityFeeSubscriber {
         }
     }
 
-    /// Returns the median priority fee in micro-lamports over the look-back window
+    /// Returns true if the subscriber is still active (subscribed).
+    pub fn is_subscribed(&self) -> bool {
+        self.unsub.lock().expect("acquired").is_some()
+    }
+
+    /// Returns the median priority fee in micro-lamports over the look-back window, or None if unsubscribed.
+    pub fn priority_fee_safe(&self) -> Option<u64> {
+        if self.is_subscribed() {
+            Some(self.priority_fee())
+        } else {
+            None
+        }
+    }
+
+    /// Returns the median priority fee in micro-lamports over the look-back window.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called before the subscriber has populated any fees (i.e., if no data is available yet).
     pub fn priority_fee(&self) -> u64 {
         self.priority_fee_nth(0.5)
     }
 
-    /// Returns the n-th percentile priority fee in micro-lamports over the look-back window
+    /// Returns the n-th percentile priority fee in micro-lamports over the look-back window.
     /// `percentile` given as decimal 0.0 < n <= 1.0
+    ///
+    /// # Panics
+    ///
+    /// Panics if called before the subscriber has populated any fees (i.e., if no data is available yet).
     pub fn priority_fee_nth(&self, percentile: f32) -> u64 {
-        let percentile = percentile.min(1.0);
         let lock = self.latest_fees.read().expect("acquired");
         if lock.is_empty() {
             panic!("PriorityFeeSubscriber is not subscribed");
         }
-        let idx = ((lock.len() - 1) as f32 * percentile).round() as usize;
-        lock[idx]
+        let n = lock.len();
+        if n == 1 {
+            return lock[0];
+        }
+        let rank = percentile * (n as f32 - 1.0);
+        let lower = rank.floor() as usize;
+        let upper = rank.ceil() as usize;
+        if lower == upper {
+            lock[lower]
+        } else {
+            let weight = rank - lower as f32;
+            (lock[lower] as f32 * (1.0 - weight) + lock[upper] as f32 * weight).round() as u64
+        }
     }
 }
 

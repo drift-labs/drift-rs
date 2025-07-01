@@ -73,10 +73,14 @@ pub struct GrpcSubscribeOpts {
     pub on_slot: Option<Box<OnSlotFn>>,
     /// custom callback for account updates
     pub on_account: Option<Vec<(AccountFilter, Box<OnAccountFn>)>>,
+    /// custom callback for tx updates
+    pub on_transaction: Option<Box<OnTransactionFn>>,
     /// Network level connection config
     pub connection_opts: GrpcConnectionOpts,
     /// Enable inter-slot update notifications
     pub interslot_updates: bool,
+    /// Watch transactions including these accounts
+    pub transaction_include_accounts: Vec<Pubkey>,
 }
 
 impl GrpcSubscribeOpts {
@@ -145,6 +149,18 @@ impl GrpcSubscribeOpts {
     /// Set network level connection opts
     pub fn connection_opts(mut self, opts: GrpcConnectionOpts) -> Self {
         self.connection_opts = opts;
+        self
+    }
+    /// Subscribe to transactions including `accounts`
+    pub fn transaction_include_accounts(mut self, accounts: Vec<Pubkey>) -> Self {
+        self.transaction_include_accounts = accounts;
+        self
+    }
+    pub fn on_transaction(
+        mut self,
+        on_transaction: impl Fn(&TransactionUpdate) + Send + Sync + 'static,
+    ) -> Self {
+        self.on_transaction = Some(Box::new(on_transaction));
         self
     }
 }

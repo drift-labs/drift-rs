@@ -135,6 +135,12 @@ pub fn zero_account_to_bytes<T: bytemuck::Pod + anchor_lang::Discriminator>(acco
     account_data
 }
 
+/// zero-copy deserialize anchor account `data` as T
+#[inline]
+pub fn deser_zero_copy<T: Discriminator + Pod>(data: &[u8]) -> &T {
+    bytemuck::from_bytes::<T>(&data[8..])
+}
+
 pub mod test_envs {
     //! test env vars
     use solana_sdk::signature::Keypair;

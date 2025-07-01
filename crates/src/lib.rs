@@ -8,6 +8,7 @@ use std::{
 };
 
 use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
+use bytemuck::Pod;
 use constants::{
     high_leverage_mode_account, ASSOCIATED_TOKEN_PROGRAM_ID, PROGRAM_ID, SYSTEM_PROGRAM_ID,
     TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID,
@@ -91,7 +92,6 @@ pub mod oraclemap;
 pub mod slot_subscriber;
 pub mod usermap;
 
-#[cfg(feature = "dlob")]
 pub mod dlob;
 
 /// DriftClient
@@ -592,7 +592,10 @@ impl DriftClient {
     /// * `account` - any onchain account
     ///
     /// Returns the deserialized account data (`User`)
-    pub async fn get_account_value<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
+    pub async fn get_account_value<T: AccountDeserialize + Pod>(
+        &self,
+        account: &Pubkey,
+    ) -> SdkResult<T> {
         self.backend.get_account(account).await
     }
 
@@ -600,7 +603,7 @@ impl DriftClient {
     ///
     /// requires account was previously subscribed too.
     /// like `get_account_value` without async/network fallback
-    pub fn try_get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
+    pub fn try_get_account<T: AccountDeserialize + Pod>(&self, account: &Pubkey) -> SdkResult<T> {
         self.backend.try_get_account(account)
     }
 
@@ -1191,6 +1194,33 @@ impl DriftClientBackend {
             self.perp_market_map.on_account_fn(),
         );
 
+        if opts.user_stats_map {
+            grpc.on_account(
+                AccountFilter::partial().with_discriminator(UserStats::DISCRIMINATOR),
+                self.account_map.on_account_fn(),
+            );
+        }
+
+        let transactions_accounts_include = opts
+            .transaction_include_accounts
+            .iter()
+            .map(|a| a.to_string())
+            .collect();
+        if let Some(f) = opts.on_transaction {
+            grpc.on_transaction(f);
+        }
+
+        // set custom callbacks
+        if let Some(callbacks) = opts.on_account {
+            for (filter, on_account) in callbacks {
+                grpc.on_account(filter, on_account)
+            }
+        }
+
+        if let Some(f) = opts.on_slot {
+            grpc.on_slot(f);
+        }
+
         if opts.usermap {
             grpc.on_account(
                 AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
@@ -1214,12 +1244,6 @@ impl DriftClientBackend {
             );
         }
 
-        // set custom callbacks
-        if let Some(callbacks) = opts.on_account {
-            for (filter, on_account) in callbacks {
-                grpc.on_account(filter, on_account)
-            }
-        }
         if let Some(f) = opts.on_slot {
             grpc.on_slot(f);
         }
@@ -1232,6 +1256,7 @@ impl DriftClientBackend {
                 GeyserSubscribeOpts {
                     accounts_owners: vec![PROGRAM_ID.to_string()],
                     interslot_updates: Some(opts.interslot_updates),
+                    transactions_accounts_include,
                     ..Default::default()
                 },
             )
@@ -1376,7 +1401,7 @@ impl DriftClientBackend {
     }
 
     /// Fetch `account` as an Anchor account type `T`
-    pub async fn get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
+    pub async fn get_account<T: AccountDeserialize + Pod>(&self, account: &Pubkey) -> SdkResult<T> {
         if let Some(value) = self.account_map.account_data(account) {
             Ok(value)
         } else {
@@ -1390,7 +1415,7 @@ impl DriftClientBackend {
     }
 
     /// Fetch `account` as an Anchor account type `T` along with the retrieved slot
-    pub async fn get_account_with_slot<T: AccountDeserialize>(
+    pub async fn get_account_with_slot<T: AccountDeserialize + Pod>(
         &self,
         account: &Pubkey,
     ) -> SdkResult<DataAndSlot<T>> {
@@ -1425,7 +1450,7 @@ impl DriftClientBackend {
 
     /// Try to fetch `account` as `T` using latest local value
     /// requires account was previously subscribed too.
-    pub fn try_get_account<T: AccountDeserialize>(&self, account: &Pubkey) -> SdkResult<T> {
+    pub fn try_get_account<T: AccountDeserialize + Pod>(&self, account: &Pubkey) -> SdkResult<T> {
         self.account_map
             .account_data(account)
             .ok_or_else(|| SdkError::NoAccountData(*account))
@@ -1724,7 +1749,7 @@ impl<'a> TransactionBuilder<'a> {
                     .unwrap()
                     .token_program(),
             },
-            &[self.account_data.as_ref()],
+            [self.account_data.as_ref()].into_iter(),
             self.force_markets.readable.iter(),
             [MarketId::spot(market_index)].iter(),
         );
@@ -1768,7 +1793,7 @@ impl<'a> TransactionBuilder<'a> {
                     .unwrap()
                     .token_program(),
             },
-            &[self.account_data.as_ref()],
+            [self.account_data.as_ref()].into_iter(),
             self.force_markets.readable.iter(),
             [MarketId::spot(market_index)]
                 .iter()
@@ -1807,12 +1832,14 @@ impl<'a> TransactionBuilder<'a> {
                 authority: self.authority,
                 user: self.sub_account,
             },
-            &[self.account_data.as_ref()],
+            [self.account_data.as_ref()].into_iter(),
             readable_accounts.iter(),
             self.force_markets.writeable.iter(),
         );
 
-        if orders.iter().any(|x| x.high_leverage_mode()) {
+        if self.account_data.margin_mode == MarginMode::HighLeverage
+            || orders.iter().any(|x| x.high_leverage_mode())
+        {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
@@ -1836,7 +1863,7 @@ impl<'a> TransactionBuilder<'a> {
                 authority: self.authority,
                 user: self.sub_account,
             },
-            &[self.account_data.as_ref()],
+            [self.account_data.as_ref()].into_iter(),
             self.force_markets.readable.iter(),
             self.force_markets.writeable.iter(),
         );
@@ -1872,7 +1899,7 @@ impl<'a> TransactionBuilder<'a> {
                 authority: self.authority,
                 user: self.sub_account,
             },
-            &[self.account_data.as_ref()],
+            [self.account_data.as_ref()].into_iter(),
             [(idx, r#type).into()]
                 .iter()
                 .chain(self.force_markets.readable.iter()),
@@ -1902,7 +1929,7 @@ impl<'a> TransactionBuilder<'a> {
                 authority: self.authority,
                 user: self.sub_account,
             },
-            &[self.account_data.as_ref()],
+            [self.account_data.as_ref()].into_iter(),
             self.force_markets.readable.iter(),
             self.force_markets.writeable.iter(),
         );
@@ -1926,7 +1953,7 @@ impl<'a> TransactionBuilder<'a> {
                 authority: self.authority,
                 user: self.sub_account,
             },
-            &[self.account_data.as_ref()],
+            [self.account_data.as_ref()].into_iter(),
             self.force_markets.readable.iter(),
             self.force_markets.writeable.iter(),
         );
@@ -1954,7 +1981,7 @@ impl<'a> TransactionBuilder<'a> {
                 authority: self.authority,
                 user: self.sub_account,
             },
-            &[self.account_data.as_ref()],
+            [self.account_data.as_ref()].into_iter(),
             self.force_markets.readable.iter(),
             self.force_markets.writeable.iter(),
         );
@@ -1983,7 +2010,7 @@ impl<'a> TransactionBuilder<'a> {
                 authority: self.authority,
                 user: self.sub_account,
             },
-            &[self.account_data.as_ref()],
+            [self.account_data.as_ref()].into_iter(),
             self.force_markets.readable.iter(),
             self.force_markets.writeable.iter(),
         );
@@ -2032,7 +2059,7 @@ impl<'a> TransactionBuilder<'a> {
                 taker: *taker,
                 taker_stats: Wallet::derive_stats_account(&taker_account.authority),
             },
-            &[self.account_data.as_ref(), taker_account],
+            [self.account_data.as_ref(), taker_account].into_iter(),
             self.force_markets.readable.iter(),
             if is_perp {
                 perp_writable.iter()
@@ -2042,7 +2069,7 @@ impl<'a> TransactionBuilder<'a> {
             .chain(self.force_markets.writeable.iter()),
         );
 
-        if order.high_leverage_mode() {
+        if order.high_leverage_mode() || taker_info.1.margin_mode == MarginMode::HighLeverage {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
@@ -2110,7 +2137,7 @@ impl<'a> TransactionBuilder<'a> {
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.authority),
             },
-            user_accounts.as_slice(),
+            user_accounts.into_iter(),
             self.force_markets.readable.iter(),
             if is_perp {
                 perp_writable.iter()
@@ -2120,7 +2147,9 @@ impl<'a> TransactionBuilder<'a> {
             .chain(self.force_markets.writeable.iter()),
         );
 
-        if order.high_leverage_mode() {
+        if order.high_leverage_mode()
+            || maker_info.is_some_and(|(_, m)| m.margin_mode == MarginMode::HighLeverage)
+        {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
@@ -2193,7 +2222,7 @@ impl<'a> TransactionBuilder<'a> {
                     &taker_account.authority,
                 ),
             },
-            &[self.account_data.as_ref(), taker_account],
+            [self.account_data.as_ref(), taker_account].into_iter(),
             self.force_markets.readable.iter(),
             perp_writable
                 .iter()
@@ -2253,14 +2282,16 @@ impl<'a> TransactionBuilder<'a> {
                 ),
                 ix_sysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
             },
-            &[taker_account],
+            [taker_account].into_iter(),
             perp_readable
                 .iter()
                 .chain(self.force_markets.readable.iter()),
             self.force_markets.writeable.iter(),
         );
 
-        if signed_order_info.order_params().high_leverage_mode() {
+        if signed_order_info.order_params().high_leverage_mode()
+            || taker_account.margin_mode == MarginMode::HighLeverage
+        {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
@@ -2300,7 +2331,7 @@ impl<'a> TransactionBuilder<'a> {
                 authority: self.authority,
                 user: self.sub_account,
             },
-            &[self.account_data.as_ref()],
+            [self.account_data.as_ref()].into_iter(),
             std::iter::empty(),
             std::iter::empty(),
         );
@@ -2346,7 +2377,7 @@ impl<'a> TransactionBuilder<'a> {
                 drift_signer: self.program_data.state().signer,
                 instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
             },
-            &[self.account_data.as_ref()],
+            [self.account_data.as_ref()].into_iter(),
             [MarketId::QUOTE_SPOT].iter(),
             [
                 MarketId::spot(in_market.market_index),
@@ -2408,7 +2439,7 @@ impl<'a> TransactionBuilder<'a> {
                 drift_signer: self.program_data.state().signer,
                 instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
             },
-            &[self.account_data.as_ref()],
+            [self.account_data.as_ref()].into_iter(),
             [MarketId::QUOTE_SPOT].iter(),
             [
                 MarketId::spot(in_market.market_index),
@@ -2557,7 +2588,7 @@ impl<'a> TransactionBuilder<'a> {
                     .unwrap()
                     .vault,
             },
-            &[target_account.unwrap_or(&self.account_data)],
+            [target_account.unwrap_or(&self.account_data)].into_iter(),
             std::iter::empty(),
             [MarketId::QUOTE_SPOT, MarketId::perp(market_index)].iter(),
         );
@@ -2600,7 +2631,7 @@ impl<'a> TransactionBuilder<'a> {
                     .unwrap()
                     .vault,
             },
-            &[target_account.unwrap_or(&self.account_data)],
+            [target_account.unwrap_or(&self.account_data)].into_iter(),
             std::iter::empty(),
             perp_iter
                 .iter()
@@ -2618,6 +2649,60 @@ impl<'a> TransactionBuilder<'a> {
 
         self.ixs.push(ix);
 
+        self
+    }
+
+    pub fn fill_perp_order(
+        mut self,
+        market_index: u16,
+        taker: Pubkey,
+        taker_account: &User,
+        taker_stats: &UserStats,
+        taker_order_id: Option<u32>,
+        makers: &[User],
+    ) -> Self {
+        let mut accounts = build_accounts(
+            self.program_data,
+            types::accounts::FillPerpOrder {
+                state: *state_account(),
+                authority: self.authority,
+                user: taker,
+                user_stats: Wallet::derive_stats_account(&taker_account.authority),
+                filler: self.sub_account,
+                filler_stats: Wallet::derive_stats_account(&self.owner()),
+            },
+            makers.iter().chain(std::iter::once(taker_account)),
+            std::iter::empty(),
+            std::iter::once(&MarketId::perp(market_index)),
+        );
+
+        for maker in makers {
+            accounts.extend([
+                AccountMeta::new(
+                    Wallet::derive_user_account(&maker.authority, maker.sub_account_id),
+                    false,
+                ),
+                AccountMeta::new(Wallet::derive_stats_account(&maker.authority), false),
+            ]);
+        }
+
+        if taker_stats.is_referred() {
+            accounts.extend([
+                AccountMeta::new(Wallet::derive_user_account(&taker_stats.referrer, 0), false),
+                AccountMeta::new(Wallet::derive_stats_account(&taker_stats.referrer), false),
+            ]);
+        }
+
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::FillPerpOrder {
+                order_id: taker_order_id,
+                maker_order_id: None,
+            }),
+        };
+
+        self.ixs.push(ix);
         self
     }
 
@@ -2659,7 +2744,7 @@ impl<'a> TransactionBuilder<'a> {
 pub fn build_accounts<'a>(
     program_data: &ProgramData,
     base_accounts: impl ToAccountMetas,
-    users: &[&User],
+    users: impl Iterator<Item = &'a User>,
     markets_readable: impl Iterator<Item = &'a MarketId>,
     markets_writable: impl Iterator<Item = &'a MarketId>,
 ) -> Vec<AccountMeta> {
@@ -2887,5 +2972,60 @@ mod tests {
         let (spot, perp) = client.all_positions(&user).await.unwrap();
         assert_eq!(spot.len(), 1);
         assert_eq!(perp.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_place_orders_high_leverage() {
+        // Create a test user with high leverage mode
+        let mut user = User::default();
+        user.margin_mode = MarginMode::HighLeverage;
+        let user = Cow::Owned(user);
+
+        // Create program data
+        let program_data = ProgramData::new(
+            vec![SpotMarket::default()],
+            vec![PerpMarket::default()],
+            vec![],
+            State::default(),
+        );
+        let sub_account = Pubkey::new_unique();
+
+        // Create transaction builder
+        let builder = TransactionBuilder::new(&program_data, sub_account, user, false);
+
+        // Test case 1: Place orders with high leverage mode account included due to user margin mode
+        let orders = vec![OrderParams {
+            market_index: 0,
+            market_type: MarketType::Perp,
+            direction: PositionDirection::Long,
+            order_type: OrderType::Limit,
+            ..Default::default()
+        }];
+
+        let tx = builder.place_orders(orders).build();
+
+        // Check that high leverage mode account is included
+        let high_leverage_account = *high_leverage_mode_account();
+        assert!(tx.static_account_keys().contains(&high_leverage_account));
+
+        // Test case 2: Place orders with high leverage mode account included due to order params
+        let mut user = User::default();
+        user.margin_mode = MarginMode::Default; // Not high leverage
+        let user = Cow::Owned(user);
+        let builder = TransactionBuilder::new(&program_data, sub_account, user, false);
+
+        let orders = vec![OrderParams {
+            market_index: 0,
+            market_type: MarketType::Perp,
+            direction: PositionDirection::Long,
+            order_type: OrderType::Limit,
+            bit_flags: OrderParams::HIGH_LEVERAGE_MODE_FLAG,
+            ..Default::default()
+        }];
+
+        let tx = builder.place_orders(orders).build();
+
+        // Check that high leverage mode account is included
+        assert!(tx.static_account_keys().contains(&high_leverage_account));
     }
 }

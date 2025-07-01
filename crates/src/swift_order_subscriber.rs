@@ -407,14 +407,17 @@ pub fn deser_signed_msg_type<'de, D>(deserializer: D) -> Result<SignedOrderType,
 where
     D: serde::Deserializer<'de>,
 {
-    let payload: &[u8] = serde::Deserialize::deserialize(deserializer)?;
+    let payload: &str = serde::Deserialize::deserialize(deserializer)?;
     if payload.len() % 2 != 0 {
         return Err(serde::de::Error::custom("Hex string length must be even"));
     }
 
     // decode expecting the largest possible variant
-    let mut borsh_buf = [0u8; SignedDelegateOrder::INIT_SPACE + 8];
+    if (payload.len() / 2) > SignedDelegateOrder::INIT_SPACE + 8 || payload.is_empty() {
+        return Err(serde::de::Error::custom("invalid signed message hex"));
+    }
 
+    let mut borsh_buf = [0u8; SignedDelegateOrder::INIT_SPACE + 8];
     hex::decode_to_slice(payload, &mut borsh_buf[..payload.len() / 2])
         .map_err(serde::de::Error::custom)?;
 
@@ -433,13 +436,46 @@ where
 
 #[cfg(test)]
 mod tests {
-    use anchor_lang::InstructionData;
-
     use super::*;
     use crate::{
         drift_idl,
         types::{MarketType, OrderTriggerCondition, OrderType, PositionDirection, PostOnlyParam},
     };
+
+    #[test]
+    fn test_swift_order_deser_bad_message() {
+        let msg = r#"{
+            "channel":"signed_orders_perp_1",
+            "order":{
+                "market_index":1,
+                "market_type":"perp",
+                "order_message":"b9c165ffdf70594d0001010080841e00000000000000000000000000010000000000000000013201a4e99abc16000000011ab2f982160000000300900f84150000000072753959424c52740000b9c165ffdf70594d0001010080841e00000000000000000000000000010000000000000000013201a4e99abc16000000011ab2f982160000000300900f84150000000072753959424c52740000aabbccaabbccaabbccaabbcc",
+                "order_signature":"FIgxWlW+C0abvtE8esSko7At1YGM8h66T0u5lJpwXirW63CuvEllVWZ68NNVFsaqcj4jqgQInXUnLPjIf/PQDA==",
+                "signing_authority":"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE",
+                "taker_authority":"DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2",
+                "ts":1739518796400,
+                "uuid":"ru9YBLRt"
+            }
+        }"#;
+        let result: Result<OrderNotification, _> = serde_json::from_str(&msg);
+        assert!(result.is_err());
+
+        let msg = r#"{
+            "channel":"signed_orders_perp_1",
+            "order":{
+                "market_index":1,
+                "market_type":"perp",
+                "order_message":"",
+                "order_signature":"FIgxWlW+C0abvtE8esSko7At1YGM8h66T0u5lJpwXirW63CuvEllVWZ68NNVFsaqcj4jqgQInXUnLPjIf/PQDA==",
+                "signing_authority":"4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE",
+                "taker_authority":"DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2",
+                "ts":1739518796400,
+                "uuid":"ru9YBLRt"
+            }
+        }"#;
+        let result: Result<OrderNotification, _> = serde_json::from_str(&msg);
+        assert!(result.is_err());
+    }
 
     #[test]
     fn test_swift_order_deser() {
@@ -489,7 +525,7 @@ mod tests {
 
     #[test]
     fn deser_ix_payload() {
-        let data = hex_literal::hex!("204f658b1906620f04010000a79826fba62ae1a29e220e2cd805e76874e109a58fc640ab2d93a96d9e4053ad46ee5213e7cadee57718748eb6886e3916724b5f3869afadf47128ae10dd9b0a522ec49107ab509f412186273ac178383c678a32183dc0c89bb804710115240ba20063386435613635653232333466353564303030313030303066666666666666666666666666666666636233373030303030303030303030303365303030303030303030303030303030313030303030303030303131343031316133373030303030303030303030303031326633383030303030303030303030303030303034306564336331343030303030303030333236393530343335343632343635323030303000");
+        let data = hex_literal::hex!("204f658b1906620f040100000a09f3447ce77b9aa6374b05c5efb667042ca0cb15ca74af8a8b97b5ad09cd68aef5bda66b38c021c42ff59afad102b7ffa31bc9c52ee85a8752b3142d62b405833d29adc5096b41d5b9d3b2d6fe46deecb286644510a70f85b95853ec628209a20063386435613635653232333466353564303430313030303038306561383232623030303030303030303030303030303030303030303030303030303030303030303030303030303030313437373930303030303131343031623065386663666666666666666666663031343737393030303030303030303030303039303062323436383231343030303030303030363235393733333936393638343133353030303000");
         let ix = drift_idl::instructions::PlaceSignedMsgTakerOrder::deserialize(&mut &data[8..])
             .unwrap();
         // signature, pubkey, len(u16)

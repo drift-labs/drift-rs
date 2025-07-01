@@ -1299,7 +1299,7 @@ mod test {
             } else if let Some(maker_order) = maker_order {
                 maker_order.market_type
             } else {
-                panic!("inalid order");
+                panic!("invalid order");
             },
             filler,
             filler_reward,
@@ -1337,6 +1337,10 @@ mod test {
             maker_order_cumulative_quote_asset_amount_filled: maker_order
                 .map(|order| order.quote_asset_amount_filled),
             oracle_price,
+            maker_existing_base_asset_amount: None,
+            maker_existing_quote_entry_amount: None,
+            taker_existing_base_asset_amount: None,
+            taker_existing_quote_entry_amount: None,
         }
     }
 }

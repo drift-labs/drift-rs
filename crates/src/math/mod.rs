@@ -3,7 +3,13 @@ use crate::{
         errors::ErrorCode,
         types::{MarginCalculationMode, MarginRequirementType, MarketIdentifier},
     },
-    types::OracleSource,
+    math::constants::{
+        BASE_PRECISION, LIQUIDATION_FEE_ADJUST_GRACE_PERIOD_SLOTS,
+        LIQUIDATION_FEE_INCREASE_PER_SLOT, LIQUIDATION_FEE_PRECISION_U128,
+        LIQUIDATION_FEE_TO_MARGIN_PRECISION_RATIO, PRICE_PRECISION,
+        PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO,
+    },
+    types::{OracleSource, PositionDirection, SdkError, SdkResult},
 };
 
 pub mod account_list_builder;
@@ -131,4 +137,127 @@ fn get_oracle_normalization_factor(a: OracleSource, b: OracleSource) -> (u64, u6
         | (OracleSource::Pyth1KPull, OracleSource::PythPull) => (1, 1_000),
         _ => (1, 1),
     }
+}
+
+/// ## panics if `tick_size` is 0
+#[inline]
+pub fn standardize_price(price: u64, tick_size: u64, direction: PositionDirection) -> u64 {
+    if price == 0 {
+        return 0;
+    }
+
+    let remainder = price.rem_euclid(tick_size);
+
+    if remainder == 0 {
+        return price;
+    }
+
+    match direction {
+        PositionDirection::Long => price - remainder,
+        PositionDirection::Short => (price + tick_size) - remainder,
+    }
+}
+
+/// ## panics if `step_size` is 0
+#[inline]
+pub fn standardize_base_asset_amount(base_asset_amount: u64, step_size: u64) -> u64 {
+    let remainder = base_asset_amount.rem_euclid(step_size);
+    base_asset_amount - remainder
+}
+
+/// ## panics if `step_size` is 0
+#[inline]
+pub fn standardize_base_asset_amount_ceil(base_asset_amount: u64, step_size: u64) -> u64 {
+    let next_tick = (step_size.abs_diff(base_asset_amount % step_size)) % step_size;
+    base_asset_amount + next_tick
+}
+
+pub fn get_liquidation_fee(
+    base_liquidation_fee: u32,
+    max_liquidation_fee: u32,
+    last_active_user_slot: u64,
+    current_slot: u64,
+) -> SdkResult<u32> {
+    if current_slot < last_active_user_slot {
+        return Err(SdkError::MathError("slot < user.last_active_slot"));
+    }
+    let slots_elapsed = current_slot - last_active_user_slot;
+
+    if slots_elapsed < LIQUIDATION_FEE_ADJUST_GRACE_PERIOD_SLOTS {
+        return Ok(base_liquidation_fee);
+    }
+
+    let liquidation_fee = base_liquidation_fee
+        .saturating_add((slots_elapsed * LIQUIDATION_FEE_INCREASE_PER_SLOT as u64) as u32);
+
+    Ok(liquidation_fee.min(max_liquidation_fee))
+}
+
+pub fn calculate_base_asset_amount_to_cover_margin_shortage(
+    margin_shortage: u128,
+    margin_ratio: u32,
+    liquidation_fee: u32,
+    if_liquidation_fee: u32,
+    oracle_price: i64,
+    quote_oracle_price: i64,
+) -> SdkResult<u64> {
+    let margin_ratio = margin_ratio * LIQUIDATION_FEE_TO_MARGIN_PRECISION_RATIO;
+
+    if oracle_price == 0 || margin_ratio <= liquidation_fee {
+        return Ok(u64::MAX);
+    }
+
+    let adjusted_margin = (margin_ratio - liquidation_fee) as u128;
+
+    let oracle_product = oracle_price as i128 * quote_oracle_price as i128;
+    let price_term = (oracle_product * adjusted_margin as i128)
+        / (PRICE_PRECISION as i128 * LIQUIDATION_FEE_PRECISION_U128 as i128);
+
+    let fee_term =
+        oracle_price as i128 * if_liquidation_fee as i128 / LIQUIDATION_FEE_PRECISION_U128 as i128;
+
+    let divisor = price_term - fee_term;
+
+    if divisor <= 0 {
+        return Ok(u64::MAX);
+    }
+
+    let result =
+        margin_shortage.saturating_mul(PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO) / divisor as u128;
+
+    Ok(result as u64) // truncate at u64 max
+}
+
+pub fn calculate_perp_if_fee(
+    margin_shortage: u128,
+    user_base_asset_amount: u64,
+    margin_ratio: u32,
+    liquidator_fee: u32,
+    oracle_price: i64,
+    quote_oracle_price: i64,
+    max_if_liquidation_fee: u32,
+) -> u32 {
+    if oracle_price == 0
+        || quote_oracle_price == 0
+        || user_base_asset_amount == 0
+        || margin_ratio <= liquidator_fee
+    {
+        return 0;
+    }
+
+    let margin_ratio = margin_ratio * LIQUIDATION_FEE_TO_MARGIN_PRECISION_RATIO;
+    let price = (oracle_price as u128 * quote_oracle_price as u128) / PRICE_PRECISION;
+
+    // implied_if_fee = (margin_shortage / (user_base_asset_amount * price)) * scaling
+    let fee_component = ((margin_shortage * BASE_PRECISION * PRICE_PRECISION)
+        / ((user_base_asset_amount as u128) * price)) as u32; // cap at u32::MAX
+
+    // implied_if_fee = (margin_ratio - liquidator_fee - fee_component) * 95%
+    let implied_if_fee = margin_ratio
+        .saturating_sub(liquidator_fee)
+        .saturating_sub(fee_component)
+        .saturating_mul(19)
+        / 20;
+
+    implied_if_fee.min(max_if_liquidation_fee)
 }

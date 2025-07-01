@@ -32,6 +32,7 @@ use crate::{
     constants::{ids, LUTS_DEVNET, LUTS_MAINNET, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID},
     drift_idl::errors::ErrorCode,
     grpc::grpc_subscriber::GrpcError,
+    types::accounts::UserStats,
     Wallet,
 };
 
@@ -323,7 +324,7 @@ pub enum SdkError {
     #[error("Couldn't send unsubscribe message")]
     CouldntUnsubscribe,
     #[error("MathError")]
-    MathError(String),
+    MathError(&'static str),
     #[error("{0}")]
     BorrowMutError(#[from] BorrowMutError),
     #[error("{0}")]
@@ -549,13 +550,15 @@ impl ReferrerInfo {
 }
 
 impl OrderParams {
+    pub const IMMEDIATE_OR_CANCEL_FLAG: u8 = 0b0000_0001;
+    pub const HIGH_LEVERAGE_MODE_FLAG: u8 = 0b0000_0010;
     /// true if 'immediate or cancel' bit is set
     pub fn immediate_or_cancel(&self) -> bool {
-        (self.bit_flags & 0b0000_00001) > 0
+        (self.bit_flags & Self::IMMEDIATE_OR_CANCEL_FLAG) > 0
     }
     /// true if HLM bit is set
     pub fn high_leverage_mode(&self) -> bool {
-        (self.bit_flags & 0b0000_00010) > 0
+        (self.bit_flags & Self::HIGH_LEVERAGE_MODE_FLAG) > 0
     }
 }
 
@@ -590,6 +593,22 @@ impl FromStr for MarketType {
         } else {
             Err(())
         }
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct ProtectedMakerParams {
+    pub limit_price_divisor: u8,
+    pub dynamic_offset: u64,
+    pub tick_size: u64,
+}
+
+impl UserStats {
+    pub fn is_referrer(&self) -> bool {
+        self.referrer_status & 0b0000_0001 != 0
+    }
+    pub fn is_referred(&self) -> bool {
+        self.referrer_status & 0b0000_0010 != 0
     }
 }
 
