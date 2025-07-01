@@ -14,6 +14,7 @@ use crate::{
         errors::ErrorCode,
         types::{self, ContractType, MarginRequirementType, OracleSource},
     },
+    math::constants::PRICE_PRECISION,
     types::{accounts::HighLeverageModeConfig, ProtectedMakerParams, SdkError},
     SdkResult,
 };
@@ -148,6 +149,12 @@ extern "C" {
         oracle_price: i64,
         is_signed_msg: bool,
     ) -> FfiResult<bool>;
+    #[allow(improper_ctypes)]
+    pub fn order_calculate_auction_params_for_trigger_order(
+        order: &types::Order,
+        oracle_price: &OraclePriceData,
+        perp_market: Option<&accounts::PerpMarket>,
+    ) -> FfiResult<(u8, i64, i64)>;
 }
 
 //
@@ -405,6 +412,60 @@ impl accounts::PerpMarket {
     pub fn get_protected_maker_params(&self) -> ProtectedMakerParams {
         unsafe { perp_market_get_protected_maker_params(self) }
     }
+
+    fn calculate_spread_reserves(
+        &self,
+        direction: crate::PositionDirection,
+    ) -> (u128, u128, u128, u128) {
+        // Returns (base_asset_reserve, quote_asset_reserve, sqrt_k, peg_multiplier)
+        match direction {
+            crate::PositionDirection::Long => (
+                self.amm.ask_base_asset_reserve.as_u128(),
+                self.amm.ask_quote_asset_reserve.as_u128(),
+                self.amm.sqrt_k.as_u128(),
+                self.amm.peg_multiplier.as_u128(),
+            ),
+            crate::PositionDirection::Short => (
+                self.amm.bid_base_asset_reserve.as_u128(),
+                self.amm.bid_quote_asset_reserve.as_u128(),
+                self.amm.sqrt_k.as_u128(),
+                self.amm.peg_multiplier.as_u128(),
+            ),
+        }
+    }
+
+    fn calculate_price(base_asset_reserve: u128, quote_asset_reserve: u128, peg: u128) -> u128 {
+        // (quote_asset_reserve / base_asset_reserve) * peg / PEG_PRECISION
+        if base_asset_reserve == 0 {
+            return 0;
+        }
+        quote_asset_reserve
+            .saturating_mul(PRICE_PRECISION)
+            .saturating_mul(peg)
+            .saturating_div(base_asset_reserve)
+            .saturating_div(crate::math::constants::PEG_PRECISION)
+    }
+
+    pub fn calculate_bid_price(&self) -> u128 {
+        let (base, quote, _, peg) = self.calculate_spread_reserves(crate::PositionDirection::Short);
+        Self::calculate_price(base, quote, peg)
+    }
+
+    pub fn calculate_ask_price(&self) -> u128 {
+        let (base, quote, _, peg) = self.calculate_spread_reserves(crate::PositionDirection::Long);
+        Self::calculate_price(base, quote, peg)
+    }
+}
+
+/// Calculates auction params for a trigger order using the FFI, returning (duration, start_price, end_price)
+pub fn calculate_auction_params_for_trigger_order(
+    order: &types::Order,
+    oracle_price: &OraclePriceData,
+    perp_market: Option<&accounts::PerpMarket>,
+) -> SdkResult<(u8, i64, i64)> {
+    to_sdk_result(unsafe {
+        order_calculate_auction_params_for_trigger_order(order, oracle_price, perp_market)
+    })
 }
 
 fn to_sdk_result<T>(value: FfiResult<T>) -> SdkResult<T> {
@@ -1207,5 +1268,39 @@ mod tests {
         assert_eq!(params.limit_price_divisor, 100);
         assert_eq!(params.dynamic_offset, 5_000); // max(10_000, 5_000) / 2
         assert_eq!(params.tick_size, 1_000);
+    }
+
+    #[test]
+    fn ffi_calculate_auction_params_for_trigger_order() {
+        use crate::{
+            drift_idl::{
+                accounts::PerpMarket,
+                types::{Order, OrderType, PositionDirection},
+            },
+            ffi::{abi_types::OraclePriceData, calculate_auction_params_for_trigger_order},
+        };
+        let order = Order {
+            order_type: OrderType::TriggerMarket,
+            direction: PositionDirection::Long,
+            slot: 1,
+            auction_duration: 10,
+            auction_start_price: 90_000,
+            auction_end_price: 100_000,
+            ..Default::default()
+        };
+        let oracle_price = OraclePriceData {
+            price: 100_000,
+            confidence: 100,
+            delay: 0,
+            has_sufficient_number_of_data_points: true,
+        };
+        let perp_market = PerpMarket::default();
+        let result =
+            calculate_auction_params_for_trigger_order(&order, &oracle_price, Some(&perp_market));
+        assert!(result.is_ok(), "FFI call should succeed");
+        let (duration, start, end) = result.unwrap();
+        assert_eq!(duration, 10);
+        assert!(start > 0);
+        assert!(end > 0);
     }
 }

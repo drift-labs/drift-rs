@@ -5,9 +5,12 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::{
     dlob::{Direction, OrderDelta},
-    ffi::calculate_auction_price,
+    ffi::{calculate_auction_price, OraclePriceData},
     math::standardize_price,
-    types::{MarketType, Order, OrderParams, OrderTriggerCondition, OrderType},
+    types::{
+        accounts::PerpMarket, MarketType, Order, OrderParams, OrderStatus, OrderTriggerCondition,
+        OrderType,
+    },
 };
 
 // Replace the key structs with type aliases
@@ -32,7 +35,13 @@ pub enum OrderKind {
     Limit,
     /// resting oracle limit order
     FloatingLimit,
-    Trigger,
+    /// trigger order that will result in Market or Oracle auction order
+    TriggerMarket,
+    /// trigger order that will result in Limit/Market auction order
+    TriggerLimit,
+    OracleTriggered,
+    MarketTriggered,
+    LimitTriggered,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -74,21 +83,35 @@ impl TakerOrder {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+/// Orderbook crosses and top maker info
+pub struct CrossesAndTopMakers {
+    //  best maker accounts on ask side
+    pub top_maker_asks: ArrayVec<Pubkey, 3>,
+    //  best maker accounts on bid side
+    pub top_maker_bids: ArrayVec<Pubkey, 3>,
+    //  taker crosses and maker orders
+    pub crosses: Vec<(OrderMetadata, MakerCrosses)>,
+}
+
 /// Best fills for a taker order
 /// Returns (candidates, is_partial)
 #[derive(Clone, Debug, Default)]
 pub struct MakerCrosses {
     /// (metadata, maker_price, fill_size)
     pub orders: ArrayVec<(OrderMetadata, u64, u64), 16>,
+    // true if crosses VAMM quote
+    pub has_vamm_cross: bool,
     pub is_partial: bool,
     /// Slot crosses were found
     pub slot: u64,
+    pub taker_direction: Direction,
 }
 
 impl MakerCrosses {
-    /// Returns True if there were not crosses found
+    /// Returns True if there were no crosses found
     pub fn is_empty(&self) -> bool {
-        self.orders.is_empty()
+        self.orders.is_empty() && !self.has_vamm_cross
     }
 }
 
@@ -201,9 +224,79 @@ pub(crate) struct FloatingLimitOrder {
 pub(crate) struct TriggerOrder {
     pub id: u64,
     pub size: u64,
+    /// static trigger price
     pub price: u64,
     pub condition: OrderTriggerCondition,
     pub slot: u64,
+    pub direction: Direction,
+    pub kind: OrderType,
+    pub bit_flags: u8,
+}
+
+impl TriggerOrder {
+    /// Returns true if the order would trigger at the given `oracle_price`
+    pub fn will_trigger_at(&self, oracle_price: u64) -> bool {
+        match self.condition {
+            OrderTriggerCondition::Above => oracle_price > self.price,
+            OrderTriggerCondition::Below => oracle_price < self.price,
+            _ => true, // technically unreachable
+        }
+    }
+    /// Returns order price if it were triggered at `slot` with the current market parameters, `oracle_price` and `perp_market`
+    pub fn get_price(&self, slot: u64, oracle_price: u64, perp_market: Option<&PerpMarket>) -> u64 {
+        // TODO: safe trigger order can fill against VAMM
+        // if slot.saturating_sub(order.slot) > 150 && order.reduce_only {
+        //     order.add_bit_flag(OrderBitFlag::SafeTriggerOrder);
+        // }
+        if let Some(ref market) = perp_market {
+            let mut order = Order {
+                slot, // slot is the current slot (i.e simulate trigger and place)
+                direction: self.direction,
+                order_type: self.kind,
+                market_index: market.market_index,
+                market_type: MarketType::Perp,
+                base_asset_amount: self.size,
+                status: OrderStatus::Open,
+                trigger_condition: match self.condition {
+                    OrderTriggerCondition::Above => OrderTriggerCondition::TriggeredAbove,
+                    OrderTriggerCondition::Below => OrderTriggerCondition::TriggeredBelow,
+                    _ => self.condition,
+                },
+                bit_flags: self.bit_flags,
+                ..Default::default()
+            };
+            let (auction_duration, auction_start, auction_end) =
+                crate::ffi::calculate_auction_params_for_trigger_order(
+                    &order,
+                    &OraclePriceData {
+                        price: oracle_price as i64,
+                        confidence: 0,
+                        delay: 0,
+                        has_sufficient_number_of_data_points: true,
+                    },
+                    Some(market),
+                )
+                .unwrap();
+            order.auction_duration = auction_duration;
+            order.auction_start_price = auction_start;
+            order.auction_end_price = auction_end;
+
+            if matches!(order.order_type, OrderType::TriggerMarket) {
+                order.bit_flags |= Order::ORACLE_TRIGGER_MARKET_FLAG;
+            }
+
+            return calculate_auction_price(
+                &order,
+                slot,
+                market.amm.order_tick_size,
+                Some(oracle_price as i64),
+                false,
+            )
+            .expect("got auction price");
+        }
+
+        todo!("implement spot market trigger price");
+    }
 }
 
 impl DynamicPrice for MarketOrder {
@@ -226,7 +319,7 @@ impl DynamicPrice for MarketOrder {
             None,
             false,
         )
-        .unwrap_or(0)
+        .expect("market price")
     }
 }
 
@@ -360,6 +453,9 @@ impl From<(u64, Order)> for TriggerOrder {
             price: order.trigger_price,
             condition: order.trigger_condition,
             slot: order.slot,
+            direction: order.direction,
+            kind: order.order_type,
+            bit_flags: order.bit_flags,
         }
     }
 }

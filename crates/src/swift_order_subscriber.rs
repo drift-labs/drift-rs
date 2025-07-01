@@ -522,7 +522,7 @@ mod tests {
             .unwrap();
         // signature, pubkey, len(u16)
         let payload = hex::decode(&ix.signed_msg_order_params_message_bytes[98..]).unwrap();
-        dbg!(payload[..8] == *SWIFT_MSG_PREFIX);
+        dbg!(payload[..8] == SWIFT_MSG_PREFIX);
 
         let res: SignedOrder = AnchorDeserialize::deserialize(&mut &payload[8..]).unwrap();
         dbg!(res);

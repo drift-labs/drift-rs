@@ -581,6 +581,13 @@ impl ReferrerInfo {
     }
 }
 
+impl Order {
+    pub const ORACLE_TRIGGER_MARKET_FLAG: u8 = 0b0000_0010;
+    pub fn is_oracle_trigger_market(&self) -> bool {
+        self.bit_flags & Self::ORACLE_TRIGGER_MARKET_FLAG != 0
+    }
+}
+
 impl OrderParams {
     pub const IMMEDIATE_OR_CANCEL_FLAG: u8 = 0b0000_0001;
     pub const HIGH_LEVERAGE_MODE_FLAG: u8 = 0b0000_0010;
