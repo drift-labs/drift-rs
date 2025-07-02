@@ -602,7 +602,7 @@ fn dlob_find_crosses_for_taker_order_vamm_cross() {
     let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, Some(999));
 
     // Should not fill any orders
-    assert_eq!(result.has_vamm_cross());
+    assert!(result.has_vamm_cross);
     assert_eq!(result.orders.len(), 0);
     assert!(!result.is_empty());
     assert!(result.is_partial);
