@@ -951,13 +951,9 @@ impl DLOB {
         let book = self.markets.get(&market).expect("market lob exists");
         let mut all_crosses = Vec::with_capacity(16);
 
-        let vamm_bid = perp_market
-            .map(|m| m.calculate_bid_price())
-            .unwrap_or_default();
-        let vamm_ask = perp_market
-            .map(|m| m.calculate_ask_price())
-            .unwrap_or_default();
-        log::trace!(target: "dlob", "VAMM market={} bid={vamm_bid} ask={vamm_ask}", market_index);
+        let vamm_bid = perp_market.map(|m| m.calculate_bid_price() as u64);
+        let vamm_ask = perp_market.map(|m| m.calculate_ask_price() as u64);
+        log::trace!(target: "dlob", "VAMM market={} bid={vamm_bid:?} ask={vamm_ask:?}", market_index);
 
         let taker_asks = book.get_taker_asks(slot, oracle_price, perp_market);
         let taker_bids = book.get_taker_bids(slot, oracle_price, perp_market);
@@ -983,10 +979,10 @@ impl DLOB {
 
         let top_3_maker_bids: ArrayVec<Pubkey, 3> = taker_bids
             .iter()
-            .by_ref()
             .take(3)
             .filter_map(|o| self.metadata.get(&o.0).map(|m| m.user))
             .collect();
+
         // Check for crosses between auction bids and resting asks
         for (oid, price, size) in taker_bids {
             taker_order.price = price;
@@ -998,12 +994,14 @@ impl DLOB {
                 book.last_modified_slot,
                 taker_order,
                 resting_asks.iter_mut().peekable(),
-                vamm_ask as u64,
+                vamm_ask,
             );
 
             if let Some(metadata) = self.metadata.get(&oid) {
                 if !new_crosses.is_empty() {
                     all_crosses.push((*metadata.value(), new_crosses));
+                } else {
+                    break;
                 }
             } else {
                 log::warn!(target: "dlob", "missing metadata for order: {oid}");
@@ -1013,10 +1011,10 @@ impl DLOB {
 
         let top_3_maker_asks: ArrayVec<Pubkey, 3> = taker_asks
             .iter()
-            .by_ref()
             .take(3)
             .filter_map(|o| self.metadata.get(&o.0).map(|m| m.user))
             .collect();
+
         // Check for crosses between auction asks and resting bids
         for (oid, price, size) in taker_asks {
             taker_order.price = price;
@@ -1028,12 +1026,14 @@ impl DLOB {
                 book.last_modified_slot,
                 taker_order,
                 resting_bids.iter_mut().peekable(),
-                vamm_bid as u64,
+                vamm_bid,
             );
 
             if let Some(metadata) = self.metadata.get(&oid) {
                 if !new_crosses.is_empty() {
                     all_crosses.push((*metadata.value(), new_crosses));
+                } else {
+                    break;
                 }
             } else {
                 log::warn!(target: "dlob", "missing metadata for order: {oid}");
@@ -1048,24 +1048,36 @@ impl DLOB {
         }
     }
 
-    /// Finds best limit order crosses for a given `taker_order`
+    /// At the current slot and oracle price return all auctions crossing resting limit orders
     ///
-    /// Limited to 16 orders
+    /// # Parameters
+    ///
+    /// * `current_slot` - The current slot number, used for time-sensitive order logic.
+    /// * `oracle_price` - The current oracle price, used for price calculations and trigger conditions.
+    /// * `taker_order` - The taker order for which to find matching maker orders. Contains price, size, direction, and market info.
+    /// * `vamm_price` - An optional price from the virtual AMM (vAMM) to consider as a crossing point. If `Some`, will check if the taker order crosses this price.
+    ///
+    /// ## Panics
+    ///
+    /// if market_index,market_type has not been initialized on this dlob instance
+    ///
+    /// # Returns
+    ///
+    /// Returns a `MakerCrosses` struct containing the list of matched maker orders, the slot, whether the match is partial, and if a vAMM cross occurred.
     pub fn find_crosses_for_taker_order(
         &self,
         current_slot: u64,
         oracle_price: u64,
         taker_order: TakerOrder,
-        perp_market: &PerpMarket,
+        vamm_price: Option<u64>,
     ) -> MakerCrosses {
         let market = MarketId::new(taker_order.market_index, taker_order.market_type);
-        let (book_slot, mut resting_orders, vamm_price) = match taker_order.direction {
+        let (book_slot, mut resting_orders) = match taker_order.direction {
             Direction::Long => {
                 let book = self.markets.get(&market).expect("market lob exists");
                 (
                     book.last_modified_slot,
                     book.get_limit_asks(current_slot, oracle_price),
-                    perp_market.calculate_ask_price(),
                 )
             }
             Direction::Short => {
@@ -1073,7 +1085,6 @@ impl DLOB {
                 (
                     book.last_modified_slot,
                     book.get_limit_bids(current_slot, oracle_price),
-                    perp_market.calculate_bid_price(),
                 )
             }
         };
@@ -1083,7 +1094,7 @@ impl DLOB {
             book_slot,
             taker_order,
             resting_orders.iter_mut().peekable(),
-            vamm_price as u64,
+            vamm_price,
         )
     }
 
@@ -1094,7 +1105,7 @@ impl DLOB {
         resting_order_slot: u64,
         taker_order: TakerOrder,
         mut resting_limit_orders: Peekable<impl Iterator<Item = &'a mut (u64, u64, u64)>>,
-        vamm_price: u64,
+        vamm_price: Option<u64>,
     ) -> MakerCrosses {
         let mut candidates = ArrayVec::<(OrderMetadata, u64, u64), 16>::new();
         let mut remaining_size = taker_order.size;
@@ -1141,7 +1152,7 @@ impl DLOB {
         }
 
         MakerCrosses {
-            has_vamm_cross: price_crosses(taker_order.price, vamm_price),
+            has_vamm_cross: vamm_price.is_some_and(|v| price_crosses(taker_order.price, v)),
             orders: candidates,
             slot: current_slot,
             is_partial: remaining_size != 0,

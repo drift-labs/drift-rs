@@ -1,7 +1,10 @@
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
-    dlob::{types::DynamicPrice, Direction, OrderKind, OrderMetadata, Orderbook, TakerOrder, DLOB},
+    dlob::{
+        types::DynamicPrice, Direction, OrderKind, OrderMetadata, Orderbook,
+        TakerOrder, DLOB,
+    },
     types::{MarketId, MarketType, Order, OrderType},
 };
 
@@ -476,7 +479,7 @@ fn dlob_find_crosses_for_taker_order_full_fill() {
         market_type: MarketType::Perp,
     };
 
-    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order);
+    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None);
 
     // Should fill both orders, 5 from first order and 2 from second
     assert_eq!(result.orders.len(), 2);
@@ -529,7 +532,7 @@ fn dlob_find_crosses_for_taker_order_partial_fill() {
         market_type: MarketType::Perp,
     };
 
-    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order);
+    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None);
 
     // Should only fill 3 units from the first order
     assert_eq!(result.orders.len(), 1);
@@ -570,10 +573,41 @@ fn dlob_find_crosses_for_taker_order_no_cross() {
         market_type: MarketType::Perp,
     };
 
-    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order);
+    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None);
 
     // Should not fill any orders
     assert_eq!(result.orders.len(), 0);
+    assert!(result.is_partial);
+}
+
+#[test]
+fn dlob_find_crosses_for_taker_order_vamm_cross() {
+    let _ = env_logger::try_init();
+    let dlob = DLOB::default();
+    let user = Pubkey::new_unique();
+    let slot = 100;
+    let oracle_price = 1000;
+
+    // Insert resting limit orders
+    let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 1100, 5, slot);
+    order.post_only = true;
+    dlob.insert_order(&user, order);
+
+    // Create taker order to buy at 1000
+    let taker_order = TakerOrder {
+        price: 1000,
+        size: 5,
+        direction: Direction::Long,
+        market_index: 0,
+        market_type: MarketType::Perp,
+    };
+
+    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, Some(999));
+
+    // Should not fill any orders
+    assert_eq!(result.has_vamm_cross());
+    assert_eq!(result.orders.len(), 0);
+    assert!(!result.is_empty());
     assert!(result.is_partial);
 }
 
@@ -600,7 +634,7 @@ fn dlob_find_crosses_for_taker_order_floating_limit() {
         market_type: MarketType::Perp,
     };
 
-    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order);
+    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None);
 
     // Should fill the floating limit order
     assert_eq!(result.orders.len(), 1);
@@ -645,7 +679,7 @@ fn dlob_find_crosses_for_taker_order_price_priority() {
         market_type: MarketType::Perp,
     };
 
-    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order);
+    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None);
 
     // Should fill the better price first (900)
     assert_eq!(result.orders.len(), 2);
@@ -1033,11 +1067,12 @@ fn dlob_find_crosses_for_auctions_market_orders() {
     market_order.auction_end_price = 1200;
     dlob.insert_order(&Pubkey::new_unique(), market_order);
 
-    let crosses = dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price);
-    assert_eq!(crosses.len(), 1);
-    assert!(!crosses[0].1.is_empty());
-    assert_eq!(crosses[0].1.orders.len(), 1);
-    assert_eq!(crosses[0].1.orders[0].2, 50); // Fill size should be 50
+    let crosses =
+        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None);
+    assert_eq!(crosses.crosses.len(), 1);
+    assert!(!crosses.crosses[0].1.is_empty());
+    assert_eq!(crosses.crosses[0].1.orders.len(), 1);
+    assert_eq!(crosses.crosses[0].1.orders[0].2, 50); // Fill size should be 50
 }
 
 #[test]
@@ -1064,11 +1099,12 @@ fn dlob_find_crosses_for_auctions_oracle_orders() {
     );
     dlob.insert_order(&Pubkey::new_unique(), oracle_order);
 
-    let crosses = dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price);
-    assert_eq!(crosses.len(), 1);
-    assert!(!crosses[0].1.is_empty());
-    assert_eq!(crosses[0].1.orders.len(), 1);
-    assert_eq!(crosses[0].1.orders[0].2, 50); // Fill size should be 50
+    let crosses =
+        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None);
+    assert_eq!(crosses.crosses.len(), 1);
+    assert!(!crosses.crosses[0].1.is_empty());
+    assert_eq!(crosses.crosses[0].1.orders.len(), 1);
+    assert_eq!(crosses.crosses[0].1.orders[0].2, 50); // Fill size should be 50
 }
 
 #[test]
@@ -1095,8 +1131,9 @@ fn dlob_find_crosses_for_auctions_no_crosses() {
     );
     dlob.insert_order(&Pubkey::new_unique(), market_order);
 
-    let crosses = dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price);
-    assert!(crosses.is_empty());
+    let crosses =
+        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None);
+    assert!(crosses.crosses.is_empty());
 }
 
 #[test]
@@ -1165,7 +1202,8 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
     dlob.insert_order(&Pubkey::new_unique(), oracle_ask_1);
     dlob.insert_order(&Pubkey::new_unique(), oracle_ask_2);
 
-    let crosses = dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price);
+    let crosses =
+        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None);
     dbg!(&crosses);
 
     // Should find 4 crosses:
@@ -1182,6 +1220,7 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
     ];
 
     let actual_crosses: Vec<_> = crosses
+        .crosses
         .iter()
         .map(|(meta, maker_crosses)| {
             (
