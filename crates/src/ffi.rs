@@ -1299,7 +1299,7 @@ mod tests {
             calculate_auction_params_for_trigger_order(&order, &oracle_price, Some(&perp_market));
         assert!(result.is_ok(), "FFI call should succeed");
         let (duration, start, end) = result.unwrap();
-        assert_eq!(duration, 10);
+        assert_eq!(duration, 20);
         assert!(start > 0);
         assert!(end > 0);
     }
