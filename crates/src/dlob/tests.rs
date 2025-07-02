@@ -1,10 +1,7 @@
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
-    dlob::{
-        types::DynamicPrice, Direction, OrderKind, OrderMetadata, Orderbook,
-        TakerOrder, DLOB,
-    },
+    dlob::{types::DynamicPrice, Direction, OrderKind, OrderMetadata, Orderbook, TakerOrder, DLOB},
     types::{MarketId, MarketType, Order, OrderType},
 };
 
