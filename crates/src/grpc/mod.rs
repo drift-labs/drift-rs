@@ -128,9 +128,9 @@ impl GrpcSubscribeOpts {
     /// Register a custom callback for account updates
     ///
     /// * `filter` - accounts matching filter will invoke the callback
-    /// * `on_account` - fn to invoke on matching account update
+    /// * `callback` - fn to invoke on matching account update
     ///
-    /// ! `on_account` must not block the gRPC task
+    /// ! `callback` must not block the gRPC task
     pub fn on_account(
         mut self,
         filter: AccountFilter,

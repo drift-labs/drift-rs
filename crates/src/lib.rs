@@ -1244,10 +1244,6 @@ impl DriftClientBackend {
             );
         }
 
-        if let Some(f) = opts.on_slot {
-            grpc.on_slot(f);
-        }
-
         // start subscription
         let commitment = opts.commitment.unwrap_or(CommitmentLevel::Confirmed);
         let grpc_unsub = grpc
