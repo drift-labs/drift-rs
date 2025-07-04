@@ -723,3 +723,6 @@ pub struct AccountUpdate {
 }
 
 pub type OnAccountFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
+
+/// Empty callback function pointer that does nothing - useful as a no-op callback
+pub const EMPTY_ACCOUNT_CALLBACK: fn(&AccountUpdate) = |_: &AccountUpdate| {};

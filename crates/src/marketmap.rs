@@ -29,7 +29,7 @@ use crate::{
     drift_idl::types::OracleSource,
     grpc::AccountUpdate,
     memcmp::get_market_filter,
-    types::MapOf,
+    types::{MapOf, EMPTY_ACCOUNT_CALLBACK},
     websocket_account_subscriber::WebsocketAccountSubscriber,
     DataAndSlot, MarketId, MarketType, PerpMarket, SdkResult, SpotMarket, UnsubHandle,
 };
@@ -123,12 +123,25 @@ where
         }
     }
 
-    /// Subscribe to market account updates
-    pub async fn subscribe<F>(
+    /// Subscribe to market account updates without callback
+    pub async fn subscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
+        self.subscribe_inner(markets, EMPTY_ACCOUNT_CALLBACK).await
+    }
+
+    /// Subscribe to market account updates with callback
+    pub async fn subscribe_with_callback<F>(
         &self,
         markets: &[MarketId],
-        on_account: Option<F>,
+        on_account: F,
     ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
+        self.subscribe_inner(markets, on_account).await
+    }
+
+    /// Subscribe to market account updates
+    async fn subscribe_inner<F>(&self, markets: &[MarketId], on_account: F) -> SdkResult<()>
     where
         F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
     {
@@ -174,9 +187,7 @@ where
                                         .expect("valid market"),
                                 },
                             );
-                            if let Some(on_account) = &on_account {
-                                on_account(&update);
-                            }
+                            on_account(&update);
                         }
                     })
                     .await;
@@ -248,7 +259,11 @@ where
 
     /// Sync all market accounts
     pub async fn sync(&self, rpc: &RpcClient) -> SdkResult<()> {
-        log::debug!(target: LOG_TARGET, "syncing marketmap: {:?}", T::MARKET_TYPE);
+        log::debug!(
+            target: LOG_TARGET,
+            "syncing marketmap: {:?}",
+            T::MARKET_TYPE
+        );
         let (markets, latest_slot) = get_market_accounts_with_fallback::<T>(rpc).await?;
         for market in markets {
             self.marketmap.insert(
@@ -261,7 +276,12 @@ where
         }
         self.latest_slot.store(latest_slot, Ordering::Relaxed);
 
-        log::debug!(target: LOG_TARGET, "synced {:?} marketmap with {} markets", T::MARKET_TYPE, self.marketmap.len());
+        log::debug!(
+            target: LOG_TARGET,
+            "synced {:?} marketmap with {} markets",
+            T::MARKET_TYPE,
+            self.marketmap.len()
+        );
         Ok(())
     }
 
@@ -310,7 +330,11 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
         }
         return Ok((markets, accounts.context.slot));
     }
-    log::debug!(target: LOG_TARGET, "syncing with getProgramAccounts failed: {:?}", T::MARKET_TYPE);
+    log::debug!(
+        target: LOG_TARGET,
+        "syncing with getProgramAccounts failed: {:?}",
+        T::MARKET_TYPE
+    );
 
     let state_response = rpc
         .get_account_with_config(state_account(), account_config)
@@ -349,14 +373,20 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
                             );
                         }
                         None => {
-                            log::warn!(target: LOG_TARGET, "failed to fetch market account (missing)");
+                            log::warn!(
+                                target: LOG_TARGET,
+                                "failed to fetch market account (missing)"
+                            );
                             break;
                         }
                     }
                 }
             }
             Err(err) => {
-                log::warn!(target: LOG_TARGET, "failed to fetch market accounts: {err:?}");
+                log::warn!(
+                    target: LOG_TARGET,
+                    "failed to fetch market accounts: {err:?}"
+                );
                 return Err(err)?;
             }
         }
@@ -364,7 +394,11 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
     if market_pdas.len() == markets.len() {
         return Ok((markets, state_response.context.slot));
     }
-    log::debug!(target: LOG_TARGET, "syncing with getMultipleAccounts failed: {:?}", T::MARKET_TYPE);
+    log::debug!(
+        target: LOG_TARGET,
+        "syncing with getMultipleAccounts failed: {:?}",
+        T::MARKET_TYPE
+    );
 
     // try multiple 'getAccount's
     let mut market_requests =
@@ -413,10 +447,7 @@ mod tests {
         );
 
         assert!(map
-            .subscribe(
-                &[MarketId::perp(0), MarketId::perp(1), MarketId::perp(1)],
-                None::<fn(&crate::AccountUpdate)>
-            )
+            .subscribe(&[MarketId::perp(0), MarketId::perp(1), MarketId::perp(1)])
             .await
             .is_ok());
         assert!(map.is_subscribed(0));

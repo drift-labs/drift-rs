@@ -47,7 +47,11 @@ impl WebsocketAccountSubscriber {
     {
         if sync {
             // seed initial account state
-            log::debug!(target: LOG_TARGET, "seeding account: {subscription_name}-{:?}", self.pubkey);
+            log::debug!(
+                target: LOG_TARGET,
+                "seeding account: {subscription_name}-{:?}",
+                self.pubkey
+            );
             let owner: Pubkey;
             let rpc = RpcClient::new(get_http_url(self.pubsub.url().as_str())?);
             match rpc
@@ -88,18 +92,28 @@ impl WebsocketAccountSubscriber {
 
         tokio::spawn(async move {
             loop {
-                log::debug!(target: LOG_TARGET, "spawn account subscriber: {subscription_name}-{:?}", pubkey);
+                log::debug!(
+                    target: LOG_TARGET,
+                    "spawn account subscriber: {subscription_name}-{:?}",
+                    pubkey
+                );
                 let (mut account_updates, account_unsubscribe) = match pubsub
                     .account_subscribe(&pubkey, Some(account_config.clone()))
                     .await
                 {
                     Ok(res) => res,
                     Err(err) => {
-                        log::error!(target: LOG_TARGET, "account subscribe {pubkey} failed: {err:?}");
+                        log::error!(
+                            target: LOG_TARGET,
+                            "account subscribe {pubkey} failed: {err:?}"
+                        );
                         continue;
                     }
                 };
-                log::debug!(target: LOG_TARGET, "account subscribed: {subscription_name}-{pubkey:?}");
+                log::debug!(
+                    target: LOG_TARGET,
+                    "account subscribed: {subscription_name}-{pubkey:?}"
+                );
                 let mut latest_slot = 0;
                 let res = loop {
                     tokio::select! {

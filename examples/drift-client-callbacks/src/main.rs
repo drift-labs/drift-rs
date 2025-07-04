@@ -103,7 +103,7 @@ async fn monitor_markets(
 
     // Subscribe to markets
     client
-        .subscribe_markets_with_callback(&perp_markets, Some(market_callback))
+        .subscribe_markets_with_callback(&perp_markets, market_callback)
         .await?;
 
     // client.subscribe_all_oracles_with_callback(on_account)

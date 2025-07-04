@@ -23,7 +23,7 @@ use crate::{
     drift_idl::types::OracleSource,
     ffi::{get_oracle_price, OraclePriceData},
     grpc::AccountUpdate as GrpcAccountUpdate,
-    types::{AccountUpdate, MapOf},
+    types::{AccountUpdate, MapOf, EMPTY_ACCOUNT_CALLBACK},
     websocket_account_subscriber::WebsocketAccountSubscriber,
     MarketId, SdkError, SdkResult, UnsubHandle,
 };
@@ -124,6 +124,22 @@ impl OracleMap {
         }
     }
 
+    /// Subscribe to oracle updates for given `markets` without callback
+    pub async fn subscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
+        self.subscribe_inner(markets, EMPTY_ACCOUNT_CALLBACK).await
+    }
+
+    pub async fn subscribe_with_callback<F>(
+        &self,
+        markets: &[MarketId],
+        on_account: F,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
+        self.subscribe_inner(markets, on_account).await
+    }
+
     /// Subscribe to oracle updates for given `markets`
     ///
     /// Can be called multiple times to subscribe to additional markets
@@ -131,11 +147,7 @@ impl OracleMap {
     /// Panics
     ///
     /// If the `market` oracle pubkey is not loaded
-    pub async fn subscribe<F>(
-        &self,
-        markets: &[MarketId],
-        on_account: Option<F>,
-    ) -> SdkResult<()>
+    async fn subscribe_inner<F>(&self, markets: &[MarketId], on_account: F) -> SdkResult<()>
     where
         F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
     {
@@ -150,15 +162,15 @@ impl OracleMap {
                 self.oracle_by_market.get(market).expect("oracle exists");
 
             // markets can share oracle pubkeys, only want one sub per oracle pubkey
-            // TEMP FIX: Allow multiple callbacks by allowing duplicate subscriptions
-            // TODO: Implement proper multi-callback support
-            if false && // Disable this check temporarily
-                (self.subscriptions.contains_key(oracle_pubkey)
+            if self.subscriptions.contains_key(oracle_pubkey)
                 || pending_subscriptions
                     .iter()
-                    .any(|sub| &sub.pubkey == oracle_pubkey))
+                    .any(|sub| &sub.pubkey == oracle_pubkey)
             {
-                log::debug!(target: LOG_TARGET, "subscription exists: {market:?}/{oracle_pubkey:?}");
+                log::debug!(
+                    target: LOG_TARGET,
+                    "subscription exists: {market:?}/{oracle_pubkey:?}"
+                );
                 continue;
             }
 
@@ -193,9 +205,7 @@ impl OracleMap {
                                 }
                             }
                         }
-                        if let Some(on_account) = &on_account {
-                            on_account(&update);
-                        }
+                        on_account(&update);
                     })
                     .await;
                 ((sub_fut.pubkey, oracle_shared_mode), unsub)
@@ -205,7 +215,10 @@ impl OracleMap {
         let mut subscription_futs = FuturesUnordered::from_iter(futs_iter);
 
         while let Some(((pubkey, oracle_share_mode), unsub)) = subscription_futs.next().await {
-            log::debug!(target: LOG_TARGET, "subscribed market oracle: {oracle_share_mode:?}");
+            log::debug!(
+                target: LOG_TARGET,
+                "subscribed market oracle: {oracle_share_mode:?}"
+            );
             self.subscriptions.insert(pubkey, unsub?);
         }
 
@@ -274,7 +287,12 @@ impl OracleMap {
             self.oraclemap
                 .entry((*oracle_pubkey, oracle_source as u8))
                 .and_modify(|o| {
-                    log::debug!(target: LOG_TARGET, "sync oracle update: {:?}/{}", oracle_source, oracle_pubkey);
+                    log::debug!(
+                        target: LOG_TARGET,
+                        "sync oracle update: {:?}/{}",
+                        oracle_source,
+                        oracle_pubkey
+                    );
                     let price_data = get_oracle_price(
                         oracle_source,
                         &mut (*oracle_pubkey, oracle_account.clone()),
@@ -287,7 +305,12 @@ impl OracleMap {
                     o.slot = latest_slot;
                 })
                 .or_insert({
-                    log::debug!(target: LOG_TARGET, "sync oracle new: {:?}/{}", oracle_source, oracle_pubkey);
+                    log::debug!(
+                        target: LOG_TARGET,
+                        "sync oracle new: {:?}/{}",
+                        oracle_source,
+                        oracle_pubkey
+                    );
                     let price_data = get_oracle_price(
                         oracle_source,
                         &mut (*oracle_pubkey, oracle_account.clone()),
@@ -306,7 +329,11 @@ impl OracleMap {
         }
 
         self.latest_slot.store(latest_slot, Ordering::Relaxed);
-        log::debug!(target: LOG_TARGET, "synced {} oracles", synced_oracles.len());
+        log::debug!(
+            target: LOG_TARGET,
+            "synced {} oracles",
+            synced_oracles.len()
+        );
 
         Ok(())
     }
@@ -440,7 +467,7 @@ fn update_handler(
             oracle_pubkey,
             Account {
                 owner: update.owner,
-                data: update.data.clone().to_vec(),
+                data: update.data.clone(),
                 lamports,
                 ..Default::default()
             },
@@ -503,14 +530,20 @@ async fn get_multi_account_data_with_fallback(
                             account_data.push((*pubkey, oracle));
                         }
                         None => {
-                            log::warn!(target: LOG_TARGET, "failed to fetch oracle account (missing)");
+                            log::warn!(
+                                target: LOG_TARGET,
+                                "failed to fetch oracle account (missing)"
+                            );
                             break;
                         }
                     }
                 }
             }
             Err(err) => {
-                log::warn!(target: LOG_TARGET, "failed to fetch oracle accounts: {err:?}");
+                log::warn!(
+                    target: LOG_TARGET,
+                    "failed to fetch oracle accounts: {err:?}"
+                );
                 return Err(err)?;
             }
         }
@@ -519,7 +552,10 @@ async fn get_multi_account_data_with_fallback(
     if account_data.len() == pubkeys.len() {
         return Ok((account_data, gma_slot));
     }
-    log::debug!(target: LOG_TARGET, "syncing with getMultipleAccounts failed");
+    log::debug!(
+        target: LOG_TARGET,
+        "syncing with getMultipleAccounts failed"
+    );
 
     // try multiple 'getAccount's
     let mut account_requests = FuturesOrdered::from_iter(pubkeys.iter().map(|p| async move {
@@ -625,7 +661,7 @@ mod tests {
         let map = OracleMap::new(pubsub, &all_oracles, CommitmentConfig::confirmed());
 
         let markets = [MarketId::perp(0), MarketId::spot(32), MarketId::perp(4)];
-        map.subscribe(&markets, None::<fn(&crate::AccountUpdate)>).await.expect("subd");
+        map.subscribe(&markets).await.expect("subd");
         assert_eq!(map.len(), 3);
         assert!(map.is_subscribed(&MarketId::spot(32)));
         assert!(map.is_subscribed(&MarketId::perp(4)));
@@ -663,10 +699,10 @@ mod tests {
             MarketId::perp(1),
             MarketId::spot(1),
         ];
-        map.subscribe(&markets, None::<fn(&crate::AccountUpdate)>).await.expect("subd");
+        map.subscribe(&markets).await.expect("subd");
         assert_eq!(map.len(), 2);
         let markets = [MarketId::perp(0), MarketId::spot(1)];
-        map.subscribe(&markets, None::<fn(&crate::AccountUpdate)>).await.expect("subd");
+        map.subscribe(&markets).await.expect("subd");
         assert_eq!(map.len(), 2);
 
         assert!(map.is_subscribed(&MarketId::perp(0)));
@@ -700,7 +736,7 @@ mod tests {
             &all_oracles,
             CommitmentConfig::confirmed(),
         );
-        map.subscribe(&[MarketId::spot(0), MarketId::perp(1)], None::<fn(&crate::AccountUpdate)>)
+        map.subscribe(&[MarketId::spot(0), MarketId::perp(1)])
             .await
             .expect("subd");
         assert!(map.unsubscribe_all().is_ok());

@@ -328,10 +328,19 @@ pub async fn subscribe_swift_orders(
                 Ok(Message::Text(ref text)) => {
                     match serde_json::from_str::<OrderNotification>(text) {
                         Ok(OrderNotification { channel: _, order }) => {
-                            log::debug!(target: LOG_TARGET, "uuid: {}, latency: {}ms", order.uuid, unix_now_ms().saturating_sub(order.ts));
+                            log::debug!(
+                                target: LOG_TARGET,
+                                "uuid: {}, latency: {}ms",
+                                order.uuid,
+                                unix_now_ms().saturating_sub(order.ts)
+                            );
 
                             if !accept_sanitized {
-                                log::debug!(target: LOG_TARGET, "skipping sanitized order: {}", order.uuid);
+                                log::debug!(
+                                    target: LOG_TARGET,
+                                    "skipping sanitized order: {}",
+                                    order.uuid
+                                );
                                 continue;
                             }
                             if let Err(err) = tx.try_send(order) {
