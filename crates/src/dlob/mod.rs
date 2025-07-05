@@ -150,8 +150,8 @@ where
         match order.direction {
             Direction::Long => {
                 let order: T = (order_id, order).into();
-                if let Some(o) = self.bids.iter_mut().find(|x| x.key() == order.key()) {
-                    *o = order;
+                if let Some(idx) = self.bids.iter_mut().position(|x| x.key() == order.key()) {
+                    self.bids[idx] = order;
                 } else {
                     self.bids.push(order);
                 }
@@ -159,8 +159,8 @@ where
             }
             Direction::Short => {
                 let order: T = (order_id, order).into();
-                if let Some(o) = self.asks.iter_mut().find(|x| x.key() == order.key()) {
-                    *o = order;
+                if let Some(idx) = self.asks.iter_mut().position(|x| x.key() == order.key()) {
+                    self.asks[idx] = order;
                 } else {
                     self.asks.push(order);
                 }
@@ -681,6 +681,7 @@ impl DLOB {
 
         self.with_orderbook_mut(MarketId::new(order.market_index, order.market_type), |orderbook| {
             if let Some(metadata) = self.metadata.get(&order_id) {
+                log::trace!(target: "dlob", "update ({order_id}): {:?}", metadata.kind);
                 match metadata.kind {
                     OrderKind::Market | OrderKind::MarketTriggered => {
                         orderbook.market_orders.update(order_id, order);
@@ -709,6 +710,7 @@ impl DLOB {
                         orderbook.floating_limit_orders.update(order_id, order);
                     }
                     OrderKind::TriggerMarket => {
+                        log::trace!(target: "dlob", "update trigger market order: {order_id},{:?}", order);
                         match order.trigger_condition {
                             OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
                                 orderbook.trigger_orders.update(order_id, order);
@@ -716,18 +718,22 @@ impl DLOB {
                             OrderTriggerCondition::TriggeredAbove | OrderTriggerCondition::TriggeredBelow => {
                                 // order has been triggered, its an ordinary auction order now
                                 orderbook.trigger_orders.remove(order_id, order);
-                                drop(metadata);  // drop the borrow
+                                let mut new_metadata = metadata.value().clone();
+                                drop(metadata);
                                 if order.is_oracle_trigger_market() {
-                                    self.metadata.entry(order_id).and_modify(|o| o.kind = OrderKind::OracleTriggered);
+                                    new_metadata.kind = OrderKind::OracleTriggered;
+                                    self.metadata.insert(order_id, new_metadata);
                                     orderbook.oracle_orders.upsert(order_id, order);
                                 } else {
-                                    self.metadata.entry(order_id).and_modify(|o| o.kind = OrderKind::MarketTriggered);
+                                    new_metadata.kind = OrderKind::MarketTriggered;
+                                    self.metadata.insert(order_id, new_metadata);
                                     orderbook.market_orders.upsert(order_id, order);
                                 }
                             }
                         }
                     }
                     OrderKind::TriggerLimit => {
+                        log::trace!(target: "dlob", "update trigger limit order: {order_id},{:?}", order);
                         match order.trigger_condition {
                             OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
                                 orderbook.trigger_orders.update(order_id, order);
@@ -752,6 +758,7 @@ impl DLOB {
 
         self.with_orderbook_mut(MarketId::new(order.market_index, order.market_type), |orderbook| {
             if let Some((_, metadata)) = self.metadata.remove(&order_id) {
+                log::trace!(target: "dlob", "remove ({order_id}): {:?}", metadata.kind);
                 match metadata.kind {
                     OrderKind::Market | OrderKind::MarketTriggered => {
                         orderbook.market_orders.remove(order_id, order);
@@ -780,6 +787,7 @@ impl DLOB {
                         orderbook.floating_limit_orders.remove(order_id, order);
                     }
                     OrderKind::TriggerMarket | OrderKind::TriggerLimit => {
+                        log::trace!(target: "dlob", "trigger order: {order_id},{:?}", order.trigger_condition);
                         match order.trigger_condition {
                             OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
                                 orderbook.trigger_orders.remove(order_id, order);
