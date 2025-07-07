@@ -290,9 +290,9 @@ impl NewOrder {
 #[derive(Debug, Error)]
 pub enum SdkError {
     #[error("{0}")]
-    Rpc(#[from] solana_rpc_client_api::client_error::Error),
+    Rpc(#[from] Box<solana_rpc_client_api::client_error::Error>),
     #[error("{0}")]
-    Ws(#[from] drift_pubsub_client::PubsubClientError),
+    Ws(#[from] Box<drift_pubsub_client::PubsubClientError>),
     #[error("{0}")]
     Anchor(#[from] Box<anchor_lang::error::Error>),
     #[error("error while deserializing")]
@@ -310,7 +310,7 @@ pub enum SdkError {
     #[error("insufficient SOL balance for fees")]
     OutOfSOL,
     #[error("{0}")]
-    Signing(#[from] solana_sdk::signer::SignerError),
+    Signing(#[from] Box<solana_sdk::signer::SignerError>),
     #[error("Received Error from websocket")]
     WebsocketError,
     #[error("Missed DLOB heartbeat")]
@@ -344,13 +344,45 @@ pub enum SdkError {
     #[error("invalid URL")]
     InvalidUrl,
     #[error("{0}")]
-    WsClient(#[from] tungstenite::Error),
+    WsClient(#[from] Box<tungstenite::Error>),
     #[error("libdrift_ffi_sys out-of-date")]
     LibDriftVersion,
     #[error("wallet signing disabled")]
     WalletSigningDisabled,
     #[error("{0}")]
-    Grpc(#[from] GrpcError),
+    Grpc(#[from] Box<GrpcError>),
+}
+
+// Manual From implementations for unboxed error types to avoid breaking changes
+impl From<solana_rpc_client_api::client_error::Error> for SdkError {
+    fn from(e: solana_rpc_client_api::client_error::Error) -> Self {
+        SdkError::Rpc(Box::new(e))
+    }
+}
+impl From<drift_pubsub_client::PubsubClientError> for SdkError {
+    fn from(e: drift_pubsub_client::PubsubClientError) -> Self {
+        SdkError::Ws(Box::new(e))
+    }
+}
+impl From<anchor_lang::error::Error> for SdkError {
+    fn from(e: anchor_lang::error::Error) -> Self {
+        SdkError::Anchor(Box::new(e))
+    }
+}
+impl From<solana_sdk::signer::SignerError> for SdkError {
+    fn from(e: solana_sdk::signer::SignerError) -> Self {
+        SdkError::Signing(Box::new(e))
+    }
+}
+impl From<tungstenite::Error> for SdkError {
+    fn from(e: tungstenite::Error) -> Self {
+        SdkError::WsClient(Box::new(e))
+    }
+}
+impl From<GrpcError> for SdkError {
+    fn from(e: GrpcError) -> Self {
+        SdkError::Grpc(Box::new(e))
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -549,6 +581,14 @@ impl ReferrerInfo {
     }
 }
 
+impl Order {
+    pub const ORACLE_TRIGGER_MARKET_FLAG: u8 = 0b0000_0010;
+    pub const SAFE_TRIGGER_ORDER_FLAG: u8 = 0b0000_0100;
+    pub fn is_oracle_trigger_market(&self) -> bool {
+        (self.bit_flags & Self::ORACLE_TRIGGER_MARKET_FLAG) != 0
+    }
+}
+
 impl OrderParams {
     pub const IMMEDIATE_OR_CANCEL_FLAG: u8 = 0b0000_0001;
     pub const HIGH_LEVERAGE_MODE_FLAG: u8 = 0b0000_0010;
@@ -639,7 +679,7 @@ mod tests {
     #[test]
     fn extract_anchor_error() {
         let err = SdkError::Rpc(
-            ClientError {
+            Box::new(ClientError {
                 request: Some(RpcRequest::SendTransaction),
                 kind: ClientErrorKind::RpcError(
                     RpcError::RpcResponseError {
@@ -658,7 +698,7 @@ mod tests {
                         )
                     }
                 )
-            }
+            })
         );
 
         assert_eq!(
