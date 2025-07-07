@@ -1240,3 +1240,96 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
         );
     }
 }
+
+#[test]
+fn dlob_trigger_order_transitions() {
+    use crate::types::OrderTriggerCondition;
+    let _ = env_logger::try_init();
+    let dlob = DLOB::default();
+    let user = Pubkey::new_unique();
+    let slot = 100;
+    let oracle_price = 1000;
+
+    // --- Insert TriggerMarket order (Above) ---
+    let mut order = create_test_order(1, OrderType::TriggerMarket, Direction::Long, 0, 10, slot);
+    order.trigger_price = 950;
+    order.trigger_condition = OrderTriggerCondition::Above;
+    dlob.insert_order(&user, order);
+    {
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.trigger_orders.bids.len(), 1);
+        assert_eq!(book.market_orders.bids.len(), 0);
+        assert_eq!(book.oracle_orders.bids.len(), 0);
+    }
+
+    // --- Update to triggered (should move to market_orders or oracle_orders) ---
+    let mut triggered_order = order;
+    triggered_order.trigger_condition = OrderTriggerCondition::TriggeredAbove;
+    // Set oracle trigger flag for oracle-triggered market
+    triggered_order.bit_flags |= Order::ORACLE_TRIGGER_MARKET_FLAG;
+    dlob.update_order(&user, triggered_order);
+    {
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        // Should be removed from trigger_orders
+        assert_eq!(book.trigger_orders.bids.len(), 0);
+        // Should be in oracle_orders (oracle trigger flag set)
+        assert_eq!(book.oracle_orders.bids.len(), 1);
+        assert_eq!(book.market_orders.bids.len(), 0);
+    }
+
+    // --- Remove triggered order ---
+    dlob.remove_order(&user, triggered_order);
+    {
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.oracle_orders.bids.len(), 0);
+        assert_eq!(book.market_orders.bids.len(), 0);
+        assert_eq!(book.trigger_orders.bids.len(), 0);
+    }
+
+    // --- Insert TriggerLimit order (Below) ---
+    let mut order2 = create_test_order(2, OrderType::TriggerLimit, Direction::Short, 0, 5, slot);
+    order2.trigger_price = 1050;
+    order2.trigger_condition = OrderTriggerCondition::Below;
+    dlob.insert_order(&user, order2);
+    {
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.trigger_orders.asks.len(), 1);
+        assert_eq!(book.market_orders.asks.len(), 0);
+    }
+
+    // --- Update to triggered (should move to market_orders) ---
+    let mut triggered_order2 = order2;
+    triggered_order2.trigger_condition = OrderTriggerCondition::TriggeredBelow;
+    dlob.update_order(&user, triggered_order2);
+    {
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.trigger_orders.asks.len(), 0);
+        assert_eq!(book.market_orders.asks.len(), 1);
+    }
+
+    // --- Remove triggered limit order ---
+    dlob.remove_order(&user, triggered_order2);
+    {
+        let book = dlob
+            .markets
+            .get(&MarketId::new(0, MarketType::Perp))
+            .unwrap();
+        assert_eq!(book.market_orders.asks.len(), 0);
+        assert_eq!(book.trigger_orders.asks.len(), 0);
+    }
+}
