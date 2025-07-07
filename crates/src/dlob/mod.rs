@@ -95,22 +95,30 @@ where
     pub fn remove(&mut self, order_id: u64, order: Order) -> bool {
         match order.direction {
             Direction::Long => {
+                log::trace!(target: "dlob", "remove order: {}/{}", order.slot, order.order_id);
                 let order: T = (order_id, order).into();
                 if let Some(idx) = self.bids.iter().position(|x| x.key() == order.key()) {
+                    log::trace!(target: "dlob", "DynamicOrders: remove {order_id} at: {idx}");
                     self.bids.swap_remove(idx);
+                    log::trace!(target: "bids", "bids: {:?}", self.bids);
                     self.mark_dirty();
                     true
                 } else {
+                    log::trace!(target: "dlob", "DynamicOrders: remove {order_id} not found");
                     false
                 }
             }
             Direction::Short => {
+                log::trace!(target: "dlob", "remove order: {}/{}", order.slot, order.order_id);
                 let order: T = (order_id, order).into();
                 if let Some(idx) = self.asks.iter().position(|x| x.key() == order.key()) {
+                    log::trace!(target: "dlob", "DynamicOrders: remove {order_id} at: {idx}");
                     self.asks.swap_remove(idx);
+                    log::trace!(target: "dlob", "asks: {:?}", self.asks);
                     self.mark_dirty();
                     true
                 } else {
+                    log::trace!(target: "dlob", "DynamicOrders: remove {order_id} not found");
                     false
                 }
             }
@@ -147,36 +155,21 @@ where
     }
 
     pub fn upsert(&mut self, order_id: u64, order: Order) {
-        match order.direction {
-            Direction::Long => {
-                let order: T = (order_id, order).into();
-                if let Some(idx) = self.bids.iter_mut().position(|x| x.key() == order.key()) {
-                    self.bids[idx] = order;
-                } else {
-                    self.bids.push(order);
-                }
-                self.mark_dirty();
-            }
-            Direction::Short => {
-                let order: T = (order_id, order).into();
-                if let Some(idx) = self.asks.iter_mut().position(|x| x.key() == order.key()) {
-                    self.asks[idx] = order;
-                } else {
-                    self.asks.push(order);
-                }
-                self.mark_dirty();
-            }
+        if self.update(order_id, order) {
+            return;
         }
+        self.insert(order_id, order);
     }
 }
 
 /// Collection of orders with fixed prices e.g. resting limit orders
-struct Orders<T: OrderKey + Clone> {
+#[derive(Debug)]
+struct Orders<T: OrderKey + Debug + Clone> {
     pub bids: BTreeMap<Reverse<T::Key>, T>,
     pub asks: BTreeMap<T::Key, T>,
 }
 
-impl<T: OrderKey + Clone> Default for Orders<T> {
+impl<T: OrderKey + Clone + Debug> Default for Orders<T> {
     fn default() -> Self {
         Self {
             bids: BTreeMap::new(),
@@ -185,7 +178,7 @@ impl<T: OrderKey + Clone> Default for Orders<T> {
     }
 }
 
-impl<T: Clone + From<(u64, Order)> + OrderKey> Orders<T> {
+impl<T: Clone + Debug + From<(u64, Order)> + OrderKey> Orders<T> {
     fn insert_raw(&mut self, is_bid: bool, order: T) {
         if is_bid {
             self.bids.insert(Reverse(order.key()), order);
@@ -216,8 +209,7 @@ impl<T: Clone + From<(u64, Order)> + OrderKey> Orders<T> {
             Direction::Long => {
                 let order: T = (order_id, order).into();
                 if remaining_size == 0 {
-                    self.bids.remove(&Reverse(order.key()));
-                    return false;
+                    return self.bids.remove(&Reverse(order.key())).is_some();
                 }
                 if let Some(existing) = self.bids.get_mut(&Reverse(order.key())) {
                     *existing = order;
@@ -227,8 +219,7 @@ impl<T: Clone + From<(u64, Order)> + OrderKey> Orders<T> {
             Direction::Short => {
                 let order: T = (order_id, order).into();
                 if remaining_size == 0 {
-                    self.asks.remove(&order.key());
-                    return false;
+                    return self.asks.remove(&order.key()).is_some();
                 }
                 if let Some(existing) = self.asks.get_mut(&order.key()) {
                     *existing = order;
@@ -236,6 +227,7 @@ impl<T: Clone + From<(u64, Order)> + OrderKey> Orders<T> {
                 }
             }
         }
+        log::trace!(target: "dlob", "update not found: {:?}", order_id);
         false
     }
 }
@@ -290,6 +282,7 @@ impl Orderbook {
         self.market_orders.asks.retain(|x| {
             let is_auction_complete = (x.slot + x.duration as u64) <= slot;
             if is_auction_complete && x.is_limit && x.size > 0 {
+                log::trace!(target: "dlob", "market auction end=>resting (slot: {}): {}", slot, x.id);
                 self.resting_limit_orders.insert_raw(
                     false,
                     LimitOrder {
@@ -306,6 +299,7 @@ impl Orderbook {
         self.market_orders.bids.retain(|x| {
             let is_auction_complete = (x.slot + x.duration as u64) <= slot;
             if is_auction_complete && x.is_limit && x.size > 0 {
+                log::trace!(target: "dlob", "market auction end=>resting: (slot: {}): {}", slot, x.id);
                 self.resting_limit_orders.insert_raw(
                     true,
                     LimitOrder {
@@ -322,6 +316,7 @@ impl Orderbook {
         self.oracle_orders.asks.retain(|x| {
             let is_auction_complete = (x.slot + x.duration as u64) <= slot;
             if is_auction_complete && x.is_limit && x.size > 0 {
+                log::trace!(target: "dlob", "oracle auction end=>resting: (slot: {}): {}", slot, x.id);
                 self.floating_limit_orders.insert_raw(
                     false,
                     FloatingLimitOrder {
@@ -338,6 +333,7 @@ impl Orderbook {
         self.oracle_orders.bids.retain(|x| {
             let is_auction_complete = (x.slot + x.duration as u64) <= slot;
             if is_auction_complete && x.is_limit && x.size > 0 {
+                log::trace!(target: "dlob", "oracle auction end=>resting: (slot: {}): {}", slot, x.id);
                 self.floating_limit_orders.insert_raw(
                     true,
                     FloatingLimitOrder {
@@ -718,7 +714,7 @@ impl DLOB {
                             OrderTriggerCondition::TriggeredAbove | OrderTriggerCondition::TriggeredBelow => {
                                 // order has been triggered, its an ordinary auction order now
                                 orderbook.trigger_orders.remove(order_id, order);
-                                let mut new_metadata = metadata.value().clone();
+                                let mut new_metadata = *metadata.value();
                                 drop(metadata);
                                 if order.is_oracle_trigger_market() {
                                     new_metadata.kind = OrderKind::OracleTriggered;
@@ -790,7 +786,9 @@ impl DLOB {
                         log::trace!(target: "dlob", "trigger order: {order_id},{:?}", order.trigger_condition);
                         match order.trigger_condition {
                             OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
-                                orderbook.trigger_orders.remove(order_id, order);
+                                if !orderbook.trigger_orders.remove(order_id, order) {
+                                    log::trace!(target: "dlob", "remove trigger order fail: {:?}", orderbook.trigger_orders);
+                                }
                             }
                             OrderTriggerCondition::TriggeredAbove | OrderTriggerCondition::TriggeredBelow => {
                                 log::error!(target: "dlob", "trigger order bad state: {order:?}");
@@ -877,6 +875,7 @@ impl DLOB {
                             }
                         };
 
+                        log::trace!(target: "dlob", "insert limit order: {order_id},{:?}", order_kind);
                         self.metadata.insert(
                             order_id,
                             OrderMetadata::new(*user, order_kind, order.order_id),
@@ -885,6 +884,7 @@ impl DLOB {
                     OrderType::TriggerMarket => match order.trigger_condition {
                         OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
                             orderbook.trigger_orders.insert(order_id, order);
+                                log::trace!(target: "dlob", "insert trigger market order: {order_id}");
                             self.metadata.insert(
                                 order_id,
                                 OrderMetadata::new(*user, OrderKind::TriggerMarket, order.order_id),
@@ -893,6 +893,7 @@ impl DLOB {
                         OrderTriggerCondition::TriggeredAbove
                         | OrderTriggerCondition::TriggeredBelow => {
                             if order.is_oracle_trigger_market() {
+                                log::trace!(target: "dlob", "insert triggered oracle order: {order_id}");
                                 orderbook.oracle_orders.insert(order_id, order);
                                 self.metadata.insert(
                                     order_id,
@@ -903,6 +904,7 @@ impl DLOB {
                                     ),
                                 );
                             } else {
+                                log::trace!(target: "dlob", "insert triggered market order: {order_id}");
                                 orderbook.market_orders.insert(order_id, order);
                                 self.metadata.insert(
                                     order_id,
@@ -918,6 +920,7 @@ impl DLOB {
                     OrderType::TriggerLimit => match order.trigger_condition {
                         OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
                             orderbook.trigger_orders.insert(order_id, order);
+                            log::trace!(target: "dlob", "insert trigger limit order: {order_id}");
                             self.metadata.insert(
                                 order_id,
                                 OrderMetadata::new(*user, OrderKind::TriggerLimit, order.order_id),
@@ -925,6 +928,7 @@ impl DLOB {
                         }
                         OrderTriggerCondition::TriggeredAbove
                         | OrderTriggerCondition::TriggeredBelow => {
+                            log::trace!(target: "dlob", "insert triggered limit order: {order_id}");
                             orderbook.market_orders.insert(order_id, order);
                             self.metadata.insert(
                                 order_id,

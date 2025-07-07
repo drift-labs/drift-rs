@@ -1,4 +1,7 @@
-use std::sync::{atomic::AtomicPtr, Arc};
+use std::{
+    fmt::Debug,
+    sync::{atomic::AtomicPtr, Arc},
+};
 
 use arrayvec::ArrayVec;
 use solana_sdk::pubkey::Pubkey;
@@ -18,7 +21,7 @@ type MarketOrderKey = (u64, u64);
 type OracleOrderKey = (u64, u64);
 type LimitOrderKey = (u64, u64, u64);
 type FloatingLimitOrderKey = (i32, u64, u64);
-type TriggerOrderKey = (u64, u64, u64);
+type TriggerOrderKey = (u64, u64);
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
@@ -137,7 +140,7 @@ pub(crate) trait DynamicPrice {
 
 // Subset of order fields for sorting
 pub(crate) trait OrderKey {
-    type Key: Ord + Clone;
+    type Key: Ord + Clone + Debug;
     fn key(&self) -> Self::Key;
 }
 
@@ -172,7 +175,8 @@ impl OrderKey for FloatingLimitOrder {
 impl OrderKey for TriggerOrder {
     type Key = TriggerOrderKey;
     fn key(&self) -> Self::Key {
-        (self.price, self.slot, self.id)
+        // nb: trigger order slot updates when triggered so is unreliable as a sort key
+        (self.price, self.id)
     }
 }
 
@@ -202,7 +206,7 @@ pub(crate) struct OracleOrder {
     pub max_ts: u64,
 }
 
-#[derive(Default, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LimitOrder {
     pub id: u64,
     pub size: u64,
@@ -220,7 +224,7 @@ pub(crate) struct FloatingLimitOrder {
     pub max_ts: u64,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct TriggerOrder {
     pub id: u64,
     pub size: u64,
@@ -248,7 +252,7 @@ impl TriggerOrder {
         // if slot.saturating_sub(order.slot) > 150 && order.reduce_only {
         //     order.add_bit_flag(OrderBitFlag::SafeTriggerOrder);
         // }
-        if let Some(ref market) = perp_market {
+        if let Some(market) = perp_market {
             let mut order = Order {
                 slot, // slot is the current slot (i.e simulate trigger and place)
                 direction: self.direction,
