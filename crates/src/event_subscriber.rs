@@ -665,6 +665,14 @@ pub enum DriftEvent {
         signature: String,
         tx_idx: usize,
     },
+    OrderTrigger {
+        /// trigger order owner
+        user: Pubkey,
+        order_id: u32,
+        oracle_price: u64,
+        /// base asset amount
+        amount: u64,
+    },
 }
 
 impl DriftEvent {
@@ -683,6 +691,7 @@ impl DriftEvent {
             Self::OrderCancelMissing { .. } => true,
             Self::FundingPayment { user, .. } => *user == sub_account,
             Self::Swap { user, .. } => *user == sub_account,
+            Self::OrderTrigger { user, .. } => *user == sub_account,
         }
     }
     /// Deserialize drift event by discriminant
@@ -803,10 +812,15 @@ impl DriftEvent {
                 tx_idx,
                 bit_flags: value.bit_flags,
             }),
+            OrderAction::Trigger => Some(DriftEvent::OrderTrigger {
+                amount: value.taker_order_base_asset_amount.unwrap_or(0),
+                oracle_price: value.oracle_price.unsigned_abs(),
+                user: value.taker.unwrap_or_default(),
+                order_id: value.taker_order_id.unwrap_or(0),
+            }),
             // Place - parsed from `OrderRecord` event, ignored here due to lack of useful info
             // Expire - never emitted
-            // Trigger - unimplemented
-            OrderAction::Place | OrderAction::Expire | OrderAction::Trigger => None,
+            OrderAction::Place | OrderAction::Expire => None,
         }
     }
 }
@@ -988,21 +1002,35 @@ mod test {
     }
 
     #[test]
-    fn test_log() {
-        let result = try_parse_log("Program log: 4DRDR8LtbQH+x7JlAAAAAAIIAAABAbpHl8YM/aWjrjfQ48x0R2DclPigyXtYx+5d/vSVjUIZAQoCAAAAAAAAAaJhIgAAAAAAAQDC6wsAAAAAAZjQCQEAAAAAAWsUAAAAAAAAAWTy////////AAAAAaNzGgMga9TnxjVkycO4bmqSGjK6kP92OrKdZMYqFV+aAS4eKQ4BAQEAHkHaNAAAAAEAwusLAAAAAAGY0AkBAAAAAAFneQwBwHPUIY9ykEdbxsTV7Lh6K+vISfq8nLCTm/rWoAHwCQAAAQABAMLrCwAAAAABAMLrCwAAAAABmNAJAQAAAAA9Zy8FAAAAAAA=", "sig", 0);
-        dbg!(result);
+    fn parses_order_trigger() {
+        let logs = &[
+        "Program log: Instruction: TriggerOrder",
+        "Program log: new auction duration 20 start price -78510 end price -240874",
+        "Program data: 4DRDR8LtbQG05GRoAAAAAAMAAAABAWV38QbUIIRAZCdpZP/Qu59+ZUJQ7xCnqbsMijUn8LhNAbgLAAAAAAAAAAAAAbgLAAAAAAAAAAAAAAFyjMdMRfzcEXahOyKad9N6FfOMHN8CvExn1JYdEjXysQEXAQAAAQEBAGXNHQAAAAABAAAAAAAAAAABAAAAAAAAAAAAAAAAAADvauMIAAAAAAAAAAAA",
+        "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH consumed 20239 of 319700 compute units",
+        "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH success",
+        "Program dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH invoke [1]",
+        "Program log: Instruction: FillPerpOrder",
+        "Program log: market 0 amm skipping auction duration",
+        "Program log: 4DRDR8LtbQG05GRoAAAAAAIGAAABAWV38QbUIIRAZCdpZP/Qu59+ZUJQ7xCnqbsMijUn8LhNAUcHAAAAAAAAASRutQAAAAAAAQBlzR0AAAAAAayTcQQAAAAAAc9IAAAAAAAAAAABySEAAAAAAAAAAXKMx0xF/NwRdqE7Ipp303oV84wc3wK8TGfUlh0SNfKxARcBAAABAQEAZc0dAAAAAAEAZc0dAAAAAAGsk3EEAAAAAAAAAAAAAO9q4wgAAAAAAAEG408EAAAAAAAAAA==",
+        ];
+        let mut found_trigger = false;
+        for log in logs {
+            if let Some(DriftEvent::OrderTrigger { .. }) = try_parse_log(log, "sig", 0) {
+                found_trigger = true;
+            }
+        }
+        assert!(found_trigger);
     }
 
     #[test]
     fn parses_jit_proxy_logs() {
         let cpi_logs = &[
-            "Program log: 4DRDR8LtbQFOKvplAAAAAAAAGAABAAAAAAAAAAAAAAFGJn8TpIimFlKv8ZWRhmuU81x+ojkf3K4d+++MbslDfAGZcTYAAQEBAM5q/TIAAAABAAAAAAAAAAABAAAAAAAAAAAAAAAAAACTWxEAAAAAAAAA",
-            "Program log: aBNAOFkVAlpOKvplAAAAAEYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8qZQ2DwAAAABMTREAAAAAAADOav0yAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJlxNgAYAAEBAQAAAQAAAQAAAAAA",
-            "Program log: 4DRDR8LtbQFOKvplAAAAAAIIGAABAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AQAAAAAAAAAAAceaAwAAAAAAAQDOav0yAAAAAQQgzQ4AAAAAAQIjAQAAAAAAAQA+////////AAAAAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AZlxNgABAQEAzmr9MgAAAAEAzmr9MgAAAAEEIM0OAAAAAAHpAf4sI0TDV0Ec0LWHs9mO40bjfKEm3A+yye5HFCQQQQEzPgAAAQABANraQssAAAABANraQssAAAABLJgAOwAAAACTWxEAAAAAAAA=",
-            "Program log: 4DRDR8LtbQFOKvplAAAAAAAAGAABAAAAAAAAAAAAAAFGJn8TpIimFlKv8ZWRhmuU81x+ojkf3K4d+++MbslDfAGacTYAAQABAM5q/TIAAAABAAAAAAAAAAABAAAAAAAAAAAAAAAAAACTWxEAAAAAAAA=",
-            "Program log: aBNAOFkVAlpOKvplAAAAAEYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8qZQ2DwAAAACAPBEAAAAAAADOav0yAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJpxNgAYAAEBAQABAAAAAQAAAAAA",
-            "Program log: 4DRDR8LtbQFOKvplAAAAAAIQGAABAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AQAAAAAAAAAAAciaAwAAAAAAAQDgBS0LAAAAAQBYOwMAAAAAAYs/AAAAAAAAAAAB+Ejx//////8AAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AZpxNgABAAEAzmr9MgAAAAEA4AUtCwAAAAEAWDsDAAAAAAAAAAAAAJNbEQAAAAAAAA==",
-            "Program log: 4DRDR8LtbQFOKvplAAAAAAIIGAABAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AQAAAAAAAAAAAcmaAwAAAAAAAQDuZNAnAAAAAYBpgwsAAAAAAV3iAAAAAAAAARhp////////AAAAAUYmfxOkiKYWUq/xlZGGa5TzXH6iOR/crh3774xuyUN8AZpxNgABAAEAzmr9MgAAAAEAzmr9MgAAAAGAwb4OAAAAAAFmQRGN8PRJqt5D5pVvCspbc3f0ZBdTB1Kcw0YfuzxCOAH2/poHAQEBAIjmn+sAAAABAFrDjp4AAAABgPDZLQAAAACTWxEAAAAAAAA=",
+            "Program log: 4DRDR8LtbQFSX2toAAAAAAAAAQABAAAAAAAAAAAAAAAAAAAAAAHxh4ku0wIrxX3I+lRI8EbIXIFfEdQlHjfBI9cFoChKLwH02xUAAQABQHcbAAAAAAABAAAAAAAAAAABAAAAAAAAAACtuRtoGQAAAAAAAAAA",
+            "Program log: aBNAOFkVAlpSX2toAAAAAPGHiS7TAivFfcj6VEjwRshcgV8R1CUeN8Ej1wWgKEovU9/1FAAAAACghJZnGQAAAEB3GwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPTbFQABAAEBAQAAAAABAQAAUwAA",
+            "Program log: 4DRDR8LtbQFSX2toAAAAAAIHAQABAfGHiS7TAivFfcj6VEjwRshcgV8R1CUeN8Ej1wWgKEovAQAAAAAAAAAAAcvxUgAAAAAAAaC7DQAAAAAAATpt2gUAAAAAAQAAAAAAAAAAAAABDh0AAAAAAAAAAVIi3orGnkfo2nFxt1E65uhfuUq1+ZNdDVJYImWVm0dJATViBAABAQFAdxsAAAAAAAGguw0AAAAAAAE6bdoFAAAAAAAAAAAAAK25G2gZAAAAAAAAAAA=",
+            "Program log: 4DRDR8LtbQFSX2toAAAAAAIJAQABAfGHiS7TAivFfcj6VEjwRshcgV8R1CUeN8Ej1wWgKEovAQAAAAAAAAAAAczxUgAAAAAAAaC7DQAAAAAAATpt2gUAAAAAAQAAAAAAAAAAAQAAAAAAAAAAAAAAAVIi3orGnkfo2nFxt1E65uhfuUq1+ZNdDVJYImWVm0dJATViBAABAQFAdxsAAAAAAAFAdxsAAAAAAAF02rQLAAAAAAHxh4ku0wIrxX3I+lRI8EbIXIFfEdQlHjfBI9cFoChKLwH02xUAAQABQHcbAAAAAAABoLsNAAAAAAABOm3aBQAAAACtuRtoGQAAAAAAAAAA",
+            "Program log: 4DRDR8LtbQFSX2toAAAAAAEAAQABAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAfGHiS7TAivFfcj6VEjwRshcgV8R1CUeN8Ej1wWgKEovAfTbFQABAAFAdxsAAAAAAAGguw0AAAAAAAE6bdoFAAAAAK25G2gZAAAAAAAAAAA=",
         ];
 
         for log in cpi_logs {
