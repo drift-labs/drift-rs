@@ -72,7 +72,7 @@ pub struct GrpcSubscribeOpts {
     /// callback for slot updates
     pub on_slot: Option<Box<OnSlotFn>>,
     /// custom callback for account updates
-    pub on_account: Option<(AccountFilter, Box<OnAccountFn>)>,
+    pub on_account: Option<Vec<(AccountFilter, Box<OnAccountFn>)>>,
     /// custom callback for tx updates
     pub on_transaction: Option<Box<OnTransactionFn>>,
     /// Network level connection config
@@ -128,15 +128,22 @@ impl GrpcSubscribeOpts {
     /// Register a custom callback for account updates
     ///
     /// * `filter` - accounts matching filter will invoke the callback
-    /// * `on_account` - fn to invoke on matching account update
+    /// * `callback` - fn to invoke on matching account update
     ///
-    /// ! `on_account` must not block the gRPC task
+    /// ! `callback` must not block the gRPC task
     pub fn on_account(
         mut self,
         filter: AccountFilter,
-        on_account: impl Fn(&AccountUpdate) + Send + Sync + 'static,
+        callback: impl Fn(&AccountUpdate) + Send + Sync + 'static,
     ) -> Self {
-        self.on_account = Some((filter, Box::new(on_account)));
+        match &mut self.on_account {
+            Some(on_account) => {
+                on_account.push((filter, Box::new(callback)));
+            }
+            None => {
+                self.on_account = Some(vec![(filter, Box::new(callback))]);
+            }
+        }
         self
     }
     /// Set network level connection opts

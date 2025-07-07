@@ -748,3 +748,21 @@ mod tests {
         )
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct AccountUpdate {
+    /// Address of the account
+    pub pubkey: Pubkey,
+    /// Owner of the account
+    pub owner: Pubkey,
+    pub lamports: u64,
+    /// Serialized account data (e.g. Anchor/Borsh)
+    pub data: Vec<u8>,
+    /// Slot retrieved
+    pub slot: u64,
+}
+
+pub type OnAccountFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
+
+/// Empty callback function pointer that does nothing - useful as a no-op callback
+pub const EMPTY_ACCOUNT_CALLBACK: fn(&AccountUpdate) = |_: &AccountUpdate| {};

@@ -168,12 +168,18 @@ impl LogEventStream {
             .await;
 
         if let Err(ref err) = subscribe_result {
-            warn!(target: LOG_TARGET, "log subscription failed for: {sub_account:?}. {err:?}");
+            warn!(
+                target: LOG_TARGET,
+                "log subscription failed for: {sub_account:?}. {err:?}"
+            );
             return;
         }
 
         let (mut log_stream, _unsub_fn) = subscribe_result.unwrap();
-        debug!(target: LOG_TARGET, "start log subscription: {sub_account:?}");
+        debug!(
+            target: LOG_TARGET,
+            "start log subscription: {sub_account:?}"
+        );
 
         while let Some(response) = log_stream.next().await {
             self.process_log(response.context.slot, response.value)
@@ -202,7 +208,10 @@ impl LogEventStream {
             cache.insert(signature.clone());
         }
 
-        debug!(target: LOG_TARGET, "log extracting events, slot: {slot}, tx: {signature:?}");
+        debug!(
+            target: LOG_TARGET,
+            "log extracting events, slot: {slot}, tx: {signature:?}"
+        );
         for (tx_idx, log) in response.logs.iter().enumerate() {
             // a drift sub-account should not interact with any other program by definition
             if let Some(event) = try_parse_log(log.as_str(), &signature, tx_idx) {
@@ -230,7 +239,10 @@ impl GrpcLogEventStream {
     /// Returns a future for running the configured log event stream
     async fn stream_fn(self) {
         let sub_account = self.sub_account;
-        info!(target: LOG_TARGET, "grpc log stream connecting: {sub_account:?}");
+        info!(
+            target: LOG_TARGET,
+            "grpc log stream connecting: {sub_account:?}"
+        );
 
         let mut grpc = DriftGrpcClient::new(self.grpc_endpoint.clone(), self.grpc_x_token.clone())
             .grpc_connection_opts(GrpcConnectionOpts::default());
@@ -256,7 +268,10 @@ impl GrpcLogEventStream {
             )
             .await
             .unwrap();
-        info!(target: LOG_TARGET, "grpc log stream connected: {sub_account:?}");
+        info!(
+            target: LOG_TARGET,
+            "grpc log stream connected: {sub_account:?}"
+        );
 
         while let Some(event) = raw_event_rx.recv().await {
             let start = std::time::Instant::now();
@@ -278,7 +293,10 @@ impl GrpcLogEventStream {
         let signature =
             Signature::from(<[u8; 64]>::try_from(signature.unwrap().as_slice()).unwrap());
 
-        debug!(target: LOG_TARGET, "log extracting events, slot: {}, tx: {}", event.slot, signature);
+        debug!(
+            target: LOG_TARGET,
+            "log extracting events, slot: {}, tx: {}", event.slot, signature
+        );
         let logs = &event.meta.log_messages;
         for (tx_idx, log) in logs.iter().enumerate() {
             if let Some(event) = try_parse_log(log.as_str(), &signature.to_string(), tx_idx) {
@@ -433,7 +451,10 @@ impl<T: EventRpcProvider> PolledEventStream<T> {
             }
 
             while let Some((signature, response)) = futs.next().await {
-                debug!(target: LOG_TARGET, "poll extracting events, tx: {signature:?}");
+                debug!(
+                    target: LOG_TARGET,
+                    "poll extracting events, tx: {signature:?}"
+                );
                 if let Err(err) = response {
                     warn!(target: LOG_TARGET, "poll processing tx: {err:?}");
                     // retry querying the batch

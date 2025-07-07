@@ -19,9 +19,9 @@ use solana_sdk::{
 use crate::{
     drift_idl::types::OracleSource,
     ffi::{get_oracle_price, OraclePriceData},
-    grpc::AccountUpdate,
-    types::MapOf,
-    websocket_account_subscriber::{AccountUpdate as WsAccountUpdate, WebsocketAccountSubscriber},
+    grpc::AccountUpdate as GrpcAccountUpdate,
+    types::{AccountUpdate, MapOf, EMPTY_ACCOUNT_CALLBACK},
+    websocket_account_subscriber::WebsocketAccountSubscriber,
     MarketId, SdkError, SdkResult, UnsubHandle,
 };
 
@@ -121,6 +121,22 @@ impl OracleMap {
         }
     }
 
+    /// Subscribe to oracle updates for given `markets` without callback
+    pub async fn subscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
+        self.subscribe_inner(markets, EMPTY_ACCOUNT_CALLBACK).await
+    }
+
+    pub async fn subscribe_with_callback<F>(
+        &self,
+        markets: &[MarketId],
+        on_account: F,
+    ) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
+        self.subscribe_inner(markets, on_account).await
+    }
+
     /// Subscribe to oracle updates for given `markets`
     ///
     /// Can be called multiple times to subscribe to additional markets
@@ -128,7 +144,10 @@ impl OracleMap {
     /// Panics
     ///
     /// If the `market` oracle pubkey is not loaded
-    pub async fn subscribe(&self, markets: &[MarketId]) -> SdkResult<()> {
+    async fn subscribe_inner<F>(&self, markets: &[MarketId], on_account: F) -> SdkResult<()>
+    where
+        F: Fn(&crate::AccountUpdate) + Send + Sync + 'static + Clone,
+    {
         let markets = HashSet::from_iter(markets);
         log::debug!(target: LOG_TARGET, "subscribe market oracles: {markets:?}");
 
@@ -145,7 +164,10 @@ impl OracleMap {
                     .iter()
                     .any(|sub| &sub.pubkey == oracle_pubkey)
             {
-                log::debug!(target: LOG_TARGET, "subscription exists: {market:?}/{oracle_pubkey:?}");
+                log::debug!(
+                    target: LOG_TARGET,
+                    "subscription exists: {market:?}/{oracle_pubkey:?}"
+                );
                 continue;
             }
 
@@ -166,7 +188,7 @@ impl OracleMap {
                 .expect("oracle exists")
                 .clone();
             let oracle_shared_mode_ref = oracle_shared_mode.clone();
-
+            let on_account = on_account.clone();
             async move {
                 let unsub = sub_fut
                     .subscribe(Self::SUBSCRIPTION_ID, true, move |update| {
@@ -180,6 +202,7 @@ impl OracleMap {
                                 }
                             }
                         }
+                        on_account(&update);
                     })
                     .await;
                 ((sub_fut.pubkey, oracle_shared_mode), unsub)
@@ -189,7 +212,10 @@ impl OracleMap {
         let mut subscription_futs = FuturesUnordered::from_iter(futs_iter);
 
         while let Some(((pubkey, oracle_share_mode), unsub)) = subscription_futs.next().await {
-            log::debug!(target: LOG_TARGET, "subscribed market oracle: {oracle_share_mode:?}");
+            log::debug!(
+                target: LOG_TARGET,
+                "subscribed market oracle: {oracle_share_mode:?}"
+            );
             self.subscriptions.insert(pubkey, unsub?);
         }
 
@@ -258,7 +284,12 @@ impl OracleMap {
             self.oraclemap
                 .entry((*oracle_pubkey, oracle_source as u8))
                 .and_modify(|o| {
-                    log::debug!(target: LOG_TARGET, "sync oracle update: {:?}/{}", oracle_source, oracle_pubkey);
+                    log::debug!(
+                        target: LOG_TARGET,
+                        "sync oracle update: {:?}/{}",
+                        oracle_source,
+                        oracle_pubkey
+                    );
                     let price_data = get_oracle_price(
                         oracle_source,
                         &mut (*oracle_pubkey, oracle_account.clone()),
@@ -271,7 +302,12 @@ impl OracleMap {
                     o.slot = latest_slot;
                 })
                 .or_insert({
-                    log::debug!(target: LOG_TARGET, "sync oracle new: {:?}/{}", oracle_source, oracle_pubkey);
+                    log::debug!(
+                        target: LOG_TARGET,
+                        "sync oracle new: {:?}/{}",
+                        oracle_source,
+                        oracle_pubkey
+                    );
                     let price_data = get_oracle_price(
                         oracle_source,
                         &mut (*oracle_pubkey, oracle_account.clone()),
@@ -290,7 +326,11 @@ impl OracleMap {
         }
 
         self.latest_slot.store(latest_slot, Ordering::Relaxed);
-        log::debug!(target: LOG_TARGET, "synced {} oracles", synced_oracles.len());
+        log::debug!(
+            target: LOG_TARGET,
+            "synced {} oracles",
+            synced_oracles.len()
+        );
 
         Ok(())
     }
@@ -347,11 +387,11 @@ impl OracleMap {
     }
 
     /// Returns a hook for driving the map with new `Account` updates
-    pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
+    pub(crate) fn on_account_fn(&self) -> impl Fn(&GrpcAccountUpdate) {
         let oraclemap = self.map();
         let oracle_lookup = self.shared_oracles.clone();
 
-        move |update: &AccountUpdate| match oracle_lookup.get(&update.pubkey).unwrap() {
+        move |update: &GrpcAccountUpdate| match oracle_lookup.get(&update.pubkey).unwrap() {
             OracleShareMode::Normal { source } => {
                 update_handler_grpc(update, *source, &oraclemap);
             }
@@ -367,7 +407,7 @@ impl OracleMap {
 /// Handler fn for new oracle account data
 #[inline]
 fn update_handler_grpc(
-    update: &AccountUpdate,
+    update: &GrpcAccountUpdate,
     oracle_source: OracleSource,
     oracle_map: &DashMap<(Pubkey, u8), Oracle, ahash::RandomState>,
 ) {
@@ -412,7 +452,7 @@ fn update_handler_grpc(
 
 /// Handler fn for new oracle account data
 fn update_handler(
-    update: &WsAccountUpdate,
+    update: &AccountUpdate,
     oracle_source: OracleSource,
     oracle_map: &DashMap<(Pubkey, u8), Oracle, ahash::RandomState>,
 ) {
@@ -437,14 +477,14 @@ fn update_handler(
                 .and_modify(|o| {
                     o.data = price_data;
                     o.slot = update.slot;
-                    o.raw.clone_from(&update.data);
+                    o.raw = update.data.to_vec();
                 })
                 .or_insert(Oracle {
                     pubkey: oracle_pubkey,
                     source: oracle_source,
                     data: price_data,
                     slot: update.slot,
-                    raw: update.data.clone(),
+                    raw: update.data.to_vec(),
                 });
         }
         Err(err) => {
@@ -487,14 +527,20 @@ async fn get_multi_account_data_with_fallback(
                             account_data.push((*pubkey, oracle));
                         }
                         None => {
-                            log::warn!(target: LOG_TARGET, "failed to fetch oracle account (missing)");
+                            log::warn!(
+                                target: LOG_TARGET,
+                                "failed to fetch oracle account (missing)"
+                            );
                             break;
                         }
                     }
                 }
             }
             Err(err) => {
-                log::warn!(target: LOG_TARGET, "failed to fetch oracle accounts: {err:?}");
+                log::warn!(
+                    target: LOG_TARGET,
+                    "failed to fetch oracle accounts: {err:?}"
+                );
                 return Err(err)?;
             }
         }
@@ -503,7 +549,10 @@ async fn get_multi_account_data_with_fallback(
     if account_data.len() == pubkeys.len() {
         return Ok((account_data, gma_slot));
     }
-    log::debug!(target: LOG_TARGET, "syncing with getMultipleAccounts failed");
+    log::debug!(
+        target: LOG_TARGET,
+        "syncing with getMultipleAccounts failed"
+    );
 
     // try multiple 'getAccount's
     let mut account_requests = FuturesOrdered::from_iter(pubkeys.iter().map(|p| async move {
