@@ -694,6 +694,7 @@ mod tests {
                                 return_data: None,
                                 inner_instructions: None,
                                 replacement_blockhash: None,
+                                loaded_accounts_data_size: None,
                             }
                         )
                     }
