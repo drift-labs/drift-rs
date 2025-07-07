@@ -24,7 +24,7 @@ pub fn read_keypair_str_multi_format(key: &str) -> SdkResult<Keypair> {
         // decode the numbers array into json string
         let bytes: Result<Vec<u8>, _> = key.split(',').map(|x| x.parse::<u8>()).collect();
         if let Ok(bytes) = bytes {
-            return Keypair::from_bytes(&bytes).map_err(|_| SdkError::InvalidSeed);
+            return Keypair::try_from(bytes.as_ref()).map_err(|_| SdkError::InvalidSeed);
         } else {
             return Err(SdkError::InvalidSeed);
         }
@@ -32,12 +32,12 @@ pub fn read_keypair_str_multi_format(key: &str) -> SdkResult<Keypair> {
 
     // try to decode as base58 string
     if let Ok(bytes) = bs58::decode(key.as_bytes()).into_vec() {
-        return Keypair::from_bytes(&bytes).map_err(|_| SdkError::InvalidSeed);
+        return Keypair::try_from(bytes.as_ref()).map_err(|_| SdkError::InvalidSeed);
     }
 
     // try to decode as base64 string
     if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(key.as_bytes()) {
-        return Keypair::from_bytes(&bytes).map_err(|_| SdkError::InvalidSeed);
+        return Keypair::try_from(bytes.as_ref()).map_err(|_| SdkError::InvalidSeed);
     }
 
     Err(SdkError::InvalidSeed)
