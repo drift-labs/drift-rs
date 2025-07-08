@@ -95,6 +95,7 @@ pub struct CrossesAndTopMakers {
     pub top_maker_bids: ArrayVec<Pubkey, 3>,
     //  taker crosses and maker orders
     pub crosses: Vec<(OrderMetadata, MakerCrosses)>,
+    pub limit_crosses: Option<(OrderMetadata, OrderMetadata)>,
 }
 
 /// Best fills for a taker order
@@ -206,6 +207,20 @@ pub(crate) struct OracleOrder {
     pub max_ts: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LimitOrderView {
+    /// Internal order id
+    pub id: u64,
+    /// Price of the order
+    pub price: u64,
+    /// Size of the order
+    pub size: u64,
+    /// Whether the order is post-only
+    pub post_only: bool,
+    /// Slot of the order
+    pub slot: u64,
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub(crate) struct LimitOrder {
     pub id: u64,
@@ -213,6 +228,7 @@ pub(crate) struct LimitOrder {
     pub price: u64,
     pub slot: u64,
     pub max_ts: u64,
+    pub post_only: bool,
 }
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
@@ -222,6 +238,7 @@ pub(crate) struct FloatingLimitOrder {
     pub offset_price: i32,
     pub slot: u64,
     pub max_ts: u64,
+    pub post_only: bool,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -416,6 +433,7 @@ impl From<(u64, Order)> for LimitOrder {
             price: order.price,
             slot: order.slot,
             max_ts: order.max_ts as u64,
+            post_only: order.post_only,
         }
     }
 }
@@ -444,6 +462,7 @@ impl From<(u64, Order)> for FloatingLimitOrder {
             offset_price: order.oracle_price_offset,
             slot: order.slot,
             max_ts: order.max_ts as u64,
+            post_only: order.post_only,
         }
     }
 }

@@ -291,6 +291,7 @@ impl Orderbook {
                         price: x.end_price as u64,
                         slot: x.slot,
                         max_ts: x.max_ts,
+                        post_only: false,
                     },
                 );
             }
@@ -308,6 +309,7 @@ impl Orderbook {
                         price: x.end_price as u64,
                         slot: x.slot,
                         max_ts: x.max_ts,
+                        post_only: false,
                     },
                 );
             }
@@ -325,6 +327,7 @@ impl Orderbook {
                         size: x.size,
                         offset_price: x.end_price_offset as i32,
                         max_ts: x.max_ts,
+                        post_only: false,
                     },
                 );
             }
@@ -342,6 +345,7 @@ impl Orderbook {
                         size: x.size,
                         offset_price: x.end_price_offset as i32,
                         max_ts: x.max_ts,
+                        post_only: false,
                     },
                 );
             }
@@ -390,9 +394,9 @@ impl Orderbook {
         self.l3_snapshot.update(Arc::new(l3book));
     }
 
-    pub fn get_limit_bids(&self, slot: u64, oracle_price: u64) -> Vec<(u64, u64, u64)> {
+    pub fn get_limit_bids(&self, slot: u64, oracle_price: u64) -> Vec<LimitOrderView> {
         let mut result = Vec::with_capacity(
-            self.resting_limit_orders.bids.len() + self.floating_limit_orders.bids.len(),
+            self.resting_limit_orders.asks.len() + self.floating_limit_orders.asks.len(),
         );
         let buffer_s = 4;
         let now_unix_s = SystemTime::now()
@@ -400,34 +404,39 @@ impl Orderbook {
             .unwrap()
             .as_secs()
             + buffer_s;
-
         result.extend(
             self.resting_limit_orders
                 .bids
                 .values()
                 .filter(|o| !o.is_expired(now_unix_s))
-                .map(|o| (o.id, o.get_price(), o.size)),
+                .map(|o| LimitOrderView {
+                    id: o.id,
+                    price: o.get_price(),
+                    size: o.size,
+                    post_only: o.post_only,
+                    slot: o.slot,
+                }),
         );
         result.extend(
             self.floating_limit_orders
                 .bids
                 .iter()
                 .filter(|o| !o.is_expired(now_unix_s))
-                .map(|o| {
-                    (
-                        o.id,
-                        o.get_price(slot, oracle_price, self.market_tick_size),
-                        o.size(),
-                    )
+                .map(|o| LimitOrderView {
+                    id: o.id,
+                    price: o.get_price(slot, oracle_price, self.market_tick_size),
+                    size: o.size(),
+                    post_only: o.post_only,
+                    slot: o.slot,
                 }),
         );
 
         // Sort by price in descending order (best bid first)
-        result.sort_by(|a, b| b.1.cmp(&a.1));
+        result.sort_by(|a, b| b.price.cmp(&a.price));
         result
     }
 
-    pub fn get_limit_asks(&self, slot: u64, oracle_price: u64) -> Vec<(u64, u64, u64)> {
+    pub fn get_limit_asks(&self, slot: u64, oracle_price: u64) -> Vec<LimitOrderView> {
         let mut result = Vec::with_capacity(
             self.resting_limit_orders.asks.len() + self.floating_limit_orders.asks.len(),
         );
@@ -443,24 +452,30 @@ impl Orderbook {
                 .asks
                 .values()
                 .filter(|o| !o.is_expired(now_unix_s))
-                .map(|o| (o.id, o.get_price(), o.size)),
+                .map(|o| LimitOrderView {
+                    id: o.id,
+                    price: o.get_price(),
+                    size: o.size,
+                    post_only: o.post_only,
+                    slot: o.slot,
+                }),
         );
         result.extend(
             self.floating_limit_orders
                 .asks
                 .iter()
                 .filter(|o| !o.is_expired(now_unix_s))
-                .map(|o| {
-                    (
-                        o.id,
-                        o.get_price(slot, oracle_price, self.market_tick_size), // tick_size unused
-                        o.size(),
-                    )
+                .map(|o| LimitOrderView {
+                    id: o.id,
+                    price: o.get_price(slot, oracle_price, self.market_tick_size),
+                    size: o.size(),
+                    post_only: o.post_only,
+                    slot: o.slot,
                 }),
         );
 
         // Sort by price in ascending order (best ask first)
-        result.sort_by(|a, b| a.1.cmp(&b.1));
+        result.sort_by(|a, b| a.price.cmp(&b.price));
         result
     }
 
@@ -945,6 +960,35 @@ impl DLOB {
         );
     }
 
+    /// Helper to find a crossing pair of limit orders at the top of the book, if any.
+    fn find_limit_cross(
+        &self,
+        bid: &LimitOrderView,
+        ask: &LimitOrderView,
+    ) -> Option<(OrderMetadata, OrderMetadata)> {
+        if bid.price < ask.price {
+            return None;
+        }
+        let bid_meta = self.metadata.get(&bid.id)?;
+        let ask_meta = self.metadata.get(&ask.id)?;
+        match (bid.post_only, ask.post_only) {
+            (true, false) => {
+                log::warn!(target: "dlob", "limit orders crossed: bid: {bid:?}, ask: {ask:?}");
+                Some((*ask_meta.value(), *bid_meta.value()))
+            }
+            (false, true) => Some((*bid_meta.value(), *ask_meta.value())),
+            (false, false) => {
+                log::warn!(target: "dlob", "taking limit orders crossed: bid: {bid:?}, ask: {ask:?}");
+                if bid.slot < ask.slot {
+                    Some((*bid_meta.value(), *ask_meta.value()))
+                } else {
+                    Some((*ask_meta.value(), *bid_meta.value()))
+                }
+            }
+            (true, true) => None, // Cannot cross
+        }
+    }
+
     /// At the current slot return all auctions crossing resting limit orders
     ///
     /// ## Panics
@@ -972,13 +1016,10 @@ impl DLOB {
         let mut resting_asks = book.get_limit_asks(slot, oracle_price);
         let mut resting_bids = book.get_limit_bids(slot, oracle_price);
 
-        // Inline check for crossing resting limit orders
-        let best_bid = taker_asks.first().map(|(_, price, _)| *price);
-        let best_ask = taker_bids.first().map(|(_, price, _)| *price);
-        if let (Some(bid), Some(ask)) = (best_bid, best_ask) {
-            if bid >= ask {
-                log::warn!(target: "dlob", "taking orders crossed: bid: {bid}, ask: {ask}, market: {market_index}");
-            }
+        let mut limit_crosses = None;
+        // Use helper to check for crossing resting limit orders
+        if let (Some(bid), Some(ask)) = (resting_bids.first(), resting_asks.first()) {
+            limit_crosses = self.find_limit_cross(bid, ask);
         }
 
         let mut taker_order = TakerOrder {
@@ -1057,6 +1098,7 @@ impl DLOB {
             top_maker_asks: top_3_maker_asks,
             top_maker_bids: top_3_maker_bids,
             crosses: all_crosses,
+            limit_crosses,
         }
     }
 
@@ -1116,7 +1158,7 @@ impl DLOB {
         current_slot: u64,
         resting_order_slot: u64,
         taker_order: TakerOrder,
-        mut resting_limit_orders: Peekable<impl Iterator<Item = &'a mut (u64, u64, u64)>>,
+        mut resting_limit_orders: Peekable<impl Iterator<Item = &'a mut LimitOrderView>>,
         vamm_price: Option<u64>,
     ) -> MakerCrosses {
         let mut candidates = ArrayVec::<(OrderMetadata, u64, u64), 16>::new();
@@ -1128,7 +1170,12 @@ impl DLOB {
         };
 
         while let Some(peeked) = resting_limit_orders.peek_mut() {
-            let (internal_order_id, maker_price, maker_size) = peeked;
+            let LimitOrderView {
+                id: internal_order_id,
+                price: maker_price,
+                size: maker_size,
+                ..
+            } = peeked;
             if !price_crosses(taker_order.price, *maker_price) {
                 break;
             }
@@ -1144,7 +1191,7 @@ impl DLOB {
                     resting_limit_orders.next();
                 } else {
                     // Partially filled — decrement in-place, do NOT advance
-                    peeked.2 -= fill_size;
+                    *maker_size -= fill_size;
                 }
 
                 if candidates.len() == candidates.capacity() {
