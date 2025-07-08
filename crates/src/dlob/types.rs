@@ -95,6 +95,7 @@ pub struct CrossesAndTopMakers {
     pub top_maker_bids: ArrayVec<Pubkey, 3>,
     //  taker crosses and maker orders
     pub crosses: Vec<(OrderMetadata, MakerCrosses)>,
+    // top of book limit cross, if any
     pub limit_crosses: Option<(OrderMetadata, OrderMetadata)>,
 }
 
