@@ -2,7 +2,7 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::{
     dlob::{types::DynamicPrice, Direction, OrderKind, OrderMetadata, Orderbook, TakerOrder, DLOB},
-    types::{LimitOrderView, MarketId, MarketType, Order, OrderType},
+    types::{MarketId, MarketType, Order, OrderType},
 };
 
 fn create_test_order(
