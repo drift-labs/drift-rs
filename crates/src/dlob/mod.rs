@@ -972,20 +972,16 @@ impl DLOB {
         let bid_meta = self.metadata.get(&bid.id)?;
         let ask_meta = self.metadata.get(&ask.id)?;
         match (bid.post_only, ask.post_only) {
-            (true, false) => {
-                log::warn!(target: "dlob", "limit orders crossed: bid: {bid:?}, ask: {ask:?}");
-                Some((*ask_meta.value(), *bid_meta.value()))
-            }
+            (true, false) => Some((*ask_meta.value(), *bid_meta.value())),
             (false, true) => Some((*bid_meta.value(), *ask_meta.value())),
             (false, false) => {
-                log::warn!(target: "dlob", "taking limit orders crossed: bid: {bid:?}, ask: {ask:?}");
                 if bid.slot < ask.slot {
                     Some((*bid_meta.value(), *ask_meta.value()))
                 } else {
                     Some((*ask_meta.value(), *bid_meta.value()))
                 }
             }
-            (true, true) => None, // Cannot cross
+            (true, true) => None,
         }
     }
 

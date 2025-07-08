@@ -95,6 +95,7 @@ pub struct CrossesAndTopMakers {
     pub top_maker_bids: ArrayVec<Pubkey, 3>,
     //  taker crosses and maker orders
     pub crosses: Vec<(OrderMetadata, MakerCrosses)>,
+    // top of book limit cross, if any
     pub limit_crosses: Option<(OrderMetadata, OrderMetadata)>,
 }
 
@@ -448,8 +449,8 @@ impl DynamicPrice for FloatingLimitOrder {
     fn size(&self) -> u64 {
         self.size
     }
-    fn get_price(&self, _slot: u64, oracle_price: u64, _market_tick_size: u64) -> u64 {
-        (oracle_price as i64 + self.offset_price as i64) as u64
+    fn get_price(&self, _slot: u64, oracle_price: u64, tick_size: u64) -> u64 {
+        (oracle_price as i64 + self.offset_price as i64).max(tick_size as i64) as u64
     }
 }
 
