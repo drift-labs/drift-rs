@@ -97,6 +97,8 @@ pub struct CrossesAndTopMakers {
     pub crosses: Vec<(OrderMetadata, MakerCrosses)>,
     // top of book limit cross, if any
     pub limit_crosses: Option<(OrderMetadata, OrderMetadata)>,
+    pub vamm_taker_ask: Option<OrderMetadata>,
+    pub vamm_taker_bid: Option<OrderMetadata>,
 }
 
 /// Best fills for a taker order
@@ -325,7 +327,7 @@ impl DynamicPrice for MarketOrder {
     fn size(&self) -> u64 {
         self.size
     }
-    fn get_price(&self, slot: u64, _oracle_price: u64, market_tick_size: u64) -> u64 {
+    fn get_price(&self, slot: u64, oracle_price: u64, market_tick_size: u64) -> u64 {
         calculate_auction_price(
             &Order {
                 slot: self.slot,
@@ -338,7 +340,7 @@ impl DynamicPrice for MarketOrder {
             },
             slot,
             market_tick_size,
-            None,
+            Some(oracle_price as i64),
             false,
         )
         .expect("market price")
