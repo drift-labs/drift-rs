@@ -1011,11 +1011,24 @@ impl DLOB {
         let taker_bids = book.get_taker_bids(slot, oracle_price, perp_market);
         let mut resting_asks = book.get_limit_asks(slot, oracle_price);
         let mut resting_bids = book.get_limit_bids(slot, oracle_price);
+        let mut vamm_taker_ask = None;
+        let mut vamm_taker_bid = None;
 
         let mut limit_crosses = None;
-        // Use helper to check for crossing resting limit orders
-        if let (Some(bid), Some(ask)) = (resting_bids.first(), resting_asks.first()) {
-            limit_crosses = self.find_limit_cross(bid, ask);
+        if let (Some(best_bid), Some(best_ask)) = (resting_bids.first(), resting_asks.first()) {
+            // check for crossing resting limit orders
+            limit_crosses = self.find_limit_cross(best_bid, best_ask);
+            // check for VAMM crossing resting limit orders
+            if vamm_bid.is_some_and(|v| v > best_ask.price && best_ask.post_only)
+                && perp_market.is_some_and(|m| best_ask.size > m.amm.min_order_size)
+            {
+                vamm_taker_bid = Some(*self.metadata.get(&best_ask.id).unwrap().value());
+            }
+            if vamm_ask.is_some_and(|v| v < best_bid.price && best_bid.post_only)
+                && perp_market.is_some_and(|m| best_bid.size > m.amm.min_order_size)
+            {
+                vamm_taker_ask = Some(*self.metadata.get(&best_bid.id).unwrap().value());
+            }
         }
 
         let mut taker_order = TakerOrder {
@@ -1095,6 +1108,8 @@ impl DLOB {
             top_maker_bids: top_3_maker_bids,
             crosses: all_crosses,
             limit_crosses,
+            vamm_taker_ask,
+            vamm_taker_bid,
         }
     }
 
