@@ -1,5 +1,5 @@
 {
-  "version": "2.125.0",
+  "version": "2.126.0",
   "name": "drift",
   "instructions": [
     {
@@ -4647,6 +4647,44 @@
       ]
     },
     {
+      "name": "recenterPerpMarketAmmCrank",
+      "accounts": [
+        {
+          "name": "admin",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "state",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "perpMarket",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "spotMarket",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "oracle",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "depth",
+          "type": {
+            "option": "u128"
+          }
+        }
+      ]
+    },
+    {
       "name": "updatePerpMarketAmmSummaryStats",
       "accounts": [
         {
@@ -6687,6 +6725,10 @@
       "args": [
         {
           "name": "ammSpreadAdjustment",
+          "type": "i8"
+        },
+        {
+          "name": "ammInventorySpreadAdjustment",
           "type": "i8"
         }
       ]
@@ -10980,11 +11022,18 @@
             "type": "i32"
           },
           {
+            "name": "ammInventorySpreadAdjustment",
+            "docs": [
+              "signed scale amm_spread similar to fee_adjustment logic (-100 = 0, 100 = double)"
+            ],
+            "type": "i8"
+          },
+          {
             "name": "padding",
             "type": {
               "array": [
                 "u8",
-                12
+                11
               ]
             }
           }
@@ -14024,7 +14073,7 @@
           "index": false
         },
         {
-          "name": "currentInAmountSinceLastTransfer",
+          "name": "transferAmount",
           "type": "u64",
           "index": false
         }
