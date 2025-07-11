@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.125.0";
+pub const IDL_VERSION: &str = "2.126.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -1227,6 +1227,16 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for RecenterPerpMarketAmm {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct RecenterPerpMarketAmmCrank {
+        pub depth: Option<u128>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for RecenterPerpMarketAmmCrank {
+        const DISCRIMINATOR: &[u8] = &[166, 19, 64, 10, 14, 51, 101, 122];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for RecenterPerpMarketAmmCrank {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdatePerpMarketAmmSummaryStats {
         pub params: UpdatePerpMarketSummaryStatsParams,
     }
@@ -1950,6 +1960,7 @@ pub mod instructions {
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdatePerpMarketAmmSpreadAdjustment {
         pub amm_spread_adjustment: i8,
+        pub amm_inventory_spread_adjustment: i8,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketAmmSpreadAdjustment {
@@ -2818,7 +2829,8 @@ pub mod types {
         pub net_unsettled_funding_pnl: i64,
         pub quote_asset_amount_with_unsettled_lp: i64,
         pub reference_price_offset: i32,
-        pub padding: [u8; 12],
+        pub amm_inventory_spread_adjustment: i8,
+        pub padding: [u8; 11],
     }
     #[repr(C)]
     #[derive(
@@ -14830,6 +14842,88 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct RecenterPerpMarketAmmCrank {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+        pub perp_market: Pubkey,
+        pub spot_market: Pubkey,
+        pub oracle: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for RecenterPerpMarketAmmCrank {
+        const DISCRIMINATOR: &[u8] = &[38, 29, 78, 100, 174, 48, 152, 253];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for RecenterPerpMarketAmmCrank {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for RecenterPerpMarketAmmCrank {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for RecenterPerpMarketAmmCrank {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for RecenterPerpMarketAmmCrank {}
+    #[automatically_derived]
+    impl ToAccountMetas for RecenterPerpMarketAmmCrank {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.perp_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.oracle,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for RecenterPerpMarketAmmCrank {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for RecenterPerpMarketAmmCrank {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdatePerpMarketAmmSummaryStats {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -22533,7 +22627,7 @@ pub mod events {
         pub shares: u128,
         pub if_vault_amount_before: u64,
         pub protocol_shares_before: u128,
-        pub current_in_amount_since_last_transfer: u64,
+        pub transfer_amount: u64,
     }
     #[event]
     pub struct SwapRecord {
