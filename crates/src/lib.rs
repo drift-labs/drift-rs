@@ -2706,7 +2706,6 @@ impl<'a> TransactionBuilder<'a> {
         taker_account: &User,
         taker_stats: &UserStats,
         taker_order_id: Option<u32>,
-        maker_order_id: Option<u32>,
         makers: &[User],
     ) -> Self {
         let mut accounts = build_accounts(
@@ -2746,7 +2745,7 @@ impl<'a> TransactionBuilder<'a> {
             accounts,
             data: InstructionData::data(&drift_idl::instructions::FillPerpOrder {
                 order_id: taker_order_id,
-                maker_order_id,
+                maker_order_id: None,
             }),
         };
 
