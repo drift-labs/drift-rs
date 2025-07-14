@@ -327,8 +327,8 @@ impl DynamicPrice for MarketOrder {
     fn size(&self) -> u64 {
         self.size
     }
-    fn get_price(&self, slot: u64, oracle_price: u64, market_tick_size: u64) -> u64 {
-        calculate_auction_price(
+    fn get_price(&self, slot: u64, oracle_price: u64, tick_size: u64) -> u64 {
+        match calculate_auction_price(
             &Order {
                 slot: self.slot,
                 auction_duration: self.duration,
@@ -339,11 +339,36 @@ impl DynamicPrice for MarketOrder {
                 ..Default::default()
             },
             slot,
-            market_tick_size,
+            tick_size,
             Some(oracle_price as i64),
             false,
-        )
-        .expect("market price")
+        ) {
+            Ok(p) => p,
+            Err(err) => {
+                log::warn!(target: "dlob", "get_price failed: {err:?}, order: {:?}, tick size: {tick_size}", &self);
+                // offchain fallback
+                let slots_elapsed = slot.saturating_sub(self.slot) as i64;
+                let delta_denominator = self.duration as i64;
+                let delta_numerator = slots_elapsed.min(delta_denominator);
+
+                if delta_denominator == 0 {
+                    return self.end_price as u64;
+                }
+
+                let price = if self.direction == Direction::Long {
+                    let delta = (self.end_price.saturating_sub(self.start_price) * delta_numerator)
+                        / delta_denominator;
+                    self.start_price.saturating_add(delta)
+                } else {
+                    let delta = (self.start_price.saturating_sub(self.end_price) * delta_numerator)
+                        / delta_denominator;
+                    self.start_price.saturating_sub(delta)
+                };
+
+                let price = price.max(tick_size as i64);
+                standardize_price(price as u64, tick_size, self.direction)
+            }
+        }
     }
 }
 
