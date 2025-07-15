@@ -19,9 +19,9 @@ use crate::{
 // Replace the key structs with type aliases
 type MarketOrderKey = (u64, u64);
 type OracleOrderKey = (u64, u64);
-type LimitOrderKey = (u64, u64, u64);
-type FloatingLimitOrderKey = (i32, u64, u64);
-type TriggerOrderKey = (u64, u64);
+type LimitOrderKey = (u64, u64);
+type FloatingLimitOrderKey = (u64, u64);
+type TriggerOrderKey = u64;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
@@ -165,14 +165,14 @@ impl OrderKey for OracleOrder {
 impl OrderKey for LimitOrder {
     type Key = LimitOrderKey;
     fn key(&self) -> Self::Key {
-        (self.price, self.slot, self.id)
+        (self.slot, self.id)
     }
 }
 
 impl OrderKey for FloatingLimitOrder {
     type Key = FloatingLimitOrderKey;
     fn key(&self) -> Self::Key {
-        (self.offset_price, self.slot, self.id)
+        (self.slot, self.id)
     }
 }
 
@@ -180,7 +180,7 @@ impl OrderKey for TriggerOrder {
     type Key = TriggerOrderKey;
     fn key(&self) -> Self::Key {
         // nb: trigger order slot updates when triggered so is unreliable as a sort key
-        (self.price, self.id)
+        self.id
     }
 }
 
