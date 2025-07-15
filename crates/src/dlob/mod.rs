@@ -227,7 +227,16 @@ impl<T: Clone + Debug + From<(u64, Order)> + OrderKey> Orders<T> {
                 }
             }
         }
-        log::trace!(target: "dlob", "update not found: {:?}", order_id);
+        log::warn!(target: "dlob", "update not found: {order_id}, {order:?}");
+        match order.direction {
+            Direction::Long => {
+                log::warn!(target: "dlob", "bids: {:?}", self.bids);
+            }
+            Direction::Short => {
+                log::warn!(target: "dlob", "asks: {:?}", self.asks);
+            }
+        }
+
         false
     }
 }
