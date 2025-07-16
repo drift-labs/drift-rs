@@ -38,7 +38,8 @@ use crate::{
     blockhash_subscriber::BlockhashSubscriber,
     constants::{
         derive_perp_market_account, derive_spot_market_account, state_account, MarketExt,
-        ProgramData, DEFAULT_PUBKEY, SYSVAR_INSTRUCTIONS_PUBKEY, SYSVAR_RENT_PUBKEY,
+        ProgramData, DEFAULT_PUBKEY, PYTH_LAZER_STORAGE_ACCOUNT_KEY, SYSVAR_INSTRUCTIONS_PUBKEY,
+        SYSVAR_RENT_PUBKEY,
     },
     drift_idl::traits::ToAccountMetas,
     grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, GeyserSubscribeOpts},
@@ -2906,6 +2907,51 @@ impl<'a> TransactionBuilder<'a> {
         };
 
         self.ixs.push(ix);
+
+        self
+    }
+
+    /// Post a Pyth Lazer oracle update
+    ///
+    /// Appends an Ed25519 signature verify ix and Pyth Lazer oracle update ix to the transaction.
+    ///
+    /// # Parameters
+    ///
+    /// - `feed_ids`: Pyth Lazer feed IDs for which the oracle update should be posted.
+    /// - `pyth_message`: the Pyth message update
+    ///
+    /// # Returns
+    ///
+    /// Returns the updated `TransactionBuilder` with the new instructions appended.
+    pub fn post_pyth_lazer_oracle_update(mut self, feed_ids: &[u32], pyth_message: &[u8]) -> Self {
+        let ed25519_verify_ix =
+            crate::utils::new_ed25519_ix_ptr(pyth_message, self.ixs.len() as u16 + 1);
+
+        let mut accounts = build_accounts(
+            self.program_data,
+            types::accounts::PostPythLazerOracleUpdate {
+                keeper: self.authority,
+                pyth_lazer_storage: PYTH_LAZER_STORAGE_ACCOUNT_KEY,
+                ix_sysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
+            },
+            std::iter::empty(),
+            std::iter::empty(),
+            std::iter::empty(),
+        );
+        accounts.extend(feed_ids.iter().map(|f| {
+            AccountMeta::new(crate::utils::derive_pyth_lazer_oracle_public_key(*f), false)
+        }));
+
+        let pyth_update_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::PostPythLazerOracleUpdate {
+                pyth_message: pyth_message.to_vec(),
+            }),
+        };
+
+        self.ixs
+            .extend_from_slice(&[ed25519_verify_ix, pyth_update_ix]);
 
         self
     }

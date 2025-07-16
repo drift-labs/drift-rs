@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use std::{sync::OnceLock, u32};
 
 use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
 
@@ -30,6 +30,9 @@ pub const JIT_PROXY_ID: Pubkey =
 pub const DEFAULT_PUBKEY: Pubkey = solana_sdk::pubkey!("11111111111111111111111111111111");
 
 pub const SYSTEM_PROGRAM_ID: Pubkey = DEFAULT_PUBKEY;
+
+pub const PYTH_LAZER_STORAGE_ACCOUNT_KEY: Pubkey =
+    solana_sdk::pubkey!("3rdJbqfnagQ4yx9HXJViD4zc4xpiSqmFsKpPuSCQVyQL");
 
 static STATE_ACCOUNT: OnceLock<Pubkey> = OnceLock::new();
 static HIGH_LEVERAGE_MODE_ACCOUNT: OnceLock<Pubkey> = OnceLock::new();
@@ -377,4 +380,87 @@ pub mod ids {
 
         pub const ID: Pubkey = solana_sdk::pubkey!("5hMjmxexWu954pX9gB9jkHxMqdjpxArQS2XdvkaevRax");
     }
+}
+
+macro_rules! generate_pyth_lazer_mappings {
+    (
+        const $array_name:ident: [ $( ($feed_id:expr, $market_index:expr) ),* $(,)? ];
+    ) => {
+        pub const $array_name: &[(u32, u16)] = &[
+            $( ($feed_id, $market_index), )*
+        ];
+
+        /// Map from pyth lazer `feed_id `to mainnet perp market index
+        pub const fn pyth_lazer_feed_id_to_perp_market_index(feed_id: u32) -> Option<u32> {
+            match feed_id {
+                $(
+                    $feed_id => Some($market_index),
+                )*
+                _ => None,
+            }
+        }
+
+        /// Map from mainnet perp market index to pyth lazer `feed_id`
+        pub const fn perp_market_index_to_pyth_lazer_feed_id(market_index: u16) -> Option<u32> {
+            match market_index {
+                $(
+                    $market_index => Some($feed_id),
+                )*
+                _ => None,
+            }
+        }
+    };
+}
+
+// DEV: append new markets to this list (feed_id, market_index)
+generate_pyth_lazer_mappings! {
+    const PYTH_LAZER_FEED_ID_TO_PERP_MARKET_MAINNET: [
+        (6, 0),
+        (1, 1),
+        (2, 2),
+        (28, 3),
+        (9, 4),
+        (32, 5),
+        (37, 6),
+        (13, 7),
+        (15, 8),
+        (11, 9),
+        (4, 10),
+        (41, 11),
+        (34, 12),
+        (14, 13),
+        (168, 14),
+        (46, 15),
+        (19, 16),
+        (3, 18),
+        (48, 19),
+        (91, 20),
+        (51, 21),
+        (18, 22),
+        (10, 23),
+        (92, 24),
+        (83, 25),
+        (36, 26),
+        (102, 27),
+        (99, 29),
+        (130, 34),
+        (12, 42),
+        (137, 51),
+        (77, 55),
+        (54, 56),
+        (110, 59),
+        (26, 60),
+        (93, 61),
+        (97, 62),
+        (171, 63),
+        (203, 64),
+        (145, 65),
+        (308, 66),
+        (306, 69),
+        (309, 70),
+        (182, 71),
+        (16, 72),
+        (163, 73),
+        (1578, 75),
+    ];
 }
