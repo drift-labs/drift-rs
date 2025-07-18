@@ -1052,10 +1052,10 @@ impl DLOB {
             market_type,
         };
 
-        let top_3_maker_bids: ArrayVec<Pubkey, 3> = taker_bids
+        let top_3_maker_bids: ArrayVec<Pubkey, 3> = resting_bids
             .iter()
             .take(3)
-            .filter_map(|o| self.metadata.get(&o.0).map(|m| m.user))
+            .filter_map(|o| self.metadata.get(&o.id).map(|m| m.user))
             .collect();
 
         // Check for crosses between auction bids and resting asks
@@ -1084,10 +1084,10 @@ impl DLOB {
             }
         }
 
-        let top_3_maker_asks: ArrayVec<Pubkey, 3> = taker_asks
+        let top_3_maker_asks: ArrayVec<Pubkey, 3> = resting_asks
             .iter()
             .take(3)
-            .filter_map(|o| self.metadata.get(&o.0).map(|m| m.user))
+            .filter_map(|o| self.metadata.get(&o.id).map(|m| m.user))
             .collect();
 
         // Check for crosses between auction asks and resting bids
