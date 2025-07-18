@@ -391,7 +391,7 @@ macro_rules! generate_pyth_lazer_mappings {
         ];
 
         /// Map from pyth lazer `feed_id `to mainnet perp market index
-        pub const fn pyth_lazer_feed_id_to_perp_market_index(feed_id: u32) -> Option<u32> {
+        pub const fn pyth_lazer_feed_id_to_perp_market_index(feed_id: u32) -> Option<u16> {
             match feed_id {
                 $(
                     $feed_id => Some($market_index),
