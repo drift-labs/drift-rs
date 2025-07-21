@@ -1,3 +1,0 @@
-error: no bin target named `keeprs` in default-run packages
-help: available bin targets:
-    swift-taker-example
