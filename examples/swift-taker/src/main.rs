@@ -2,10 +2,7 @@
 use base64::Engine;
 use drift_rs::{
     swift_order_subscriber::SignedOrderType,
-    types::{
-        MarketType, OrderParams, OrderType, PositionDirection,
-        SignedMsgOrderParamsMessage,
-    },
+    types::{MarketType, OrderParams, OrderType, PositionDirection, SignedMsgOrderParamsMessage},
     DriftClient, RpcClient, Wallet,
 };
 use nanoid::nanoid;
@@ -16,8 +13,10 @@ async fn main() {
     let _ = env_logger::init();
     let _ = dotenv::dotenv();
     let wallet: Wallet = drift_rs::utils::load_keypair_multi_format(
-        &std::env::var("PRIVATE_KEY").expect("base58 PRIVATE_KEY set")
-    ).unwrap().into();
+        &std::env::var("PRIVATE_KEY").expect("base58 PRIVATE_KEY set"),
+    )
+    .unwrap()
+    .into();
 
     let use_mainnet = std::env::var("MAINNET").is_ok();
     let context = if use_mainnet {
@@ -61,16 +60,17 @@ async fn main() {
         "signature": base64::prelude::BASE64_STANDARD.encode(signature.as_ref()),
     });
 
-    dbg!(
-        &swift_order_request.to_string()
-    );
+    dbg!(&swift_order_request.to_string());
 
-    let swift_url = "https://swift.drift.trade/orders";
+    let swift_url = if use_mainnet {
+        "https://swift.drift.trade/orders"
+    } else {
+        "https://master/swift.drift.trade/orders"
+    };
     let swift_cli = reqwest::Client::new();
     let req = swift_cli
         .post(swift_url)
         .header(header::CONTENT_TYPE, "application/json")
-        .header(header::USER_AGENT, "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36")
         .json(&swift_order_request)
         .build();
     dbg!(&req);
