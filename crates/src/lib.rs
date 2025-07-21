@@ -2911,6 +2911,58 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
+    /// Liquidate a perp position for a given user.
+    ///
+    /// This method constructs a liquidation instruction for a perpetual market position.
+    /// The liquidator will be the subaccount associated with this `TransactionBuilder` (i.e., the builder's default subaccount).
+    ///
+    /// # Parameters
+    /// - `market_index`: The index of the perp market to liquidate on.
+    /// - `user_account`: The user account (liquidatee) whose position will be liquidated.
+    /// - `liquidator_max_base_asset_amount`: The maximum base asset amount the liquidator is willing to liquidate.
+    /// - `limit_price`: Optional limit price for the liquidation (if `None`, no limit is set).
+    ///
+    /// # Returns
+    /// Returns an updated `TransactionBuilder` with the liquidation instruction appended.
+    pub fn liquidate_perp(
+        mut self,
+        market_index: u16,
+        user_account: &User,
+        liquidator_max_base_asset_amount: u64,
+        limit_price: Option<u64>,
+    ) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::LiquidatePerp {
+                state: *state_account(),
+                authority: self.authority,
+                user: Wallet::derive_user_account(
+                    &user_account.authority,
+                    user_account.sub_account_id,
+                ),
+                user_stats: Wallet::derive_stats_account(&user_account.authority),
+                liquidator: self.sub_account,
+                liquidator_stats: Wallet::derive_stats_account(&self.authority),
+            },
+            [&self.account_data, user_account].into_iter(),
+            std::iter::empty(),
+            std::iter::once(&MarketId::perp(market_index)),
+        );
+
+        let liquidate_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::LiquidatePerp {
+                market_index,
+                liquidator_max_base_asset_amount,
+                limit_price,
+            }),
+        };
+
+        self.ixs.push(liquidate_ix);
+        self
+    }
+
     /// Post a Pyth Lazer oracle update
     ///
     /// Appends an Ed25519 signature verify ix and Pyth Lazer oracle update ix to the transaction.
