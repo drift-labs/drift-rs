@@ -1367,13 +1367,12 @@ impl L2Book {
     fn from_limit_orders(resting_limit_orders: &Orders<LimitOrder>) -> Self {
         let mut bids: BTreeMap<u64, u64> = BTreeMap::new();
         let mut asks: BTreeMap<u64, u64> = BTreeMap::new();
-        for (price_rev, order) in &resting_limit_orders.bids {
-            let price = price_rev.0 .0;
-            *bids.entry(price).or_insert(0) += order.size;
+        for (_, order) in &resting_limit_orders.bids {
+            *bids.entry(order.price).or_insert(0) += order.size;
         }
 
-        for (price, order) in &resting_limit_orders.asks {
-            *asks.entry(price.0).or_insert(0) += order.size;
+        for (_, order) in &resting_limit_orders.asks {
+            *asks.entry(order.price).or_insert(0) += order.size;
         }
 
         Self { bids, asks }

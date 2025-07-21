@@ -142,22 +142,18 @@ fn dlob_limit_order_sorting() {
         .unwrap();
 
     // Verify bids are sorted highest to lowest
-    let bid_prices: Vec<u64> = book
-        .resting_limit_orders
-        .bids
-        .iter()
-        .map(|(_, v)| v.get_price())
-        .collect();
-    assert_eq!(bid_prices, vec![200, 150, 100]);
+    let bid_prices = book.get_limit_bids(slot, 1_000_000);
+    assert_eq!(
+        bid_prices.iter().map(|o| o.price).collect::<Vec<u64>>(),
+        vec![200_u64, 150, 100]
+    );
 
     // Verify asks are sorted lowest to highest
-    let ask_prices: Vec<u64> = book
-        .resting_limit_orders
-        .asks
-        .iter()
-        .map(|(_, v)| v.get_price())
-        .collect();
-    assert_eq!(ask_prices, vec![250, 300, 350]);
+    let ask_prices = book.get_limit_asks(slot, 1_000_000);
+    assert_eq!(
+        ask_prices.iter().map(|o| o.price).collect::<Vec<u64>>(),
+        vec![250_u64, 300, 350]
+    );
 }
 
 #[test]
@@ -346,11 +342,11 @@ fn dlob_l2_snapshot() {
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100_u64;
-    let oracle_price = 1_000;
+    let oracle_price = 1000;
 
     dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
         market_index: 0,
-        market_tick_size: 10,
+        market_tick_size: 1,
         ..Default::default()
     });
 
@@ -393,9 +389,9 @@ fn dlob_l2_snapshot() {
 
     // Verify bid prices and sizes
     // At 1100: 2 (resting limit) + 6 (floating limit) = 8
+    dbg!(&l2book.bids);
     assert_eq!(l2book.bids.get(&1100), Some(&8));
     // At 1050: 4 (market)
-    dbg!(&l2book.bids);
     assert_eq!(l2book.bids.get(&1050), Some(&4));
 
     // Verify ask prices and sizes

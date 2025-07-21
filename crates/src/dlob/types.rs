@@ -269,7 +269,7 @@ impl TriggerOrder {
     /// Returns order price if it were triggered at `slot` with the current market parameters, `oracle_price` and `perp_market`
     pub fn get_price(&self, slot: u64, oracle_price: u64, perp_market: Option<&PerpMarket>) -> u64 {
         // TODO: safe trigger order can fill against VAMM
-        // if slot.saturating_sub(order.slot) > 150 && order.reduce_only {
+        // if slot.saturating_sub(order.slot) > 150 && self.reduce_only {
         //     order.add_bit_flag(OrderBitFlag::SafeTriggerOrder);
         // }
         if let Some(market) = perp_market {
