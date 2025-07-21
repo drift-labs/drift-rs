@@ -13,9 +13,9 @@ gjson = "0.8.1"
 log = "0.4"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["raw_value"] }
-solana-account-decoder-client-types = "2.3"
-solana-sdk = "2.3"
-solana-rpc-client-api = "2.3"
+solana-account-decoder-client-types = "2.2"
+solana-sdk = "2.2"
+solana-rpc-client-api = "2.2"
 thiserror = "1"
 tokio = { version = "1.42", features = ["full"] }
 tokio-stream = "0.1"

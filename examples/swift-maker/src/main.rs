@@ -14,9 +14,11 @@ use solana_sdk::signature::Keypair;
 async fn main() {
     let _ = env_logger::init();
     let _ = dotenv::dotenv();
-    let wallet: Wallet =
-        Keypair::from_base58_string(&std::env::var("PRIVATE_KEY").expect("base58 PRIVATE_KEY set"))
-            .into();
+    let wallet: Wallet = (drift_rs::utils::load_keypair_multi_format(
+        &std::env::var("PRIVATE_KEY").expect("base58 PRIVATE_KEY set"),
+    )
+    .unwrap())
+    .into();
 
     // choose a sub-account for order placement
     let filler_subaccount = wallet.default_sub_account();
@@ -44,13 +46,13 @@ async fn main() {
         .expect("subscribed");
 
     // choose some markets by symbol
-    let market_ids: Vec<MarketId> = ["sol-perp", "eth-perp"]
+    let market_ids: Vec<MarketId> = ["pump-perp"]
         .iter()
         .map(|m| drift.market_lookup(m).expect("market found"))
         .collect();
 
     let mut swift_order_stream = drift
-        .subscribe_swift_orders(&market_ids, None)
+        .subscribe_swift_orders(&market_ids, Some(true))
         .await
         .expect("subscribed swift orders");
 

@@ -14,8 +14,8 @@ use crate::{
         errors::ErrorCode,
         types::{self, ContractType, MarginRequirementType, OracleSource},
     },
-    math::constants::PRICE_PRECISION,
-    types::{accounts::HighLeverageModeConfig, ProtectedMakerParams, SdkError},
+    math::constants::{PERCENTAGE_PRECISION_I128, PRICE_PRECISION, QUOTE_PRECISION_I64},
+    types::{accounts::HighLeverageModeConfig, ContractTier, ProtectedMakerParams, SdkError},
     SdkResult,
 };
 
@@ -412,7 +412,41 @@ impl accounts::PerpMarket {
     pub fn get_protected_maker_params(&self) -> ProtectedMakerParams {
         unsafe { perp_market_get_protected_maker_params(self) }
     }
+    pub fn has_too_much_drawdown(&self) -> bool {
+        pub const DEFAULT_REVENUE_SINCE_LAST_FUNDING_SPREAD_RETREAT: i64 =
+            -25 * QUOTE_PRECISION_I64; //$25 loss
+        let quote_drawdown_limit_breached = match self.contract_tier {
+            ContractTier::A | ContractTier::B => {
+                self.amm.net_revenue_since_last_funding
+                    <= DEFAULT_REVENUE_SINCE_LAST_FUNDING_SPREAD_RETREAT * 400
+            }
+            _ => {
+                self.amm.net_revenue_since_last_funding
+                    <= DEFAULT_REVENUE_SINCE_LAST_FUNDING_SPREAD_RETREAT * 200
+            }
+        };
 
+        if quote_drawdown_limit_breached {
+            let net_revenue_since_last_funding: i128 = (self.amm.net_revenue_since_last_funding)
+                .try_into()
+                .unwrap();
+            let percent_drawdown = (net_revenue_since_last_funding * PERCENTAGE_PRECISION_I128)
+                / (self.amm.total_fee_minus_distributions.as_i128().max(1_i128));
+
+            let percent_drawdown_limit_breached = match self.contract_tier {
+                ContractTier::A => percent_drawdown <= -PERCENTAGE_PRECISION_I128 / 50,
+                ContractTier::B => percent_drawdown <= -PERCENTAGE_PRECISION_I128 / 33,
+                ContractTier::C => percent_drawdown <= -PERCENTAGE_PRECISION_I128 / 25,
+                _ => percent_drawdown <= -PERCENTAGE_PRECISION_I128 / 20,
+            };
+
+            if percent_drawdown_limit_breached {
+                return true;
+            }
+        }
+
+        false
+    }
     fn calculate_spread_reserves(
         &self,
         direction: crate::PositionDirection,

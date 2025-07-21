@@ -19,9 +19,9 @@ use crate::{
 // Replace the key structs with type aliases
 type MarketOrderKey = (u64, u64);
 type OracleOrderKey = (u64, u64);
-type LimitOrderKey = (u64, u64, u64);
-type FloatingLimitOrderKey = (i32, u64, u64);
-type TriggerOrderKey = (u64, u64);
+type LimitOrderKey = (u64, u64);
+type FloatingLimitOrderKey = (u64, u64);
+type TriggerOrderKey = u64;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 #[repr(u8)]
@@ -97,6 +97,8 @@ pub struct CrossesAndTopMakers {
     pub crosses: Vec<(OrderMetadata, MakerCrosses)>,
     // top of book limit cross, if any
     pub limit_crosses: Option<(OrderMetadata, OrderMetadata)>,
+    pub vamm_taker_ask: Option<OrderMetadata>,
+    pub vamm_taker_bid: Option<OrderMetadata>,
 }
 
 /// Best fills for a taker order
@@ -163,14 +165,14 @@ impl OrderKey for OracleOrder {
 impl OrderKey for LimitOrder {
     type Key = LimitOrderKey;
     fn key(&self) -> Self::Key {
-        (self.price, self.slot, self.id)
+        (self.slot, self.id)
     }
 }
 
 impl OrderKey for FloatingLimitOrder {
     type Key = FloatingLimitOrderKey;
     fn key(&self) -> Self::Key {
-        (self.offset_price, self.slot, self.id)
+        (self.slot, self.id)
     }
 }
 
@@ -178,7 +180,7 @@ impl OrderKey for TriggerOrder {
     type Key = TriggerOrderKey;
     fn key(&self) -> Self::Key {
         // nb: trigger order slot updates when triggered so is unreliable as a sort key
-        (self.price, self.id)
+        self.id
     }
 }
 
@@ -267,7 +269,7 @@ impl TriggerOrder {
     /// Returns order price if it were triggered at `slot` with the current market parameters, `oracle_price` and `perp_market`
     pub fn get_price(&self, slot: u64, oracle_price: u64, perp_market: Option<&PerpMarket>) -> u64 {
         // TODO: safe trigger order can fill against VAMM
-        // if slot.saturating_sub(order.slot) > 150 && order.reduce_only {
+        // if slot.saturating_sub(order.slot) > 150 && self.reduce_only {
         //     order.add_bit_flag(OrderBitFlag::SafeTriggerOrder);
         // }
         if let Some(market) = perp_market {
@@ -325,8 +327,8 @@ impl DynamicPrice for MarketOrder {
     fn size(&self) -> u64 {
         self.size
     }
-    fn get_price(&self, slot: u64, _oracle_price: u64, market_tick_size: u64) -> u64 {
-        calculate_auction_price(
+    fn get_price(&self, slot: u64, oracle_price: u64, tick_size: u64) -> u64 {
+        match calculate_auction_price(
             &Order {
                 slot: self.slot,
                 auction_duration: self.duration,
@@ -337,11 +339,36 @@ impl DynamicPrice for MarketOrder {
                 ..Default::default()
             },
             slot,
-            market_tick_size,
-            None,
+            tick_size,
+            Some(oracle_price as i64),
             false,
-        )
-        .expect("market price")
+        ) {
+            Ok(p) => p,
+            Err(err) => {
+                log::warn!(target: "dlob", "get_price failed: {err:?}, order: {:?}, tick size: {tick_size}", &self);
+                // offchain fallback
+                let slots_elapsed = slot.saturating_sub(self.slot) as i64;
+                let delta_denominator = self.duration as i64;
+                let delta_numerator = slots_elapsed.min(delta_denominator);
+
+                if delta_denominator == 0 {
+                    return self.end_price as u64;
+                }
+
+                let price = if self.direction == Direction::Long {
+                    let delta = (self.end_price.saturating_sub(self.start_price) * delta_numerator)
+                        / delta_denominator;
+                    self.start_price.saturating_add(delta)
+                } else {
+                    let delta = (self.start_price.saturating_sub(self.end_price) * delta_numerator)
+                        / delta_denominator;
+                    self.start_price.saturating_sub(delta)
+                };
+
+                let price = price.max(tick_size as i64);
+                standardize_price(price as u64, tick_size, self.direction)
+            }
+        }
     }
 }
 

@@ -9,7 +9,10 @@ use solana_sdk::{
     instruction::Instruction, pubkey::Pubkey, signature::Keypair,
 };
 
-use crate::types::{SdkError, SdkResult};
+use crate::{
+    constants::PROGRAM_ID,
+    types::{SdkError, SdkResult},
+};
 
 // kudos @wphan
 /// Try to parse secret `key` string
@@ -24,7 +27,7 @@ pub fn read_keypair_str_multi_format(key: &str) -> SdkResult<Keypair> {
         // decode the numbers array into json string
         let bytes: Result<Vec<u8>, _> = key.split(',').map(|x| x.parse::<u8>()).collect();
         if let Ok(bytes) = bytes {
-            return Keypair::try_from(bytes.as_ref()).map_err(|_| SdkError::InvalidSeed);
+            return Keypair::from_bytes(bytes.as_ref()).map_err(|_| SdkError::InvalidSeed);
         } else {
             return Err(SdkError::InvalidSeed);
         }
@@ -32,12 +35,12 @@ pub fn read_keypair_str_multi_format(key: &str) -> SdkResult<Keypair> {
 
     // try to decode as base58 string
     if let Ok(bytes) = bs58::decode(key.as_bytes()).into_vec() {
-        return Keypair::try_from(bytes.as_ref()).map_err(|_| SdkError::InvalidSeed);
+        return Keypair::from_bytes(bytes.as_ref()).map_err(|_| SdkError::InvalidSeed);
     }
 
     // try to decode as base64 string
     if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(key.as_bytes()) {
-        return Keypair::try_from(bytes.as_ref()).map_err(|_| SdkError::InvalidSeed);
+        return Keypair::from_bytes(bytes.as_ref()).map_err(|_| SdkError::InvalidSeed);
     }
 
     Err(SdkError::InvalidSeed)
@@ -139,6 +142,15 @@ pub fn zero_account_to_bytes<T: bytemuck::Pod + anchor_lang::Discriminator>(acco
 #[inline]
 pub fn deser_zero_copy<T: Discriminator + Pod>(data: &[u8]) -> &T {
     bytemuck::from_bytes::<T>(&data[8..])
+}
+
+/// Derive pyth lazer oracle pubkey for DriftV2 program
+pub fn derive_pyth_lazer_oracle_public_key(feed_id: u32) -> Pubkey {
+    let seed_prefix = b"pyth_lazer";
+    let feed_id_bytes = feed_id.to_le_bytes();
+
+    let (pubkey, _bump) = Pubkey::find_program_address(&[seed_prefix, &feed_id_bytes], &PROGRAM_ID);
+    pubkey
 }
 
 pub mod test_envs {

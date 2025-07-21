@@ -227,7 +227,16 @@ impl<T: Clone + Debug + From<(u64, Order)> + OrderKey> Orders<T> {
                 }
             }
         }
-        log::trace!(target: "dlob", "update not found: {:?}", order_id);
+        log::warn!(target: "dlob", "update not found: {order_id}, {order:?}");
+        match order.direction {
+            Direction::Long => {
+                log::warn!(target: "dlob", "bids: {:?}", self.bids);
+            }
+            Direction::Short => {
+                log::warn!(target: "dlob", "asks: {:?}", self.asks);
+            }
+        }
+
         false
     }
 }
@@ -261,7 +270,7 @@ struct Orderbook {
 impl Orderbook {
     /// Evaluate dynamic order prices for some `slot` and `oracle_price`
     pub fn update_slot_and_oracle_price(&mut self, slot: u64, oracle_price: u64) {
-        log::debug!(target: "dlob","update book. market:{},slot:{slot},oracle:{oracle_price}",self.market_index);
+        log::debug!(target: "dlob","update book. market:{},slot:{slot},oracle:{oracle_price}", self.market_index);
         self.expire_auction_orders(slot);
         self.market_orders
             .sort(slot, oracle_price, self.market_tick_size);
@@ -491,12 +500,13 @@ impl Orderbook {
                 + self.trigger_orders.asks.len(),
         );
 
-        result.extend(
-            self.market_orders
-                .asks
-                .iter()
-                .map(|o| (o.id, o.get_price(slot, 0, self.market_tick_size), o.size)), // oracle price unused
-        );
+        result.extend(self.market_orders.asks.iter().map(|o| {
+            (
+                o.id,
+                o.get_price(slot, oracle_price, self.market_tick_size),
+                o.size,
+            )
+        }));
         result.extend(self.oracle_orders.asks.iter().map(|o| {
             (
                 o.id,
@@ -530,12 +540,13 @@ impl Orderbook {
                 + self.trigger_orders.bids.len(),
         );
 
-        result.extend(
-            self.market_orders
-                .bids
-                .iter()
-                .map(|o| (o.id, o.get_price(slot, 0, self.market_tick_size), o.size)), // oracle price unused
-        );
+        result.extend(self.market_orders.bids.iter().map(|o| {
+            (
+                o.id,
+                o.get_price(slot, oracle_price, self.market_tick_size),
+                o.size,
+            )
+        }));
         result.extend(self.oracle_orders.bids.iter().map(|o| {
             (
                 o.id,
@@ -961,6 +972,8 @@ impl DLOB {
     }
 
     /// Helper to find a crossing pair of limit orders at the top of the book, if any.
+    ///
+    /// The crossing orders could from the same user account and so un-fillable
     fn find_limit_cross(
         &self,
         bid: &LimitOrderView,
@@ -1011,11 +1024,24 @@ impl DLOB {
         let taker_bids = book.get_taker_bids(slot, oracle_price, perp_market);
         let mut resting_asks = book.get_limit_asks(slot, oracle_price);
         let mut resting_bids = book.get_limit_bids(slot, oracle_price);
+        let mut vamm_taker_ask = None;
+        let mut vamm_taker_bid = None;
 
         let mut limit_crosses = None;
-        // Use helper to check for crossing resting limit orders
-        if let (Some(bid), Some(ask)) = (resting_bids.first(), resting_asks.first()) {
-            limit_crosses = self.find_limit_cross(bid, ask);
+        if let (Some(best_bid), Some(best_ask)) = (resting_bids.first(), resting_asks.first()) {
+            // check for crossing resting limit orders
+            limit_crosses = self.find_limit_cross(best_bid, best_ask);
+            // check for VAMM crossing resting limit orders
+            if vamm_bid.is_some_and(|v| v > best_ask.price && best_ask.post_only)
+                && perp_market.is_some_and(|m| best_ask.size > m.amm.min_order_size)
+            {
+                vamm_taker_bid = self.metadata.get(&best_ask.id).map(|x| *x.value());
+            }
+            if vamm_ask.is_some_and(|v| v < best_bid.price && best_bid.post_only)
+                && perp_market.is_some_and(|m| best_bid.size > m.amm.min_order_size)
+            {
+                vamm_taker_ask = self.metadata.get(&best_bid.id).map(|x| *x.value());
+            }
         }
 
         let mut taker_order = TakerOrder {
@@ -1026,10 +1052,10 @@ impl DLOB {
             market_type,
         };
 
-        let top_3_maker_bids: ArrayVec<Pubkey, 3> = taker_bids
+        let top_3_maker_bids: ArrayVec<Pubkey, 3> = resting_bids
             .iter()
             .take(3)
-            .filter_map(|o| self.metadata.get(&o.0).map(|m| m.user))
+            .filter_map(|o| self.metadata.get(&o.id).map(|m| m.user))
             .collect();
 
         // Check for crosses between auction bids and resting asks
@@ -1058,10 +1084,10 @@ impl DLOB {
             }
         }
 
-        let top_3_maker_asks: ArrayVec<Pubkey, 3> = taker_asks
+        let top_3_maker_asks: ArrayVec<Pubkey, 3> = resting_asks
             .iter()
             .take(3)
-            .filter_map(|o| self.metadata.get(&o.0).map(|m| m.user))
+            .filter_map(|o| self.metadata.get(&o.id).map(|m| m.user))
             .collect();
 
         // Check for crosses between auction asks and resting bids
@@ -1095,6 +1121,8 @@ impl DLOB {
             top_maker_bids: top_3_maker_bids,
             crosses: all_crosses,
             limit_crosses,
+            vamm_taker_ask,
+            vamm_taker_bid,
         }
     }
 
@@ -1339,13 +1367,12 @@ impl L2Book {
     fn from_limit_orders(resting_limit_orders: &Orders<LimitOrder>) -> Self {
         let mut bids: BTreeMap<u64, u64> = BTreeMap::new();
         let mut asks: BTreeMap<u64, u64> = BTreeMap::new();
-        for (price_rev, order) in &resting_limit_orders.bids {
-            let price = price_rev.0 .0;
-            *bids.entry(price).or_insert(0) += order.size;
+        for (_, order) in &resting_limit_orders.bids {
+            *bids.entry(order.price).or_insert(0) += order.size;
         }
 
-        for (price, order) in &resting_limit_orders.asks {
-            *asks.entry(price.0).or_insert(0) += order.size;
+        for (_, order) in &resting_limit_orders.asks {
+            *asks.entry(order.price).or_insert(0) += order.size;
         }
 
         Self { bids, asks }
