@@ -20,6 +20,21 @@ use crate::{
     },
 };
 
+use serde::{Deserialize, Serialize};
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct CrossingOrder {
+    pub order_view: LimitOrderView,
+    pub metadata: OrderMetadata,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct CrossingRegion {
+    pub slot: u64,
+    pub crossing_bids: Vec<CrossingOrder>,
+    pub crossing_asks: Vec<CrossingOrder>,
+}
+
 #[cfg(test)]
 mod tests;
 pub mod types;
@@ -405,7 +420,7 @@ impl Orderbook {
 
     pub fn get_limit_bids(&self, slot: u64, oracle_price: u64) -> Vec<LimitOrderView> {
         let mut result = Vec::with_capacity(
-            self.resting_limit_orders.asks.len() + self.floating_limit_orders.asks.len(),
+            self.resting_limit_orders.bids.len() + self.floating_limit_orders.bids.len(),
         );
         let buffer_s = 4;
         let now_unix_s = SystemTime::now()
@@ -455,7 +470,6 @@ impl Orderbook {
             .unwrap()
             .as_secs()
             + buffer_s;
-
         result.extend(
             self.resting_limit_orders
                 .asks
@@ -689,6 +703,56 @@ impl DLOB {
             .get(&MarketId::new(market_index, market_type))
             .map(|book| book.l3_snapshot.get())
             .unwrap_or_default()
+    }
+
+    pub fn find_crossing_region(
+        &self,
+        slot: u64,
+        oracle_price: u64,
+        market_index: u16,
+        market_type: MarketType,
+    ) -> Option<CrossingRegion> {
+        let market_id = MarketId::new(market_index, market_type);
+        let book = self.markets.get(&market_id)?;
+        let bids = book.get_limit_bids(slot, oracle_price);
+        let asks = book.get_limit_asks(slot, oracle_price);
+
+        if bids.is_empty() || asks.is_empty() {
+            return None;
+        }
+        let best_bid = bids[0].price;
+        let best_ask = asks[0].price;
+        if best_bid < best_ask {
+            return None;
+        }
+
+        let crossing_bids = bids
+            .iter()
+            .take_while(|b| b.price >= best_ask)
+            .filter_map(|b| {
+                self.metadata.get(&b.id).map(|m| CrossingOrder {
+                    order_view: b.clone(),
+                    metadata: *m.value(),
+                })
+            })
+            .collect();
+
+        let crossing_asks = asks
+            .iter()
+            .take_while(|a| a.price <= best_bid)
+            .filter_map(|a| {
+                self.metadata.get(&a.id).map(|m| CrossingOrder {
+                    order_view: a.clone(),
+                    metadata: *m.value(),
+                })
+            })
+            .collect();
+
+        Some(CrossingRegion {
+            slot,
+            crossing_bids,
+            crossing_asks,
+        })
     }
 
     fn update_order(&self, user: &Pubkey, order: Order) {

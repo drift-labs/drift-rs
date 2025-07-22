@@ -11,6 +11,8 @@ use yellowstone_grpc_proto::prelude::{Transaction, TransactionStatusMeta};
 
 /// grpc transaction update callback
 pub type OnTransactionFn = dyn Fn(&TransactionUpdate) + Send + Sync + 'static;
+/// grpc oracle account update callback
+pub type OnOracleFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
 /// grpc account update callback
 pub type OnAccountFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
 /// grpc slot update callback
@@ -75,6 +77,8 @@ pub struct GrpcSubscribeOpts {
     pub on_account: Option<Vec<(AccountFilter, Box<OnAccountFn>)>>,
     /// custom callback for tx updates
     pub on_transaction: Option<Box<OnTransactionFn>>,
+    /// custom callback for oracle account updates
+    pub on_oracle_update: Option<Box<OnOracleFn>>,
     /// Network level connection config
     pub connection_opts: GrpcConnectionOpts,
     /// Enable inter-slot update notifications

@@ -23,7 +23,7 @@ type LimitOrderKey = (u64, u64);
 type FloatingLimitOrderKey = (u64, u64);
 type TriggerOrderKey = u64;
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy, PartialEq)]
 #[repr(u8)]
 pub enum OrderKind {
     /// auction fixed price offset
@@ -47,7 +47,7 @@ pub enum OrderKind {
     LimitTriggered,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy, PartialEq)]
 pub struct OrderMetadata {
     pub order_id: u32,
     pub user: Pubkey,
@@ -210,7 +210,7 @@ pub(crate) struct OracleOrder {
     pub max_ts: u64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct LimitOrderView {
     /// Internal order id
     pub id: u64,

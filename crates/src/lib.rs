@@ -1298,7 +1298,14 @@ impl DriftClientBackend {
             .iter()
             .map(|(_, (pubkey, _))| pubkey.to_string())
             .collect();
-        oracles_grpc.on_account(AccountFilter::firehose(), self.oracle_map.on_account_fn());
+        let oracle_map_on_account = self.oracle_map.on_account_fn();
+        let on_oracle = opts.on_oracle_update.map(|f| f);
+        oracles_grpc.on_account(AccountFilter::firehose(), move |update| {
+            if let Some(f) = &on_oracle {
+                f(update);
+            }
+            oracle_map_on_account(update);
+        });
         let oracles_grpc_unsub = oracles_grpc
             .subscribe(
                 commitment,
@@ -1748,6 +1755,11 @@ impl<'a> TransactionBuilder<'a> {
     pub fn add_ix(mut self, ix: Instruction) -> Self {
         self.ixs.push(ix);
         self
+    }
+
+    /// Return the ixs currently included in the Transaction
+    pub fn ixs(&self) -> &[Instruction] {
+        &self.ixs
     }
 
     /// Deposit collateral into the user's account for a given spot market.
