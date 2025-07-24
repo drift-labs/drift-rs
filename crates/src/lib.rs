@@ -1752,9 +1752,16 @@ impl<'a> TransactionBuilder<'a> {
 
         self
     }
+
     /// Append an ix to the Tx
     pub fn add_ix(mut self, ix: Instruction) -> Self {
         self.ixs.push(ix);
+        self
+    }
+
+    /// Set ix at index
+    pub fn set_ix(mut self, idx: usize, ix: Instruction) -> Self {
+        self.ixs.insert(idx, ix);
         self
     }
 
