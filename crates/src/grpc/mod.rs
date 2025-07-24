@@ -102,6 +102,7 @@ impl Default for GrpcSubscribeOpts {
             on_account: None,
             on_oracle_update: None,
             connection_opts: GrpcConnectionOpts::default(),
+            interslot_updates: false,
         }
     }
 }
