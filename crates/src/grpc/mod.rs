@@ -11,6 +11,8 @@ use yellowstone_grpc_proto::prelude::{Transaction, TransactionStatusMeta};
 
 /// grpc transaction update callback
 pub type OnTransactionFn = dyn Fn(&TransactionUpdate) + Send + Sync + 'static;
+/// grpc oracle account update callback
+pub type OnOracleFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
 /// grpc account update callback
 pub type OnAccountFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
 /// grpc slot update callback
@@ -60,11 +62,12 @@ pub struct TransactionUpdate {
 ///                 .on_slot(move |new_slot| {}) // slot callback
 /// ```
 ///
-#[derive(Default)]
 pub struct GrpcSubscribeOpts {
     pub commitment: Option<CommitmentLevel>,
-    /// toggle usermap
+    /// cache user account updates (default: false)
     pub usermap: bool,
+    /// cache oracle account updates (default: true)
+    pub oraclemap: bool,
     /// toggle user stats map
     pub user_stats_map: bool,
     /// list of user (sub)accounts to subscribe
@@ -75,12 +78,33 @@ pub struct GrpcSubscribeOpts {
     pub on_account: Option<Vec<(AccountFilter, Box<OnAccountFn>)>>,
     /// custom callback for tx updates
     pub on_transaction: Option<Box<OnTransactionFn>>,
+    /// custom callback for oracle account updates
+    pub on_oracle_update: Option<Box<OnOracleFn>>,
     /// Network level connection config
     pub connection_opts: GrpcConnectionOpts,
     /// Enable inter-slot update notifications
     pub interslot_updates: bool,
     /// Watch transactions including these accounts
     pub transaction_include_accounts: Vec<Pubkey>,
+}
+
+impl Default for GrpcSubscribeOpts {
+    fn default() -> Self {
+        Self {
+            commitment: Some(CommitmentLevel::Confirmed),
+            usermap: false,
+            user_stats_map: false,
+            oraclemap: true,
+            user_accounts: Default::default(),
+            transaction_include_accounts: Default::default(),
+            on_slot: None,
+            on_transaction: None,
+            on_account: None,
+            on_oracle_update: None,
+            connection_opts: GrpcConnectionOpts::default(),
+            interslot_updates: false,
+        }
+    }
 }
 
 impl GrpcSubscribeOpts {
@@ -104,11 +128,23 @@ impl GrpcSubscribeOpts {
         self.usermap = true;
         self
     }
+    /// Disable oraclemap, will not cache oracle account updates
+    pub fn oraclemap_off(mut self) -> Self {
+        self.oraclemap = false;
+        self
+    }
     /// Cache ALL drift `UserStats` account updates
     ///
     /// useful for e.g. fast TX building for makers
     pub fn statsmap_on(mut self) -> Self {
         self.user_stats_map = true;
+        self
+    }
+    /// Cache ALL drift `UserStats` account updates
+    ///
+    /// useful for e.g. fast TX building for makers
+    pub fn statsmap_off(mut self) -> Self {
+        self.user_stats_map = false;
         self
     }
     /// Cache account updates for given `users` only
@@ -146,6 +182,19 @@ impl GrpcSubscribeOpts {
         }
         self
     }
+    /// Register a custom callback for oracle account updates
+    /// It will be called _before_ the oraclemap is updated
+    ///
+    /// * `callback` - fn to invoke on matching account update
+    ///
+    /// ! `callback` must not block the gRPC task
+    pub fn on_oracle_update(
+        mut self,
+        callback: impl Fn(&AccountUpdate) + Send + Sync + 'static,
+    ) -> Self {
+        self.on_oracle_update = Some(Box::new(callback));
+        self
+    }
     /// Set network level connection opts
     pub fn connection_opts(mut self, opts: GrpcConnectionOpts) -> Self {
         self.connection_opts = opts;
@@ -156,11 +205,16 @@ impl GrpcSubscribeOpts {
         self.transaction_include_accounts = accounts;
         self
     }
+    /// Register a custom callback for transaction updates
+    ///
+    /// * `callback` - fn to invoke on matching account update
+    ///
+    /// ! `callback` must not block the gRPC task
     pub fn on_transaction(
         mut self,
-        on_transaction: impl Fn(&TransactionUpdate) + Send + Sync + 'static,
+        callback: impl Fn(&TransactionUpdate) + Send + Sync + 'static,
     ) -> Self {
-        self.on_transaction = Some(Box::new(on_transaction));
+        self.on_transaction = Some(Box::new(callback));
         self
     }
 }

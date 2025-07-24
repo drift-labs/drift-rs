@@ -239,12 +239,11 @@ pub async fn subscribe_swift_orders(
         SWIFT_DEVNET_WS_URL
     };
     let maker_pubkey = client.wallet().authority().to_string();
-    let (ws_stream, _) = connect_async(format!("{base_url}/ws?pubkey={maker_pubkey}"))
-        .await
-        .map_err(|err| {
-            log::error!(target: LOG_TARGET, "couldn't connect to server: {err:?}");
-            SdkError::WsClient(Box::new(err))
-        })?;
+    let uri = format!("{base_url}/ws?pubkey={maker_pubkey}");
+    let (ws_stream, _) = connect_async(uri).await.map_err(|err| {
+        log::error!(target: LOG_TARGET, "couldn't connect to server: {err:?}");
+        SdkError::WsClient(Box::new(err))
+    })?;
 
     let (mut outgoing, mut incoming) = ws_stream.split();
 

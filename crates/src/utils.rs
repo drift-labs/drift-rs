@@ -195,17 +195,24 @@ struct Ed25519SignatureOffsets {
 
 /// Build a new ed25519 verify ix pointing to another ix for data
 ///
+/// ## Params
+/// - `magic_len` additional message offset from the start of `message` e.g. pyth lazer has a u32 prefix
 /// DEV: this constructor should exist in `solana_sdk::ed25519_instruction` but does not.
-pub fn new_ed25519_ix_ptr(message: &[u8], instruction_index: u16) -> Instruction {
+pub fn new_ed25519_ix_ptr(
+    message: &[u8],
+    instruction_index: u16,
+    magic_len: Option<usize>,
+) -> Instruction {
     let mut instruction_data = Vec::with_capacity(solana_sdk::ed25519_instruction::DATA_START);
-    let signature_offset = 12_usize; // after discriminator??
+    let message_offset = 12_usize;
+    let signature_offset = message_offset + magic_len.unwrap_or_default();
     let public_key_offset =
         signature_offset.saturating_add(solana_sdk::ed25519_instruction::SIGNATURE_SERIALIZED_SIZE);
     let message_data_size_offset =
         public_key_offset.saturating_add(solana_sdk::ed25519_instruction::PUBKEY_SERIALIZED_SIZE);
     let message_data_size = u16::from_le_bytes([
-        message[message_data_size_offset - signature_offset],
-        message[message_data_size_offset - signature_offset + 1],
+        message[message_data_size_offset - message_offset],
+        message[message_data_size_offset - message_offset + 1],
     ]);
     let message_data_offset = message_data_size_offset + 2;
 

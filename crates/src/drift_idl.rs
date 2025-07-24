@@ -22383,6 +22383,7 @@ pub mod errors {
 pub mod events {
     #![doc = r" IDL event types"]
     use super::{types::*, *};
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct NewUserRecord {
         pub ts: i64,
@@ -22392,6 +22393,7 @@ pub mod events {
         pub name: [u8; 32],
         pub referrer: Pubkey,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct DepositRecord {
         pub ts: i64,
@@ -22411,6 +22413,7 @@ pub mod events {
         pub explanation: DepositExplanation,
         pub transfer_user: Option<Pubkey>,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct SpotInterestRecord {
         pub ts: i64,
@@ -22423,6 +22426,7 @@ pub mod events {
         pub optimal_borrow_rate: u32,
         pub max_borrow_rate: u32,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct FundingPaymentRecord {
         pub ts: i64,
@@ -22435,6 +22439,7 @@ pub mod events {
         pub amm_cumulative_funding_long: i128,
         pub amm_cumulative_funding_short: i128,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct FundingRateRecord {
         pub ts: i64,
@@ -22451,6 +22456,7 @@ pub mod events {
         pub base_asset_amount_with_amm: i128,
         pub base_asset_amount_with_unsettled_lp: i128,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct CurveRecord {
         pub ts: i64,
@@ -22474,6 +22480,7 @@ pub mod events {
         pub number_of_users: u32,
         pub market_index: u16,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct SignedMsgOrderRecord {
         pub user: Pubkey,
@@ -22484,12 +22491,14 @@ pub mod events {
         pub signed_msg_order_uuid: [u8; 8],
         pub ts: i64,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct OrderRecord {
         pub ts: i64,
         pub user: Pubkey,
         pub order: Order,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct OrderActionRecord {
         pub ts: i64,
@@ -22526,6 +22535,7 @@ pub mod events {
         pub maker_existing_quote_entry_amount: Option<u64>,
         pub maker_existing_base_asset_amount: Option<u64>,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct LPRecord {
         pub ts: i64,
@@ -22537,6 +22547,7 @@ pub mod events {
         pub delta_quote_asset_amount: i64,
         pub pnl: i64,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct LiquidationRecord {
         pub ts: i64,
@@ -22556,6 +22567,7 @@ pub mod events {
         pub perp_bankruptcy: PerpBankruptcyRecord,
         pub spot_bankruptcy: SpotBankruptcyRecord,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct SettlePnlRecord {
         pub ts: i64,
@@ -22568,6 +22580,7 @@ pub mod events {
         pub settle_price: i64,
         pub explanation: SettlePnlExplanation,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct InsuranceFundRecord {
         pub ts: i64,
@@ -22581,6 +22594,7 @@ pub mod events {
         pub total_if_shares_after: u128,
         pub amount: i64,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct InsuranceFundStakeRecord {
         pub ts: i64,
@@ -22596,6 +22610,7 @@ pub mod events {
         pub user_if_shares_after: u128,
         pub total_if_shares_after: u128,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct InsuranceFundSwapRecord {
         pub rebalance_config: Pubkey,
@@ -22619,6 +22634,7 @@ pub mod events {
         pub in_market_index: u16,
         pub out_market_index: u16,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct TransferProtocolIfSharesToRevenuePoolRecord {
         pub ts: i64,
@@ -22629,6 +22645,7 @@ pub mod events {
         pub protocol_shares_before: u128,
         pub transfer_amount: u64,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct SwapRecord {
         pub ts: i64,
@@ -22641,6 +22658,7 @@ pub mod events {
         pub in_oracle_price: i64,
         pub fee: u64,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct SpotMarketVaultDepositRecord {
         pub ts: i64,
@@ -22651,6 +22669,7 @@ pub mod events {
         pub deposit_token_amount_before: u64,
         pub amount: u64,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct DeleteUserRecord {
         pub ts: i64,
@@ -22659,6 +22678,7 @@ pub mod events {
         pub sub_account_id: u16,
         pub keeper: Option<Pubkey>,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct FuelSweepRecord {
         pub ts: i64,
@@ -22676,6 +22696,7 @@ pub mod events {
         pub fuel_overflow_fuel_taker: u128,
         pub fuel_overflow_fuel_maker: u128,
     }
+    #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
     pub struct FuelSeasonRecord {
         pub ts: i64,

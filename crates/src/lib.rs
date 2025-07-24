@@ -1298,7 +1298,15 @@ impl DriftClientBackend {
             .iter()
             .map(|(_, (pubkey, _))| pubkey.to_string())
             .collect();
-        oracles_grpc.on_account(AccountFilter::firehose(), self.oracle_map.on_account_fn());
+
+        if let Some(on_oracle) = opts.on_oracle_update {
+            oracles_grpc.on_account(AccountFilter::firehose(), on_oracle);
+        }
+
+        if opts.oraclemap {
+            oracles_grpc.on_account(AccountFilter::firehose(), self.oracle_map.on_account_fn());
+        }
+
         let oracles_grpc_unsub = oracles_grpc
             .subscribe(
                 commitment,
@@ -1744,10 +1752,22 @@ impl<'a> TransactionBuilder<'a> {
 
         self
     }
+
     /// Append an ix to the Tx
     pub fn add_ix(mut self, ix: Instruction) -> Self {
         self.ixs.push(ix);
         self
+    }
+
+    /// Set ix at index
+    pub fn set_ix(mut self, idx: usize, ix: Instruction) -> Self {
+        self.ixs.insert(idx, ix);
+        self
+    }
+
+    /// Return the ixs currently included in the Transaction
+    pub fn ixs(&self) -> &[Instruction] {
+        &self.ixs
     }
 
     /// Deposit collateral into the user's account for a given spot market.
@@ -1768,7 +1788,7 @@ impl<'a> TransactionBuilder<'a> {
             types::accounts::Deposit {
                 state: *state_account(),
                 user: self.sub_account,
-                user_stats: Wallet::derive_stats_account(&self.authority),
+                user_stats: Wallet::derive_stats_account(&self.owner()),
                 authority: self.authority,
                 spot_market_vault: spot_market.vault,
                 user_token_account: Wallet::derive_associated_token_address(
@@ -1815,7 +1835,7 @@ impl<'a> TransactionBuilder<'a> {
             types::accounts::Withdraw {
                 state: *state_account(),
                 user: self.sub_account,
-                user_stats: Wallet::derive_stats_account(&self.authority),
+                user_stats: Wallet::derive_stats_account(&self.owner()),
                 authority: self.authority,
                 spot_market_vault: spot_market.vault,
                 user_token_account: Wallet::derive_associated_token_address(
@@ -2091,7 +2111,7 @@ impl<'a> TransactionBuilder<'a> {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
-                user_stats: Wallet::derive_stats_account(&self.authority),
+                user_stats: Wallet::derive_stats_account(&self.owner()),
                 taker: *taker,
                 taker_stats: Wallet::derive_stats_account(&taker_account.authority),
             },
@@ -2171,7 +2191,7 @@ impl<'a> TransactionBuilder<'a> {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
-                user_stats: Wallet::derive_stats_account(&self.authority),
+                user_stats: Wallet::derive_stats_account(&self.owner()),
             },
             user_accounts.into_iter(),
             self.force_markets.readable.iter(),
@@ -2251,7 +2271,7 @@ impl<'a> TransactionBuilder<'a> {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
-                user_stats: Wallet::derive_stats_account(&self.authority),
+                user_stats: Wallet::derive_stats_account(&self.owner()),
                 taker: signed_order_info.taker_subaccount(),
                 taker_stats: Wallet::derive_stats_account(&taker_account.authority),
                 taker_signed_msg_user_orders: Wallet::derive_swift_order_account(
@@ -2335,6 +2355,7 @@ impl<'a> TransactionBuilder<'a> {
         let ed25519_verify_ix = crate::utils::new_ed25519_ix_ptr(
             swift_taker_ix_data.as_slice(),
             self.ixs.len() as u16 + 1,
+            None,
         );
 
         let place_swift_ix = Instruction {
@@ -2863,7 +2884,7 @@ impl<'a> TransactionBuilder<'a> {
                 state: *state_account(),
                 authority: self.authority,
                 user: Wallet::derive_user_account(&self.authority, sub_account_id),
-                user_stats: Wallet::derive_stats_account(&self.authority),
+                user_stats: Wallet::derive_stats_account(&self.owner()),
                 payer: self.authority,
                 rent: SYSVAR_RENT_PUBKEY,
                 system_program: SYSTEM_PROGRAM_ID,
@@ -2942,7 +2963,7 @@ impl<'a> TransactionBuilder<'a> {
                 ),
                 user_stats: Wallet::derive_stats_account(&user_account.authority),
                 liquidator: self.sub_account,
-                liquidator_stats: Wallet::derive_stats_account(&self.authority),
+                liquidator_stats: Wallet::derive_stats_account(&self.owner()),
             },
             [&self.account_data, user_account].into_iter(),
             std::iter::empty(),
@@ -2977,7 +2998,7 @@ impl<'a> TransactionBuilder<'a> {
     /// Returns the updated `TransactionBuilder` with the new instructions appended.
     pub fn post_pyth_lazer_oracle_update(mut self, feed_ids: &[u32], pyth_message: &[u8]) -> Self {
         let ed25519_verify_ix =
-            crate::utils::new_ed25519_ix_ptr(pyth_message, self.ixs.len() as u16 + 1);
+            crate::utils::new_ed25519_ix_ptr(pyth_message, self.ixs.len() as u16 + 1, Some(4));
 
         let mut accounts = build_accounts(
             self.program_data,
@@ -3104,10 +3125,10 @@ pub fn build_accounts<'a>(
         for p in user.perp_positions.iter().filter(|p| !p.is_available()) {
             include_market(p.market_index, MarketType::Perp, false);
         }
+        // always manually try to include the quote (USDC) market
+        // TODO: this is not exactly the same semantics as the TS sdk
+        include_market(MarketId::QUOTE_SPOT.index(), MarketType::Spot, false);
     }
-    // always manually try to include the quote (USDC) market
-    // TODO: this is not exactly the same semantics as the TS sdk
-    include_market(MarketId::QUOTE_SPOT.index(), MarketType::Spot, false);
 
     let mut account_metas = base_accounts.to_account_metas();
     account_metas.extend(accounts.into_iter().map(Into::into));
