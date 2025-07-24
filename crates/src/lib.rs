@@ -3007,11 +3007,6 @@ impl<'a> TransactionBuilder<'a> {
         accounts.extend(feed_ids.iter().map(|f| {
             AccountMeta::new(crate::utils::derive_pyth_lazer_oracle_public_key(*f), false)
         }));
-        // TODO: accounts shouldn't include these in first place
-        accounts.retain(|a| {
-            a.pubkey != solana_sdk::pubkey!("6gMq3mRCKf8aP3ttTyYhuijVZ2LGi14oDsBbkgubfLB3")
-                && a.pubkey != solana_sdk::pubkey!("9VCioxmni2gDLv11qufWzT3RDERhQE4iY5Gf7NTfYyAV")
-        });
 
         let pyth_update_ix = Instruction {
             program_id: PROGRAM_ID,
@@ -3123,10 +3118,10 @@ pub fn build_accounts<'a>(
         for p in user.perp_positions.iter().filter(|p| !p.is_available()) {
             include_market(p.market_index, MarketType::Perp, false);
         }
+        // always manually try to include the quote (USDC) market
+        // TODO: this is not exactly the same semantics as the TS sdk
+        include_market(MarketId::QUOTE_SPOT.index(), MarketType::Spot, false);
     }
-    // always manually try to include the quote (USDC) market
-    // TODO: this is not exactly the same semantics as the TS sdk
-    include_market(MarketId::QUOTE_SPOT.index(), MarketType::Spot, false);
 
     let mut account_metas = base_accounts.to_account_metas();
     account_metas.extend(accounts.into_iter().map(Into::into));
