@@ -14,8 +14,14 @@ use crate::{
         errors::ErrorCode,
         types::{self, ContractType, MarginRequirementType, OracleSource},
     },
-    math::constants::{PERCENTAGE_PRECISION_I128, PRICE_PRECISION, QUOTE_PRECISION_I64},
-    types::{accounts::HighLeverageModeConfig, ContractTier, ProtectedMakerParams, SdkError},
+    math::{
+        constants::{PERCENTAGE_PRECISION_I128, PRICE_PRECISION, QUOTE_PRECISION_I64},
+        standardize_price_i64,
+    },
+    types::{
+        accounts::HighLeverageModeConfig, ContractTier, OrderType, PositionDirection,
+        ProtectedMakerParams, SdkError,
+    },
     SdkResult,
 };
 
@@ -268,6 +274,129 @@ pub fn simulate_will_auction_params_sanitize(
         )
     };
     to_sdk_result(res)
+}
+
+impl types::OrderParams {
+    pub fn get_auction_params(
+        &self,
+        oracle_price_data: &OraclePriceData,
+        tick_size: u64,
+        min_auction_duration: u8,
+    ) -> Option<(i64, i64, u8)> {
+        if !matches!(
+            self.order_type,
+            OrderType::Market | OrderType::Oracle | OrderType::Limit
+        ) {
+            return Some((0_i64, 0_i64, 0_u8));
+        }
+
+        if self.order_type == OrderType::Limit {
+            return match (
+                self.auction_start_price,
+                self.auction_end_price,
+                self.auction_duration,
+            ) {
+                (Some(auction_start_price), Some(auction_end_price), Some(auction_duration)) => {
+                    let auction_duration = if auction_duration == 0 {
+                        auction_duration
+                    } else {
+                        // if auction is non-zero, force it to be at least min_auction_duration
+                        auction_duration.max(min_auction_duration)
+                    };
+
+                    Some((
+                        standardize_price_i64(auction_start_price, tick_size, self.direction)
+                            as i64,
+                        standardize_price_i64(auction_end_price, tick_size, self.direction) as i64,
+                        auction_duration,
+                    ))
+                }
+                _ => Some((0_i64, 0_i64, 0_u8)),
+            };
+        }
+
+        let auction_duration = self.auction_duration.unwrap_or(0).max(min_auction_duration);
+
+        let (auction_start_price, auction_end_price) =
+            match (self.auction_start_price, self.auction_end_price) {
+                (Some(auction_start_price), Some(auction_end_price)) => {
+                    (auction_start_price, auction_end_price)
+                }
+                _ if self.order_type == OrderType::Oracle => return None,
+                _ => calculate_auction_prices(oracle_price_data, self.direction, self.price)?,
+            };
+
+        Some((
+            standardize_price_i64(auction_start_price, tick_size, self.direction),
+            standardize_price_i64(auction_end_price, tick_size, self.direction),
+            auction_duration,
+        ))
+    }
+}
+pub const AUCTION_DERIVE_PRICE_FRACTION: i64 = 200;
+pub fn calculate_auction_prices(
+    oracle_price_data: &OraclePriceData,
+    direction: PositionDirection,
+    limit_price: u64,
+) -> Option<(i64, i64)> {
+    let oracle_price = oracle_price_data.price;
+    let limit_price = limit_price as i64;
+    if limit_price > 0 {
+        let (auction_start_price, auction_end_price) = match direction {
+            // Long and limit price is better than oracle price
+            PositionDirection::Long if limit_price < oracle_price => {
+                let limit_derive_start_price =
+                    limit_price.checked_sub(limit_price / AUCTION_DERIVE_PRICE_FRACTION)?;
+                let oracle_derive_start_price =
+                    oracle_price.checked_sub(oracle_price / AUCTION_DERIVE_PRICE_FRACTION)?;
+
+                (
+                    limit_derive_start_price.min(oracle_derive_start_price),
+                    limit_price,
+                )
+            }
+            // Long and limit price is worse than oracle price
+            PositionDirection::Long if limit_price >= oracle_price => {
+                let oracle_derive_end_price =
+                    oracle_price.checked_add(oracle_price / AUCTION_DERIVE_PRICE_FRACTION)?;
+
+                (oracle_price, limit_price.min(oracle_derive_end_price))
+            }
+            // Short and limit price is better than oracle price
+            PositionDirection::Short if limit_price > oracle_price => {
+                let limit_derive_start_price =
+                    limit_price.checked_add(limit_price / AUCTION_DERIVE_PRICE_FRACTION)?;
+                let oracle_derive_start_price =
+                    oracle_price.checked_add(oracle_price / AUCTION_DERIVE_PRICE_FRACTION)?;
+
+                (
+                    limit_derive_start_price.max(oracle_derive_start_price),
+                    limit_price,
+                )
+            }
+            // Short and limit price is worse than oracle price
+            PositionDirection::Short if limit_price <= oracle_price => {
+                let oracle_derive_end_price =
+                    oracle_price.checked_sub(oracle_price / AUCTION_DERIVE_PRICE_FRACTION)?;
+
+                (oracle_price, limit_price.max(oracle_derive_end_price))
+            }
+            _ => unreachable!(),
+        };
+
+        return Some((auction_start_price, auction_end_price));
+    }
+
+    let auction_end_price = match direction {
+        PositionDirection::Long => {
+            oracle_price.checked_add(oracle_price / AUCTION_DERIVE_PRICE_FRACTION)?
+        }
+        PositionDirection::Short => {
+            oracle_price.checked_sub(oracle_price / AUCTION_DERIVE_PRICE_FRACTION)?
+        }
+    };
+
+    Some((oracle_price, auction_end_price))
 }
 
 impl types::SpotPosition {

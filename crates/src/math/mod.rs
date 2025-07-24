@@ -158,6 +158,25 @@ pub fn standardize_price(price: u64, tick_size: u64, direction: PositionDirectio
     }
 }
 
+/// ## panics if `tick_size` is 0
+#[inline]
+pub fn standardize_price_i64(price: i64, tick_size: u64, direction: PositionDirection) -> i64 {
+    if price == 0 {
+        return 0;
+    }
+
+    let remainder = price.rem_euclid(tick_size as i64);
+
+    if remainder == 0 {
+        return price;
+    }
+
+    match direction {
+        PositionDirection::Long => price - remainder,
+        PositionDirection::Short => (price + tick_size as i64) - remainder,
+    }
+}
+
 /// ## panics if `step_size` is 0
 #[inline]
 pub fn standardize_base_asset_amount(base_asset_amount: u64, step_size: u64) -> u64 {

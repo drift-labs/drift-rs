@@ -533,7 +533,7 @@ fn generate_idl_types(idl: &Idl) -> String {
         });
 
         let struct_def = quote! {
-            //#[derive(InitSpace)]
+            #[derive(Clone, Debug, PartialEq, Default)]
             #[event]
             pub struct #struct_name {
                 #(#fields)*
