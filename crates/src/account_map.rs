@@ -284,7 +284,7 @@ impl AccountSub<Unsubscribed> {
                                 slot: update.slot,
                             });
 
-                        on_account(&update);
+                        on_account(update);
                     })
                     .await?;
                 Some(unsub)

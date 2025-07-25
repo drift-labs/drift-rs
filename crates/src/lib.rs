@@ -1761,7 +1761,7 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Set ix at index
     pub fn set_ix(mut self, idx: usize, ix: Instruction) -> Self {
-        self.ixs.insert(idx, ix);
+        self.ixs[idx] = ix;
         self
     }
 
@@ -1778,12 +1778,19 @@ impl<'a> TransactionBuilder<'a> {
     /// - `amount`: The amount of collateral to deposit (in native units).
     /// - `market_index`: The spot market index to deposit into.
     /// - `reduce_only`: If `Some(true)`, only reduces an existing borrow; otherwise, acts as a normal deposit.
-    pub fn deposit(mut self, amount: u64, market_index: u16, reduce_only: Option<bool>) -> Self {
+    /// - `transfer_hook`: transfer hook program address, if required by the spot token
+    pub fn deposit(
+        mut self,
+        amount: u64,
+        market_index: u16,
+        reduce_only: Option<bool>,
+        transfer_hook: Option<Pubkey>,
+    ) -> Self {
         let spot_market = self
             .program_data
             .spot_market_config_by_index(market_index)
             .expect("spot markets syncd");
-        let accounts = build_accounts(
+        let mut accounts = build_accounts(
             self.program_data,
             types::accounts::Deposit {
                 state: *state_account(),
@@ -1801,6 +1808,13 @@ impl<'a> TransactionBuilder<'a> {
             self.force_markets.readable.iter(),
             [MarketId::spot(market_index)].iter(),
         );
+
+        if spot_market.has_transfer_hook() {
+            accounts.push(AccountMeta::new_readonly(
+                transfer_hook.expect("requires transfer hook"),
+                false,
+            ));
+        }
 
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
@@ -1825,12 +1839,19 @@ impl<'a> TransactionBuilder<'a> {
     /// - `amount`: The amount of collateral to withdraw (in native units).
     /// - `market_index`: The spot market index to withdraw from.
     /// - `reduce_only`: If `Some(true)`, only reduces an existing deposit; otherwise, acts as a normal withdrawal.
-    pub fn withdraw(mut self, amount: u64, market_index: u16, reduce_only: Option<bool>) -> Self {
+    /// - `transfer_hook`: transfer hook program address, if required by the spot token
+    pub fn withdraw(
+        mut self,
+        amount: u64,
+        market_index: u16,
+        reduce_only: Option<bool>,
+        transfer_hook: Option<Pubkey>,
+    ) -> Self {
         let spot_market = self
             .program_data
             .spot_market_config_by_index(market_index)
             .expect("spot markets syncd");
-        let accounts = build_accounts(
+        let mut accounts = build_accounts(
             self.program_data,
             types::accounts::Withdraw {
                 state: *state_account(),
@@ -1843,11 +1864,7 @@ impl<'a> TransactionBuilder<'a> {
                     spot_market,
                 ),
                 drift_signer: constants::derive_drift_signer(),
-                token_program: self
-                    .program_data
-                    .spot_market_config_by_index(market_index)
-                    .unwrap()
-                    .token_program(),
+                token_program: spot_market.token_program(),
             },
             [self.account_data.as_ref()].into_iter(),
             self.force_markets.readable.iter(),
@@ -1855,6 +1872,13 @@ impl<'a> TransactionBuilder<'a> {
                 .iter()
                 .chain(self.force_markets.writeable.iter()),
         );
+
+        if spot_market.has_transfer_hook() {
+            accounts.push(AccountMeta::new_readonly(
+                transfer_hook.expect("requires transfer hook"),
+                false,
+            ));
+        }
 
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
@@ -2447,7 +2471,7 @@ impl<'a> TransactionBuilder<'a> {
             accounts.push(AccountMeta::new_readonly(out_token_program, false));
         }
 
-        if out_market.token_program == 1 || in_market.token_program == 1 {
+        if out_market.is_token_2022_program() || in_market.is_token_2022_program() {
             accounts.push(AccountMeta::new_readonly(in_market.mint, false));
             accounts.push(AccountMeta::new_readonly(out_market.mint, false));
         }
@@ -2509,7 +2533,7 @@ impl<'a> TransactionBuilder<'a> {
             accounts.push(AccountMeta::new_readonly(out_token_program, false));
         }
 
-        if out_market.token_program == 1 || in_market.token_program == 1 {
+        if out_market.is_token_2022_program() || in_market.is_token_2022_program() {
             accounts.push(AccountMeta::new_readonly(in_market.mint, false));
             accounts.push(AccountMeta::new_readonly(out_market.mint, false));
         }

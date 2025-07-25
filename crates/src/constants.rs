@@ -1,4 +1,4 @@
-use std::{sync::OnceLock, u32};
+use std::sync::OnceLock;
 
 use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
 

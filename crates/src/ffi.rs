@@ -305,9 +305,8 @@ impl types::OrderParams {
                     };
 
                     Some((
-                        standardize_price_i64(auction_start_price, tick_size, self.direction)
-                            as i64,
-                        standardize_price_i64(auction_end_price, tick_size, self.direction) as i64,
+                        standardize_price_i64(auction_start_price, tick_size, self.direction),
+                        standardize_price_i64(auction_end_price, tick_size, self.direction),
                         auction_duration,
                     ))
                 }
@@ -556,9 +555,7 @@ impl accounts::PerpMarket {
         };
 
         if quote_drawdown_limit_breached {
-            let net_revenue_since_last_funding: i128 = (self.amm.net_revenue_since_last_funding)
-                .try_into()
-                .unwrap();
+            let net_revenue_since_last_funding = self.amm.net_revenue_since_last_funding as i128;
             let percent_drawdown = (net_revenue_since_last_funding * PERCENTAGE_PRECISION_I128)
                 / (self.amm.total_fee_minus_distributions.as_i128().max(1_i128));
 

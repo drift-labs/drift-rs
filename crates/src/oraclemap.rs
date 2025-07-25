@@ -202,7 +202,7 @@ impl OracleMap {
                                 }
                             }
                         }
-                        on_account(&update);
+                        on_account(update);
                     })
                     .await;
                 ((sub_fut.pubkey, oracle_shared_mode), unsub)
