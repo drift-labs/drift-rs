@@ -187,7 +187,7 @@ where
                                         .expect("valid market"),
                                 },
                             );
-                            on_account(&update);
+                            on_account(update);
                         }
                     })
                     .await;

@@ -531,7 +531,9 @@ impl Orderbook {
         result.extend(self.trigger_orders.asks.values().filter_map(|o| {
             // checking untriggered orders that will trigger at current oracle price
             if o.will_trigger_at(oracle_price) {
-                Some((o.id, o.get_price(slot, oracle_price, perp_market), o.size))
+                o.get_price(slot, oracle_price, perp_market)
+                    .ok()
+                    .map(|p| (o.id, p, o.size))
             } else {
                 None
             }
@@ -572,7 +574,9 @@ impl Orderbook {
         result.extend(self.trigger_orders.bids.values().filter_map(|o| {
             // checking untriggered orders that will trigger at current oracle price
             if o.will_trigger_at(oracle_price) {
-                Some((o.id, o.get_price(slot, oracle_price, perp_market), o.size))
+                o.get_price(slot, oracle_price, perp_market)
+                    .ok()
+                    .map(|p| (o.id, p, o.size))
             } else {
                 None
             }
@@ -1431,11 +1435,11 @@ impl L2Book {
     fn from_limit_orders(resting_limit_orders: &Orders<LimitOrder>) -> Self {
         let mut bids: BTreeMap<u64, u64> = BTreeMap::new();
         let mut asks: BTreeMap<u64, u64> = BTreeMap::new();
-        for (_, order) in &resting_limit_orders.bids {
+        for order in resting_limit_orders.bids.values() {
             *bids.entry(order.price).or_insert(0) += order.size;
         }
 
-        for (_, order) in &resting_limit_orders.asks {
+        for order in resting_limit_orders.asks.values() {
             *asks.entry(order.price).or_insert(0) += order.size;
         }
 

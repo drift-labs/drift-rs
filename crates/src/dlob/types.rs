@@ -12,7 +12,7 @@ use crate::{
     math::standardize_price,
     types::{
         accounts::PerpMarket, MarketType, Order, OrderParams, OrderStatus, OrderTriggerCondition,
-        OrderType,
+        OrderType, SdkResult,
     },
 };
 
@@ -268,7 +268,12 @@ impl TriggerOrder {
             }
     }
     /// Returns order price if it were triggered at `slot` with the current market parameters, `oracle_price` and `perp_market`
-    pub fn get_price(&self, slot: u64, oracle_price: u64, perp_market: Option<&PerpMarket>) -> u64 {
+    pub fn get_price(
+        &self,
+        slot: u64,
+        oracle_price: u64,
+        perp_market: Option<&PerpMarket>,
+    ) -> SdkResult<u64> {
         // TODO: safe trigger order can fill against VAMM
         // if slot.saturating_sub(order.slot) > 150 && self.reduce_only {
         //     order.add_bit_flag(OrderBitFlag::SafeTriggerOrder);
@@ -316,8 +321,7 @@ impl TriggerOrder {
                 market.amm.order_tick_size,
                 Some(oracle_price as i64),
                 false,
-            )
-            .unwrap_or(0);
+            );
         }
 
         todo!("implement spot market trigger price");
