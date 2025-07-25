@@ -1406,6 +1406,7 @@ dependencies = [
  "solana-sdk",
  "solana-transaction-status",
  "spl-associated-token-account",
+ "spl-token-2022",
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",

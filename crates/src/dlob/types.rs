@@ -260,11 +260,12 @@ pub(crate) struct TriggerOrder {
 impl TriggerOrder {
     /// Returns true if the order would trigger at the given `oracle_price`
     pub fn will_trigger_at(&self, oracle_price: u64) -> bool {
-        match self.condition {
-            OrderTriggerCondition::Above => oracle_price > self.price,
-            OrderTriggerCondition::Below => oracle_price < self.price,
-            _ => true, // technically unreachable
-        }
+        oracle_price != 0
+            && match self.condition {
+                OrderTriggerCondition::Above => oracle_price > self.price,
+                OrderTriggerCondition::Below => oracle_price < self.price,
+                _ => true, // technically unreachable
+            }
     }
     /// Returns order price if it were triggered at `slot` with the current market parameters, `oracle_price` and `perp_market`
     pub fn get_price(&self, slot: u64, oracle_price: u64, perp_market: Option<&PerpMarket>) -> u64 {
@@ -316,7 +317,7 @@ impl TriggerOrder {
                 Some(oracle_price as i64),
                 false,
             )
-            .expect("got auction price");
+            .unwrap_or(0);
         }
 
         todo!("implement spot market trigger price");

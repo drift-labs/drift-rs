@@ -53,11 +53,19 @@ pub fn is_one_of_variant<T: PartialEq>(value: &T, variants: &[T]) -> bool {
 impl SpotMarket {
     /// Return the spot market's token program address
     pub fn token_program(&self) -> Pubkey {
-        if self.token_program == 1 {
+        if self.is_token_2022_program() {
             TOKEN_2022_PROGRAM_ID
         } else {
             TOKEN_PROGRAM_ID
         }
+    }
+    /// Return true if spot market uses 2022 program
+    pub fn is_token_2022_program(&self) -> bool {
+        self.token_program_flag & TokenProgramFlag::Token2022 as u8 != 0
+    }
+    /// Return true if spot market has a 2022 transfer hook extension
+    pub fn has_transfer_hook(&self) -> bool {
+        self.token_program_flag & TokenProgramFlag::TransferHook as u8 != 0
     }
 }
 
@@ -650,6 +658,12 @@ impl UserStats {
     pub fn is_referred(&self) -> bool {
         self.referrer_status & 0b0000_0010 != 0
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Debug, Eq)]
+pub enum TokenProgramFlag {
+    Token2022 = 0b00000001,
+    TransferHook = 0b00000010,
 }
 
 #[cfg(test)]

@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.126.0";
+pub const IDL_VERSION: &str = "2.129.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -2220,6 +2220,14 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateIfRebalanceConfig {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct ZeroAmmFieldsPrepMmOracleInfo {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ZeroAmmFieldsPrepMmOracleInfo {
+        const DISCRIMINATOR: &[u8] = &[21, 40, 21, 206, 25, 2, 94, 55];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ZeroAmmFieldsPrepMmOracleInfo {}
 }
 pub mod types {
     #![doc = r" IDL types"]
@@ -3914,6 +3922,23 @@ pub mod types {
         Debug,
         PartialEq,
     )]
+    pub enum TokenProgramFlag {
+        #[default]
+        Token2022,
+        TransferHook,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
     pub enum ExchangeStatus {
         #[default]
         DepositPaused,
@@ -4088,6 +4113,7 @@ pub mod types {
         #[default]
         Default,
         HighLeverage,
+        HighLeverageMaintenance,
     }
     #[derive(
         AnchorSerialize,
@@ -5024,7 +5050,7 @@ pub mod accounts {
         pub fuel_boost_taker: u8,
         pub fuel_boost_maker: u8,
         pub fuel_boost_insurance: u8,
-        pub token_program: u8,
+        pub token_program_flag: u8,
         pub pool_id: u8,
         #[serde(skip)]
         pub padding: Padding<40>,
@@ -21722,6 +21748,70 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for UpdateIfRebalanceConfig {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct ZeroAmmFieldsPrepMmOracleInfo {
+        pub admin: Pubkey,
+        pub perp_market: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ZeroAmmFieldsPrepMmOracleInfo {
+        const DISCRIMINATOR: &[u8] = &[46, 184, 229, 194, 141, 210, 68, 54];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for ZeroAmmFieldsPrepMmOracleInfo {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ZeroAmmFieldsPrepMmOracleInfo {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for ZeroAmmFieldsPrepMmOracleInfo {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ZeroAmmFieldsPrepMmOracleInfo {}
+    #[automatically_derived]
+    impl ToAccountMetas for ZeroAmmFieldsPrepMmOracleInfo {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.perp_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for ZeroAmmFieldsPrepMmOracleInfo {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for ZeroAmmFieldsPrepMmOracleInfo {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
