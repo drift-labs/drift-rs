@@ -503,19 +503,16 @@ impl Orderbook {
                 o.size(),
             )
         }));
-        result.extend(
-            self.trigger_orders
-                .asks
-                .values()
-                // rely on trigger order sorting for early exit
-                .take_while(|o| o.will_trigger_at(oracle_price))
-                .filter_map(|o| {
-                    // checking untriggered orders that will trigger at current oracle price
-                    o.get_price(slot, oracle_price, perp_market)
-                        .ok()
-                        .map(|p| (o.id, p, o.size))
-                }),
-        );
+        result.extend(self.trigger_orders.asks.values().filter_map(|o| {
+            // checking untriggered orders that will trigger at current oracle price
+            if o.will_trigger_at(oracle_price) {
+                o.get_price(slot, oracle_price, perp_market)
+                    .ok()
+                    .map(|p| (o.id, p, o.size))
+            } else {
+                None
+            }
+        }));
 
         // Sort by price in ascending order (best ask first)
         result.sort_by(|a, b| a.1.cmp(&b.1));
@@ -554,12 +551,15 @@ impl Orderbook {
                 .bids
                 .values()
                 // rely on trigger order sorting for early exit
-                .take_while(|o| o.will_trigger_at(oracle_price))
                 .filter_map(|o| {
                     // checking untriggered orders that will trigger at current oracle price
-                    o.get_price(slot, oracle_price, perp_market)
-                        .ok()
-                        .map(|p| (o.id, p, o.size))
+                    if o.will_trigger_at(oracle_price) {
+                        o.get_price(slot, oracle_price, perp_market)
+                            .ok()
+                            .map(|p| (o.id, p, o.size))
+                    } else {
+                        None
+                    }
                 }),
         );
 
