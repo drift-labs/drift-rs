@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.129.0";
+pub const IDL_VERSION: &str = "2.128.1";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -4113,7 +4113,6 @@ pub mod types {
         #[default]
         Default,
         HighLeverage,
-        HighLeverageMaintenance,
     }
     #[derive(
         AnchorSerialize,
