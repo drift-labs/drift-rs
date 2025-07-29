@@ -617,6 +617,16 @@ impl accounts::PerpMarket {
     }
 }
 
+impl types::MarginMode {
+    /// Returns true if the margin mode is high leverage mode or high leverage maintenance mode
+    pub fn is_high_leverage_mode(&self) -> bool {
+        matches!(
+            self,
+            types::MarginMode::HighLeverage | types::MarginMode::HighLeverageMaintenance
+        )
+    }
+}
+
 /// Calculates auction params for a trigger order using the FFI, returning (duration, start_price, end_price)
 pub fn calculate_auction_params_for_trigger_order(
     order: &types::Order,

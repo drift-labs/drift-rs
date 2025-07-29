@@ -19,9 +19,9 @@ use crate::{
 // Replace the key structs with type aliases
 type MarketOrderKey = (u64, u64);
 type OracleOrderKey = (u64, u64);
-type LimitOrderKey = (u64, u64);
+type LimitOrderKey = (u64, u64, u64);
 type FloatingLimitOrderKey = (u64, u64);
-type TriggerOrderKey = u64;
+type TriggerOrderKey = (u64, u64);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy, PartialEq)]
 #[repr(u8)]
@@ -165,7 +165,7 @@ impl OrderKey for OracleOrder {
 impl OrderKey for LimitOrder {
     type Key = LimitOrderKey;
     fn key(&self) -> Self::Key {
-        (self.slot, self.id)
+        (self.price, self.slot, self.id)
     }
 }
 
@@ -180,7 +180,7 @@ impl OrderKey for TriggerOrder {
     type Key = TriggerOrderKey;
     fn key(&self) -> Self::Key {
         // nb: trigger order slot updates when triggered so is unreliable as a sort key
-        self.id
+        (self.price, self.id)
     }
 }
 

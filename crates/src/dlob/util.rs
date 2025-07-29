@@ -7,9 +7,19 @@ use solana_sdk::pubkey::Pubkey;
 /// change of order signal dlob
 #[derive(Debug, PartialEq, Clone)]
 pub enum OrderDelta {
-    Create { user: Pubkey, order: Order },
-    Update { user: Pubkey, order: Order },
-    Remove { user: Pubkey, order: Order },
+    Create {
+        user: Pubkey,
+        order: Order,
+    },
+    Update {
+        user: Pubkey,
+        new_order: Order,
+        old_order: Order,
+    },
+    Remove {
+        user: Pubkey,
+        order: Order,
+    },
 }
 
 /// Helper function to generate unique order Id hash for internal DLOB use
@@ -49,7 +59,8 @@ pub fn compare_user_orders(pubkey: Pubkey, old: &User, new: &User) -> Vec<OrderD
                     if new_order != existing {
                         deltas.push(OrderDelta::Update {
                             user: pubkey,
-                            order: *new_order,
+                            new_order: *new_order,
+                            old_order: *existing,
                         });
                     }
                 }
@@ -180,10 +191,16 @@ mod tests {
         assert_eq!(deltas.len(), 1);
 
         match &deltas[0] {
-            OrderDelta::Update { user, order } => {
+            OrderDelta::Update {
+                user,
+                new_order,
+                old_order,
+            } => {
                 assert_eq!(*user, pubkey);
-                assert_eq!(order.order_id, 1);
-                assert_eq!(order.price, 200);
+                assert_eq!(new_order.order_id, 1);
+                assert_eq!(new_order.price, 200);
+                assert_eq!(old_order.order_id, 1);
+                assert_eq!(old_order.price, 100);
             }
             _ => panic!("Expected Update delta"),
         }

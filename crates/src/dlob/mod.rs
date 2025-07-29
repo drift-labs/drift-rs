@@ -35,6 +35,7 @@ pub struct CrossingRegion {
     pub crossing_asks: Vec<CrossingOrder>,
 }
 
+pub mod builder;
 #[cfg(test)]
 mod tests;
 pub mod types;
@@ -140,40 +141,17 @@ where
         }
     }
 
-    pub fn update(&mut self, order_id: u64, order: Order) -> bool {
-        let remaining_size = order.base_asset_amount - order.base_asset_amount_filled;
-        if remaining_size == 0 {
-            return self.remove(order_id, order);
-        }
-        match order.direction {
-            Direction::Long => {
-                let order: T = (order_id, order).into();
-                if let Some(o) = self.bids.iter_mut().find(|x| x.key() == order.key()) {
-                    *o = order;
-                    self.mark_dirty();
-                    true
-                } else {
-                    false
-                }
-            }
-            Direction::Short => {
-                let order: T = (order_id, order).into();
-                if let Some(o) = self.asks.iter_mut().find(|x| x.key() == order.key()) {
-                    *o = order;
-                    self.mark_dirty();
-                    true
-                } else {
-                    false
-                }
-            }
-        }
-    }
+    /// Returns true if the order was updated, false if it was removed
+    pub fn update(&mut self, order_id: u64, new_order: Order, old_order: Order) -> bool {
+        let remaining_size = new_order.base_asset_amount - new_order.base_asset_amount_filled;
+        self.remove(order_id, old_order);
 
-    pub fn upsert(&mut self, order_id: u64, order: Order) {
-        if self.update(order_id, order) {
-            return;
+        if remaining_size != 0 {
+            self.insert(order_id, new_order);
+            true
+        } else {
+            false
         }
-        self.insert(order_id, order);
     }
 }
 
@@ -218,32 +196,28 @@ impl<T: Clone + Debug + From<(u64, Order)> + OrderKey> Orders<T> {
         }
     }
 
-    pub fn update(&mut self, order_id: u64, order: Order) -> bool {
-        let remaining_size = order.base_asset_amount - order.base_asset_amount_filled;
-        match order.direction {
+    pub fn update(&mut self, order_id: u64, new_order: Order, old_order: Order) -> bool {
+        let remaining_size = new_order.base_asset_amount - new_order.base_asset_amount_filled;
+        let old_order: T = (order_id, old_order).into();
+        let old_key = old_order.key();
+        match new_order.direction {
             Direction::Long => {
-                let order: T = (order_id, order).into();
-                if remaining_size == 0 {
-                    return self.bids.remove(&Reverse(order.key())).is_some();
-                }
-                if let Some(existing) = self.bids.get_mut(&Reverse(order.key())) {
-                    *existing = order;
+                if self.bids.remove(&Reverse(old_key)).is_some() && remaining_size != 0 {
+                    let order: T = (order_id, new_order).into();
+                    self.insert_raw(true, order);
                     return true;
                 }
             }
             Direction::Short => {
-                let order: T = (order_id, order).into();
-                if remaining_size == 0 {
-                    return self.asks.remove(&order.key()).is_some();
-                }
-                if let Some(existing) = self.asks.get_mut(&order.key()) {
-                    *existing = order;
+                if self.asks.remove(&old_key).is_some() && remaining_size != 0 {
+                    let order: T = (order_id, new_order).into();
+                    self.insert_raw(false, order);
                     return true;
                 }
             }
         }
-        log::warn!(target: "dlob", "update not found: {order_id}, {order:?}");
-        match order.direction {
+        log::warn!(target: "dlob", "update not found: {order_id}, {new_order:?}");
+        match new_order.direction {
             Direction::Long => {
                 log::warn!(target: "dlob", "bids: {:?}", self.bids);
             }
@@ -571,16 +545,22 @@ impl Orderbook {
             )
         }));
 
-        result.extend(self.trigger_orders.bids.values().filter_map(|o| {
-            // checking untriggered orders that will trigger at current oracle price
-            if o.will_trigger_at(oracle_price) {
-                o.get_price(slot, oracle_price, perp_market)
-                    .ok()
-                    .map(|p| (o.id, p, o.size))
-            } else {
-                None
-            }
-        }));
+        result.extend(
+            self.trigger_orders
+                .bids
+                .values()
+                // rely on trigger order sorting for early exit
+                .filter_map(|o| {
+                    // checking untriggered orders that will trigger at current oracle price
+                    if o.will_trigger_at(oracle_price) {
+                        o.get_price(slot, oracle_price, perp_market)
+                            .ok()
+                            .map(|p| (o.id, p, o.size))
+                    } else {
+                        None
+                    }
+                }),
+        );
 
         // Sort by price in descending order (best bid first)
         result.sort_by(|a, b| b.1.cmp(&a.1));
@@ -597,6 +577,7 @@ pub struct DLOB {
     markets: DashMap<MarketId, Orderbook, ahash::RandomState>,
     /// Map from DLOB internal order ID to order metadata
     metadata: DashMap<u64, OrderMetadata, ahash::RandomState>,
+    /// static drift program data e.g market tick sizes
     program_data: &'static ProgramData,
 }
 
@@ -635,9 +616,13 @@ impl DLOB {
                             log::trace!(target: "dlob", "insert order: {:?}", order.order_id);
                             self.insert_order(&user, order);
                         }
-                        OrderDelta::Update { user, order } => {
-                            log::trace!(target: "dlob", "update order: {:?}", order.order_id);
-                            self.update_order(&user, order);
+                        OrderDelta::Update {
+                            user,
+                            new_order,
+                            old_order,
+                        } => {
+                            log::trace!(target: "dlob", "update order: {:?}", old_order.order_id);
+                            self.update_order(&user, new_order, old_order);
                         }
                         OrderDelta::Remove { user, order } => {
                             log::trace!(target: "dlob", "remove order: {:?}", order.order_id);
@@ -759,81 +744,81 @@ impl DLOB {
         })
     }
 
-    fn update_order(&self, user: &Pubkey, order: Order) {
-        let order_id = order_hash(user, order.order_id);
-        log::trace!(target: "dlob", "update order: {order_id},{:?}", order.order_type);
+    fn update_order(&self, user: &Pubkey, new_order: Order, old_order: Order) {
+        let order_id = order_hash(user, new_order.order_id);
+        log::trace!(target: "dlob", "update order: {order_id},{:?}", new_order.order_type);
 
         // If order is fully filled, remove it instead of updating
-        if order.base_asset_amount <= order.base_asset_amount_filled {
-            self.remove_order(user, order);
+        if new_order.base_asset_amount <= new_order.base_asset_amount_filled {
+            self.remove_order(user, new_order);
             return;
         }
 
-        self.with_orderbook_mut(MarketId::new(order.market_index, order.market_type), |orderbook| {
+        self.with_orderbook_mut(MarketId::new(new_order.market_index, new_order.market_type), |orderbook| {
             if let Some(metadata) = self.metadata.get(&order_id) {
                 log::trace!(target: "dlob", "update ({order_id}): {:?}", metadata.kind);
                 match metadata.kind {
                     OrderKind::Market | OrderKind::MarketTriggered => {
-                        orderbook.market_orders.update(order_id, order);
+                        orderbook.market_orders.update(order_id, new_order, old_order);
                     }
                     OrderKind::LimitAuction | OrderKind::LimitTriggered => {
                         // if the auction completed, check if order moved to resting
-                        if !orderbook.market_orders.update(order_id, order) {
+                        if !orderbook.market_orders.update(order_id, new_order, old_order) {
                             log::trace!(target: "dlob", "update market limit order: {order_id}");
-                            orderbook.resting_limit_orders.update(order_id, order);
+                            orderbook.resting_limit_orders.update(order_id, new_order, old_order);
                         }
                     }
                     OrderKind::Oracle | OrderKind::OracleTriggered => {
-                        orderbook.oracle_orders.update(order_id, order);
+                        orderbook.oracle_orders.update(order_id, new_order, old_order);
                     }
                     OrderKind::FloatingLimitAuction => {
                         // if the auction completed, check if order moved to resting
-                        if !orderbook.oracle_orders.update(order_id, order) {
+                        if !orderbook.oracle_orders.update(order_id, new_order, old_order) {
                             log::trace!(target: "dlob", "update oracle limit order: {order_id}");
-                            orderbook.floating_limit_orders.update(order_id, order);
+                            orderbook.floating_limit_orders.update(order_id, new_order, old_order);
                         }
                     }
                     OrderKind::Limit => {
-                        orderbook.resting_limit_orders.update(order_id, order);
+                        orderbook.resting_limit_orders.update(order_id, new_order, old_order);
                     }
                     OrderKind::FloatingLimit => {
-                        orderbook.floating_limit_orders.update(order_id, order);
+                        orderbook.floating_limit_orders.update(order_id, new_order, old_order);
                     }
                     OrderKind::TriggerMarket => {
-                        log::trace!(target: "dlob", "update trigger market order: {order_id},{:?}", order);
-                        match order.trigger_condition {
+                        log::trace!(target: "dlob", "update trigger market order: {order_id},{:?}", new_order);
+                        match new_order.trigger_condition {
                             OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
-                                orderbook.trigger_orders.update(order_id, order);
+                                orderbook.trigger_orders.update(order_id, new_order, old_order);
                             }
                             OrderTriggerCondition::TriggeredAbove | OrderTriggerCondition::TriggeredBelow => {
                                 // order has been triggered, its an ordinary auction order now
-                                orderbook.trigger_orders.remove(order_id, order);
+                                orderbook.trigger_orders.remove(order_id, new_order);
                                 let mut new_metadata = *metadata.value();
                                 drop(metadata);
-                                if order.is_oracle_trigger_market() {
+                                if new_order.is_oracle_trigger_market() {
                                     new_metadata.kind = OrderKind::OracleTriggered;
                                     self.metadata.insert(order_id, new_metadata);
-                                    orderbook.oracle_orders.upsert(order_id, order);
+                                    orderbook.oracle_orders.update(order_id, new_order, old_order);
                                 } else {
                                     new_metadata.kind = OrderKind::MarketTriggered;
                                     self.metadata.insert(order_id, new_metadata);
-                                    orderbook.market_orders.upsert(order_id, order);
+                                    orderbook.market_orders.update(order_id, new_order, old_order);
                                 }
                             }
                         }
                     }
                     OrderKind::TriggerLimit => {
-                        log::trace!(target: "dlob", "update trigger limit order: {order_id},{:?}", order);
-                        match order.trigger_condition {
+                        log::trace!(target: "dlob", "update trigger limit order: {order_id},{:?}", new_order);
+                        match new_order.trigger_condition {
                             OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
-                                orderbook.trigger_orders.update(order_id, order);
+                                orderbook.trigger_orders.update(order_id, new_order, old_order);
                             }
                             OrderTriggerCondition::TriggeredAbove | OrderTriggerCondition::TriggeredBelow => {
                                 // order has been triggered, its an ordinary auction order now
-                                orderbook.trigger_orders.remove(order_id, order);
+                                orderbook.trigger_orders.remove(order_id, new_order);
                                 drop(metadata); // drop the borrow
                                 self.metadata.entry(order_id).and_modify(|o| o.kind = OrderKind::LimitTriggered);
-                                orderbook.market_orders.upsert(order_id, order);
+                                orderbook.market_orders.update(order_id, new_order, old_order);
                             }
                         }
                     }

@@ -35,8 +35,7 @@ dashmap = "6"
 env_logger = "0.11"
 futures-util = "0.3"
 hex = "0.4"
-# TODO: use jup-ag version once solana crate versions relaxed
-jupiter-swap-api-client = { git = "https://github.com/drift-labs/jupiter-swap-api-client", package = "jupiter-swap-api-client" }
+jupiter-swap-api-client = { git = "https://github.com/jup-ag/jupiter-swap-api-client", package = "jupiter-swap-api-client" }
 log = "0.4"
 regex = "1.10"
 serde = { version = "1", features = ["derive"] }

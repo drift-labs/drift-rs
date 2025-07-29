@@ -420,9 +420,10 @@ fn dlob_l2_snapshot() {
     assert_eq!(l2book.bids.len(), 3);
 
     // Modify an existing order
-    let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 4, slot); // Changed size from 2 to 4
-    order.post_only = true;
-    dlob.update_order(&user, order);
+    let old_order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 2, slot);
+    let mut new_order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 4, slot); // Changed size from 2 to 4
+    new_order.post_only = true;
+    dlob.update_order(&user, new_order, old_order);
 
     // Get updated L2 snapshot
     dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
@@ -433,9 +434,10 @@ fn dlob_l2_snapshot() {
     assert_eq!(l2book.bids.len(), 3);
 
     // Remove an order
-    let mut order = create_test_order(3, OrderType::Market, Direction::Long, 1050, 4, slot);
-    order.base_asset_amount_filled = order.base_asset_amount; // Set filled amount equal to total amount
-    dlob.update_order(&user, order);
+    let old_order = create_test_order(3, OrderType::Market, Direction::Long, 0, 4, slot);
+    let mut new_order = create_test_order(3, OrderType::Market, Direction::Long, 1050, 4, slot);
+    new_order.base_asset_amount_filled = old_order.base_asset_amount; // Set filled amount equal to total amount
+    dlob.update_order(&user, new_order, old_order);
 
     // Get updated L2 snapshot
     dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
@@ -917,10 +919,11 @@ fn dlob_zero_size_order_handling() {
     let oracle_price = 1000;
 
     // Test 1: Update order to be fully filled (should be removed)
-    let mut order = create_test_order(2, OrderType::Limit, Direction::Long, 1000, 10, slot);
+    let order = create_test_order(2, OrderType::Limit, Direction::Long, 1000, 10, slot);
     dlob.insert_order(&user, order);
-    order.base_asset_amount_filled = 10; // Fully fill it
-    dlob.update_order(&user, order);
+    let mut new_order = order.clone();
+    new_order.base_asset_amount_filled = 10; // Fully fill it
+    dlob.update_order(&user, new_order, order);
 
     // Verify no orders in book
     let book = dlob
@@ -1266,7 +1269,7 @@ fn dlob_trigger_order_transitions() {
     triggered_order.trigger_condition = OrderTriggerCondition::TriggeredAbove;
     // Set oracle trigger flag for oracle-triggered market
     triggered_order.bit_flags |= Order::ORACLE_TRIGGER_MARKET_FLAG;
-    dlob.update_order(&user, triggered_order);
+    dlob.update_order(&user, triggered_order, order);
     {
         let book = dlob
             .markets
@@ -1308,7 +1311,7 @@ fn dlob_trigger_order_transitions() {
     // --- Update to triggered (should move to market_orders) ---
     let mut triggered_order2 = order2;
     triggered_order2.trigger_condition = OrderTriggerCondition::TriggeredBelow;
-    dlob.update_order(&user, triggered_order2);
+    dlob.update_order(&user, triggered_order2, order2);
     {
         let book = dlob
             .markets

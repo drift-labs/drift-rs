@@ -974,6 +974,7 @@ impl DriftClient {
     /// * `endpoint` - the gRPC endpoint
     /// * `x_token` - gRPC authentication X token
     /// * `opts` - configure callbacks and caching
+    /// * `sync` - sync all oracle,market,and User accounts on startup
     ///
     pub async fn grpc_subscribe(
         &self,
@@ -1917,7 +1918,7 @@ impl<'a> TransactionBuilder<'a> {
             self.force_markets.writeable.iter(),
         );
 
-        if self.account_data.margin_mode == MarginMode::HighLeverage
+        if self.account_data.margin_mode.is_high_leverage_mode()
             || orders.iter().any(|x| x.high_leverage_mode())
         {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
@@ -2149,7 +2150,7 @@ impl<'a> TransactionBuilder<'a> {
             .chain(self.force_markets.writeable.iter()),
         );
 
-        if order.high_leverage_mode() || taker_info.1.margin_mode == MarginMode::HighLeverage {
+        if order.high_leverage_mode() || taker_info.1.margin_mode.is_high_leverage_mode() {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
@@ -2228,7 +2229,7 @@ impl<'a> TransactionBuilder<'a> {
         );
 
         if order.high_leverage_mode()
-            || maker_info.is_some_and(|(_, m)| m.margin_mode == MarginMode::HighLeverage)
+            || maker_info.is_some_and(|(_, m)| m.margin_mode.is_high_leverage_mode())
         {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
@@ -2370,7 +2371,7 @@ impl<'a> TransactionBuilder<'a> {
         );
 
         if signed_order_info.order_params().high_leverage_mode()
-            || taker_account.margin_mode == MarginMode::HighLeverage
+            || taker_account.margin_mode.is_high_leverage_mode()
         {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
@@ -3050,6 +3051,29 @@ impl<'a> TransactionBuilder<'a> {
         self.ixs
             .extend_from_slice(&[ed25519_verify_ix, pyth_update_ix]);
 
+        self
+    }
+
+    pub fn disable_user_hlm(mut self, user: Pubkey, user_account_data: &User) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::DisableUserHighLeverageMode {
+                authority: self.authority,
+                state: *state_account(),
+                user,
+                high_leverage_mode_config: *high_leverage_mode_account(),
+            },
+            [user_account_data].into_iter(),
+            std::iter::empty(),
+            std::iter::empty(),
+        );
+        let ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::DisableUserHighLeverageMode {}),
+        };
+
+        self.ixs.push(ix);
         self
     }
 

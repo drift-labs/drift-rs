@@ -1,5 +1,6 @@
 //! Drift gRPC module
 
+use anchor_lang::Discriminator;
 use solana_sdk::{
     clock::{Epoch, Slot},
     commitment_config::CommitmentLevel,
@@ -8,6 +9,8 @@ use solana_sdk::{
 pub mod grpc_subscriber;
 use grpc_subscriber::{AccountFilter, GrpcConnectionOpts};
 use yellowstone_grpc_proto::prelude::{Transaction, TransactionStatusMeta};
+
+use crate::types::accounts::User;
 
 /// grpc transaction update callback
 pub type OnTransactionFn = dyn Fn(&TransactionUpdate) + Send + Sync + 'static;
@@ -181,6 +184,18 @@ impl GrpcSubscribeOpts {
             }
         }
         self
+    }
+    /// Register a custom callback for User account updates
+    ///
+    /// * `callback` - fn to invoke on all User account update
+    ///
+    /// ! `callback` must not block the gRPC task
+    pub fn on_user_account(
+        self,
+        callback: impl Fn(&AccountUpdate) + Send + Sync + 'static,
+    ) -> Self {
+        let filter = AccountFilter::partial().with_discriminator(User::DISCRIMINATOR);
+        self.on_account(filter, callback)
     }
     /// Register a custom callback for oracle account updates
     /// It will be called _before_ the oraclemap is updated
