@@ -4,3 +4,4 @@ target
 /vendor
 **/*/build
 .vscode
+.env

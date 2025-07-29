@@ -244,7 +244,7 @@ impl DriftGrpcClient {
         self.on_slot = Box::new(on_slot);
     }
 
-    /// Add a callback on account updates matching `filter`
+    /// Add a callback for all account updates matching `filter`
     ///
     /// This may be called many times to define multiple callbacks
     ///
@@ -261,6 +261,7 @@ impl DriftGrpcClient {
     }
 
     /// Add a callback for transaction updates
+    /// !Use with `transaction_include_accounts` to subscribe to specific account txs
     ///
     /// This may be called many times to define multiple callbacks
     ///

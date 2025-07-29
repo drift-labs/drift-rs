@@ -10,6 +10,10 @@ pub fn get_user_filter() -> RpcFilterType {
     RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, User::DISCRIMINATOR.to_vec()))
 }
 
+pub fn get_hlm_user_filter() -> RpcFilterType {
+    RpcFilterType::Memcmp(Memcmp::new_raw_bytes(4_355, vec![1]))
+}
+
 pub fn get_non_idle_user_filter() -> RpcFilterType {
     RpcFilterType::Memcmp(Memcmp::new_raw_bytes(4_350, vec![0]))
 }

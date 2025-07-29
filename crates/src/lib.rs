@@ -974,6 +974,7 @@ impl DriftClient {
     /// * `endpoint` - the gRPC endpoint
     /// * `x_token` - gRPC authentication X token
     /// * `opts` - configure callbacks and caching
+    /// * `sync` - sync all oracle,market,and User accounts on startup
     ///
     pub async fn grpc_subscribe(
         &self,
@@ -3050,6 +3051,29 @@ impl<'a> TransactionBuilder<'a> {
         self.ixs
             .extend_from_slice(&[ed25519_verify_ix, pyth_update_ix]);
 
+        self
+    }
+
+    pub fn disable_user_hlm(mut self, user: Pubkey, user_account_data: &User) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::DisableUserHighLeverageMode {
+                authority: self.authority,
+                state: *state_account(),
+                user,
+                high_leverage_mode_config: *high_leverage_mode_account(),
+            },
+            [user_account_data].into_iter(),
+            std::iter::empty(),
+            std::iter::empty(),
+        );
+        let ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::DisableUserHighLeverageMode {}),
+        };
+
+        self.ixs.push(ix);
         self
     }
 
