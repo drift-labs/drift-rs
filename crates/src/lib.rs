@@ -3349,7 +3349,7 @@ mod tests {
     async fn test_place_orders_high_leverage() {
         // Create a test user with high leverage mode
         let mut user = User::default();
-        user.margin_mod.is_high_leverage_mode();
+        user.margin_mode = MarginMode::HighLeverage;
         let user = Cow::Owned(user);
 
         // Create program data
