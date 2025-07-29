@@ -1918,7 +1918,10 @@ impl<'a> TransactionBuilder<'a> {
             self.force_markets.writeable.iter(),
         );
 
-        if self.account_data.margin_mode.is_high_leverage_mode()
+        if self
+            .account_data
+            .margin_mode
+            .is_high_leverage_mode(MarginRequirementType::Maintenance)
             || orders.iter().any(|x| x.high_leverage_mode())
         {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
@@ -2150,7 +2153,12 @@ impl<'a> TransactionBuilder<'a> {
             .chain(self.force_markets.writeable.iter()),
         );
 
-        if order.high_leverage_mode() || taker_info.1.margin_mode.is_high_leverage_mode() {
+        if order.high_leverage_mode()
+            || taker_info
+                .1
+                .margin_mode
+                .is_high_leverage_mode(MarginRequirementType::Maintenance)
+        {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
@@ -2229,7 +2237,10 @@ impl<'a> TransactionBuilder<'a> {
         );
 
         if order.high_leverage_mode()
-            || maker_info.is_some_and(|(_, m)| m.margin_mode.is_high_leverage_mode())
+            || maker_info.is_some_and(|(_, m)| {
+                m.margin_mode
+                    .is_high_leverage_mode(MarginRequirementType::Maintenance)
+            })
         {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
@@ -2371,7 +2382,9 @@ impl<'a> TransactionBuilder<'a> {
         );
 
         if signed_order_info.order_params().high_leverage_mode()
-            || taker_account.margin_mode.is_high_leverage_mode()
+            || taker_account
+                .margin_mode
+                .is_high_leverage_mode(MarginRequirementType::Maintenance)
         {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }

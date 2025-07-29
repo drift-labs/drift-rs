@@ -235,7 +235,7 @@ pub fn calculate_perp_free_collateral_delta(
         .get_margin_ratio(
             worst_case_base_amount.unsigned_abs(),
             MarginRequirementType::Maintenance,
-            margin_mode.is_high_leverage_mode(),
+            margin_mode.is_high_leverage_mode(MarginRequirementType::Maintenance),
         )
         .unwrap();
     let margin_ratio = (margin_ratio as i64 * QUOTE_PRECISION_I64) / MARGIN_PRECISION as i64;
