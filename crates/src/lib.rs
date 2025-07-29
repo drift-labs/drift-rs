@@ -1918,7 +1918,7 @@ impl<'a> TransactionBuilder<'a> {
             self.force_markets.writeable.iter(),
         );
 
-        if self.account_data.margin_mode == MarginMode::HighLeverage
+        if self.account_data.margin_mode.is_high_leverage_mode()
             || orders.iter().any(|x| x.high_leverage_mode())
         {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
@@ -2150,7 +2150,7 @@ impl<'a> TransactionBuilder<'a> {
             .chain(self.force_markets.writeable.iter()),
         );
 
-        if order.high_leverage_mode() || taker_info.1.margin_mode == MarginMode::HighLeverage {
+        if order.high_leverage_mode() || taker_info.1.margin_mode.is_high_leverage_mode() {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
@@ -2229,7 +2229,7 @@ impl<'a> TransactionBuilder<'a> {
         );
 
         if order.high_leverage_mode()
-            || maker_info.is_some_and(|(_, m)| m.margin_mode == MarginMode::HighLeverage)
+            || maker_info.is_some_and(|(_, m)| m.margin_mode.is_high_leverage_mode())
         {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
@@ -2371,7 +2371,7 @@ impl<'a> TransactionBuilder<'a> {
         );
 
         if signed_order_info.order_params().high_leverage_mode()
-            || taker_account.margin_mode == MarginMode::HighLeverage
+            || taker_account.margin_mode.is_high_leverage_mode()
         {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
@@ -3349,7 +3349,7 @@ mod tests {
     async fn test_place_orders_high_leverage() {
         // Create a test user with high leverage mode
         let mut user = User::default();
-        user.margin_mode = MarginMode::HighLeverage;
+        user.margin_mod.is_high_leverage_mode();
         let user = Cow::Owned(user);
 
         // Create program data
