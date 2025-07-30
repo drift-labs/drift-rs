@@ -197,7 +197,7 @@ struct Ed25519SignatureOffsets {
 ///
 /// ## Params
 /// - `magic_len` additional message offset from the start of `message` e.g. pyth lazer has a u32 prefix
-/// DEV: this constructor should exist in `solana_sdk::ed25519_instruction` but does not.
+///   DEV: this constructor should exist in `solana_sdk::ed25519_instruction` but does not.
 pub fn new_ed25519_ix_ptr(
     message: &[u8],
     instruction_index: u16,
