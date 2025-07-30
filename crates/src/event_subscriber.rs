@@ -1390,6 +1390,7 @@ mod test {
             maker_existing_quote_entry_amount: None,
             taker_existing_base_asset_amount: None,
             taker_existing_quote_entry_amount: None,
+            trigger_price: None,
         }
     }
 }
