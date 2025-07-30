@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.129.0";
+pub const IDL_VERSION: &str = "2.130.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -596,7 +596,9 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for LogUserBalances {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct DisableUserHighLeverageMode {}
+    pub struct DisableUserHighLeverageMode {
+        pub disable_maintenance: bool,
+    }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DisableUserHighLeverageMode {
         const DISCRIMINATOR: &[u8] = &[183, 155, 45, 0, 226, 85, 213, 69];
@@ -856,7 +858,7 @@ pub mod instructions {
     impl anchor_lang::InstructionData for UpdateSpotMarketCumulativeInterest {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdateAmms {
-        pub market_indexes: [u16; 5],
+        pub market_indexes: Vec<u16>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdateAmms {
@@ -1961,6 +1963,7 @@ pub mod instructions {
     pub struct UpdatePerpMarketAmmSpreadAdjustment {
         pub amm_spread_adjustment: i8,
         pub amm_inventory_spread_adjustment: i8,
+        pub reference_price_offset: i32,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketAmmSpreadAdjustment {
@@ -2221,13 +2224,23 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateIfRebalanceConfig {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct ZeroAmmFieldsPrepMmOracleInfo {}
-    #[automatically_derived]
-    impl anchor_lang::Discriminator for ZeroAmmFieldsPrepMmOracleInfo {
-        const DISCRIMINATOR: &[u8] = &[21, 40, 21, 206, 25, 2, 94, 55];
+    pub struct UpdateFeatureBitFlagsMmOracle {
+        pub enable: bool,
     }
     #[automatically_derived]
-    impl anchor_lang::InstructionData for ZeroAmmFieldsPrepMmOracleInfo {}
+    impl anchor_lang::Discriminator for UpdateFeatureBitFlagsMmOracle {
+        const DISCRIMINATOR: &[u8] = &[218, 134, 33, 186, 231, 59, 130, 149];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateFeatureBitFlagsMmOracle {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct ZeroMmOracleFields {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ZeroMmOracleFields {
+        const DISCRIMINATOR: &[u8] = &[192, 226, 39, 204, 207, 120, 148, 250];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ZeroMmOracleFields {}
 }
 pub mod types {
     #![doc = r" IDL types"]
@@ -2808,7 +2821,7 @@ pub mod types {
         pub order_step_size: u64,
         pub order_tick_size: u64,
         pub min_order_size: u64,
-        pub max_position_size: u64,
+        pub mm_oracle_slot: u64,
         pub volume24h: u64,
         pub long_intensity_volume: u64,
         pub short_intensity_volume: u64,
@@ -2820,8 +2833,7 @@ pub mod types {
         pub max_spread: u32,
         pub long_spread: u32,
         pub short_spread: u32,
-        pub long_intensity_count: u32,
-        pub short_intensity_count: u32,
+        pub mm_oracle_price: i64,
         pub max_fill_reserve_fraction: u16,
         pub max_slippage_ratio: u16,
         pub curve_update_intensity: u8,
@@ -2833,12 +2845,13 @@ pub mod types {
         pub taker_speed_bump_override: i8,
         pub amm_spread_adjustment: i8,
         pub oracle_slot_delay_override: i8,
-        pub total_fee_earned_per_lp: u64,
+        pub mm_oracle_sequence_id: u64,
         pub net_unsettled_funding_pnl: i64,
         pub quote_asset_amount_with_unsettled_lp: i64,
         pub reference_price_offset: i32,
         pub amm_inventory_spread_adjustment: i8,
-        pub padding: [u8; 11],
+        pub padding: [u8; 3],
+        pub last_funding_oracle_twap: i64,
     }
     #[repr(C)]
     #[derive(
@@ -3314,6 +3327,26 @@ pub mod types {
         UpdateTwap,
         UpdateAMMCurve,
         OracleOrderPrice,
+        UseMMOraclePrice,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub enum LogMode {
+        #[default]
+        None,
+        ExchangeOracle,
+        MMOracle,
+        SafeMMOracle,
     }
     #[derive(
         AnchorSerialize,
@@ -3962,6 +3995,23 @@ pub mod types {
         Debug,
         PartialEq,
     )]
+    pub enum FeatureBitFlags {
+        #[default]
+        MmOracleUpdate,
+        EnableMedianTriggerPrice,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
     pub enum UserStatus {
         #[default]
         BeingLiquidated,
@@ -4382,8 +4432,9 @@ pub mod accounts {
         pub max_users: u32,
         pub current_users: u32,
         pub reduce_only: u8,
-        #[serde(skip)]
-        pub padding: Padding<31>,
+        pub padding1: [u8; 3],
+        pub current_maintenance_users: u32,
+        pub padding2: [u8; 24],
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for HighLeverageModeConfig {
@@ -4731,8 +4782,10 @@ pub mod accounts {
         pub high_leverage_margin_ratio_maintenance: u16,
         pub protected_maker_limit_price_divisor: u8,
         pub protected_maker_dynamic_divisor: u8,
+        pub padding1: u32,
+        pub last_fill_price: u64,
         #[serde(skip)]
-        pub padding: Padding<36>,
+        pub padding: Padding<24>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PerpMarket {
@@ -5132,8 +5185,9 @@ pub mod accounts {
         pub initial_pct_to_liquidate: u16,
         pub max_number_of_sub_accounts: u16,
         pub max_initialize_user_fee: u16,
+        pub feature_bit_flags: u8,
         #[serde(skip)]
-        pub padding: Padding<10>,
+        pub padding: Padding<9>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for State {
@@ -8287,6 +8341,7 @@ pub mod accounts {
     pub struct RemovePerpLpSharesInExpiringMarket {
         pub state: Pubkey,
         pub user: Pubkey,
+        pub signer: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for RemovePerpLpSharesInExpiringMarket {
@@ -8313,6 +8368,11 @@ pub mod accounts {
                     pubkey: self.user,
                     is_signer: false,
                     is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.signer,
+                    is_signer: true,
+                    is_writable: false,
                 },
             ]
         }
@@ -21765,33 +21825,33 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct ZeroAmmFieldsPrepMmOracleInfo {
+    pub struct UpdateFeatureBitFlagsMmOracle {
         pub admin: Pubkey,
-        pub perp_market: Pubkey,
+        pub state: Pubkey,
     }
     #[automatically_derived]
-    impl anchor_lang::Discriminator for ZeroAmmFieldsPrepMmOracleInfo {
-        const DISCRIMINATOR: &[u8] = &[46, 184, 229, 194, 141, 210, 68, 54];
+    impl anchor_lang::Discriminator for UpdateFeatureBitFlagsMmOracle {
+        const DISCRIMINATOR: &[u8] = &[88, 1, 170, 20, 116, 55, 171, 64];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for ZeroAmmFieldsPrepMmOracleInfo {}
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateFeatureBitFlagsMmOracle {}
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ZeroAmmFieldsPrepMmOracleInfo {}
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateFeatureBitFlagsMmOracle {}
     #[automatically_derived]
-    impl anchor_lang::ZeroCopy for ZeroAmmFieldsPrepMmOracleInfo {}
+    impl anchor_lang::ZeroCopy for UpdateFeatureBitFlagsMmOracle {}
     #[automatically_derived]
-    impl anchor_lang::InstructionData for ZeroAmmFieldsPrepMmOracleInfo {}
+    impl anchor_lang::InstructionData for UpdateFeatureBitFlagsMmOracle {}
     #[automatically_derived]
-    impl ToAccountMetas for ZeroAmmFieldsPrepMmOracleInfo {
+    impl ToAccountMetas for UpdateFeatureBitFlagsMmOracle {
         fn to_account_metas(&self) -> Vec<AccountMeta> {
             vec![
                 AccountMeta {
                     pubkey: self.admin,
                     is_signer: true,
-                    is_writable: true,
+                    is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.perp_market,
+                    pubkey: self.state,
                     is_signer: false,
                     is_writable: true,
                 },
@@ -21799,7 +21859,7 @@ pub mod accounts {
         }
     }
     #[automatically_derived]
-    impl anchor_lang::AccountSerialize for ZeroAmmFieldsPrepMmOracleInfo {
+    impl anchor_lang::AccountSerialize for UpdateFeatureBitFlagsMmOracle {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
             if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
@@ -21811,7 +21871,77 @@ pub mod accounts {
         }
     }
     #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for ZeroAmmFieldsPrepMmOracleInfo {
+    impl anchor_lang::AccountDeserialize for UpdateFeatureBitFlagsMmOracle {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct ZeroMmOracleFields {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+        pub perp_market: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ZeroMmOracleFields {
+        const DISCRIMINATOR: &[u8] = &[163, 39, 36, 8, 37, 81, 249, 83];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for ZeroMmOracleFields {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ZeroMmOracleFields {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for ZeroMmOracleFields {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ZeroMmOracleFields {}
+    #[automatically_derived]
+    impl ToAccountMetas for ZeroMmOracleFields {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.perp_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for ZeroMmOracleFields {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for ZeroMmOracleFields {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -22624,6 +22754,7 @@ pub mod events {
         pub taker_existing_base_asset_amount: Option<u64>,
         pub maker_existing_quote_entry_amount: Option<u64>,
         pub maker_existing_base_asset_amount: Option<u64>,
+        pub trigger_price: Option<u64>,
     }
     #[derive(Clone, Debug, PartialEq, Default)]
     #[event]

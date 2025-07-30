@@ -620,13 +620,14 @@ impl accounts::PerpMarket {
 impl types::MarginMode {
     /// Returns true if the margin mode is high leverage mode or high leverage maintenance mode
     pub fn is_high_leverage_mode(&self, margin_type: MarginRequirementType) -> bool {
-        match (self, margin_type) {
-            (types::MarginMode::HighLeverage, _) => true,
-            (types::MarginMode::HighLeverageMaintenance, MarginRequirementType::Maintenance) => {
-                true
-            }
-            _ => false,
-        }
+        matches!(
+            (self, margin_type),
+            (types::MarginMode::HighLeverage, _)
+                | (
+                    types::MarginMode::HighLeverageMaintenance,
+                    MarginRequirementType::Maintenance
+                )
+        )
     }
 }
 
@@ -1315,7 +1316,9 @@ mod tests {
                 max_users: 5,
                 current_users: 2,
                 reduce_only: 0,
-                padding: Default::default(),
+                padding1: Default::default(),
+                current_maintenance_users: 0,
+                padding2: Default::default(),
             }),
         );
         dbg!(&res);

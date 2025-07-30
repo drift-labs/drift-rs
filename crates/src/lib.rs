@@ -3067,7 +3067,12 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
-    pub fn disable_user_hlm(mut self, user: Pubkey, user_account_data: &User) -> Self {
+    pub fn disable_user_hlm(
+        mut self,
+        user: Pubkey,
+        user_account_data: &User,
+        disable_maintenance: bool,
+    ) -> Self {
         let accounts = build_accounts(
             self.program_data,
             types::accounts::DisableUserHighLeverageMode {
@@ -3083,7 +3088,9 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::DisableUserHighLeverageMode {}),
+            data: InstructionData::data(&drift_idl::instructions::DisableUserHighLeverageMode {
+                disable_maintenance,
+            }),
         };
 
         self.ixs.push(ix);
