@@ -50,7 +50,7 @@ jobs:
 
   notify-downstream-repos:
     needs: crates-io
-    runs-on: ubuntu-latest
+    runs-on: ubicloud
     strategy:
       matrix:
         repo: ['gateway', 'swift']
