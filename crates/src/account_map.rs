@@ -64,7 +64,7 @@ impl AccountMap {
         self.inner
             .iter()
             .filter(|x| &x.raw[..8] == T::DISCRIMINATOR)
-            .map(|x| f(x.key(), crate::utils::deser_zero_copy(&x.raw), x.slot));
+            .for_each(|x| f(x.key(), crate::utils::deser_zero_copy(&x.raw), x.slot))
     }
     /// Subscribe account with Ws
     ///
@@ -443,7 +443,7 @@ pub struct AccountRef<T> {
 impl<T: Pod> Deref for AccountRef<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        bytemuck::from_bytes(&self.arc)
+        bytemuck::from_bytes(&self.arc[8..]) // strip discriminator
     }
 }
 
