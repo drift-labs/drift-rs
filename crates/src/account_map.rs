@@ -5,14 +5,21 @@ use std::{
     time::Duration,
 };
 
+use anchor_lang::Discriminator;
 use bytemuck::Pod;
 use dashmap::DashMap;
 use drift_pubsub_client::PubsubClient;
 use log::debug;
+use solana_account_decoder_client_types::UiAccountEncoding;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
+use solana_rpc_client_api::{
+    config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
+    filter::RpcFilterType,
+};
 use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{
+    constants::PROGRAM_ID,
     grpc::AccountUpdate,
     polled_account_subscriber::PolledAccountSubscriber,
     types::{DataAndSlot, EMPTY_ACCOUNT_CALLBACK},
@@ -52,6 +59,12 @@ impl AccountMap {
             inner: Arc::default(),
             subscriptions: Arc::default(),
         }
+    }
+    pub fn iter_accounts_with<'a, T: Pod + Discriminator>(&self, f: impl Fn(&Pubkey, &T, u64)) {
+        self.inner
+            .iter()
+            .filter(|x| &x.raw[..8] == T::DISCRIMINATOR)
+            .map(|x| f(x.key(), crate::utils::deser_zero_copy(&x.raw), x.slot));
     }
     /// Subscribe account with Ws
     ///
@@ -156,19 +169,20 @@ impl AccountMap {
         Ok(())
     }
 
-    /// On account update callback for gRPC hook
+    /// On account hook for gRPC subscriber
     pub fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
         let accounts = Arc::clone(&self.inner);
         let subscriptions = Arc::clone(&self.subscriptions);
         move |update| {
+            if update.lamports == 0 {
+                accounts.remove(&update.pubkey);
+                return;
+            }
             accounts
                 .entry(update.pubkey)
                 .and_modify(|x| {
                     x.slot = update.slot;
-                    x.raw = Arc::from(&update.data[8..]);
-                    if update.lamports == 0 {
-                        accounts.remove(&update.pubkey);
-                    }
+                    x.raw = Arc::from(update.data);
                 })
                 .or_insert({
                     subscriptions.insert(
@@ -183,7 +197,7 @@ impl AccountMap {
                     );
                     AccountSlot {
                         slot: update.slot,
-                        raw: Arc::from(&update.data[8..]),
+                        raw: Arc::from(update.data),
                     }
                 });
         }
@@ -212,6 +226,79 @@ impl AccountMap {
                 },
             }
         })
+    }
+
+    pub async fn sync_stats_accounts(&self) -> SdkResult<()> {
+        // TODO: rust sdk does not surface with_context slot on GPA
+        let slot = self
+            .rpc
+            .get_slot_with_commitment(CommitmentConfig::confirmed())
+            .await?;
+        let stats_sync_result = self
+            .rpc
+            .get_program_accounts_with_config(
+                &PROGRAM_ID,
+                RpcProgramAccountsConfig {
+                    filters: Some(vec![crate::memcmp::get_user_stats_filter()]),
+                    account_config: RpcAccountInfoConfig {
+                        encoding: Some(UiAccountEncoding::Base64Zstd),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .await?;
+
+        for (pubkey, account) in stats_sync_result {
+            self.on_account_fn()(&AccountUpdate {
+                pubkey,
+                data: &account.data,
+                lamports: account.lamports,
+                owner: PROGRAM_ID,
+                rent_epoch: u64::MAX,
+                executable: false,
+                slot,
+            });
+        }
+        Ok(())
+    }
+
+    pub async fn sync_user_accounts(&self, mut filters: Vec<RpcFilterType>) -> SdkResult<()> {
+        // TODO: rust sdk does not surface with_context slot on GPA
+        let slot = self
+            .rpc
+            .get_slot_with_commitment(CommitmentConfig::confirmed())
+            .await?;
+        filters.insert(0, crate::memcmp::get_user_filter());
+
+        let sync_result = self
+            .rpc
+            .get_program_accounts_with_config(
+                &PROGRAM_ID,
+                RpcProgramAccountsConfig {
+                    filters: Some(filters),
+                    account_config: RpcAccountInfoConfig {
+                        encoding: Some(UiAccountEncoding::Base64Zstd),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )
+            .await?;
+
+        for (pubkey, account) in sync_result {
+            self.on_account_fn()(&AccountUpdate {
+                pubkey,
+                data: &account.data,
+                lamports: account.lamports,
+                owner: PROGRAM_ID,
+                rent_epoch: u64::MAX,
+                executable: false,
+                slot,
+            });
+        }
+
+        Ok(())
     }
 }
 
