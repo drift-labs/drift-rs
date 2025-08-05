@@ -19,6 +19,7 @@ use log::debug;
 pub use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::{
     config::RpcSimulateTransactionConfig,
+    filter::RpcFilterType,
     response::{Response, RpcSimulateTransactionResult},
 };
 use solana_sdk::{
@@ -144,6 +145,14 @@ impl DriftClient {
             context,
             wallet,
         })
+    }
+
+    pub async fn sync_user_accounts(&self, filters: Vec<RpcFilterType>) -> SdkResult<()> {
+        self.backend.account_map.sync_user_accounts(filters).await
+    }
+
+    pub async fn sync_user_stats_accounts(&self) -> SdkResult<()> {
+        self.backend.account_map.sync_stats_accounts().await
     }
 
     /// Starts background subscriptions for live blockhashes

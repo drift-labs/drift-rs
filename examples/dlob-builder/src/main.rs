@@ -21,9 +21,18 @@ async fn main() {
     )
     .await
     .expect("initialized client");
-    let markets = drift.get_all_perp_market_ids();
-    let dlob_builder = DLOBBuilder::new(markets);
 
+    let markets = drift.get_all_perp_market_ids();
+    let account_map = drift.backend().account_map();
+    println!("syncing initial User accounts/orders");
+    account_map
+        .sync_user_accounts(vec![drift_rs::memcmp::get_user_with_order_filter()])
+        .await
+        .expect("synced user accounts");
+
+    let dlob_builder = DLOBBuilder::new(markets, account_map);
+
+    println!("starting gRPC subscription to live order changes");
     let grpc_url = std::env::var("GRPC_URL").expect("GRPC_URL set");
     let grpc_x_token = std::env::var("GRPC_X_TOKEN").expect("GRPC_X_TOKEN set");
     let _res = drift
@@ -33,9 +42,9 @@ async fn main() {
             GrpcSubscribeOpts::default()
                 .commitment(CommitmentLevel::Processed)
                 .usermap_on()
-                .on_user_account(dlob_builder.account_update_handler(drift.backend().account_map()))
+                .on_user_account(dlob_builder.account_update_handler(account_map))
                 .on_slot(dlob_builder.slot_update_handler(drift.clone())),
-            true, // sync all the accounts on startup (required to populate the usermap)
+            true,
         )
         .await;
 

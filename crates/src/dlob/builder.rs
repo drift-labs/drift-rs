@@ -1,3 +1,5 @@
+use solana_sdk::pubkey::Pubkey;
+
 use crate::{
     account_map::AccountMap,
     accounts::User,
@@ -45,9 +47,34 @@ pub struct DLOBBuilder<'a> {
 
 impl<'a> DLOBBuilder<'a> {
     /// Initialize a new DLOBBuilder instance
-    pub fn new(market_ids: Vec<MarketId>) -> Self {
+    ///
+    /// ## Params
+    ///
+    /// * `market_ids` - to build DLOB for
+    /// * `account_map` - account_map with initial User accounts (i.e orders) to bootstrap orderbook
+    ///
+    pub fn new(market_ids: Vec<MarketId>, account_map: &AccountMap) -> Self {
         let dlob = Box::leak(Box::new(DLOB::default()));
         let notifier = dlob.spawn_notifier();
+
+        let notifier_ref = notifier.clone();
+        account_map.iter_accounts_with::<User>(move |pubkey, user, slot| {
+            for order in user.orders {
+                if order.status == OrderStatus::Open
+                    && order.base_asset_amount > order.base_asset_amount_filled
+                {
+                    notifier_ref
+                        .send(DLOBEvent::Order {
+                            delta: OrderDelta::Create {
+                                user: *pubkey,
+                                order,
+                            },
+                            slot,
+                        })
+                        .expect("sent");
+                }
+            }
+        });
 
         Self {
             dlob,
@@ -106,6 +133,24 @@ impl<'a> DLOBBuilder<'a> {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    pub fn load_user(&self, pubkey: Pubkey, user: &User, slot: u64) {
+        for order in user.orders {
+            if order.status == OrderStatus::Open
+                && order.base_asset_amount > order.base_asset_amount_filled
+            {
+                self.notifier
+                    .send(DLOBEvent::Order {
+                        delta: OrderDelta::Create {
+                            user: pubkey,
+                            order,
+                        },
+                        slot,
+                    })
+                    .expect("sent");
             }
         }
     }
