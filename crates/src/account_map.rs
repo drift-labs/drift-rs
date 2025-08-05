@@ -64,7 +64,7 @@ impl AccountMap {
         self.inner
             .iter()
             .filter(|x| &x.raw[..8] == T::DISCRIMINATOR)
-            .for_each(|x| f(x.key(), crate::utils::deser_zero_copy(&x.raw), x.slot))
+            .for_each(|x| f(x.key(), crate::utils::deser_zero_copy(&x.raw[8..]), x.slot))
     }
     /// Subscribe account with Ws
     ///
@@ -357,17 +357,18 @@ impl AccountSub<Unsubscribed> {
                 let on_account = on_account.clone();
                 let unsub = ws
                     .subscribe(Self::SUBSCRIPTION_ID, true, move |update| {
+                        if update.lamports == 0 {
+                            accounts.remove(&update.pubkey);
+                            return;
+                        }
                         accounts
                             .entry(update.pubkey)
                             .and_modify(|x| {
                                 x.slot = update.slot;
-                                x.raw = Arc::from(&update.data[8..]);
-                                if update.lamports == 0 {
-                                    accounts.remove(&update.pubkey);
-                                }
+                                x.raw = Arc::from(update.data.as_slice());
                             })
                             .or_insert(AccountSlot {
-                                raw: Arc::from(&update.data[8..]),
+                                raw: Arc::from(update.data.as_slice()),
                                 slot: update.slot,
                             });
 
@@ -379,17 +380,18 @@ impl AccountSub<Unsubscribed> {
             SubscriptionImpl::Polled(ref poll) => {
                 let on_account = on_account.clone();
                 let unsub = poll.subscribe(move |update| {
+                    if update.lamports == 0 {
+                        accounts.remove(&update.pubkey);
+                        return;
+                    }
                     accounts
                         .entry(update.pubkey)
                         .and_modify(|x| {
                             x.slot = update.slot;
-                            x.raw = Arc::from(&update.data[8..]);
-                            if update.lamports == 0 {
-                                accounts.remove(&update.pubkey);
-                            }
+                            x.raw = Arc::from(update.data.as_slice());
                         })
                         .or_insert(AccountSlot {
-                            raw: Arc::from(&update.data[8..]),
+                            raw: Arc::from(update.data.as_slice()),
                             slot: update.slot,
                         });
 
