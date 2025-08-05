@@ -24,10 +24,15 @@ async fn main() {
 
     let markets = drift.get_all_perp_market_ids();
     let account_map = drift.backend().account_map();
-    account_map.sync_user_accounts(vec![drift_rs::memcmp::get_user_with_order_filter()]);
+    println!("syncing initial User accounts/orders");
+    account_map
+        .sync_user_accounts(vec![drift_rs::memcmp::get_user_with_order_filter()])
+        .await
+        .expect("synced user accounts");
 
     let dlob_builder = DLOBBuilder::new(markets, account_map);
 
+    println!("starting gRPC subscription to live order changes");
     let grpc_url = std::env::var("GRPC_URL").expect("GRPC_URL set");
     let grpc_x_token = std::env::var("GRPC_X_TOKEN").expect("GRPC_X_TOKEN set");
     let _res = drift

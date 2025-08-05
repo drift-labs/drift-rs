@@ -64,7 +64,7 @@ impl AccountMap {
         self.inner
             .iter()
             .filter(|x| &x.raw[..8] == T::DISCRIMINATOR)
-            .for_each(|x| f(x.key(), crate::utils::deser_zero_copy(&x.raw[8..]), x.slot))
+            .for_each(|x| f(x.key(), crate::utils::deser_zero_copy(&x.raw), x.slot))
     }
     /// Subscribe account with Ws
     ///
@@ -217,7 +217,7 @@ impl AccountMap {
     /// Return data of the given `account` as T and slot, if it exists
     pub fn account_data_and_slot<T: Pod>(&self, account: &Pubkey) -> Option<DataAndSlot<T>> {
         self.inner.get(account).map(|x| {
-            let arc = x.raw.clone();
+            let arc = Arc::clone(&x.raw);
             DataAndSlot {
                 slot: x.slot,
                 data: *AccountRef {

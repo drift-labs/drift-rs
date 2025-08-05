@@ -1397,8 +1397,8 @@ impl std::fmt::Display for L2Book {
         writeln!(f, "L2 Order Book:")?;
         writeln!(f, "-------------")?;
 
-        // Get top 5 asks in reverse order (highest to lowest)
-        let asks: Vec<_> = self.asks.iter().rev().take(5).collect();
+        // Get top 5 asks in order (highest to lowest)
+        let asks: Vec<_> = self.asks.iter().take(5).collect();
         for (price, size) in asks {
             writeln!(f, "ASK: {:>10} | {:>10}", price, size)?;
         }

@@ -139,6 +139,10 @@ pub fn zero_account_to_bytes<T: bytemuck::Pod + anchor_lang::Discriminator>(acco
 }
 
 /// zero-copy deserialize anchor account `data` as T
+///
+/// ## Params
+/// - * `data` - Anchor borsh encoded buffer (including discriminator)
+///
 #[inline]
 pub fn deser_zero_copy<T: Discriminator + Pod>(data: &[u8]) -> &T {
     bytemuck::from_bytes::<T>(&data[8..])
