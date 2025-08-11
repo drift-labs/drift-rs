@@ -12,7 +12,10 @@ use yellowstone_grpc_client::{
     ClientTlsConfig, GeyserGrpcBuilderError, GeyserGrpcClient, GeyserGrpcClientError, Interceptor,
 };
 use yellowstone_grpc_proto::{
-    geyser::{CommitmentLevel as GeyserCommitmentLevel, SubscribeUpdateAccountInfo},
+    geyser::{
+        CommitmentLevel as GeyserCommitmentLevel, SubscribeRequestFilterBlocksMeta,
+        SubscribeUpdateAccountInfo, SubscribeUpdateBlockMeta,
+    },
     prelude::{
         subscribe_request_filter_accounts_filter::Filter as AccountsFilterOneof,
         subscribe_request_filter_accounts_filter_memcmp::Data as AccountsFilterMemcmpOneof,
@@ -193,6 +196,10 @@ pub struct GeyserSubscribeOpts {
     pub transactions_accounts_exclude: Vec<String>,
     /// Transaction filters: Txs must include all of these accounts
     pub transactions_accounts_required: Vec<String>,
+    /// Subscribe to block metadata updates
+    pub blocks_meta: bool,
+    /// subscribe to slot updates
+    pub slot_updates: bool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -214,6 +221,7 @@ pub struct DriftGrpcClient {
     on_account_hooks: Hooks,
     on_slot: Box<dyn Fn(Slot) + Send + Sync + 'static>,
     on_transaction_hooks: TransactionHooks,
+    on_block_meta: Box<dyn Fn(SubscribeUpdateBlockMeta) + Send + Sync + 'static>,
 }
 
 impl DriftGrpcClient {
@@ -228,6 +236,7 @@ impl DriftGrpcClient {
             on_transaction_hooks: Default::default(),
             grpc_opts: None,
             on_slot: Box::new(move |_slot| {}),
+            on_block_meta: Box::new(move |_meta| {}),
         }
     }
 
@@ -242,6 +251,16 @@ impl DriftGrpcClient {
     /// `on_slot` must prioritize fast handling or risk blocking the gRPC thread
     pub fn on_slot<F: Fn(Slot) + Send + Sync + 'static>(&mut self, on_slot: F) {
         self.on_slot = Box::new(on_slot);
+    }
+
+    /// Add a callback on block meta updates
+    ///
+    /// `on_block_meta` must prioritize fast handling or risk blocking the gRPC thread
+    pub fn on_block_meta<F: Fn(SubscribeUpdateBlockMeta) + Send + Sync + 'static>(
+        &mut self,
+        on_block_meta: F,
+    ) {
+        self.on_block_meta = Box::new(on_block_meta);
     }
 
     /// Add a callback for all account updates matching `filter`
@@ -312,6 +331,7 @@ impl DriftGrpcClient {
                 self.on_account_hooks,
                 self.on_transaction_hooks,
                 self.on_slot,
+                self.on_block_meta,
             ));
             let mut waiter = FuturesUnordered::new();
             waiter.push(geyser_task);
@@ -347,6 +367,7 @@ impl DriftGrpcClient {
         on_account: Hooks,
         on_transaction: TransactionHooks,
         on_slot: impl Fn(Slot),
+        on_block_meta: impl Fn(SubscribeUpdateBlockMeta),
     ) -> Option<GrpcError> {
         let max_retries = 3;
         let mut retry_count = 0;
@@ -445,6 +466,7 @@ impl DriftGrpcClient {
                                     on_slot(latest_slot);
                                 }
                             }
+                            Some(UpdateOneof::BlockMeta(msg)) => on_block_meta(msg),
                             Some(UpdateOneof::Ping(_)) => {
                                 // This is necessary to keep load balancers that expect client pings alive. If your load balancer doesn't
                                 // require periodic client pings then this is unnecessary
@@ -537,6 +559,11 @@ impl GeyserSubscribeOpts {
             },
         );
 
+        let mut blocks_meta = HashMap::new();
+        if self.blocks_meta {
+            blocks_meta.insert("client".to_owned(), SubscribeRequestFilterBlocksMeta {});
+        }
+
         let mut transactions = TransactionFilterMap::default();
         if !self.transactions_accounts_include.is_empty()
             || !self.transactions_accounts_exclude.is_empty()
@@ -568,6 +595,7 @@ impl GeyserSubscribeOpts {
             } as i32),
             ping,
             from_slot: self.from_slot,
+            blocks_meta,
             ..Default::default()
         }
     }

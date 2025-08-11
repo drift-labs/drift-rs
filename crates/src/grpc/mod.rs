@@ -8,7 +8,10 @@ use solana_sdk::{
 };
 pub mod grpc_subscriber;
 use grpc_subscriber::{AccountFilter, GrpcConnectionOpts};
-use yellowstone_grpc_proto::prelude::{Transaction, TransactionStatusMeta};
+use yellowstone_grpc_proto::{
+    geyser::SubscribeUpdateBlockMeta,
+    prelude::{Transaction, TransactionStatusMeta},
+};
 
 use crate::types::accounts::User;
 
@@ -20,6 +23,8 @@ pub type OnOracleFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
 pub type OnAccountFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
 /// grpc slot update callback
 pub type OnSlotFn = dyn Fn(Slot) + Send + Sync + 'static;
+/// grpc block metadata update callback
+pub type OnBlockMetaFn = dyn Fn(SubscribeUpdateBlockMeta) + Send + Sync + 'static;
 
 /// Account update from gRPC
 #[derive(PartialEq, Eq, Clone)]
@@ -89,6 +94,12 @@ pub struct GrpcSubscribeOpts {
     pub interslot_updates: bool,
     /// Watch transactions including these accounts
     pub transaction_include_accounts: Vec<Pubkey>,
+    /// Subscribe to block metadata updates
+    pub subscribe_block_meta_updates: bool,
+    /// custom callback for block meta updates
+    pub on_block_meta: Option<Box<OnBlockMetaFn>>,
+    /// Subscribe to slot updates
+    pub subscribe_slot_updates: bool,
 }
 
 impl Default for GrpcSubscribeOpts {
@@ -106,6 +117,9 @@ impl Default for GrpcSubscribeOpts {
             on_oracle_update: None,
             connection_opts: GrpcConnectionOpts::default(),
             interslot_updates: false,
+            subscribe_block_meta_updates: false,
+            subscribe_slot_updates: true,
+            on_block_meta: None,
         }
     }
 }
@@ -162,6 +176,20 @@ impl GrpcSubscribeOpts {
     /// ! `on_slot` must not block the gRPC task
     pub fn on_slot(mut self, on_slot: impl Fn(Slot) + Send + Sync + 'static) -> Self {
         self.on_slot = Some(Box::new(on_slot));
+        self
+    }
+    /// Set a callback to invoke on new block metadata updates
+    ///
+    /// Caller should also set `subscribe_block_meta(true)` or no updates will be received
+    ///
+    /// * `on_block_meta` - the callback for new block metadata updates
+    ///
+    /// ! `on_block_meta` must not block the gRPC task
+    pub fn on_block_meta(
+        mut self,
+        on_block_meta: impl Fn(SubscribeUpdateBlockMeta) + Send + Sync + 'static,
+    ) -> Self {
+        self.on_block_meta = Some(Box::new(on_block_meta));
         self
     }
     /// Register a custom callback for account updates
@@ -230,6 +258,16 @@ impl GrpcSubscribeOpts {
         callback: impl Fn(&TransactionUpdate) + Send + Sync + 'static,
     ) -> Self {
         self.on_transaction = Some(Box::new(callback));
+        self
+    }
+    /// Subscribe to slot updates (default: true)
+    pub fn subscribe_slots(mut self, subscribe: bool) -> Self {
+        self.subscribe_slot_updates = subscribe;
+        self
+    }
+    /// Subscribe to slot updates (default: false)
+    pub fn subscribe_block_meta(mut self, subscribe: bool) -> Self {
+        self.subscribe_block_meta_updates = subscribe;
         self
     }
 }

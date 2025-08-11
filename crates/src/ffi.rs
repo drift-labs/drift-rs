@@ -84,7 +84,13 @@ extern "C" {
     pub fn perp_market_get_protected_maker_params(
         market: &accounts::PerpMarket,
     ) -> ProtectedMakerParams;
-
+    #[allow(improper_ctypes)]
+    pub fn perp_market_get_trigger_price(
+        market: &accounts::PerpMarket,
+        oracle_price: i64,
+        now: i64,
+        use_median_trigger_price: bool,
+    ) -> FfiResult<u64>;
     #[allow(improper_ctypes)]
     pub fn perp_position_get_unrealized_pnl(
         position: &types::PerpPosition,
@@ -524,6 +530,16 @@ impl accounts::SpotMarket {
 }
 
 impl accounts::PerpMarket {
+    pub fn get_trigger_price(
+        &self,
+        oracle_price: i64,
+        now: i64,
+        use_median_trigger_price: bool,
+    ) -> SdkResult<u64> {
+        to_sdk_result(unsafe {
+            perp_market_get_trigger_price(self, oracle_price, now, use_median_trigger_price)
+        })
+    }
     pub fn get_margin_ratio(
         &self,
         size: u128,
