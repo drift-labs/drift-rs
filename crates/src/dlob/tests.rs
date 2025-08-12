@@ -1063,8 +1063,14 @@ fn dlob_find_crosses_for_auctions_market_orders() {
     market_order.auction_end_price = 1200;
     dlob.insert_order(&Pubkey::new_unique(), market_order);
 
-    let crosses =
-        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None);
+    let crosses = dlob.find_crosses_for_auctions(
+        market_index,
+        market_type,
+        slot,
+        oracle_price,
+        oracle_price,
+        None,
+    );
     assert_eq!(crosses.crosses.len(), 1);
     assert!(!crosses.crosses[0].1.is_empty());
     assert_eq!(crosses.crosses[0].1.orders.len(), 1);
@@ -1095,8 +1101,14 @@ fn dlob_find_crosses_for_auctions_oracle_orders() {
     );
     dlob.insert_order(&Pubkey::new_unique(), oracle_order);
 
-    let crosses =
-        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None);
+    let crosses = dlob.find_crosses_for_auctions(
+        market_index,
+        market_type,
+        slot,
+        oracle_price,
+        oracle_price,
+        None,
+    );
     assert_eq!(crosses.crosses.len(), 1);
     assert!(!crosses.crosses[0].1.is_empty());
     assert_eq!(crosses.crosses[0].1.orders.len(), 1);
@@ -1127,8 +1139,14 @@ fn dlob_find_crosses_for_auctions_no_crosses() {
     );
     dlob.insert_order(&Pubkey::new_unique(), market_order);
 
-    let crosses =
-        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None);
+    let crosses = dlob.find_crosses_for_auctions(
+        market_index,
+        market_type,
+        slot,
+        oracle_price,
+        oracle_price,
+        None,
+    );
     assert!(crosses.crosses.is_empty());
 }
 
@@ -1198,8 +1216,14 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
     dlob.insert_order(&Pubkey::new_unique(), oracle_ask_1);
     dlob.insert_order(&Pubkey::new_unique(), oracle_ask_2);
 
-    let crosses =
-        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None);
+    let crosses = dlob.find_crosses_for_auctions(
+        market_index,
+        market_type,
+        slot,
+        oracle_price,
+        oracle_price,
+        None,
+    );
     dbg!(&crosses);
 
     // Should find 4 crosses:
