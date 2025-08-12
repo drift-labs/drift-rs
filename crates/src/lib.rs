@@ -1259,6 +1259,10 @@ impl DriftClientBackend {
             grpc.on_slot(f);
         }
 
+        if let Some(f) = opts.on_block_meta {
+            grpc.on_block_meta(f);
+        }
+
         if opts.usermap {
             grpc.on_account(
                 AccountFilter::partial().with_discriminator(User::DISCRIMINATOR),
@@ -1291,6 +1295,8 @@ impl DriftClientBackend {
                     accounts_owners: vec![PROGRAM_ID.to_string()],
                     interslot_updates: Some(opts.interslot_updates),
                     transactions_accounts_include,
+                    blocks_meta: opts.subscribe_block_meta_updates,
+                    slot_updates: opts.subscribe_slot_updates,
                     ..Default::default()
                 },
             )

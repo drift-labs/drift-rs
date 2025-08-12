@@ -480,6 +480,7 @@ impl Orderbook {
         &self,
         slot: u64,
         oracle_price: u64,
+        trigger_price: u64,
         perp_market: Option<&PerpMarket>,
     ) -> Vec<(u64, u64, u64)> {
         let mut result = Vec::with_capacity(
@@ -504,7 +505,7 @@ impl Orderbook {
         }));
         result.extend(self.trigger_orders.asks.values().filter_map(|o| {
             // checking untriggered orders that will trigger at current oracle price
-            if o.will_trigger_at(oracle_price) {
+            if o.will_trigger_at(trigger_price) {
                 o.get_price(slot, oracle_price, perp_market)
                     .ok()
                     .map(|p| (o.id, p, o.size))
@@ -522,6 +523,7 @@ impl Orderbook {
         &self,
         slot: u64,
         oracle_price: u64,
+        trigger_price: u64,
         perp_market: Option<&PerpMarket>,
     ) -> Vec<(u64, u64, u64)> {
         let mut result = Vec::with_capacity(
@@ -530,6 +532,7 @@ impl Orderbook {
                 + self.trigger_orders.bids.len(),
         );
 
+        // TODO: this may use MM oracle
         result.extend(self.market_orders.bids.iter().map(|o| {
             (
                 o.id,
@@ -552,7 +555,7 @@ impl Orderbook {
                 // rely on trigger order sorting for early exit
                 .filter_map(|o| {
                     // checking untriggered orders that will trigger at current oracle price
-                    if o.will_trigger_at(oracle_price) {
+                    if o.will_trigger_at(trigger_price) {
                         o.get_price(slot, oracle_price, perp_market)
                             .ok()
                             .map(|p| (o.id, p, o.size))
@@ -1063,6 +1066,7 @@ impl DLOB {
         market_type: MarketType,
         slot: u64,
         oracle_price: u64,
+        trigger_price: u64,
         perp_market: Option<&PerpMarket>,
     ) -> CrossesAndTopMakers {
         let market = MarketId::new(market_index, market_type);
@@ -1073,8 +1077,8 @@ impl DLOB {
         let vamm_ask = perp_market.map(|m| m.calculate_ask_price() as u64);
         log::trace!(target: "dlob", "VAMM market={} bid={vamm_bid:?} ask={vamm_ask:?}", market_index);
 
-        let taker_asks = book.get_taker_asks(slot, oracle_price, perp_market);
-        let taker_bids = book.get_taker_bids(slot, oracle_price, perp_market);
+        let taker_asks = book.get_taker_asks(slot, oracle_price, trigger_price, perp_market);
+        let taker_bids = book.get_taker_bids(slot, oracle_price, trigger_price, perp_market);
         let mut resting_asks = book.get_limit_asks(slot, oracle_price);
         let mut resting_bids = book.get_limit_bids(slot, oracle_price);
         let mut vamm_taker_ask = None;
