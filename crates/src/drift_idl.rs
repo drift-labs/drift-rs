@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.132.0";
+pub const IDL_VERSION: &str = "2.134.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -1276,6 +1276,16 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for DepositIntoPerpMarketFeePool {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdatePerpMarketPnlPool {
+        pub amount: u64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdatePerpMarketPnlPool {
+        const DISCRIMINATOR: &[u8] = &[50, 202, 249, 224, 166, 184, 13, 143];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdatePerpMarketPnlPool {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct DepositIntoSpotMarketVault {
         pub amount: u64,
@@ -15332,6 +15342,88 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for DepositIntoPerpMarketFeePool {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdatePerpMarketPnlPool {
+        pub state: Pubkey,
+        pub admin: Pubkey,
+        pub spot_market: Pubkey,
+        pub spot_market_vault: Pubkey,
+        pub perp_market: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdatePerpMarketPnlPool {
+        const DISCRIMINATOR: &[u8] = &[104, 120, 127, 193, 115, 51, 229, 51];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketPnlPool {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdatePerpMarketPnlPool {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdatePerpMarketPnlPool {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdatePerpMarketPnlPool {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdatePerpMarketPnlPool {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.perp_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdatePerpMarketPnlPool {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdatePerpMarketPnlPool {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
