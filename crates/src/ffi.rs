@@ -17,13 +17,17 @@ use crate::{
     math::{
         constants::{
             BID_ASK_SPREAD_PRECISION_I128, BID_ASK_SPREAD_PRECISION_U128,
+<<<<<<< HEAD
             PERCENTAGE_PRECISION_I128, QUOTE_PRECISION_I64,
+=======
+            PERCENTAGE_PRECISION_I128, PRICE_PRECISION, QUOTE_PRECISION_I64,
+>>>>>>> 1168208 (updates for mm oracle)
         },
         standardize_price_i64,
     },
     types::{
-        accounts::HighLeverageModeConfig, ContractTier, OrderType, PositionDirection,
-        ProtectedMakerParams, SdkError,
+        accounts::HighLeverageModeConfig, ContractTier, OracleValidity, OrderType,
+        PositionDirection, ProtectedMakerParams, SdkError, ValidityGuardRails,
     },
     SdkResult,
 };
@@ -94,6 +98,13 @@ extern "C" {
         now: i64,
         use_median_trigger_price: bool,
     ) -> FfiResult<u64>;
+    #[allow(improper_ctypes)]
+    pub fn perp_market_get_mm_oracle_data(
+        market: &accounts::PerpMarket,
+        oracle_price_data: OraclePriceData,
+        clock_slot: Slot,
+        oracle_guard_rails: &ValidityGuardRails,
+    ) -> FfiResult<MMOraclePriceData>;
     #[allow(improper_ctypes)]
     pub fn perp_position_get_unrealized_pnl(
         position: &types::PerpPosition,
@@ -533,6 +544,21 @@ impl accounts::SpotMarket {
 }
 
 impl accounts::PerpMarket {
+    pub fn get_mm_oracle_data(
+        &self,
+        oracle_price_data: OraclePriceData,
+        clock_slot: Slot,
+        validity_guard_rails: &ValidityGuardRails,
+    ) -> SdkResult<MMOraclePriceData> {
+        to_sdk_result(unsafe {
+            perp_market_get_mm_oracle_data(
+                self,
+                oracle_price_data,
+                clock_slot,
+                validity_guard_rails,
+            )
+        })
+    }
     pub fn get_trigger_price(
         &self,
         oracle_price: i64,
@@ -664,7 +690,7 @@ pub mod abi_types {
     use abi_stable::std_types::RResult;
     use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 
-    use crate::{drift_idl::types::MarginRequirementType, OracleGuardRails};
+    use crate::{drift_idl::types::MarginRequirementType, types::OracleValidity, OracleGuardRails};
 
     /// FFI safe version of (pubkey, account)
     #[repr(C)]
@@ -745,6 +771,7 @@ pub mod abi_types {
         }
     }
 
+    /// FFI equivalent of `OraclePriceData`
     #[repr(C)]
     #[derive(Default, Clone, Copy, Debug)]
     pub struct OraclePriceData {
@@ -752,6 +779,18 @@ pub mod abi_types {
         pub confidence: u64,
         pub delay: i64,
         pub has_sufficient_number_of_data_points: bool,
+    }
+
+    /// FFI equivalent of `MMOraclePriceData`
+    #[repr(C)]
+    #[derive(Default, Clone, Copy, Debug)]
+    pub struct MMOraclePriceData {
+        pub mm_oracle_price: i64,
+        pub mm_oracle_delay: i64,
+        pub mm_oracle_validity: OracleValidity,
+        pub mm_exchange_diff_bps: u128,
+        pub exchange_oracle_price_data: OraclePriceData,
+        pub safe_oracle_price_data: OraclePriceData,
     }
 
     /// C-ABI compatible result type for drift FFI calls
