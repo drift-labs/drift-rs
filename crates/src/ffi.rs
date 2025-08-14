@@ -15,7 +15,10 @@ use crate::{
         types::{self, ContractType, MarginRequirementType, OracleSource},
     },
     math::{
-        constants::{PERCENTAGE_PRECISION_I128, PRICE_PRECISION, QUOTE_PRECISION_I64},
+        constants::{
+            BID_ASK_SPREAD_PRECISION_I128, BID_ASK_SPREAD_PRECISION_U128,
+            PERCENTAGE_PRECISION_I128, QUOTE_PRECISION_I64,
+        },
         standardize_price_i64,
     },
     types::{
@@ -589,47 +592,33 @@ impl accounts::PerpMarket {
 
         false
     }
-    fn calculate_spread_reserves(
-        &self,
-        direction: crate::PositionDirection,
-    ) -> (u128, u128, u128, u128) {
-        // Returns (base_asset_reserve, quote_asset_reserve, sqrt_k, peg_multiplier)
-        match direction {
-            crate::PositionDirection::Long => (
-                self.amm.ask_base_asset_reserve.as_u128(),
-                self.amm.ask_quote_asset_reserve.as_u128(),
-                self.amm.sqrt_k.as_u128(),
-                self.amm.peg_multiplier.as_u128(),
-            ),
-            crate::PositionDirection::Short => (
-                self.amm.bid_base_asset_reserve.as_u128(),
-                self.amm.bid_quote_asset_reserve.as_u128(),
-                self.amm.sqrt_k.as_u128(),
-                self.amm.peg_multiplier.as_u128(),
-            ),
-        }
-    }
-
-    fn calculate_price(base_asset_reserve: u128, quote_asset_reserve: u128, peg: u128) -> u128 {
+    /// Return AMM's reserve price
+    pub fn reserve_price(&self) -> u64 {
         // (quote_asset_reserve / base_asset_reserve) * peg / PEG_PRECISION
-        if base_asset_reserve == 0 {
+        if self.amm.base_asset_reserve.as_u128() == 0 {
             return 0;
         }
-        quote_asset_reserve
-            .saturating_mul(PRICE_PRECISION)
-            .saturating_mul(peg)
-            .saturating_div(base_asset_reserve)
-            .saturating_div(crate::math::constants::PEG_PRECISION)
+        let peg_quote_asset_amount =
+            self.amm.quote_asset_reserve.as_u128() * self.amm.peg_multiplier.as_u128();
+        peg_quote_asset_amount.saturating_div(self.amm.base_asset_reserve.as_u128()) as u64
     }
 
-    pub fn calculate_bid_price(&self) -> u128 {
-        let (base, quote, _, peg) = self.calculate_spread_reserves(crate::PositionDirection::Short);
-        Self::calculate_price(base, quote, peg)
+    /// Return AMM's bid price
+    pub fn bid_price(&self) -> u64 {
+        let adjusted_spread = (-(self.amm.short_spread as i32)) + self.amm.reference_price_offset;
+        let multiplier = BID_ASK_SPREAD_PRECISION_I128 + adjusted_spread as i128;
+
+        let reserve_price = self.reserve_price();
+        (reserve_price * multiplier as u64) / BID_ASK_SPREAD_PRECISION_U128 as u64
     }
 
-    pub fn calculate_ask_price(&self) -> u128 {
-        let (base, quote, _, peg) = self.calculate_spread_reserves(crate::PositionDirection::Long);
-        Self::calculate_price(base, quote, peg)
+    /// Return AMM's ask price
+    pub fn ask_price(&self) -> u64 {
+        let adjusted_spread = self.amm.long_spread as i32 + self.amm.reference_price_offset;
+        let multiplier = BID_ASK_SPREAD_PRECISION_I128 + adjusted_spread as i128;
+        let reserve_price = self.reserve_price();
+
+        (reserve_price * multiplier as u64) / BID_ASK_SPREAD_PRECISION_U128 as u64
     }
 }
 
