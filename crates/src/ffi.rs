@@ -15,12 +15,15 @@ use crate::{
         types::{self, ContractType, MarginRequirementType, OracleSource},
     },
     math::{
-        constants::{PERCENTAGE_PRECISION_I128, PRICE_PRECISION, QUOTE_PRECISION_I64},
+        constants::{
+            BID_ASK_SPREAD_PRECISION_I128, BID_ASK_SPREAD_PRECISION_U128,
+            PERCENTAGE_PRECISION_I128, PRICE_PRECISION, QUOTE_PRECISION_I64,
+        },
         standardize_price_i64,
     },
     types::{
-        accounts::HighLeverageModeConfig, ContractTier, OrderType, PositionDirection,
-        ProtectedMakerParams, SdkError,
+        accounts::HighLeverageModeConfig, ContractTier, OracleValidity, OrderType,
+        PositionDirection, ProtectedMakerParams, SdkError, ValidityGuardRails,
     },
     SdkResult,
 };
@@ -91,6 +94,13 @@ extern "C" {
         now: i64,
         use_median_trigger_price: bool,
     ) -> FfiResult<u64>;
+    #[allow(improper_ctypes)]
+    pub fn perp_market_get_mm_oracle_data(
+        market: &accounts::PerpMarket,
+        oracle_price_data: OraclePriceData,
+        clock_slot: Slot,
+        oracle_guard_rails: &ValidityGuardRails,
+    ) -> FfiResult<MMOraclePriceData>;
     #[allow(improper_ctypes)]
     pub fn perp_position_get_unrealized_pnl(
         position: &types::PerpPosition,
@@ -530,6 +540,21 @@ impl accounts::SpotMarket {
 }
 
 impl accounts::PerpMarket {
+    pub fn get_mm_oracle_data(
+        &self,
+        oracle_price_data: OraclePriceData,
+        clock_slot: Slot,
+        validity_guard_rails: &ValidityGuardRails,
+    ) -> SdkResult<MMOraclePriceData> {
+        to_sdk_result(unsafe {
+            perp_market_get_mm_oracle_data(
+                self,
+                oracle_price_data,
+                clock_slot,
+                validity_guard_rails,
+            )
+        })
+    }
     pub fn get_trigger_price(
         &self,
         oracle_price: i64,
@@ -589,47 +614,33 @@ impl accounts::PerpMarket {
 
         false
     }
-    fn calculate_spread_reserves(
-        &self,
-        direction: crate::PositionDirection,
-    ) -> (u128, u128, u128, u128) {
-        // Returns (base_asset_reserve, quote_asset_reserve, sqrt_k, peg_multiplier)
-        match direction {
-            crate::PositionDirection::Long => (
-                self.amm.ask_base_asset_reserve.as_u128(),
-                self.amm.ask_quote_asset_reserve.as_u128(),
-                self.amm.sqrt_k.as_u128(),
-                self.amm.peg_multiplier.as_u128(),
-            ),
-            crate::PositionDirection::Short => (
-                self.amm.bid_base_asset_reserve.as_u128(),
-                self.amm.bid_quote_asset_reserve.as_u128(),
-                self.amm.sqrt_k.as_u128(),
-                self.amm.peg_multiplier.as_u128(),
-            ),
-        }
-    }
-
-    fn calculate_price(base_asset_reserve: u128, quote_asset_reserve: u128, peg: u128) -> u128 {
+    /// Return AMM's reserve price
+    pub fn reserve_price(&self) -> u64 {
         // (quote_asset_reserve / base_asset_reserve) * peg / PEG_PRECISION
-        if base_asset_reserve == 0 {
+        if self.amm.base_asset_reserve.as_u128() == 0 {
             return 0;
         }
-        quote_asset_reserve
-            .saturating_mul(PRICE_PRECISION)
-            .saturating_mul(peg)
-            .saturating_div(base_asset_reserve)
-            .saturating_div(crate::math::constants::PEG_PRECISION)
+        let peg_quote_asset_amount =
+            self.amm.quote_asset_reserve.as_u128() * self.amm.peg_multiplier.as_u128();
+        peg_quote_asset_amount.saturating_div(self.amm.base_asset_reserve.as_u128()) as u64
     }
 
-    pub fn calculate_bid_price(&self) -> u128 {
-        let (base, quote, _, peg) = self.calculate_spread_reserves(crate::PositionDirection::Short);
-        Self::calculate_price(base, quote, peg)
+    /// Return AMM's bid price
+    pub fn bid_price(&self) -> u64 {
+        let adjusted_spread = (-(self.amm.short_spread as i32)) + self.amm.reference_price_offset;
+        let multiplier = BID_ASK_SPREAD_PRECISION_I128 + adjusted_spread as i128;
+
+        let reserve_price = self.reserve_price();
+        (reserve_price * multiplier as u64) / BID_ASK_SPREAD_PRECISION_U128 as u64
     }
 
-    pub fn calculate_ask_price(&self) -> u128 {
-        let (base, quote, _, peg) = self.calculate_spread_reserves(crate::PositionDirection::Long);
-        Self::calculate_price(base, quote, peg)
+    /// Return AMM's ask price
+    pub fn ask_price(&self) -> u64 {
+        let adjusted_spread = self.amm.long_spread as i32 + self.amm.reference_price_offset;
+        let multiplier = BID_ASK_SPREAD_PRECISION_I128 + adjusted_spread as i128;
+        let reserve_price = self.reserve_price();
+
+        (reserve_price * multiplier as u64) / BID_ASK_SPREAD_PRECISION_U128 as u64
     }
 }
 
@@ -675,7 +686,7 @@ pub mod abi_types {
     use abi_stable::std_types::RResult;
     use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 
-    use crate::{drift_idl::types::MarginRequirementType, OracleGuardRails};
+    use crate::{drift_idl::types::MarginRequirementType, types::OracleValidity, OracleGuardRails};
 
     /// FFI safe version of (pubkey, account)
     #[repr(C)]
@@ -756,6 +767,7 @@ pub mod abi_types {
         }
     }
 
+    /// FFI equivalent of `OraclePriceData`
     #[repr(C)]
     #[derive(Default, Clone, Copy, Debug)]
     pub struct OraclePriceData {
@@ -763,6 +775,18 @@ pub mod abi_types {
         pub confidence: u64,
         pub delay: i64,
         pub has_sufficient_number_of_data_points: bool,
+    }
+
+    /// FFI equivalent of `MMOraclePriceData`
+    #[repr(C)]
+    #[derive(Default, Clone, Copy, Debug)]
+    pub struct MMOraclePriceData {
+        pub mm_oracle_price: i64,
+        pub mm_oracle_delay: i64,
+        pub mm_oracle_validity: OracleValidity,
+        pub mm_exchange_diff_bps: u128,
+        pub exchange_oracle_price_data: OraclePriceData,
+        pub safe_oracle_price_data: OraclePriceData,
     }
 
     /// C-ABI compatible result type for drift FFI calls
