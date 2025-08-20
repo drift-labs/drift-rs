@@ -1073,8 +1073,8 @@ impl DLOB {
         let book = self.markets.get(&market).expect("market lob exists");
         let mut all_crosses = Vec::with_capacity(16);
 
-        let vamm_bid = perp_market.map(|m| m.bid_price() as u64);
-        let vamm_ask = perp_market.map(|m| m.ask_price() as u64);
+        let vamm_bid = perp_market.map(|m| m.bid_price(None) as u64);
+        let vamm_ask = perp_market.map(|m| m.ask_price(None) as u64);
         log::trace!(target: "dlob", "VAMM market={} bid={vamm_bid:?} ask={vamm_ask:?}", market_index);
 
         let taker_asks = book.get_taker_asks(slot, oracle_price, trigger_price, perp_market);
@@ -1305,8 +1305,8 @@ impl DLOB {
 pub struct L3Order {
     pub price: u64,
     pub size: u64,
-    pub maker: Pubkey,
     pub order_id: u32,
+    pub maker: Pubkey,
 }
 
 #[derive(Debug, Default)]

@@ -43,9 +43,11 @@ use crate::{
         SYSVAR_RENT_PUBKEY,
     },
     drift_idl::traits::ToAccountMetas,
+    ffi::OraclePriceData,
     grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, GeyserSubscribeOpts},
     jupiter::JupiterSwapInfo,
     marketmap::MarketMap,
+    math::constants::PERCENTAGE_PRECISION,
     oraclemap::{Oracle, OracleMap},
     swift_order_subscriber::{SignedOrderInfo, SwiftOrderStream},
     types::{
@@ -898,6 +900,41 @@ impl DriftClient {
         self.backend.try_get_oracle_price_data_and_slot(market)
     }
 
+    pub fn try_get_mmoracle_for_perp_market(
+        &self,
+        market_index: u16,
+    ) -> SdkResult<OraclePriceData> {
+        let perp_market = self.try_get_perp_market_account(market_index)?;
+        let oracle_data = self
+            .try_get_oracle_price_data_and_slot(MarketId::perp(market_index))
+            .ok_or(SdkError::InvalidOracle)?;
+
+        let mm_oracle_price = perp_market.amm.mm_oracle_price;
+        let mm_oracle_slot = perp_market.amm.mm_oracle_slot;
+
+        let percent_diff = (mm_oracle_price.abs_diff(oracle_data.data.price)
+            * PERCENTAGE_PRECISION as u64)
+            / oracle_data.data.price.max(1) as u64;
+
+        // TODO: check !oracle_validity()
+        if mm_oracle_price == 0
+            || mm_oracle_slot < oracle_data.slot
+            || percent_diff > (PERCENTAGE_PRECISION as u64 / 100)
+        // 1% threshold
+        {
+            Ok(oracle_data.data)
+        } else {
+            let mm_oracle_diff_premium = mm_oracle_price.abs_diff(oracle_data.data.price);
+            let confidence = oracle_data.data.confidence + mm_oracle_diff_premium;
+            Ok(OraclePriceData {
+                price: mm_oracle_price,
+                delay: mm_oracle_slot as i64, // TODO: clock.now - mm_oracle_slot
+                confidence,
+                has_sufficient_number_of_data_points: true,
+            })
+        }
+    }
+
     /// Get the latest oracle data for `market`
     ///
     /// If only the price is required use `oracle_price` instead
@@ -1686,22 +1723,22 @@ impl ForceMarkets {
 /// ```
 ///
 pub struct TransactionBuilder<'a> {
-    /// contextual on-chain program data
-    program_data: &'a ProgramData,
     /// sub-account data
     account_data: Cow<'a, User>,
-    /// the drift sub-account address
-    sub_account: Pubkey,
-    /// either account authority or account delegate
-    authority: Pubkey,
+    /// contextual on-chain program data
+    program_data: &'a ProgramData,
     /// ordered list of instructions
     ixs: Vec<Instruction>,
-    /// use legacy transaction mode
-    legacy: bool,
     /// Tx lookup tables (v0 only)
     lookup_tables: Vec<AddressLookupTableAccount>,
     /// some markets forced to include in the tx accounts list
     force_markets: ForceMarkets,
+    /// the drift sub-account address
+    sub_account: Pubkey,
+    /// either account authority or account delegate
+    authority: Pubkey,
+    /// use legacy transaction mode
+    legacy: bool,
 }
 
 impl<'a> TransactionBuilder<'a> {

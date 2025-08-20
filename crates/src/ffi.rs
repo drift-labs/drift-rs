@@ -604,19 +604,29 @@ impl accounts::PerpMarket {
     }
 
     /// Return AMM's bid price
-    pub fn bid_price(&self) -> u64 {
+    ///
+    /// ## Params
+    ///
+    /// * `reserve_price` - optional reserve price, default: AMM current reserve price
+    ///
+    pub fn bid_price(&self, reserve_price: Option<u64>) -> u64 {
         let adjusted_spread = (-(self.amm.short_spread as i32)) + self.amm.reference_price_offset;
         let multiplier = BID_ASK_SPREAD_PRECISION_I128 + adjusted_spread as i128;
 
-        let reserve_price = self.reserve_price();
+        let reserve_price = reserve_price.unwrap_or(self.reserve_price());
         (reserve_price * multiplier as u64) / BID_ASK_SPREAD_PRECISION_U128 as u64
     }
 
     /// Return AMM's ask price
-    pub fn ask_price(&self) -> u64 {
+    ///
+    /// ## Params
+    ///
+    /// * `reserve_price` - optional reserve price, default: AMM current reserve price
+    ///
+    pub fn ask_price(&self, reserve_price: Option<u64>) -> u64 {
         let adjusted_spread = self.amm.long_spread as i32 + self.amm.reference_price_offset;
         let multiplier = BID_ASK_SPREAD_PRECISION_I128 + adjusted_spread as i128;
-        let reserve_price = self.reserve_price();
+        let reserve_price = reserve_price.unwrap_or(self.reserve_price());
 
         (reserve_price * multiplier as u64) / BID_ASK_SPREAD_PRECISION_U128 as u64
     }
