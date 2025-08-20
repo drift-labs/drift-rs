@@ -47,7 +47,6 @@ use crate::{
     grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, GeyserSubscribeOpts},
     jupiter::JupiterSwapInfo,
     marketmap::MarketMap,
-    math::constants::PERCENTAGE_PRECISION,
     oraclemap::{Oracle, OracleMap},
     swift_order_subscriber::{SignedOrderInfo, SwiftOrderStream},
     types::{
@@ -900,39 +899,26 @@ impl DriftClient {
         self.backend.try_get_oracle_price_data_and_slot(market)
     }
 
+    /// Get the AMM `OraclePriceData` if valid, otherwise return the normal `OraclePriceData`
+    ///
+    /// ## Params
+    /// * `market_index` - perp market index
+    /// * `current_slot` - current solana slot
+    ///
     pub fn try_get_mmoracle_for_perp_market(
         &self,
         market_index: u16,
+        current_slot: Slot,
     ) -> SdkResult<OraclePriceData> {
-        let perp_market = self.try_get_perp_market_account(market_index)?;
         let oracle_data = self
             .try_get_oracle_price_data_and_slot(MarketId::perp(market_index))
             .ok_or(SdkError::InvalidOracle)?;
+        let perp_market = self.try_get_perp_market_account(market_index)?;
+        let oracle_validity_guard_rails = self.state_account().unwrap().oracle_guard_rails.validity;
 
-        let mm_oracle_price = perp_market.amm.mm_oracle_price;
-        let mm_oracle_slot = perp_market.amm.mm_oracle_slot;
-
-        let percent_diff = (mm_oracle_price.abs_diff(oracle_data.data.price)
-            * PERCENTAGE_PRECISION as u64)
-            / oracle_data.data.price.max(1) as u64;
-
-        // TODO: check !oracle_validity()
-        if mm_oracle_price == 0
-            || mm_oracle_slot < oracle_data.slot
-            || percent_diff > (PERCENTAGE_PRECISION as u64 / 100)
-        // 1% threshold
-        {
-            Ok(oracle_data.data)
-        } else {
-            let mm_oracle_diff_premium = mm_oracle_price.abs_diff(oracle_data.data.price);
-            let confidence = oracle_data.data.confidence + mm_oracle_diff_premium;
-            Ok(OraclePriceData {
-                price: mm_oracle_price,
-                delay: mm_oracle_slot as i64, // TODO: clock.now - mm_oracle_slot
-                confidence,
-                has_sufficient_number_of_data_points: true,
-            })
-        }
+        perp_market
+            .get_mm_oracle_data(oracle_data.data, current_slot, &oracle_validity_guard_rails)
+            .map(|x| x.safe_oracle_price_data)
     }
 
     /// Get the latest oracle data for `market`

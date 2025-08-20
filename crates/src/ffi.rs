@@ -17,11 +17,7 @@ use crate::{
     math::{
         constants::{
             BID_ASK_SPREAD_PRECISION_I128, BID_ASK_SPREAD_PRECISION_U128,
-<<<<<<< HEAD
             PERCENTAGE_PRECISION_I128, QUOTE_PRECISION_I64,
-=======
-            PERCENTAGE_PRECISION_I128, PRICE_PRECISION, QUOTE_PRECISION_I64,
->>>>>>> 1168208 (updates for mm oracle)
         },
         standardize_price_i64,
     },
@@ -700,7 +696,7 @@ pub mod abi_types {
     use abi_stable::std_types::RResult;
     use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 
-    use crate::{drift_idl::types::MarginRequirementType, types::OracleValidity, OracleGuardRails};
+    use crate::{drift_idl::types::MarginRequirementType, OracleGuardRails};
 
     /// FFI safe version of (pubkey, account)
     #[repr(C)]
