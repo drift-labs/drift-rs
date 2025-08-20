@@ -22,8 +22,8 @@ use crate::{
         standardize_price_i64,
     },
     types::{
-        accounts::HighLeverageModeConfig, ContractTier, OracleValidity, OrderType,
-        PositionDirection, ProtectedMakerParams, SdkError, ValidityGuardRails,
+        accounts::HighLeverageModeConfig, ContractTier, OrderType, PositionDirection,
+        ProtectedMakerParams, SdkError, ValidityGuardRails,
     },
     SdkResult,
 };
@@ -95,7 +95,7 @@ extern "C" {
         use_median_trigger_price: bool,
     ) -> FfiResult<u64>;
     #[allow(improper_ctypes)]
-    pub fn perp_market_get_mm_oracle_data(
+    pub fn perp_market_get_mm_oracle_price_data(
         market: &accounts::PerpMarket,
         oracle_price_data: OraclePriceData,
         clock_slot: Slot,
@@ -540,14 +540,14 @@ impl accounts::SpotMarket {
 }
 
 impl accounts::PerpMarket {
-    pub fn get_mm_oracle_data(
+    pub fn get_mm_oracle_price_data(
         &self,
         oracle_price_data: OraclePriceData,
         clock_slot: Slot,
         validity_guard_rails: &ValidityGuardRails,
     ) -> SdkResult<MMOraclePriceData> {
         to_sdk_result(unsafe {
-            perp_market_get_mm_oracle_data(
+            perp_market_get_mm_oracle_price_data(
                 self,
                 oracle_price_data,
                 clock_slot,
@@ -696,7 +696,7 @@ pub mod abi_types {
     use abi_stable::std_types::RResult;
     use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 
-    use crate::{drift_idl::types::MarginRequirementType, OracleGuardRails};
+    use crate::{drift_idl::types::MarginRequirementType, types::OracleValidity, OracleGuardRails};
 
     /// FFI safe version of (pubkey, account)
     #[repr(C)]
@@ -787,8 +787,7 @@ pub mod abi_types {
         pub has_sufficient_number_of_data_points: bool,
     }
 
-    /// FFI equivalent of `MMOraclePriceData`
-    #[repr(C)]
+    /// MMOraclePriceData, not defined in IDL
     #[derive(Default, Clone, Copy, Debug)]
     pub struct MMOraclePriceData {
         pub mm_oracle_price: i64,
@@ -823,15 +822,18 @@ mod tests {
         ffi::{
             calculate_auction_price,
             calculate_margin_requirement_and_total_collateral_and_liability_info,
-            check_ffi_version, get_oracle_price,
+            check_ffi_version, get_oracle_price, OraclePriceData,
         },
         math::constants::{
             BASE_PRECISION, BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, MARGIN_PRECISION,
-            PRICE_PRECISION_I64, PRICE_PRECISION_U64, QUOTE_PRECISION, QUOTE_PRECISION_I64,
-            SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64, SPOT_CUMULATIVE_INTEREST_PRECISION,
-            SPOT_WEIGHT_PRECISION,
+            PERCENTAGE_PRECISION, PRICE_PRECISION_I64, PRICE_PRECISION_U64, QUOTE_PRECISION,
+            QUOTE_PRECISION_I64, SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64,
+            SPOT_CUMULATIVE_INTEREST_PRECISION, SPOT_WEIGHT_PRECISION,
         },
-        types::{accounts::HighLeverageModeConfig, MarketType},
+        types::{
+            accounts::HighLeverageModeConfig, ContractTier, MarketType, OracleValidity,
+            ValidityGuardRails,
+        },
         utils::test_utils::{get_account_bytes, get_pyth_price},
         HistoricalOracleData, MarketStatus, PositionDirection, AMM,
     };
@@ -1109,6 +1111,37 @@ mod tests {
                 is_limit
             );
         }
+    }
+
+    #[test]
+    fn ffi_perp_market_get_mm_oracle_data_basic() {
+        let perp_market = PerpMarket {
+            market_index: 1,
+            contract_tier: ContractTier::A,
+            amm: AMM {
+                mm_oracle_price: 1_000_123,
+                mm_oracle_slot: 12345,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let oracle_price_data = OraclePriceData {
+            price: 1_000_000,
+            confidence: 99 * PERCENTAGE_PRECISION as u64,
+            delay: 2,
+            has_sufficient_number_of_data_points: true,
+        };
+        let clock_slot = 12345;
+        let validity_guard_rails = ValidityGuardRails::default();
+
+        let result = perp_market.get_mm_oracle_price_data(
+            oracle_price_data,
+            clock_slot,
+            &validity_guard_rails,
+        );
+        assert!(result.is_ok(), "Should succeed for valid input");
+        let mm_oracle_data = result.unwrap();
+        assert!(mm_oracle_data.safe_oracle_price_data.price > 0);
     }
 
     #[test]

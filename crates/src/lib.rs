@@ -899,7 +899,7 @@ impl DriftClient {
         self.backend.try_get_oracle_price_data_and_slot(market)
     }
 
-    /// Get the AMM `OraclePriceData` if valid, otherwise return the normal `OraclePriceData`
+    /// Get the AMM `OraclePriceData` if valid, otherwise return the conventional `OraclePriceData`
     ///
     /// ## Params
     /// * `market_index` - perp market index
@@ -917,7 +917,7 @@ impl DriftClient {
         let oracle_validity_guard_rails = self.state_account().unwrap().oracle_guard_rails.validity;
 
         perp_market
-            .get_mm_oracle_data(oracle_data.data, current_slot, &oracle_validity_guard_rails)
+            .get_mm_oracle_price_data(oracle_data.data, current_slot, &oracle_validity_guard_rails)
             .map(|x| x.safe_oracle_price_data)
     }
 

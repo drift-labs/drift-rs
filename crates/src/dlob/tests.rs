@@ -1271,7 +1271,6 @@ fn dlob_trigger_order_transitions() {
     let dlob = DLOB::default();
     let user = Pubkey::new_unique();
     let slot = 100;
-    let oracle_price = 1000;
 
     // --- Insert TriggerMarket order (Above) ---
     let mut order = create_test_order(1, OrderType::TriggerMarket, Direction::Long, 0, 10, slot);

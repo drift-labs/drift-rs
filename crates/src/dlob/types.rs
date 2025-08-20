@@ -244,6 +244,7 @@ pub(crate) struct FloatingLimitOrder {
     pub post_only: bool,
 }
 
+#[allow(dead_code)]
 #[derive(Default, Debug, Clone)]
 pub(crate) struct TriggerOrder {
     pub id: u64,
