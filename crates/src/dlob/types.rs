@@ -69,8 +69,8 @@ impl OrderMetadata {
 pub struct TakerOrder {
     pub price: u64,
     pub size: u64,
-    pub direction: Direction,
     pub market_index: u16,
+    pub direction: Direction,
     pub market_type: MarketType,
 }
 
@@ -93,12 +93,12 @@ pub struct CrossesAndTopMakers {
     pub top_maker_asks: ArrayVec<Pubkey, 3>,
     //  best maker accounts on bid side
     pub top_maker_bids: ArrayVec<Pubkey, 3>,
-    //  taker crosses and maker orders
-    pub crosses: Vec<(OrderMetadata, MakerCrosses)>,
     // top of book limit cross, if any
     pub limit_crosses: Option<(OrderMetadata, OrderMetadata)>,
     pub vamm_taker_ask: Option<OrderMetadata>,
     pub vamm_taker_bid: Option<OrderMetadata>,
+    //  taker crosses and maker orders
+    pub crosses: Vec<(OrderMetadata, MakerCrosses)>,
 }
 
 /// Best fills for a taker order
@@ -107,11 +107,11 @@ pub struct CrossesAndTopMakers {
 pub struct MakerCrosses {
     /// (metadata, maker_price, fill_size)
     pub orders: ArrayVec<(OrderMetadata, u64, u64), 16>,
+    /// Slot crosses were found
+    pub slot: u64,
     // true if crosses VAMM quote
     pub has_vamm_cross: bool,
     pub is_partial: bool,
-    /// Slot crosses were found
-    pub slot: u64,
     pub taker_direction: Direction,
 }
 
@@ -192,9 +192,9 @@ pub(crate) struct MarketOrder {
     pub end_price: i64,
     pub duration: u8,
     pub slot: u64,
+    pub max_ts: u64,
     pub is_limit: bool,
     pub direction: Direction,
-    pub max_ts: u64,
 }
 
 #[derive(Default, Clone, PartialEq, Debug)]
@@ -203,11 +203,11 @@ pub(crate) struct OracleOrder {
     pub size: u64,
     pub start_price_offset: i64,
     pub end_price_offset: i64,
-    pub duration: u8,
+    pub max_ts: u64,
     pub slot: u64,
+    pub duration: u8,
     pub is_limit: bool,
     pub direction: Direction,
-    pub max_ts: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -218,10 +218,10 @@ pub struct LimitOrderView {
     pub price: u64,
     /// Size of the order
     pub size: u64,
-    /// Whether the order is post-only
-    pub post_only: bool,
     /// Slot of the order
     pub slot: u64,
+    /// Whether the order is post-only
+    pub post_only: bool,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -238,20 +238,21 @@ pub(crate) struct LimitOrder {
 pub(crate) struct FloatingLimitOrder {
     pub id: u64,
     pub size: u64,
-    pub offset_price: i32,
     pub slot: u64,
     pub max_ts: u64,
+    pub offset_price: i32,
     pub post_only: bool,
 }
 
+#[allow(dead_code)]
 #[derive(Default, Debug, Clone)]
 pub(crate) struct TriggerOrder {
     pub id: u64,
     pub size: u64,
     /// static trigger price
     pub price: u64,
-    pub condition: OrderTriggerCondition,
     pub slot: u64,
+    pub condition: OrderTriggerCondition,
     pub direction: Direction,
     pub kind: OrderType,
     pub bit_flags: u8,
