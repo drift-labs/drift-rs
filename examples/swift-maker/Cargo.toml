@@ -8,5 +8,5 @@ dotenv = "0.15.0"
 drift-rs = { path = "../../../drift-rs" }
 env_logger = "0.11"
 futures-util = "0.3.31"
-solana-sdk = "2"
+solana-pubkey = "2"
 tokio = "*"

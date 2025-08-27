@@ -7,7 +7,31 @@ use std::{
     time::Duration,
 };
 
-use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
+use crate::{
+    account_map::AccountMap,
+    blockhash_subscriber::BlockhashSubscriber,
+    constants::{
+        derive_perp_market_account, derive_spot_market_account,
+        ids::{drift_oracle_receiver_program, wormhole_program},
+        state_account, MarketExt, ProgramData, DEFAULT_PUBKEY, PYTH_LAZER_STORAGE_ACCOUNT_KEY,
+        SYSVAR_INSTRUCTIONS_PUBKEY, SYSVAR_RENT_PUBKEY,
+    },
+    drift_idl::traits::ToAccountMetas,
+    ffi::OraclePriceData,
+    grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, GeyserSubscribeOpts},
+    jupiter::JupiterSwapInfo,
+    marketmap::MarketMap,
+    oraclemap::{Oracle, OracleMap},
+    swift_order_subscriber::{SignedOrderInfo, SwiftOrderStream},
+    types::{
+        accounts::{PerpMarket, SpotMarket, State, User, UserStats},
+        AccountUpdate, DataAndSlot, MarketType, *,
+    },
+    utils::{get_http_url, get_ws_url},
+};
+pub use crate::{grpc::GrpcSubscribeOpts, types::Context, wallet::Wallet};
+use anchor_lang::{AccountDeserialize, AnchorSerialize, Discriminator, InstructionData};
+use base64::Engine;
 use bytemuck::Pod;
 use constants::{
     high_leverage_mode_account, ASSOCIATED_TOKEN_PROGRAM_ID, PROGRAM_ID, SYSTEM_PROGRAM_ID,
@@ -16,6 +40,7 @@ use constants::{
 pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
 use log::debug;
+use pythnet_sdk::wire::v1::{AccumulatorUpdateData, Proof};
 pub use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::{
     config::RpcSimulateTransactionConfig,
@@ -33,29 +58,6 @@ use solana_sdk::{
     signature::Signature,
 };
 pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
-
-use crate::{
-    account_map::AccountMap,
-    blockhash_subscriber::BlockhashSubscriber,
-    constants::{
-        derive_perp_market_account, derive_spot_market_account, state_account, MarketExt,
-        ProgramData, DEFAULT_PUBKEY, PYTH_LAZER_STORAGE_ACCOUNT_KEY, SYSVAR_INSTRUCTIONS_PUBKEY,
-        SYSVAR_RENT_PUBKEY,
-    },
-    drift_idl::traits::ToAccountMetas,
-    ffi::OraclePriceData,
-    grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, GeyserSubscribeOpts},
-    jupiter::JupiterSwapInfo,
-    marketmap::MarketMap,
-    oraclemap::{Oracle, OracleMap},
-    swift_order_subscriber::{SignedOrderInfo, SwiftOrderStream},
-    types::{
-        accounts::{PerpMarket, SpotMarket, State, User, UserStats},
-        AccountUpdate, DataAndSlot, MarketType, *,
-    },
-    utils::{get_http_url, get_ws_url},
-};
-pub use crate::{grpc::GrpcSubscribeOpts, types::Context, wallet::Wallet};
 
 // utils
 pub mod async_utils;
@@ -90,6 +92,7 @@ pub mod jit_client;
 pub mod account_map;
 pub mod marketmap;
 pub mod oraclemap;
+
 pub mod slot_subscriber;
 pub mod usermap;
 
@@ -322,6 +325,7 @@ impl DriftClient {
     ///
     /// * `markets` - list of markets to watch for swift orders
     /// * `accept_sanitized` - set to `Some(true)` to also view *sanitized order flow
+    /// * `swift_ws_url` - optional custom swift Ws endpoint
     ///
     /// *a sanitized order may have its auction params modified by the program when
     /// placed onchain. Makers should understand the time/price implications to accept these.
@@ -331,11 +335,13 @@ impl DriftClient {
         &self,
         markets: &[MarketId],
         accept_sanitized: Option<bool>,
+        swift_ws_url: Option<String>,
     ) -> SdkResult<SwiftOrderStream> {
         swift_order_subscriber::subscribe_swift_orders(
             self,
             markets,
             accept_sanitized.is_some_and(|x| x),
+            swift_ws_url,
         )
         .await
     }
@@ -3158,6 +3164,116 @@ impl<'a> TransactionBuilder<'a> {
 
     pub fn account_data(&self) -> &Cow<'_, User> {
         &self.account_data
+    }
+
+    /// Update Pyth pull oracle with VAA data
+    ///
+    /// This method adds instructions to update a Pyth pull oracle using VAA (Validators Approval Authority) data.
+    /// It handles the VAA parsing, guardian set validation, and oracle update instructions.
+    ///
+    /// ## Parameters
+    /// * `vaa_proof` - ` Base64 encoded VAA string from Pyth
+    /// * `feed_id` - The Pyth feed ID to update (can include 0x prefix)
+    /// * `vaa_signature_count` - number of VAA signatures to keep in the proof (default: 2)
+    ///
+    /// ## Panics
+    /// if the provided VAA proof is invalid
+    ///
+    /// ## Example
+    /// ```no_run
+    /// use drift_rs::{TransactionBuilder, Wallet};
+    /// use solana_pubkey::Pubkey;
+    ///
+    /// let wallet = Wallet::new();
+    /// let program_data =
+    /// let mut builder = TransactionBuilder::new(&program_data, wallet.default_sub_account(), /* user data */, false);
+    ///
+    /// // Update Pyth pull oracle
+    /// builder = builder.post_pyth_pull_oracle_update_atomic(
+    ///     "<BASE64_ENCODED_VAA>",
+    ///     &hex_literal::hex!("1234567890abcdef"),
+    ///     Some(2),
+    /// );
+    /// ```
+    pub fn post_pyth_pull_oracle_update_atomic(
+        mut self,
+        vaa_proof: &str,
+        feed_id: &[u8; 32],
+        vaa_signature_count: Option<usize>,
+    ) -> Self {
+        // Parse VAA data
+        let mut vaa_bytes = base64::prelude::BASE64_STANDARD.decode(vaa_proof).unwrap();
+
+        // Read guardian set index from VAA (big-endian, offset 1)
+        let guardian_set_index = {
+            let index_bytes = [vaa_bytes[1], vaa_bytes[2], vaa_bytes[3], vaa_bytes[4]];
+            u32::from_be_bytes(index_bytes)
+        };
+
+        // Get guardian set PDA
+        let guardian_set = {
+            let guardian_set_bytes = guardian_set_index.to_le_bytes();
+            let seeds = &[b"GuardianSet".as_slice(), &guardian_set_bytes];
+            let (pubkey, _bump) = Pubkey::find_program_address(seeds, &wormhole_program::ID);
+            pubkey
+        };
+
+        // Get Pyth pull oracle public key
+        let price_feed = {
+            let seeds = [b"pyth_pull".as_slice(), feed_id];
+            let (pubkey, _bump) = Pubkey::find_program_address(&seeds, &constants::PROGRAM_ID);
+            pubkey
+        };
+
+        // strip extraneous VAA signatures
+        let existing_signature_count = vaa_bytes[5] as usize;
+        let target_signature_count = vaa_signature_count.unwrap_or(2) as usize;
+        if existing_signature_count > target_signature_count {
+            vaa_bytes = vaa_bytes
+                .drain(6 + target_signature_count * 66..6 + existing_signature_count * 66)
+                .collect();
+        }
+        let vaa_parsed = AccumulatorUpdateData::try_from_slice(&vaa_bytes).unwrap();
+
+        let Proof::WormholeMerkle { vaa, updates } = vaa_parsed.proof;
+
+        for update in updates {
+            let params = pyth_solana_receiver_sdk::PostUpdateAtomicParams {
+                vaa: vaa.as_ref().clone(),
+                merkle_price_update: update.clone(),
+                treasury_id: 0,
+            };
+            let encoded_params = params.try_to_vec().unwrap();
+
+            let accounts = build_accounts(
+                self.program_data,
+                drift_idl::accounts::PostPythPullOracleUpdateAtomic {
+                    keeper: self.authority,
+                    pyth_solana_receiver: drift_oracle_receiver_program::ID,
+                    guardian_set,
+                    price_feed,
+                },
+                std::iter::empty(),
+                std::iter::empty(),
+                std::iter::empty(),
+            );
+
+            // Add the oracle update instruction
+            let oracle_update_ix = Instruction {
+                program_id: constants::PROGRAM_ID,
+                accounts,
+                data: InstructionData::data(
+                    &drift_idl::instructions::PostPythPullOracleUpdateAtomic {
+                        feed_id: *feed_id,
+                        params: encoded_params,
+                    },
+                ),
+            };
+
+            self.ixs.push(oracle_update_ix);
+        }
+
+        self
     }
 }
 

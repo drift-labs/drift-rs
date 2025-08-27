@@ -33,10 +33,10 @@ async fn main() {
     let latest_slot = drift.rpc().get_slot().await.expect("get slot") + 200;
 
     let order_params = OrderParams {
-        market_index: 75,
+        market_index: 0,
         market_type: MarketType::Perp,
         order_type: OrderType::Oracle,
-        base_asset_amount: 5_000_000_000,
+        base_asset_amount: 100_000_000,
         direction: PositionDirection::Long,
         auction_start_price: Some(1_00),
         auction_end_price: Some(1_000),
@@ -65,7 +65,7 @@ async fn main() {
     let swift_url = if use_mainnet {
         "https://swift.drift.trade/orders"
     } else {
-        "https://master/swift.drift.trade/orders"
+        "https://master.swift.drift.trade/orders"
     };
     let swift_cli = reqwest::Client::new();
     let req = swift_cli
@@ -79,5 +79,3 @@ async fn main() {
     let response = res.unwrap().text().await.unwrap();
     dbg!(response);
 }
-
-// nlHXHqU0

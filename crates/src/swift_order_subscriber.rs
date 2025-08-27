@@ -105,6 +105,7 @@ struct OrderNotification<'a> {
     #[allow(dead_code)]
     channel: &'a str,
     order: SignedOrderInfo,
+    deposit: Option<&'a str>,
 }
 
 #[derive(Deserialize)]
@@ -143,6 +144,10 @@ pub struct SignedOrderInfo {
     /// MMs wishing to fill a sanitized order should understand the potential time/price bound changes
     #[serde(default)]
     pub will_sanitize: bool,
+    /// Taker signed (pre)deposit tx
+    ///
+    /// taker requires posting collateral before placing the swift order
+    pub pre_deposit: Option<String>,
 }
 
 impl SignedOrderInfo {
@@ -202,6 +207,7 @@ impl SignedOrderInfo {
         signer: Pubkey,
         order: SignedOrderType,
         signature: Signature,
+        pre_deposit: Option<String>,
     ) -> Self {
         Self {
             uuid,
@@ -211,6 +217,7 @@ impl SignedOrderInfo {
             order,
             signature,
             will_sanitize: false,
+            pre_deposit,
         }
     }
 }
@@ -223,6 +230,7 @@ pub type SwiftOrderStream = ReceiverStream<SignedOrderInfo>;
 /// * `client` - Drift client instance
 /// * `markets` - markets to listen on for new swift orders
 /// * `accept_sanitized` - set to true to also view *sanitized order flow
+/// * `swift_ws_override` - custom swift Ws server endpoint
 ///
 /// *a sanitized order may have its auction params modified by the program when
 /// placed onchain. Makers should understand the time/price implications to accept these.
@@ -232,12 +240,16 @@ pub async fn subscribe_swift_orders(
     client: &DriftClient,
     markets: &[MarketId],
     accept_sanitized: bool,
+    swift_ws_override: Option<String>,
 ) -> SdkResult<SwiftOrderStream> {
-    let base_url = if client.context == Context::MainNet {
-        SWIFT_MAINNET_WS_URL
+    let base_url = if let Some(custom_base_url) = swift_ws_override {
+        custom_base_url
+    } else if client.context == Context::MainNet {
+        SWIFT_MAINNET_WS_URL.to_string()
     } else {
-        SWIFT_DEVNET_WS_URL
+        SWIFT_DEVNET_WS_URL.to_string()
     };
+
     let maker_pubkey = client.wallet().authority().to_string();
     let uri = format!("{base_url}/ws?pubkey={maker_pubkey}");
     let (ws_stream, _) = connect_async(uri).await.map_err(|err| {
@@ -318,13 +330,21 @@ pub async fn subscribe_swift_orders(
             match msg {
                 Ok(Message::Text(ref text)) => {
                     match serde_json::from_str::<OrderNotification>(text) {
-                        Ok(OrderNotification { channel: _, order }) => {
+                        Ok(OrderNotification {
+                            channel: _,
+                            mut order,
+                            deposit,
+                        }) => {
                             log::debug!(
                                 target: LOG_TARGET,
                                 "uuid: {}, latency: {}ms",
                                 order.uuid,
                                 unix_now_ms().saturating_sub(order.ts)
                             );
+
+                            if let Some(deposit) = deposit {
+                                order.pre_deposit = Some(deposit.to_string());
+                            }
 
                             if !accept_sanitized {
                                 log::debug!(
