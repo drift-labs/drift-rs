@@ -5,10 +5,10 @@
 use drift_rs::{
     swift_order_subscriber::SignedOrderInfo,
     types::{MarketId, OrderParams, OrderType, PositionDirection, PostOnlyParam},
-    DriftClient, Pubkey, RpcClient, Wallet,
+    DriftClient, RpcClient, Wallet,
 };
 use futures_util::StreamExt;
-use solana_sdk::signature::Keypair;
+use solana_pubkey::Pubkey;
 
 #[tokio::main]
 async fn main() {
@@ -46,13 +46,13 @@ async fn main() {
         .expect("subscribed");
 
     // choose some markets by symbol
-    let market_ids: Vec<MarketId> = ["pump-perp"]
+    let market_ids: Vec<MarketId> = ["sol-perp"]
         .iter()
         .map(|m| drift.market_lookup(m).expect("market found"))
         .collect();
 
     let mut swift_order_stream = drift
-        .subscribe_swift_orders(&market_ids, Some(true))
+        .subscribe_swift_orders(&market_ids, Some(true), None)
         .await
         .expect("subscribed swift orders");
 

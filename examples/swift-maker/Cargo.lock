@@ -1383,11 +1383,12 @@ dependencies = [
 
 [[package]]
 name = "drift-rs"
-version = "1.0.0-alpha.15"
+version = "1.0.0-alpha.16"
 dependencies = [
  "abi_stable",
  "ahash 0.8.12",
  "anchor-lang",
+ "anyhow",
  "arrayvec",
  "base64 0.22.1",
  "bytemuck",
@@ -1409,6 +1410,7 @@ dependencies = [
  "solana-sdk",
  "solana-transaction-status",
  "spl-associated-token-account",
+ "spl-token-2022",
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
@@ -2315,8 +2317,8 @@ dependencies = [
 
 [[package]]
 name = "jupiter-swap-api-client"
-version = "0.1.0"
-source = "git+https://github.com/drift-labs/jupiter-swap-api-client#b699edf30ff1f561460579ee2504622e28f9a797"
+version = "0.2.0"
+source = "git+https://github.com/jup-ag/jupiter-swap-api-client#70aaffd957d59c19588df86e92ce3b94f24f7d0b"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -5794,7 +5796,7 @@ dependencies = [
  "drift-rs",
  "env_logger 0.11.8",
  "futures-util",
- "solana-sdk",
+ "solana-pubkey",
  "tokio",
 ]
 
