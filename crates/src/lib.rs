@@ -3168,13 +3168,13 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Update Pyth pull oracle with VAA data
     ///
-    /// This method adds instructions to update a Pyth pull oracle using VAA (Validators Approval Authority) data.
-    /// It handles the VAA parsing, guardian set validation, and oracle update instructions.
+    /// This method adds ix to update a Pyth pull oracle using VAA data.
+    /// NOTE: Only the first update in the VAA will be posted
     ///
     /// ## Parameters
     /// * `vaa_proof` - ` Base64 encoded VAA string from Pyth
     /// * `feed_id` - The Pyth feed ID to update (can include 0x prefix)
-    /// * `vaa_signature_count` - number of VAA signatures to keep in the proof (default: 2)
+    /// * `vaa_signature_count` - max. number of VAA signatures to keep in the proof (default: 2)
     ///
     /// ## Panics
     /// if the provided VAA proof is invalid
@@ -3202,17 +3202,17 @@ impl<'a> TransactionBuilder<'a> {
         vaa_signature_count: Option<usize>,
     ) -> Self {
         // Parse VAA data
-        let mut vaa_bytes = base64::prelude::BASE64_STANDARD.decode(vaa_proof).unwrap();
+        let vaa_bytes = base64::prelude::BASE64_STANDARD.decode(vaa_proof).unwrap();
+        let accumulator_update_data = AccumulatorUpdateData::try_from_slice(&vaa_bytes).unwrap();
+        let Proof::WormholeMerkle { vaa, updates } = accumulator_update_data.proof;
+        let mut vaa: Vec<u8> = vaa.into();
 
         // Read guardian set index from VAA (big-endian, offset 1)
-        let guardian_set_index = {
-            let index_bytes = [vaa_bytes[1], vaa_bytes[2], vaa_bytes[3], vaa_bytes[4]];
-            u32::from_be_bytes(index_bytes)
-        };
+        let guardian_set_index = u32::from_be_bytes(vaa[1..=4].try_into().unwrap());
 
         // Get guardian set PDA
         let guardian_set = {
-            let guardian_set_bytes = guardian_set_index.to_le_bytes();
+            let guardian_set_bytes = guardian_set_index.to_be_bytes();
             let seeds = &[b"GuardianSet".as_slice(), &guardian_set_bytes];
             let (pubkey, _bump) = Pubkey::find_program_address(seeds, &wormhole_program::ID);
             pubkey
@@ -3226,20 +3226,20 @@ impl<'a> TransactionBuilder<'a> {
         };
 
         // strip extraneous VAA signatures
-        let existing_signature_count = vaa_bytes[5] as usize;
-        let target_signature_count = vaa_signature_count.unwrap_or(2) as usize;
+        let existing_signature_count = vaa[5] as usize;
+        let target_signature_count = vaa_signature_count.unwrap_or(2);
         if existing_signature_count > target_signature_count {
-            vaa_bytes = vaa_bytes
-                .drain(6 + target_signature_count * 66..6 + existing_signature_count * 66)
+            // truncate extra signatures
+            let _: Vec<u8> = vaa
+                .drain(6 + (target_signature_count * 66)..6 + existing_signature_count * 66)
                 .collect();
+            vaa[5] = target_signature_count as u8;
         }
-        let vaa_parsed = AccumulatorUpdateData::try_from_slice(&vaa_bytes).unwrap();
 
-        let Proof::WormholeMerkle { vaa, updates } = vaa_parsed.proof;
-
-        for update in updates {
+        // only post first update from the VAA
+        if let Some(update) = updates.first() {
             let params = pyth_solana_receiver_sdk::PostUpdateAtomicParams {
-                vaa: vaa.as_ref().clone(),
+                vaa,
                 merkle_price_update: update.clone(),
                 treasury_id: 0,
             };

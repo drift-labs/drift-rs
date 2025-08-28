@@ -355,3 +355,31 @@ async fn settle_pnl_txs() {
     dbg!(&result);
     assert!(result.is_ok_and(|x| x.err.is_none()));
 }
+
+#[tokio::test]
+async fn pyth_pull_update_atomic() {
+    let vaa_proof = "UE5BVQEAAAADuAEAAAAEDQCGP2Fjz2LFIX48Qqm/paFzO/iEtFgH5sC1FHhNroyIC2fuzsISzz9IHbvBrlknA0UvM8r9UHSvsAwaqzquhzFsAALnhRblTgAMLanjq38YctnwqDsdV39WviJ0QAnWgRn+a2i4ljPkbVQl1+MM47qcsua4+1L6jo8i3LPMivVx+HQgAQRRADMkx28oGLPnNZnaZp8wtsxckjtx1GvXi+l9d89Yu1DJnYEGkVF4TzZSKtIQe+5OoUPAaIpnEauGVe0AEeh7AAYzopa5UFEUji5zKjTRRUxlQWAWDq3LuGMeV7osio6L/jyD0jMxpYMR0r/dqIdUi2a4GP0uF15k9yFMkANh7OCRAAgb/WNBqaYjLjZsqRqEFKbG3ZVR2vS5ph7EO6D8TKP2gg3Mk3Mhyr2O21KAboy061vKPbHTjX1w3dq8ipnz6EacAQpOpdNfjx1LhMu7ZaMfSM6IFqHOZnQqGxQOQHwh5lAd50Vj8LVu3rng211UchelGHtROvhN1IapTkVSEhD0dbeeAQs+IYIUBk8EahKpPnD0hk6E2d8ge3gKDcgakWgDhRMunArMASyVWkWw0N3p9FvOobXg4V4L5Tim6L1AhHf5Rj0YAAxsygUAwlhGQPEThxT72eY0HVbi8C1LATsBXrW6jksUNTllCqWWbRwgwDSlgibrk05BKtO1pjFCjkWRZZ+TCvrsAA05LnYl0RwpRYUs31y5Lbk8mZHrFDj02MkTC05rGcjVzmddlNcj5/IIp8Hc44GJFZ4XZO3kx7jW3vuF6RQm6RPmAA6xLKcvzZllJT8kxn/LI4AYUuCIOVyLMG/kVodeXWkOKSrkXr0SNwMFsLfl9xvPk2dCa7SyicGwMTUfKP4P8cyeAQ9Q5G4EDpPCq/A0J3luHRoCnSDpCuCu4zTzESAmRe80aSwDl7tN4wSn369Nu4iD6JSyUx/y3bHF7BgvlyGfQYHjABCZpnivKtKFNYpaLR627OKG//Vv3zol7gdCoMOXRcIxLhwSuhn5QlVHgeoOrHiLtOBlTzpz4bwa8btRxvU43pCgABK2TIKVKUnv5OyTjkQh8N5IMpaRK83UH3hpvsJKejNpJQK2zR/WfCkrYjy6pYQfhenZYHi4GCMQ0ALSh9cojaDlAGaVh0wAAAAAABrhAfrtrFhR4yubI7X5QRqMK6xKrj7U3XuBHdGnLqSqcQAAAAAEHJOLAUFVV1YAAAAAAAknGqgAACcQdoC/4vcjI21wyoVC1q3FUZH0FpwBAFUALy0Xq7weeBvYe0pdUsiyhWiG9cSC+jWTzr9nlQQKsLYAAAAAAICwNAAAAAAAAS4k////+AAAAABmlYdMAAAAAGaVh0sAAAAAAH6C+QAAAAAAAPFsCz2Sz2/hyAOSwCA+M8lRiOs+jGuZp6wcFR4rTAFuR2bAYNycVYQFeCxlkQJrEKDSba6FxQXgPZ7wBb/43EHuHHKQaaGb3NVsxnHFnLHefZDbF235q+aRnadgJfm6gqckqb0IczoHBaSuyrVYfSEbPuyNjXE7V++G/OwwVrwQOWqD6ti/nzLgnQ+qCVpEBto25YvZQzkmfYMKg1tJepxs/Sbgyx2fayAJtK8pRlJIixSTRbLiQX408KCq/ElVNzOSqt6Aw1KrAg81sLzKSjMEqnhbdFxgSzqncj8kPFw=";
+    let feed_id =
+        hex_literal::hex!("2f2d17abbc1e781bd87b4a5d52c8b2856886f5c482fa3593cebf6795040ab0b6");
+
+    let _ = env_logger::try_init();
+    let wallet: Wallet = test_keypair().into();
+    let client = DriftClient::new(
+        Context::MainNet,
+        RpcClient::new(mainnet_endpoint()),
+        wallet.clone(),
+    )
+    .await
+    .expect("connects");
+
+    let tx = client
+        .init_tx(&wallet.default_sub_account(), false)
+        .await
+        .unwrap()
+        .post_pyth_pull_oracle_update_atomic(vaa_proof, &feed_id, None)
+        .build();
+
+    let result = client.simulate_tx(tx).await;
+    dbg!(&result);
+    assert!(result.is_ok_and(|x| x.err.is_none()));
+}
