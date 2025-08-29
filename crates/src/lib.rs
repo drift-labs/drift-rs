@@ -3238,7 +3238,7 @@ impl<'a> TransactionBuilder<'a> {
 
         // only post first update from the VAA
         if let Some(update) = updates.first() {
-            let params = pyth_solana_receiver_sdk::PostUpdateAtomicParams {
+            let params = PostUpdateAtomicParams {
                 vaa,
                 merkle_price_update: update.clone(),
                 treasury_id: 0,

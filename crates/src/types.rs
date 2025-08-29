@@ -5,7 +5,9 @@ use std::{
     str::FromStr,
 };
 
+use anchor_lang::{AnchorDeserialize, AnchorSerialize};
 use dashmap::DashMap;
+use pythnet_sdk::wire::v1::MerklePriceUpdate;
 pub use solana_rpc_client_api::config::RpcSendTransactionConfig;
 pub use solana_sdk::{
     commitment_config::CommitmentConfig, message::VersionedMessage,
@@ -664,6 +666,15 @@ impl UserStats {
 pub enum TokenProgramFlag {
     Token2022 = 0b00000001,
     TransferHook = 0b00000010,
+}
+
+// copied from pythnet-solana-receiver-sdk
+use anchor_lang::prelude::borsh::{self};
+#[derive(Debug, AnchorSerialize, AnchorDeserialize, Clone)]
+pub struct PostUpdateAtomicParams {
+    pub vaa: Vec<u8>,
+    pub merkle_price_update: MerklePriceUpdate,
+    pub treasury_id: u8,
 }
 
 #[cfg(test)]
