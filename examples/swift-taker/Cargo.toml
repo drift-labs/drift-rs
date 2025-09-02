@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+argh = "0.1.13"
 base64 = "0.22.1"
 bincode = "1"
 dotenv = "0.15.0"

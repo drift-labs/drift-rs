@@ -7,6 +7,10 @@ Runs on devnet by default
 Run on devnet
 ```shell
 PRIVATE_KEY="<base58 private key>" RUST_LOG=swift=debug cargo run --release
+
+# Deposit Trade
+PRIVATE_KEY="<base58 private key>" RUST_LOG=swift=debug cargo run --release -- --deposit-trade
+
 ```
 
 Run on mainnet
