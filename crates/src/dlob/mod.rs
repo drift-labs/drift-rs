@@ -278,74 +278,34 @@ impl Orderbook {
     /// limit orders with finishing auctions are moved to resting orders
     fn expire_auction_orders(&mut self, slot: u64) {
         self.market_orders.asks.retain(|x| {
-            let is_auction_complete = (x.slot + x.duration as u64) <= slot;
+            let is_auction_complete = x.is_auction_complete(slot);
             if is_auction_complete && x.is_limit && x.size > 0 {
                 log::trace!(target: "dlob", "market auction end=>resting (slot: {}): {}", slot, x.id);
-                self.resting_limit_orders.insert_raw(
-                    false,
-                    LimitOrder {
-                        id: x.id,
-                        size: x.size,
-                        price: x.end_price as u64,
-                        slot: x.slot,
-                        max_ts: x.max_ts,
-                        post_only: false,
-                    },
-                );
+                self.resting_limit_orders.insert_raw(false, x.to_limit_order());
             }
             !is_auction_complete
         });
         self.market_orders.bids.retain(|x| {
-            let is_auction_complete = (x.slot + x.duration as u64) <= slot;
+            let is_auction_complete = x.is_auction_complete(slot);
             if is_auction_complete && x.is_limit && x.size > 0 {
                 log::trace!(target: "dlob", "market auction end=>resting: (slot: {}): {}", slot, x.id);
-                self.resting_limit_orders.insert_raw(
-                    true,
-                    LimitOrder {
-                        id: x.id,
-                        size: x.size,
-                        price: x.end_price as u64,
-                        slot: x.slot,
-                        max_ts: x.max_ts,
-                        post_only: false,
-                    },
-                );
+                self.resting_limit_orders.insert_raw(true, x.to_limit_order());
             }
             !is_auction_complete
         });
         self.oracle_orders.asks.retain(|x| {
-            let is_auction_complete = (x.slot + x.duration as u64) <= slot;
+            let is_auction_complete = x.is_auction_complete(slot);
             if is_auction_complete && x.is_limit && x.size > 0 {
                 log::trace!(target: "dlob", "oracle auction end=>resting: (slot: {}): {}", slot, x.id);
-                self.floating_limit_orders.insert_raw(
-                    false,
-                    FloatingLimitOrder {
-                        id: x.id,
-                        slot: x.slot,
-                        size: x.size,
-                        offset_price: x.end_price_offset as i32,
-                        max_ts: x.max_ts,
-                        post_only: false,
-                    },
-                );
+                self.floating_limit_orders.insert_raw(false, x.to_floating_limit_order());
             }
             !is_auction_complete
         });
         self.oracle_orders.bids.retain(|x| {
-            let is_auction_complete = (x.slot + x.duration as u64) <= slot;
+            let is_auction_complete = x.is_auction_complete(slot);
             if is_auction_complete && x.is_limit && x.size > 0 {
                 log::trace!(target: "dlob", "oracle auction end=>resting: (slot: {}): {}", slot, x.id);
-                self.floating_limit_orders.insert_raw(
-                    true,
-                    FloatingLimitOrder {
-                        id: x.id,
-                        slot: x.slot,
-                        size: x.size,
-                        offset_price: x.end_price_offset as i32,
-                        max_ts: x.max_ts,
-                        post_only: false,
-                    },
-                );
+                self.floating_limit_orders.insert_raw(true, x.to_floating_limit_order());
             }
             !is_auction_complete
         });
@@ -666,7 +626,7 @@ impl DLOB {
     }
 
     /// Update orderbook slot and oracle price for market
-    fn update_slot_and_oracle_price(
+    pub fn update_slot_and_oracle_price(
         &self,
         market_index: u16,
         market_type: MarketType,
@@ -835,40 +795,51 @@ impl DLOB {
         log::trace!(target: "dlob", "remove order: {order_id}");
 
         self.with_orderbook_mut(MarketId::new(order.market_index, order.market_type), |orderbook| {
-            if let Some((_, metadata)) = self.metadata.remove(&order_id) {
+            if let Some(metadata) = self.metadata.get(&order_id) {
                 log::trace!(target: "dlob", "remove ({order_id}): {:?}", metadata.kind);
+                let mut order_removed = false;
+
                 match metadata.kind {
                     OrderKind::Market | OrderKind::MarketTriggered => {
-                        orderbook.market_orders.remove(order_id, order);
+                        order_removed = orderbook.market_orders.remove(order_id, order);
                     }
                     OrderKind::LimitAuction | OrderKind::LimitTriggered => {
                         // if the auction completed, check if order moved to resting
-                        if !orderbook.market_orders.remove(order_id, order) {
+                        order_removed = orderbook.market_orders.remove(order_id, order);
+                        if !order_removed {
                             log::trace!(target: "dlob", "remove market limit order: {order_id}");
-                            orderbook.resting_limit_orders.remove(order_id, order);
+                            // Auction has completed, order moved to resting_limit_orders
+                            // Monkey patch the order to look like a limit order with correct price
+                            let market_order: MarketOrder = (order_id, order).into();
+                            let converted_order = market_order.to_order_for_resting_removal(order);
+                            order_removed = orderbook.resting_limit_orders.remove(order_id, converted_order);
                         }
                     }
                     OrderKind::Oracle | OrderKind::OracleTriggered => {
-                        orderbook.oracle_orders.remove(order_id, order);
+                        order_removed = orderbook.oracle_orders.remove(order_id, order);
                     }
                     OrderKind::FloatingLimitAuction => {
                         // if the auction completed, check if order moved to resting
-                        if !orderbook.oracle_orders.remove(order_id, order) {
+                        order_removed = orderbook.oracle_orders.remove(order_id, order);
+                        if !order_removed {
                             log::trace!(target: "dlob", "remove oracle limit order: {order_id}");
-                            orderbook.floating_limit_orders.remove(order_id, order);
+                            // Since FloatingLimitOrder key is (slot, id) same as OracleOrder, 
+                            // we can use the same order for removal
+                            order_removed = orderbook.floating_limit_orders.remove(order_id, order);
                         }
                     }
                     OrderKind::Limit => {
-                        orderbook.resting_limit_orders.remove(order_id, order);
+                        order_removed = orderbook.resting_limit_orders.remove(order_id, order);
                     }
                     OrderKind::FloatingLimit => {
-                        orderbook.floating_limit_orders.remove(order_id, order);
+                        order_removed = orderbook.floating_limit_orders.remove(order_id, order);
                     }
                     OrderKind::TriggerMarket | OrderKind::TriggerLimit => {
                         log::trace!(target: "dlob", "trigger order: {order_id},{:?}", order.trigger_condition);
                         match order.trigger_condition {
                             OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
-                                if !orderbook.trigger_orders.remove(order_id, order) {
+                                order_removed = orderbook.trigger_orders.remove(order_id, order);
+                                if !order_removed {
                                     log::trace!(target: "dlob", "remove trigger order fail: {:?}", orderbook.trigger_orders);
                                 }
                             }
@@ -877,6 +848,14 @@ impl DLOB {
                             }
                         }
                     }
+                }
+
+                // Only remove metadata if we successfully removed the order
+                if order_removed {
+                    drop(metadata); // drop the borrow before removing
+                    self.metadata.remove(&order_id);
+                } else {
+                    log::warn!(target: "dlob", "failed to remove order {order_id} from orderbook, keeping metadata. order_kind: {:?}, user: {}, order_id: {}", metadata.kind, metadata.user, metadata.order_id);
                 }
             }
         });

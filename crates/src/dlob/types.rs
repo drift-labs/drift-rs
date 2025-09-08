@@ -155,10 +155,59 @@ impl OrderKey for MarketOrder {
     }
 }
 
+impl MarketOrder {
+    /// Check if this auction order has completed
+    pub fn is_auction_complete(&self, current_slot: u64) -> bool {
+        (self.slot + self.duration as u64) <= current_slot
+    }
+
+    /// Convert to LimitOrder when auction completes
+    pub fn to_limit_order(&self) -> LimitOrder {
+        LimitOrder {
+            id: self.id,
+            size: self.size,
+            price: self.end_price as u64,
+            slot: self.slot,
+            max_ts: self.max_ts,
+            post_only: false,
+        }
+    }
+
+    /// Convert to Order with correct properties for removal from resting_limit_orders
+    pub fn to_order_for_resting_removal(
+        &self,
+        mut order: crate::types::Order,
+    ) -> crate::types::Order {
+        // Monkey patch the order to look like a limit order with correct price
+        order.price = self.end_price as u64; // Use end_price instead of start_price
+        order.order_type = crate::types::OrderType::Limit;
+        order
+    }
+}
+
 impl OrderKey for OracleOrder {
     type Key = OracleOrderKey;
     fn key(&self) -> Self::Key {
         (self.slot, self.id)
+    }
+}
+
+impl OracleOrder {
+    /// Check if this auction order has completed
+    pub fn is_auction_complete(&self, current_slot: u64) -> bool {
+        (self.slot + self.duration as u64) <= current_slot
+    }
+
+    /// Convert to FloatingLimitOrder when auction completes
+    pub fn to_floating_limit_order(&self) -> FloatingLimitOrder {
+        FloatingLimitOrder {
+            id: self.id,
+            slot: self.slot,
+            size: self.size,
+            offset_price: self.end_price_offset as i32,
+            max_ts: self.max_ts,
+            post_only: false,
+        }
     }
 }
 
