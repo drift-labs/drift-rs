@@ -147,13 +147,13 @@ where
     /// Returns true if the order was updated, false if it was removed
     pub fn update(&mut self, order_id: u64, new_order: Order, old_order: Order) -> bool {
         let remaining_size = new_order.base_asset_amount - new_order.base_asset_amount_filled;
-        self.remove(order_id, old_order);
+        let was_removed = self.remove(order_id, old_order);
 
         if remaining_size != 0 {
             self.insert(order_id, new_order);
             true
         } else {
-            false
+            was_removed
         }
     }
 }
@@ -744,10 +744,7 @@ impl DLOB {
                             orderbook.resting_limit_orders.update(order_id, new_order, old_order);
                         }
                     }
-                    OrderKind::Oracle | OrderKind::OracleTriggered => {
-                        orderbook.oracle_orders.update(order_id, new_order, old_order);
-                    }
-                    OrderKind::FloatingLimitAuction => {
+                    OrderKind::FloatingLimitAuction | OrderKind::Oracle | OrderKind::OracleTriggered => {
                         // if the auction completed, check if order moved to resting
                         if !orderbook.oracle_orders.update(order_id, new_order, old_order) {
                             log::trace!(target: "dlob", "update oracle limit order: {order_id}");
@@ -826,10 +823,7 @@ impl DLOB {
                             order_removed = orderbook.resting_limit_orders.remove(order_id, converted_order);
                         }
                     }
-                    OrderKind::Oracle | OrderKind::OracleTriggered => {
-                        order_removed = orderbook.oracle_orders.remove(order_id, order);
-                    }
-                    OrderKind::FloatingLimitAuction => {
+                    OrderKind::FloatingLimitAuction | OrderKind::Oracle | OrderKind::OracleTriggered => {
                         // if the auction completed, check if order moved to resting
                         order_removed = orderbook.oracle_orders.remove(order_id, order);
                         if !order_removed {
