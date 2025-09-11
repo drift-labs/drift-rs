@@ -678,7 +678,6 @@ impl DLOB {
                 orderbook.update_l3_view(slot, oracle_price, &self.metadata);
             }
         });
-
         self.last_modified_slot
             .store(slot, std::sync::atomic::Ordering::Relaxed)
     }
