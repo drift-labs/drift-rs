@@ -3,7 +3,10 @@ use std::{
     collections::BTreeMap,
     fmt::Debug,
     iter::Peekable,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{
+        atomic::{AtomicBool, AtomicU64},
+        Arc,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -202,29 +205,25 @@ impl<T: Clone + Debug + From<(u64, Order)> + OrderKey> Orders<T> {
         let old_key = old_order.key();
         match new_order.direction {
             Direction::Long => {
-                if self.bids.remove(&Reverse(old_key)).is_some() && remaining_size != 0 {
-                    let order: T = (order_id, new_order).into();
-                    self.insert_raw(true, order);
+                if self.bids.remove(&Reverse(old_key)).is_some() {
+                    if remaining_size != 0 {
+                        let order: T = (order_id, new_order).into();
+                        self.insert_raw(true, order);
+                    }
                     return true;
                 }
             }
             Direction::Short => {
-                if self.asks.remove(&old_key).is_some() && remaining_size != 0 {
-                    let order: T = (order_id, new_order).into();
-                    self.insert_raw(false, order);
+                if self.asks.remove(&old_key).is_some() {
+                    if remaining_size != 0 {
+                        let order: T = (order_id, new_order).into();
+                        self.insert_raw(false, order);
+                    }
                     return true;
                 }
             }
         }
-        log::warn!(target: "dlob", "update not found: {order_id}, {new_order:?}");
-        match new_order.direction {
-            Direction::Long => {
-                log::warn!(target: "dlob", "bids: {:?}", self.bids);
-            }
-            Direction::Short => {
-                log::warn!(target: "dlob", "asks: {:?}", self.asks);
-            }
-        }
+        log::warn!(target: "dlob", "update not found: {order_id}, {old_order:?}, {new_order:?}");
 
         false
     }
@@ -542,6 +541,8 @@ pub struct DLOB {
     metadata: DashMap<u64, OrderMetadata, ahash::RandomState>,
     /// static drift program data e.g market tick sizes
     program_data: &'static ProgramData,
+    /// last slot update
+    last_modified_slot: AtomicU64,
 }
 
 impl Default for DLOB {
@@ -550,6 +551,7 @@ impl Default for DLOB {
             markets: DashMap::default(),
             metadata: DashMap::default(),
             program_data: Box::leak(Box::new(ProgramData::uninitialized())),
+            last_modified_slot: Default::default(),
         }
     }
 }
@@ -633,10 +635,21 @@ impl DLOB {
         slot: u64,
         oracle_price: u64,
     ) {
+        let last_modified_slot = self
+            .last_modified_slot
+            .load(std::sync::atomic::Ordering::Relaxed);
+        if slot < last_modified_slot {
+            log::warn!(
+                "ignoring out of order slot update: update:{slot},ours:{last_modified_slot}",
+            );
+            return;
+        }
         self.with_orderbook_mut(MarketId::new(market_index, market_type), |orderbook| {
             orderbook.update_slot_and_oracle_price(slot, oracle_price);
             orderbook.update_l3_view(slot, oracle_price, &self.metadata);
         });
+        self.last_modified_slot
+            .store(slot, std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Get a lock-free snapshot of the L2 order book
