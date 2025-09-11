@@ -147,13 +147,13 @@ where
     /// Returns true if the order was updated, false if it was removed
     pub fn update(&mut self, order_id: u64, new_order: Order, old_order: Order) -> bool {
         let remaining_size = new_order.base_asset_amount - new_order.base_asset_amount_filled;
-        self.remove(order_id, old_order);
+        let was_removed = self.remove(order_id, old_order);
 
         if remaining_size != 0 {
             self.insert(order_id, new_order);
             true
         } else {
-            false
+            was_removed
         }
     }
 }
