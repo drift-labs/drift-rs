@@ -755,18 +755,16 @@ impl DLOB {
                             }
                             OrderTriggerCondition::TriggeredAbove | OrderTriggerCondition::TriggeredBelow => {
                                 // order has been triggered, its an ordinary auction order now
-                                orderbook.trigger_orders.remove(order_id, new_order);
-                                let mut new_metadata = *metadata.value();
-                                drop(metadata);
-                                if new_order.is_oracle_trigger_market() {
-                                    new_metadata.kind = OrderKind::OracleTriggered;
-                                    self.metadata.insert(order_id, new_metadata);
-                                    orderbook.oracle_orders.update(order_id, new_order, old_order);
+                                orderbook.trigger_orders.remove(order_id, old_order);
+                                let new_kind = if new_order.is_oracle_trigger_market() {
+                                    orderbook.oracle_orders.insert(order_id, new_order);
+                                    OrderKind::OracleTriggered
                                 } else {
-                                    new_metadata.kind = OrderKind::MarketTriggered;
-                                    self.metadata.insert(order_id, new_metadata);
-                                    orderbook.market_orders.update(order_id, new_order, old_order);
-                                }
+                                    orderbook.market_orders.insert(order_id, new_order);
+                                    OrderKind::MarketTriggered
+                                };
+                                drop(metadata);
+                                self.metadata.entry(order_id).and_modify(|o| o.kind = new_kind);
                             }
                         }
                     }
@@ -778,10 +776,10 @@ impl DLOB {
                             }
                             OrderTriggerCondition::TriggeredAbove | OrderTriggerCondition::TriggeredBelow => {
                                 // order has been triggered, its an ordinary auction order now
-                                orderbook.trigger_orders.remove(order_id, new_order);
+                                orderbook.trigger_orders.remove(order_id, old_order);
+                                orderbook.market_orders.insert(order_id, new_order);
                                 drop(metadata); // drop the borrow
                                 self.metadata.entry(order_id).and_modify(|o| o.kind = OrderKind::LimitTriggered);
-                                orderbook.market_orders.update(order_id, new_order, old_order);
                             }
                         }
                     }
