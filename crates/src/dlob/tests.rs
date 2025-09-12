@@ -142,14 +142,14 @@ fn dlob_limit_order_sorting() {
         .unwrap();
 
     // Verify bids are sorted highest to lowest
-    let bid_prices = book.get_limit_bids(slot, 1_000_000);
+    let bid_prices = book.get_limit_bids(1_000_000);
     assert_eq!(
         bid_prices.iter().map(|o| o.price).collect::<Vec<u64>>(),
         vec![200_u64, 150, 100]
     );
 
     // Verify asks are sorted lowest to highest
-    let ask_prices = book.get_limit_asks(slot, 1_000_000);
+    let ask_prices = book.get_limit_asks(1_000_000);
     assert_eq!(
         ask_prices.iter().map(|o| o.price).collect::<Vec<u64>>(),
         vec![250_u64, 300, 350]
@@ -200,7 +200,7 @@ fn dlob_floating_limit_order_sorting() {
         .floating_limit_orders
         .bids
         .iter()
-        .map(|v| v.offset_price)
+        .map(|(_, v)| v.offset_price)
         .collect();
     assert_eq!(bid_offsets, vec![30, 20, 10]);
 
@@ -209,7 +209,7 @@ fn dlob_floating_limit_order_sorting() {
         .floating_limit_orders
         .asks
         .iter()
-        .map(|v| v.offset_price)
+        .map(|(_, v)| v.offset_price)
         .collect();
     assert_eq!(ask_offsets, vec![-30, -20, -10]);
 }
@@ -423,7 +423,7 @@ fn dlob_l2_snapshot() {
     let old_order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 2, slot);
     let mut new_order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 4, slot); // Changed size from 2 to 4
     new_order.post_only = true;
-    dlob.update_order(&user, new_order, old_order);
+    dlob.update_order(&user, slot, new_order, old_order);
 
     // Get updated L2 snapshot
     dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
@@ -437,7 +437,7 @@ fn dlob_l2_snapshot() {
     let old_order = create_test_order(3, OrderType::Market, Direction::Long, 0, 4, slot);
     let mut new_order = create_test_order(3, OrderType::Market, Direction::Long, 1050, 4, slot);
     new_order.base_asset_amount_filled = old_order.base_asset_amount; // Set filled amount equal to total amount
-    dlob.update_order(&user, new_order, old_order);
+    dlob.update_order(&user, slot, new_order, old_order);
 
     // Get updated L2 snapshot
     dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
@@ -923,7 +923,7 @@ fn dlob_zero_size_order_handling() {
     dlob.insert_order(&user, order);
     let mut new_order = order.clone();
     new_order.base_asset_amount_filled = 10; // Fully fill it
-    dlob.update_order(&user, new_order, order);
+    dlob.update_order(&user, slot, new_order, order);
 
     // Verify no orders in book
     let book = dlob
@@ -1292,7 +1292,7 @@ fn dlob_trigger_order_transitions() {
     triggered_order.trigger_condition = OrderTriggerCondition::TriggeredAbove;
     // Set oracle trigger flag for oracle-triggered market
     triggered_order.bit_flags |= Order::ORACLE_TRIGGER_MARKET_FLAG;
-    dlob.update_order(&user, triggered_order, order);
+    dlob.update_order(&user, slot, triggered_order, order);
     {
         let book = dlob
             .markets
@@ -1306,7 +1306,9 @@ fn dlob_trigger_order_transitions() {
     }
 
     // --- Remove triggered order ---
-    dlob.remove_order(&user, triggered_order);
+    // Advance slot to ensure auction is completed
+    let advanced_slot = slot + order.auction_duration as u64;
+    dlob.remove_order(&user, advanced_slot, triggered_order);
     {
         let book = dlob
             .markets
@@ -1318,7 +1320,7 @@ fn dlob_trigger_order_transitions() {
     }
 
     // --- Insert TriggerLimit order (Below) ---
-    let mut order2 = create_test_order(2, OrderType::TriggerLimit, Direction::Short, 0, 5, slot);
+    let mut order2 = create_test_order(2, OrderType::TriggerLimit, Direction::Short, 1049, 5, slot);
     order2.trigger_price = 1050;
     order2.trigger_condition = OrderTriggerCondition::Below;
     dlob.insert_order(&user, order2);
@@ -1334,7 +1336,10 @@ fn dlob_trigger_order_transitions() {
     // --- Update to triggered (should move to market_orders) ---
     let mut triggered_order2 = order2;
     triggered_order2.trigger_condition = OrderTriggerCondition::TriggeredBelow;
-    dlob.update_order(&user, triggered_order2, order2);
+    triggered_order2.auction_duration = 5;
+    triggered_order2.auction_start_price = 1050;
+    triggered_order2.auction_end_price = 1048;
+    dlob.update_order(&user, slot + 1, triggered_order2, order2);
     {
         let book = dlob
             .markets
@@ -1345,7 +1350,10 @@ fn dlob_trigger_order_transitions() {
     }
 
     // --- Remove triggered limit order ---
-    dlob.remove_order(&user, triggered_order2);
+    // Advance slot to ensure auction is completed
+    let auction_complete_slot = slot + triggered_order2.auction_duration as u64 + 1;
+    dlob.update_slot_and_oracle_price(0, MarketType::Perp, auction_complete_slot, 0);
+    dlob.remove_order(&user, auction_complete_slot, triggered_order2);
     {
         let book = dlob
             .markets
@@ -1412,7 +1420,7 @@ fn dlob_metadata_consistency_after_auction_expiry_and_removal() {
     // 2. Then try to remove from market_orders (fails - order not there)
     // 3. Then try to remove from resting_limit_orders (fails - metadata already gone)
     // 4. Result: order still in resting_limit_orders but metadata is gone
-    dlob.remove_order(&user, order);
+    dlob.remove_order(&user, expired_slot, order);
 
     // Verify order was actually removed from resting_limit_orders
     {
@@ -1443,6 +1451,95 @@ fn dlob_metadata_consistency_after_auction_expiry_and_removal() {
 
     // This should work without "metadata missing" errors
     // Before the fix, this would fail because the order would still be in resting_limit_orders
+    // but without metadata, causing the "metadata missing" error
+    assert_eq!(
+        crosses.orders.len(),
+        0,
+        "Should find no crossing orders after removal"
+    );
+}
+
+#[test]
+fn dlob_metadata_consistency_limit_auction_expiry_and_removal() {
+    let _ = env_logger::try_init();
+    let dlob = DLOB::default();
+    let user = Pubkey::new_unique();
+    let slot = 100;
+    let order_size = 100;
+    let oracle_price = 150_000;
+
+    // bootstrap orderbook for market
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market_index: 0,
+        market_tick_size: 10,
+        ..Default::default()
+    });
+
+    // Create a regular limit order with auction that will expire
+    let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 0, order_size, slot);
+    order.auction_start_price = 100_000;
+    order.auction_end_price = 200_000;
+    order.auction_duration = 5; // Will expire at slot 105
+                                // No oracle_price_offset - this makes it a regular limit order
+    order.post_only = false; // This makes it a LimitAuction
+
+    // Insert the order
+    dlob.insert_order(&user, order);
+
+    // Verify initial state - order should be in market_orders with LimitAuction metadata
+    let order_id = crate::dlob::util::order_hash(&user, 1);
+    {
+        let metadata = dlob.metadata.get(&order_id).unwrap();
+        assert_eq!(metadata.kind, OrderKind::LimitAuction);
+    } // Drop metadata reference before accessing orderbook
+
+    {
+        let book = dlob.markets.get(&MarketId::perp(0)).unwrap();
+        assert_eq!(book.market_orders.asks.len(), 1);
+        assert_eq!(book.resting_limit_orders.asks.len(), 0);
+    } // Drop book reference
+
+    // Advance slot to expire the auction (slot 105 > slot + duration)
+    let expired_slot = slot + 6; // slot 106
+    dlob.update_slot_and_oracle_price(0, MarketType::Perp, expired_slot, oracle_price);
+
+    // Verify order moved to resting_limit_orders
+    {
+        let book = dlob.markets.get(&MarketId::perp(0)).unwrap();
+        assert_eq!(book.market_orders.asks.len(), 0);
+        assert_eq!(book.resting_limit_orders.asks.len(), 1);
+    } // Drop book reference
+
+    // CRITICAL: Now try to remove the order
+    dlob.remove_order(&user, expired_slot, order);
+
+    // Verify order was actually removed from resting_limit_orders
+    {
+        let book = dlob.markets.get(&MarketId::perp(0)).unwrap();
+        assert_eq!(
+            book.resting_limit_orders.asks.len(),
+            0,
+            "Order should be removed from resting_limit_orders"
+        );
+    } // Drop book reference
+
+    // Verify metadata was also removed
+    assert!(
+        dlob.metadata.get(&order_id).is_none(),
+        "Metadata should be removed after successful order removal"
+    );
+
+    // Test that we can find crosses without "metadata missing" errors
+    let taker_order = TakerOrder {
+        price: 150_000,
+        size: 50,
+        direction: Direction::Long,
+        market_index: 0,
+        market_type: MarketType::Perp,
+    };
+
+    let crosses = dlob.find_crosses_for_taker_order(expired_slot, oracle_price, taker_order, None);
+    // Should find no crosses since the order was removed
     // but without metadata, causing the "metadata missing" error
     assert_eq!(
         crosses.orders.len(),
@@ -1503,12 +1600,8 @@ fn dlob_metadata_consistency_floating_limit_auction_expiry_and_removal() {
     } // Drop book reference
 
     // CRITICAL: Now try to remove the order
-    // Before the fix, this would fail because:
-    // 1. remove_order() would remove metadata immediately
-    // 2. Then try to remove from oracle_orders (fails - order not there)
-    // 3. Then try to remove from floating_limit_orders (fails - metadata already gone)
-    // 4. Result: order still in floating_limit_orders but metadata is gone
-    dlob.remove_order(&user, order);
+    // Use a much later slot to ensure the auction logic works correctly
+    dlob.remove_order(&user, expired_slot, order);
 
     // Verify order was actually removed from floating_limit_orders
     {
@@ -1544,76 +1637,6 @@ fn dlob_metadata_consistency_floating_limit_auction_expiry_and_removal() {
         crosses.orders.len(),
         0,
         "Should find no crossing orders after removal"
-    );
-}
-
-#[test]
-fn dlob_demonstrates_metadata_missing() {
-    let _ = env_logger::try_init();
-    let dlob = DLOB::default();
-    let user = Pubkey::new_unique();
-    let slot = 100;
-    let order_size = 100;
-    let oracle_price = 150_000;
-
-    // bootstrap orderbook for market
-    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
-        market_index: 0,
-        market_tick_size: 10,
-        ..Default::default()
-    });
-
-    // Create a limit order with auction that will expire
-    let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 0, order_size, slot);
-    order.auction_start_price = 100_000;
-    order.auction_end_price = 200_000;
-    order.auction_duration = 5; // Will expire at slot 105
-    order.post_only = false; // This makes it a LimitAuction
-
-    // Insert the order
-    dlob.insert_order(&user, order);
-
-    // Advance slot to expire the auction (slot 105 > slot + duration)
-    let expired_slot = slot + 6; // slot 106
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, expired_slot, oracle_price);
-
-    // Try to remove the order - this will fail with the original bug
-    dlob.remove_order(&user, order);
-
-    // Now try to find crosses - this will trigger the "metadata missing" error
-    // because the order is still in resting_limit_orders but metadata is gone
-    let taker_order = TakerOrder {
-        price: 190_000, // Lower than the resting order price (200_000)
-        size: 50,
-        direction: Direction::Short,
-        market_index: 0,
-        market_type: MarketType::Perp,
-    };
-
-    let crosses = dlob.find_crosses_for_taker_order(expired_slot, oracle_price, taker_order, None);
-
-    // This test demonstrates the bug: the order should be removed but isn't
-    // Before the fix: crosses.orders.len() would be 0 but the order would still be in the book
-    // After the fix: crosses.orders.len() should be 0 and the order should be properly removed
-
-    // The bug manifests as: order still exists in resting_limit_orders but has no metadata
-    // This causes the "metadata missing" error in find_crosses_for_taker_order_inner
-    {
-        let book = dlob.markets.get(&MarketId::perp(0)).unwrap();
-        let order_id = crate::dlob::util::order_hash(&user, 1);
-
-        // This demonstrates the inconsistent state that causes the bug:
-        // Order exists in the book but has no metadata
-        if book.resting_limit_orders.bids.len() > 0 && dlob.metadata.get(&order_id).is_none() {
-            panic!("BUG DEMONSTRATED: Order exists in resting_limit_orders but has no metadata - this causes 'metadata missing' errors");
-        }
-    }
-
-    // With the fix, this should pass (order properly removed)
-    assert_eq!(
-        crosses.orders.len(),
-        0,
-        "Order should be properly removed after fix"
     );
 }
 
@@ -1661,7 +1684,7 @@ fn dlob_trigger_order_transition_remove() {
     triggered_order.price = 1100; // Price might change when triggered
 
     // This update should work, but let's see if there are any issues
-    dlob.update_order(&user, triggered_order, order);
+    dlob.update_order(&user, slot, triggered_order, order);
 
     // Verify the transition worked
     {
@@ -1672,7 +1695,7 @@ fn dlob_trigger_order_transition_remove() {
 
     // Now try to remove the triggered order
     // This might fail if the same key mismatch issue exists
-    dlob.remove_order(&user, triggered_order);
+    dlob.remove_order(&user, slot, triggered_order);
 
     // Verify the order was properly removed
     {
@@ -1731,7 +1754,7 @@ fn dlob_trigger_order_transition_update() {
     triggered_order.price = 1100; // Price changes when triggered
 
     // This update might fail silently
-    dlob.update_order(&user, triggered_order, order);
+    dlob.update_order(&user, slot, triggered_order, order);
 
     // Check if the transition actually worked
     {
