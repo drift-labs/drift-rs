@@ -147,13 +147,13 @@ where
     /// Returns true if the order was updated, false if it was removed
     pub fn update(&mut self, order_id: u64, new_order: Order, old_order: Order) -> bool {
         let remaining_size = new_order.base_asset_amount - new_order.base_asset_amount_filled;
-        let was_removed = self.remove(order_id, old_order);
+        self.remove(order_id, old_order);
 
         if remaining_size != 0 {
             self.insert(order_id, new_order);
             true
         } else {
-            was_removed
+            false
         }
     }
 }
@@ -678,6 +678,7 @@ impl DLOB {
                 orderbook.update_l3_view(slot, oracle_price, &self.metadata);
             }
         });
+
         self.last_modified_slot
             .store(slot, std::sync::atomic::Ordering::Relaxed)
     }
