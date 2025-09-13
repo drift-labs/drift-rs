@@ -178,6 +178,26 @@ mod tests {
     }
 
     #[test]
+    fn dlob_util_test_remove_order_via_cancel() {
+        let pubkey = Pubkey::new_unique();
+        let mut order = create_test_order(1, OrderStatus::Open);
+        let old = create_test_user(vec![order.clone()]);
+        order.status = OrderStatus::Canceled;
+        let new = create_test_user(vec![order]);
+
+        let deltas = compare_user_orders(pubkey, &old, &new);
+        assert_eq!(deltas.len(), 1);
+
+        match &deltas[0] {
+            OrderDelta::Remove { user, order } => {
+                assert_eq!(*user, pubkey);
+                assert_eq!(order.order_id, 1);
+            }
+            _ => panic!("Expected Remove delta"),
+        }
+    }
+
+    #[test]
     fn dlob_util_test_update_order() {
         let pubkey = Pubkey::new_unique();
         let old_order = create_test_order(1, OrderStatus::Open);

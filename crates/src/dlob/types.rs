@@ -20,7 +20,7 @@ use crate::{
 type MarketOrderKey = (u64, u64);
 type OracleOrderKey = (u64, u64);
 type LimitOrderKey = (u64, u64, u64);
-type FloatingLimitOrderKey = (u64, u64);
+type FloatingLimitOrderKey = (i32, u64, u64);
 type TriggerOrderKey = (u64, u64);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy, PartialEq)]
@@ -166,22 +166,12 @@ impl MarketOrder {
         LimitOrder {
             id: self.id,
             size: self.size,
-            price: self.end_price as u64,
+            price: self.price,
             slot: self.slot,
             max_ts: self.max_ts,
             post_only: false,
+            reduce_only: self.reduce_only,
         }
-    }
-
-    /// Convert to Order with correct properties for removal from resting_limit_orders
-    pub fn to_order_for_resting_removal(
-        &self,
-        mut order: crate::types::Order,
-    ) -> crate::types::Order {
-        // Monkey patch the order to look like a limit order with correct price
-        order.price = self.end_price as u64; // Use end_price instead of start_price
-        order.order_type = crate::types::OrderType::Limit;
-        order
     }
 }
 
@@ -204,9 +194,10 @@ impl OracleOrder {
             id: self.id,
             slot: self.slot,
             size: self.size,
-            offset_price: self.end_price_offset as i32,
+            offset_price: self.oracle_price_offset,
             max_ts: self.max_ts,
             post_only: false,
+            reduce_only: self.reduce_only,
         }
     }
 }
@@ -221,7 +212,7 @@ impl OrderKey for LimitOrder {
 impl OrderKey for FloatingLimitOrder {
     type Key = FloatingLimitOrderKey;
     fn key(&self) -> Self::Key {
-        (self.slot, self.id)
+        (self.offset_price, self.slot, self.id)
     }
 }
 
@@ -239,11 +230,13 @@ pub(crate) struct MarketOrder {
     pub size: u64,
     pub start_price: i64,
     pub end_price: i64,
+    pub price: u64, // the limit price post auction
     pub duration: u8,
     pub slot: u64,
     pub max_ts: u64,
     pub is_limit: bool,
     pub direction: Direction,
+    pub reduce_only: bool,
 }
 
 #[derive(Default, Clone, PartialEq, Debug)]
@@ -252,11 +245,13 @@ pub(crate) struct OracleOrder {
     pub size: u64,
     pub start_price_offset: i64,
     pub end_price_offset: i64,
+    pub oracle_price_offset: i32,
     pub max_ts: u64,
     pub slot: u64,
     pub duration: u8,
     pub is_limit: bool,
     pub direction: Direction,
+    pub reduce_only: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -271,6 +266,8 @@ pub struct LimitOrderView {
     pub slot: u64,
     /// Whether the order is post-only
     pub post_only: bool,
+    /// Whether the order is reduce-only
+    pub reduce_only: bool,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -281,6 +278,7 @@ pub(crate) struct LimitOrder {
     pub slot: u64,
     pub max_ts: u64,
     pub post_only: bool,
+    pub reduce_only: bool,
 }
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
@@ -291,6 +289,7 @@ pub(crate) struct FloatingLimitOrder {
     pub max_ts: u64,
     pub offset_price: i32,
     pub post_only: bool,
+    pub reduce_only: bool,
 }
 
 #[allow(dead_code)]
@@ -305,6 +304,7 @@ pub(crate) struct TriggerOrder {
     pub direction: Direction,
     pub kind: OrderType,
     pub bit_flags: u8,
+    pub reduce_only: bool,
 }
 
 impl TriggerOrder {
@@ -435,11 +435,13 @@ impl From<(u64, Order)> for MarketOrder {
             size: order.base_asset_amount - order.base_asset_amount_filled,
             start_price: order.auction_start_price,
             end_price: order.auction_end_price,
+            price: order.price,
             duration: order.auction_duration,
             direction: order.direction,
             slot: order.slot,
-            is_limit: order.order_type == OrderType::Limit,
+            is_limit: matches!(order.order_type, OrderType::Limit | OrderType::TriggerLimit),
             max_ts: order.max_ts as u64,
+            reduce_only: order.reduce_only,
         }
     }
 }
@@ -489,11 +491,13 @@ impl From<(u64, Order)> for OracleOrder {
             size: order.base_asset_amount - order.base_asset_amount_filled,
             start_price_offset: order.auction_start_price,
             end_price_offset: order.auction_end_price,
+            oracle_price_offset: order.oracle_price_offset,
             duration: order.auction_duration,
             slot: order.slot,
             is_limit: order.order_type == OrderType::Limit,
             direction: order.direction,
             max_ts: order.max_ts as u64,
+            reduce_only: order.reduce_only,
         }
     }
 }
@@ -517,6 +521,7 @@ impl From<(u64, Order)> for LimitOrder {
             slot: order.slot,
             max_ts: order.max_ts as u64,
             post_only: order.post_only,
+            reduce_only: order.reduce_only,
         }
     }
 }
@@ -525,13 +530,7 @@ impl FloatingLimitOrder {
     pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
         self.max_ts > now_unix_seconds
     }
-}
-
-impl DynamicPrice for FloatingLimitOrder {
-    fn size(&self) -> u64 {
-        self.size
-    }
-    fn get_price(&self, _slot: u64, oracle_price: u64, tick_size: u64) -> u64 {
+    pub fn get_price(&self, oracle_price: u64, tick_size: u64) -> u64 {
         (oracle_price as i64 + self.offset_price as i64).max(tick_size as i64) as u64
     }
 }
@@ -546,6 +545,7 @@ impl From<(u64, Order)> for FloatingLimitOrder {
             slot: order.slot,
             max_ts: order.max_ts as u64,
             post_only: order.post_only,
+            reduce_only: order.reduce_only,
         }
     }
 }
@@ -562,6 +562,7 @@ impl From<(u64, Order)> for TriggerOrder {
             direction: order.direction,
             kind: order.order_type,
             bit_flags: order.bit_flags,
+            reduce_only: order.reduce_only,
         }
     }
 }
