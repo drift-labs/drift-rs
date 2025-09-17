@@ -2242,20 +2242,21 @@ impl<'a> TransactionBuilder<'a> {
     /// Add a place and take instruction
     ///
     /// * `order` - the order to place
-    /// * `maker_info` - pubkey of the maker/counter-party to take against and account data
+    /// * `maker_info` - pubkey of the maker/counter-party(s) to take against and account data
     /// * `referrer` - pubkey of the maker's referrer account, if any
     /// * `fulfillment_type` - type of fill for spot orders, ignored for perp orders
     pub fn place_and_take(
         mut self,
         order: OrderParams,
-        maker_info: Option<(Pubkey, User)>,
+        maker_info: &[(Pubkey, User)],
         referrer: Option<Pubkey>,
         fulfillment_type: Option<SpotFulfillmentType>,
         success_condition: Option<u32>,
     ) -> Self {
         let mut user_accounts = vec![self.account_data.as_ref()];
-        if let Some((ref _maker_pubkey, ref maker)) = maker_info {
-            user_accounts.push(maker);
+
+        for (_maker, maker_account) in maker_info {
+            user_accounts.push(maker_account);
         }
 
         let is_perp = order.market_type == MarketType::Perp;
@@ -2280,22 +2281,26 @@ impl<'a> TransactionBuilder<'a> {
             .chain(self.force_markets.writeable.iter()),
         );
 
-        if order.high_leverage_mode()
-            || maker_info.is_some_and(|(_, m)| {
-                m.margin_mode
-                    .is_high_leverage_mode(MarginRequirementType::Maintenance)
-            })
-        {
+        if is_perp && order.high_leverage_mode() {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
-        if referrer.is_some_and(|r| !maker_info.is_some_and(|(m, _)| m == r)) {
+        // if referrer is maker don't add account again
+        if referrer.is_some_and(|r| !maker_info.iter().any(|(m, _)| *m == r)) {
             let referrer = referrer.unwrap();
             accounts.push(AccountMeta::new(
                 Wallet::derive_stats_account(&referrer),
                 false,
             ));
             accounts.push(AccountMeta::new(referrer, false));
+        }
+
+        for (maker, maker_account) in maker_info {
+            accounts.push(AccountMeta::new(*maker, false));
+            accounts.push(AccountMeta::new(
+                Wallet::derive_stats_account(&maker_account.authority),
+                false,
+            ));
         }
 
         let ix = if is_perp {
