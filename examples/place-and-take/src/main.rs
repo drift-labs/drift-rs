@@ -1,7 +1,11 @@
 use borsh::de::BorshDeserialize;
 use drift_rs::{
     Context, DriftClient, RpcClient, TransactionBuilder, Wallet,
-    types::{MarketId, MarketType, PositionDirection, accounts::User},
+    math::constants::PRICE_PRECISION,
+    types::{
+        MarketId, MarketType, OrderParams, OrderType, PositionDirection, PostOnlyParam,
+        accounts::User,
+    },
 };
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
@@ -109,9 +113,15 @@ async fn main() {
     };
 
     // Create a sample order
-    let order = drift_rs::types::NewOrder::market(MarketId::perp(market_index))
-        .amount(10_000_000) // 0.1 SOL (assuming 6 decimals)
-        .build();
+    let order = OrderParams {
+        market_index,
+        market_type,
+        base_asset_amount: 10_000_000,
+        order_type: OrderType::Market,
+        direction: PositionDirection::Long,
+        post_only: PostOnlyParam::None,
+        ..Default::default()
+    };
 
     // Get top makers
     let makers = match get_top_makers(context, market_index, market_type, side, Some(4)).await {
