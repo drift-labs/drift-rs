@@ -114,12 +114,6 @@ extern "C" {
         oracle_price: i64,
         contract_type: ContractType,
     ) -> FfiResult<i128>;
-    #[allow(improper_ctypes)]
-    pub fn perp_position_simulate_settled_lp_position(
-        position: &types::PerpPosition,
-        market: &accounts::PerpMarket,
-        oracle_price: i64,
-    ) -> FfiResult<types::PerpPosition>;
 
     #[allow(improper_ctypes)]
     pub fn spot_market_get_asset_weight(
@@ -443,15 +437,6 @@ impl types::PerpPosition {
     ) -> SdkResult<i128> {
         to_sdk_result(unsafe {
             perp_position_worst_case_base_asset_amount(self, oracle_price, contract_type)
-        })
-    }
-    pub fn simulate_settled_lp_position(
-        &self,
-        market: &accounts::PerpMarket,
-        oracle_price: i64,
-    ) -> SdkResult<types::PerpPosition> {
-        to_sdk_result(unsafe {
-            perp_position_simulate_settled_lp_position(self, market, oracle_price)
         })
     }
 }
@@ -1037,30 +1022,6 @@ mod tests {
         assert!(result.is_ok());
         let worst_case_amount = result.unwrap();
         assert!(worst_case_amount >= 1000); // The worst case should be at least the current base asset amount
-    }
-
-    #[test]
-    fn ffi_perp_position_simulate_settled_lp_position() {
-        let position = PerpPosition {
-            base_asset_amount: 1_000 * BASE_PRECISION_I64,
-            quote_asset_amount: 5_000 * QUOTE_PRECISION_I64,
-            last_cumulative_funding_rate: 100.into(),
-            ..Default::default()
-        };
-        let market = PerpMarket {
-            amm: crate::drift_idl::types::AMM {
-                cumulative_funding_rate_long: 120.into(),
-                cumulative_funding_rate_short: 80.into(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        let oracle_price = 10 * QUOTE_PRECISION_I64;
-
-        let result = position.simulate_settled_lp_position(&market, oracle_price);
-        assert!(result.is_ok());
-        let simulated_position = result.unwrap();
-        assert!(simulated_position.quote_asset_amount > 1_000);
     }
 
     #[test]

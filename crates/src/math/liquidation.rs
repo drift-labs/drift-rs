@@ -178,11 +178,8 @@ pub fn calculate_liquidation_price_inner(
         .get_perp_position(perp_market.market_index)
         .map_err(|_| SdkError::NoPosition(perp_market.market_index))?;
 
-    let perp_position_with_lp =
-        perp_position.simulate_settled_lp_position(perp_market, oracle_price)?;
-
     let perp_free_collateral_delta = calculate_perp_free_collateral_delta(
-        &perp_position_with_lp,
+        &perp_position,
         perp_market,
         oracle_price,
         user.margin_mode,

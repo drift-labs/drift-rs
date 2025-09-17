@@ -175,11 +175,9 @@ impl UserMargin for DriftClient {
         let position = user
             .get_perp_position(market.market_index)
             .map_err(|_| SdkError::NoMarketData(MarketId::perp(market.market_index)))?;
-        let position_with_lp_settle =
-            position.simulate_settled_lp_position(market, oracle_price)?;
 
-        let worst_case_base_amount = position_with_lp_settle
-            .worst_case_base_asset_amount(oracle_price, market.contract_type)?;
+        let worst_case_base_amount =
+            position.worst_case_base_asset_amount(oracle_price, market.contract_type)?;
 
         let margin_info = self.calculate_margin_info(user)?;
         let free_collateral = margin_info
