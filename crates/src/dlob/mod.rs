@@ -114,7 +114,6 @@ where
     pub fn remove(&mut self, order_id: u64, order: Order) -> bool {
         match order.direction {
             Direction::Long => {
-                log::trace!(target: "dlob", "remove order: {}/{}", order.slot, order.order_id);
                 let order: T = (order_id, order).into();
                 if let Some(idx) = self.bids.iter().position(|x| x.key() == order.key()) {
                     log::trace!(target: "dlob", "DynamicOrders: remove {order_id} at: {idx}");
@@ -128,7 +127,6 @@ where
                 }
             }
             Direction::Short => {
-                log::trace!(target: "dlob", "remove order: {}/{}", order.slot, order.order_id);
                 let order: T = (order_id, order).into();
                 if let Some(idx) = self.asks.iter().position(|x| x.key() == order.key()) {
                     log::trace!(target: "dlob", "DynamicOrders: remove {order_id} at: {idx}");
@@ -274,33 +272,53 @@ impl Orderbook {
     fn expire_auction_orders(&mut self, slot: u64) {
         self.market_orders.asks.retain(|x| {
             let is_auction_complete = x.is_auction_complete(slot);
-            if is_auction_complete && x.is_limit && x.size > 0 {
-                log::trace!(target: "dlob", "market auction end=>resting (slot: {}): {}", slot, x.id);
-                self.resting_limit_orders.insert_raw(false, x.to_limit_order());
+            if is_auction_complete {
+                if x.is_limit && x.size > 0 {
+                    log::trace!(target: "dlob", "market auction => resting: {}@{}", x.id, x.slot);
+                    self.resting_limit_orders
+                        .insert_raw(false, x.to_limit_order());
+                } else {
+                    log::trace!(target: "dlob", "market auction expired: {}@{}", x.id, x.slot);
+                }
             }
             !is_auction_complete
         });
         self.market_orders.bids.retain(|x| {
             let is_auction_complete = x.is_auction_complete(slot);
-            if is_auction_complete && x.is_limit && x.size > 0 {
-                log::trace!(target: "dlob", "market auction end=>resting: (slot: {}): {}", slot, x.id);
-                self.resting_limit_orders.insert_raw(true, x.to_limit_order());
+            if is_auction_complete {
+                if x.is_limit && x.size > 0 {
+                    log::trace!(target: "dlob", "market auction => resting:: {}@{}", x.id, x.slot);
+                    self.resting_limit_orders
+                        .insert_raw(true, x.to_limit_order());
+                } else {
+                    log::trace!(target: "dlob", "market auction expired: {}@{}", x.id, x.slot);
+                }
             }
             !is_auction_complete
         });
         self.oracle_orders.asks.retain(|x| {
             let is_auction_complete = x.is_auction_complete(slot);
-            if is_auction_complete && x.is_limit && x.size > 0 {
-                log::trace!(target: "dlob", "oracle auction end=>resting: (slot: {}): {}", slot, x.id);
-                self.floating_limit_orders.insert_raw(false, x.to_floating_limit_order());
+            if is_auction_complete {
+                if x.is_limit && x.size > 0 {
+                    log::trace!(target: "dlob", "oracle auction => resting:: {}@{}", x.id, x.slot);
+                    self.floating_limit_orders
+                        .insert_raw(false, x.to_floating_limit_order());
+                } else {
+                    log::trace!(target: "dlob", "oracle auction expired:: {}@{}", x.id, x.slot);
+                }
             }
             !is_auction_complete
         });
         self.oracle_orders.bids.retain(|x| {
             let is_auction_complete = x.is_auction_complete(slot);
-            if is_auction_complete && x.is_limit && x.size > 0 {
-                log::trace!(target: "dlob", "oracle auction end=>resting: (slot: {}): {}", slot, x.id);
-                self.floating_limit_orders.insert_raw(true, x.to_floating_limit_order());
+            if is_auction_complete {
+                if x.is_limit && x.size > 0 {
+                    log::trace!(target: "dlob", "oracle auction => resting:: {}@{}", x.id, x.slot);
+                    self.floating_limit_orders
+                        .insert_raw(true, x.to_floating_limit_order());
+                } else {
+                    log::trace!(target: "dlob", "oracle auction expired:: {}@{}", x.id, x.slot);
+                }
             }
             !is_auction_complete
         });
@@ -757,7 +775,7 @@ impl DLOB {
 
     fn update_order(&self, user: &Pubkey, slot: u64, new_order: Order, old_order: Order) {
         let order_id = order_hash(user, new_order.order_id);
-        log::trace!(target: "dlob", "update order: {order_id},{:?}", new_order.order_type);
+        log::trace!(target: "dlob", "update order: {order_id}{},{:?}", old_order.order_id, new_order.order_type);
 
         // If order is fully filled, remove it instead of updating
         if new_order.base_asset_amount <= new_order.base_asset_amount_filled {
@@ -782,6 +800,7 @@ impl DLOB {
                             orderbook.market_orders.update(order_id, new_order, old_order);
                         } else {
                             log::trace!(target: "dlob", "update limit auction (resting): {order_id}");
+                            orderbook.market_orders.remove(order_id, old_order);
                             orderbook.resting_limit_orders.update(order_id, new_order, old_order);
                         }
                     }
@@ -792,6 +811,7 @@ impl DLOB {
                             orderbook.oracle_orders.update(order_id, new_order, old_order);
                         } else {
                             log::trace!(target: "dlob", "update oracle limit (resting): {order_id}");
+                            orderbook.oracle_orders.remove(order_id, old_order);
                             orderbook.floating_limit_orders.update(order_id, new_order, old_order);
                         }
                     }
@@ -848,7 +868,7 @@ impl DLOB {
         log::trace!(target: "dlob", "remove order: {order_id} @ slot: {slot}");
 
         self.with_orderbook_mut(MarketId::new(order.market_index, order.market_type), |orderbook| {
-            if let Some(metadata) = self.metadata.get(&order_id) {
+            if let Some((_, metadata)) = self.metadata.remove(&order_id) {
                 log::trace!(target: "dlob", "remove ({order_id}): {:?}", metadata.kind);
                 let mut order_removed = false;
 
@@ -901,11 +921,7 @@ impl DLOB {
                     }
                 }
 
-                // Only remove metadata if we successfully removed the order
-                if order_removed {
-                    drop(metadata); // drop the borrow before removing
-                    self.metadata.remove(&order_id);
-                } else {
+                if !order_removed {
                     log::warn!(target: "dlob", "failed to remove order {order_id} from orderbook, keeping metadata. order_kind: {:?}, user: {}, order_id: {}", metadata.kind, metadata.user, metadata.order_id);
                 }
             }
