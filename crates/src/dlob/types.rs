@@ -430,7 +430,6 @@ impl DynamicPrice for MarketOrder {
 impl From<(u64, Order)> for MarketOrder {
     fn from(value: (u64, Order)) -> Self {
         let (id, order) = value;
-        let is_limit = matches!(order.order_type, OrderType::Limit | OrderType::TriggerLimit);
         Self {
             id,
             size: order.base_asset_amount - order.base_asset_amount_filled,
@@ -440,7 +439,7 @@ impl From<(u64, Order)> for MarketOrder {
             duration: order.auction_duration,
             direction: order.direction,
             slot: order.slot,
-            is_limit,
+            is_limit: matches!(order.order_type, OrderType::Limit | OrderType::TriggerLimit),
             max_ts: order.max_ts as u64,
             reduce_only: order.reduce_only,
         }
