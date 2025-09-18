@@ -151,6 +151,12 @@ extern "C" {
         market_index: u16,
     ) -> FfiResult<&types::PerpPosition>;
     #[allow(improper_ctypes)]
+    pub fn user_update_perp_position_max_margin_ratio(
+        user: &mut accounts::User,
+        market_index: u16,
+        max_margin_ratio: u16,
+    ) -> FfiResult<()>;
+    #[allow(improper_ctypes)]
     pub fn orders_place_perp_order<'a>(
         user: &accounts::User,
         state: &accounts::State,
@@ -230,16 +236,21 @@ pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
 ///
 /// Returns `true` if the order could be placed
 pub fn simulate_place_perp_order(
-    user: &accounts::User,
+    user: &mut accounts::User,
     accounts: &mut AccountsList,
     state: &accounts::State,
     order_params: &types::OrderParams,
     high_leverage_mode_config: Option<&mut accounts::HighLeverageModeConfig>,
+    max_margin_ratio: Option<u16>,
 ) -> SdkResult<bool> {
     if order_params.high_leverage_mode() && high_leverage_mode_config.is_none() {
         return Err(SdkError::Generic(
             "HLM config account must be provided".to_owned(),
         ));
+    }
+
+    if let Some(max_margin_ratio) = max_margin_ratio {
+        user.update_perp_position_max_margin_ratio(order_params.market_index, max_margin_ratio)?;
     }
 
     let mut lamports = 0;
@@ -469,6 +480,16 @@ impl accounts::User {
     }
     pub fn is_protected_maker(&self) -> bool {
         (self.status & Self::STATUS_PROTECTED_MAKER_ORDERS) > 0
+    }
+
+    pub fn update_perp_position_max_margin_ratio(
+        &mut self,
+        market_index: u16,
+        max_margin_ratio: u16,
+    ) -> SdkResult<()> {
+        to_sdk_result(unsafe {
+            user_update_perp_position_max_margin_ratio(self, market_index, max_margin_ratio)
+        })
     }
 }
 
@@ -1325,7 +1346,7 @@ mod tests {
         let mut accounts = AccountsList::new(&mut perp_markets, &mut spot_markets, &mut oracles);
 
         let res = simulate_place_perp_order(
-            &user,
+            &mut user,
             &mut accounts,
             &State::default(),
             &OrderParams {
@@ -1336,6 +1357,7 @@ mod tests {
                 order_type: OrderType::Market,
                 ..Default::default()
             },
+            None,
             None,
         );
         assert!(res.is_ok_and(|truthy| truthy));
@@ -1361,6 +1383,167 @@ mod tests {
                 current_maintenance_users: 0,
                 padding2: Default::default(),
             }),
+            None,
+        );
+        dbg!(&res);
+        assert!(res.is_ok_and(|truthy| truthy));
+    }
+
+    #[test]
+    fn ffi_simulate_place_perp_order_with_max_margin_ratio() {
+        // smoke test for ffi compatibility, logic tested in `math::` module
+        let btc_perp_index = 1_u16;
+        let mut user = User::default();
+        user.spot_positions[1] = SpotPosition {
+            market_index: 1,
+            scaled_balance: (1_000 * SPOT_BALANCE_PRECISION) as u64,
+            balance_type: SpotBalanceType::Deposit,
+            ..Default::default()
+        };
+        user.perp_positions[0] = PerpPosition {
+            market_index: btc_perp_index,
+            base_asset_amount: 100 * BASE_PRECISION_I64 as i64,
+            quote_asset_amount: -5_000 * QUOTE_PRECISION as i64,
+            ..Default::default()
+        };
+        user.perp_positions[1] = PerpPosition {
+            market_index: 0,
+            base_asset_amount: 100 * BASE_PRECISION_I64 as i64,
+            quote_asset_amount: -5_000 * QUOTE_PRECISION as i64,
+            ..Default::default()
+        };
+
+        // Create mock accounts
+        let mut perp_markets = vec![
+            AccountWithKey {
+                key: Pubkey::new_unique(),
+                account: Account {
+                    owner: crate::constants::PROGRAM_ID,
+                    data: [
+                        PerpMarket::DISCRIMINATOR,
+                        bytemuck::bytes_of(&PerpMarket {
+                            market_index: btc_perp_index,
+                            status: MarketStatus::Active,
+                            amm: AMM {
+                                order_step_size: 1_000,
+                                order_tick_size: 1_000,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        }),
+                    ]
+                    .concat()
+                    .to_vec(),
+                    ..Default::default()
+                },
+            },
+            AccountWithKey {
+                key: Pubkey::new_unique(),
+                account: Account {
+                    owner: crate::constants::PROGRAM_ID,
+                    data: [
+                        PerpMarket::DISCRIMINATOR,
+                        bytemuck::bytes_of(&PerpMarket {
+                            market_index: 0,
+                            status: MarketStatus::Active,
+                            amm: AMM {
+                                order_step_size: 1_000,
+                                order_tick_size: 1_000,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        }),
+                    ]
+                    .concat()
+                    .to_vec(),
+                    ..Default::default()
+                },
+            },
+        ];
+        let mut spot_markets = vec![
+            AccountWithKey {
+                key: Pubkey::new_unique(),
+                account: Account {
+                    owner: crate::constants::PROGRAM_ID,
+                    data: [
+                        SpotMarket::DISCRIMINATOR,
+                        bytemuck::bytes_of(&sol_spot_market()),
+                    ]
+                    .concat()
+                    .to_vec(),
+                    ..Default::default()
+                },
+            },
+            AccountWithKey {
+                key: Pubkey::new_unique(),
+                account: Account {
+                    owner: crate::constants::PROGRAM_ID,
+                    data: [
+                        SpotMarket::DISCRIMINATOR,
+                        bytemuck::bytes_of(&usdc_spot_market()),
+                    ]
+                    .concat()
+                    .to_vec(),
+                    ..Default::default()
+                },
+            },
+        ];
+
+        create_account_info!(
+            get_pyth_price(240, 9),
+            &sol_spot_market().oracle,
+            pyth_program::ID,
+            sol_oracle
+        );
+        create_account_info!(
+            get_pyth_price(1, 6),
+            &usdc_spot_market().oracle,
+            pyth_program::ID,
+            usdc_oracle
+        );
+
+        let mut oracles = [sol_oracle, usdc_oracle];
+        let mut accounts = AccountsList::new(&mut perp_markets, &mut spot_markets, &mut oracles);
+
+        let res = simulate_place_perp_order(
+            &mut user,
+            &mut accounts,
+            &State::default(),
+            &OrderParams {
+                market_index: 1,
+                market_type: MarketType::Perp,
+                direction: PositionDirection::Short,
+                base_asset_amount: 123 * BASE_PRECISION as u64,
+                order_type: OrderType::Market,
+                ..Default::default()
+            },
+            None,
+            2,
+        );
+        assert!(res.is_ok_and(|truthy| truthy));
+
+        let res: Result<bool, crate::types::SdkError> = simulate_place_perp_order(
+            &mut user,
+            &mut accounts,
+            &State::default(),
+            &OrderParams {
+                market_index: 1,
+                market_type: MarketType::Perp,
+                direction: PositionDirection::Short,
+                base_asset_amount: 1_234 * BASE_PRECISION as u64,
+                order_type: OrderType::Market,
+                bit_flags: 0b0000_0010,
+                ..Default::default()
+            },
+            Some(&mut HighLeverageModeConfig {
+                max_users: 5,
+                current_users: 2,
+                reduce_only: 0,
+                padding1: Default::default(),
+                current_maintenance_users: 0,
+                padding2: Default::default(),
+            }),
+            None,
         );
         dbg!(&res);
         assert!(res.is_ok_and(|truthy| truthy));

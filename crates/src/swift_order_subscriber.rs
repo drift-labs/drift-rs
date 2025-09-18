@@ -612,6 +612,7 @@ mod tests {
                 uuid: [115, 56, 108, 117, 74, 76, 90, 101],
                 take_profit_order_params: None,
                 stop_loss_order_params: None,
+                max_margin_ratio: None,
             };
             assert_eq!(signed_msg, expected);
         } else {

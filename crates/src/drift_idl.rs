@@ -2615,6 +2615,7 @@ pub mod types {
         pub uuid: [u8; 8],
         pub take_profit_order_params: Option<SignedMsgTriggerOrderParams>,
         pub stop_loss_order_params: Option<SignedMsgTriggerOrderParams>,
+        pub max_margin_ratio: Option<u16>,
     }
     #[repr(C)]
     #[derive(
@@ -2636,6 +2637,7 @@ pub mod types {
         pub uuid: [u8; 8],
         pub take_profit_order_params: Option<SignedMsgTriggerOrderParams>,
         pub stop_loss_order_params: Option<SignedMsgTriggerOrderParams>,
+        pub max_margin_ratio: Option<u16>,
     }
     #[repr(C)]
     #[derive(
@@ -22675,5 +22677,67 @@ pub mod events {
         pub fuel_taker: u128,
         pub fuel_maker: u128,
         pub fuel_total: u128,
+    }
+    #[derive(Clone, Debug, PartialEq, Default)]
+    #[event]
+    pub struct LPSettleRecord {
+        pub record_id: u64,
+        pub last_ts: i64,
+        pub last_slot: u64,
+        pub ts: i64,
+        pub slot: u64,
+        pub perp_market_index: u16,
+        pub settle_to_lp_amount: i64,
+        pub perp_amm_pnl_delta: i64,
+        pub perp_amm_ex_fee_delta: i64,
+        pub lp_aum: u128,
+        pub lp_price: u128,
+    }
+    #[derive(Clone, Debug, PartialEq, Default)]
+    #[event]
+    pub struct LPSwapRecord {
+        pub ts: i64,
+        pub slot: u64,
+        pub authority: Pubkey,
+        pub out_amount: u128,
+        pub in_amount: u128,
+        pub out_fee: i128,
+        pub in_fee: i128,
+        pub out_spot_market_index: u16,
+        pub in_spot_market_index: u16,
+        pub out_constituent_index: u16,
+        pub in_constituent_index: u16,
+        pub out_oracle_price: i64,
+        pub in_oracle_price: i64,
+        pub last_aum: u128,
+        pub last_aum_slot: u64,
+        pub in_market_current_weight: i64,
+        pub out_market_current_weight: i64,
+        pub in_market_target_weight: i64,
+        pub out_market_target_weight: i64,
+        pub in_swap_id: u64,
+        pub out_swap_id: u64,
+    }
+    #[derive(Clone, Debug, PartialEq, Default)]
+    #[event]
+    pub struct LPMintRedeemRecord {
+        pub ts: i64,
+        pub slot: u64,
+        pub authority: Pubkey,
+        pub description: u8,
+        pub amount: u128,
+        pub fee: i128,
+        pub spot_market_index: u16,
+        pub constituent_index: u16,
+        pub oracle_price: i64,
+        pub mint: Pubkey,
+        pub lp_amount: u64,
+        pub lp_fee: i64,
+        pub lp_price: u128,
+        pub mint_redeem_id: u64,
+        pub last_aum: u128,
+        pub last_aum_slot: u64,
+        pub in_market_current_weight: i64,
+        pub in_market_target_weight: i64,
     }
 }
