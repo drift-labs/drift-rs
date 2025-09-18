@@ -154,7 +154,7 @@ extern "C" {
     pub fn user_update_perp_position_max_margin_ratio(
         user: &mut accounts::User,
         market_index: u16,
-        max_margin_ratio: u16,
+        margin_ratio: u16,
     ) -> FfiResult<()>;
     #[allow(improper_ctypes)]
     pub fn orders_place_perp_order<'a>(
