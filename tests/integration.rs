@@ -241,7 +241,7 @@ async fn place_and_take() {
         .init_tx(&wallet.default_sub_account(), false)
         .await
         .unwrap()
-        .place_and_take(order, None, None, None, None)
+        .place_and_take(order, &[], None, None, None)
         .build();
 
     let result = client.sign_and_send(tx).await;
