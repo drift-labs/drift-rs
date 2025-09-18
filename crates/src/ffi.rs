@@ -1363,7 +1363,7 @@ mod tests {
         assert!(res.is_ok_and(|truthy| truthy));
 
         let res = simulate_place_perp_order(
-            &user,
+            &mut user,
             &mut accounts,
             &State::default(),
             &OrderParams {
@@ -1518,7 +1518,7 @@ mod tests {
                 ..Default::default()
             },
             None,
-            2,
+            Some(2),
         );
         assert!(res.is_ok_and(|truthy| truthy));
 
