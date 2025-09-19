@@ -3280,6 +3280,40 @@ impl<'a> TransactionBuilder<'a> {
 
         self
     }
+    /// Update user position margin ratio
+    ///
+    /// ## Params
+    /// * `market_index` - perp market index of the position
+    /// * `margin_ratio` - new margin ratio for the position
+    ///
+    pub fn update_user_perp_position_custom_margin_ratio(
+        mut self,
+        market_index: u16,
+        margin_ratio: u16,
+    ) -> Self {
+        let accounts = build_accounts(
+            self.program_data(),
+            drift_idl::accounts::UpdateUserPerpPositionCustomMarginRatio {
+                user: self.sub_account,
+                authority: self.owner(),
+            },
+            std::iter::empty(),
+            std::iter::empty(),
+            std::iter::empty(),
+        );
+        self.ixs.push(Instruction {
+            program_id: PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(
+                &drift_idl::instructions::UpdateUserPerpPositionCustomMarginRatio {
+                    sub_account_id: self.account_data.sub_account_id,
+                    perp_market_index: market_index,
+                    margin_ratio,
+                },
+            ),
+        });
+        self
+    }
 }
 
 /// Builds a set of required accounts from a user's open positions and additional given accounts

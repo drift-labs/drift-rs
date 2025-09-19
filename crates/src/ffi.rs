@@ -784,13 +784,13 @@ pub mod abi_types {
     }
 
     /// FFI equivalent of `OraclePriceData`
-    #[repr(C)]
     #[derive(Default, Clone, Copy, Debug)]
     pub struct OraclePriceData {
         pub price: i64,
         pub confidence: u64,
         pub delay: i64,
         pub has_sufficient_number_of_data_points: bool,
+        pub sequence_id: Option<u64>,
     }
 
     /// MMOraclePriceData, not defined in IDL
@@ -1109,6 +1109,7 @@ mod tests {
             confidence: 99 * PERCENTAGE_PRECISION as u64,
             delay: 2,
             has_sufficient_number_of_data_points: true,
+            sequence_id: None,
         };
         let clock_slot = 12345;
         let validity_guard_rails = ValidityGuardRails::default();
@@ -1686,15 +1687,22 @@ mod tests {
             auction_duration: 10,
             auction_start_price: 90_000,
             auction_end_price: 100_000,
+            market_index: 0,
+            market_type: MarketType::Perp,
             ..Default::default()
         };
         let oracle_price = OraclePriceData {
-            price: 100_000,
+            price: 2 * PRICE_PRECISION_I64,
             confidence: 100,
             delay: 0,
             has_sufficient_number_of_data_points: true,
+            sequence_id: None,
         };
-        let perp_market = PerpMarket::default();
+        let perp_market = PerpMarket {
+            contract_tier: ContractTier::A,
+            market_index: 0,
+            ..Default::default()
+        };
         let result =
             calculate_auction_params_for_trigger_order(&order, &oracle_price, Some(&perp_market));
         assert!(result.is_ok(), "FFI call should succeed");

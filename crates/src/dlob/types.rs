@@ -353,6 +353,7 @@ impl TriggerOrder {
                         confidence: 0,
                         delay: 0,
                         has_sufficient_number_of_data_points: true,
+                        sequence_id: None,
                     },
                     Some(market),
                 )
