@@ -26,11 +26,11 @@ use crate::{
 /// Swift message discriminator (Anchor)
 ///
 /// sha256("global:SignedMsgOrderParamsMessage")[..8]
-const SWIFT_MSG_PREFIX: [u8; 8] = [0xc8, 0xd5, 0xa6, 0x5e, 0x22, 0x34, 0xf5, 0x5d];
+pub const SWIFT_MSG_PREFIX: [u8; 8] = [0xc8, 0xd5, 0xa6, 0x5e, 0x22, 0x34, 0xf5, 0x5d];
 /// Swift delegate message discriminator (Anchor)
 ///
 /// sha256("global:/// sha256("global:SignedMsgOrderParamsDelegatedMessage")[..8]
-const SWIFT_DELEGATE_MSG_PREFIX: [u8; 8] = [0x42, 0x65, 0x66, 0x38, 0xc7, 0x25, 0x9e, 0x23];
+pub const SWIFT_DELEGATE_MSG_PREFIX: [u8; 8] = [0x42, 0x65, 0x66, 0x38, 0xc7, 0x25, 0x9e, 0x23];
 
 pub const SWIFT_DEVNET_WS_URL: &str = "wss://master.swift.drift.trade";
 pub const SWIFT_MAINNET_WS_URL: &str = "wss://swift.drift.trade";
@@ -298,19 +298,25 @@ pub async fn subscribe_swift_orders(
             if message["channel"] == "auth" && message["message"] == "Authenticated" {
                 let subscribe_msgs: Vec<Result<Message, _>> = markets
                     .iter()
-                    .map(|m| {
+                    .filter_map(|m| {
                         assert!(m.is_perp(), "only perp markets");
                         let market = client
                             .program_data()
                             .perp_market_config_by_index(m.index())
                             .expect("market exists");
-                        let subscribe_msg = json!({
-                          "action": "subscribe",
-                          "market_type": "perp",
-                          "market_name": market.symbol(),
-                        })
-                        .to_string();
-                        Ok(Message::Text(subscribe_msg.into()))
+                        if !market.symbol().contains("BET") {
+                            let subscribe_msg = json!({
+                              "action": "subscribe",
+                              "market_type": "perp",
+                              "market_name": market.symbol(),
+                            })
+                            .to_string();
+                            Some(Ok(Message::Text(subscribe_msg.into())))
+                        } else {
+                            // skipping bet market
+                            log::debug!(target: LOG_TARGET, "skip subscribe for bet market: {}", market.market_index);
+                            None
+                        }
                     })
                     .collect();
 
@@ -539,7 +545,7 @@ mod tests {
         let signed_message = order_notification.order;
         assert_eq!(
             signed_message.encode_for_signing().as_slice(),
-            b"c8d5a65e2234f55d0001010080841e0000000000000000000000000002000000000000000001320124c6aa950000000001786b2f94000000000000bb64a9150000000074735730364f6d380000"
+            b"c8d5a65e2234f55d0001010080841e0000000000000000000000000002000000000000000001320124c6aa950000000001786b2f94000000000000bb64a9150000000074735730364f6d38000000"
         );
     }
 
@@ -549,9 +555,10 @@ mod tests {
         let ix = drift_idl::instructions::PlaceSignedMsgTakerOrder::deserialize(&mut &data[8..])
             .unwrap();
         // signature, pubkey, len(u16)
-        let payload = hex::decode(&ix.signed_msg_order_params_message_bytes[98..]).unwrap();
+        let mut payload = hex::decode(&ix.signed_msg_order_params_message_bytes[98..]).unwrap();
         dbg!(payload[..8] == SWIFT_MSG_PREFIX);
 
+        payload.resize(SignedOrder::INIT_SPACE, 0);
         let res: SignedOrder = AnchorDeserialize::deserialize(&mut &payload[8..]).unwrap();
         dbg!(res);
         dbg!(core::str::from_utf8(&res.uuid).unwrap());
@@ -612,6 +619,7 @@ mod tests {
                 uuid: [115, 56, 108, 117, 74, 76, 90, 101],
                 take_profit_order_params: None,
                 stop_loss_order_params: None,
+                max_margin_ratio: None,
             };
             assert_eq!(signed_msg, expected);
         } else {
