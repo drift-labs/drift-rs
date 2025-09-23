@@ -324,23 +324,30 @@ impl DriftClient {
     /// Subscribe to swift order feed(s) for given `markets`
     ///
     /// * `markets` - list of markets to watch for swift orders
-    /// * `accept_sanitized` - set to `Some(true)` to also view *sanitized order flow
+    /// * `accept_sanitized` - set to `Some(true)` to view *sanitized order flow
+    /// * `accept_deposit_trades` - set to `Some(true)` to view 'deposit+trade' order flow
     /// * `swift_ws_url` - optional custom swift Ws endpoint
     ///
-    /// *a sanitized order may have its auction params modified by the program when
+    /// ## DEV
+    /// - *a sanitized order may have its auction params modified by the program when
     /// placed onchain. Makers should understand the time/price implications to accept these.
+    ///
+    /// - 'deposit+trade' orders require fillers to send an attached, preceding deposit tx
+    /// before the swift order
     ///
     /// Returns a stream of swift orders
     pub async fn subscribe_swift_orders(
         &self,
         markets: &[MarketId],
         accept_sanitized: Option<bool>,
+        accept_deposit_trades: Option<bool>,
         swift_ws_url: Option<String>,
     ) -> SdkResult<SwiftOrderStream> {
         swift_order_subscriber::subscribe_swift_orders(
             self,
             markets,
             accept_sanitized.is_some_and(|x| x),
+            accept_deposit_trades.is_some_and(|x| x),
             swift_ws_url,
         )
         .await
