@@ -229,17 +229,22 @@ pub type SwiftOrderStream = ReceiverStream<SignedOrderInfo>;
 ///
 /// * `client` - Drift client instance
 /// * `markets` - markets to listen on for new swift orders
-/// * `accept_sanitized` - set to true to also view *sanitized order flow
+/// * `accept_sanitized` - set to true to receive *sanitized order flow (default: false)
+/// * `accept_deposit_trade` - set to true to receive 'deposit+trade' order flow (default: false)
 /// * `swift_ws_override` - custom swift Ws server endpoint
 ///
 /// *a sanitized order may have its auction params modified by the program when
 /// placed onchain. Makers should understand the time/price implications to accept these.
+///
+/// * deposit+trade orders require fillers to send an attached, preliminary deposit tx
+/// before the fill
 ///
 /// Returns a stream of new Swift order messages
 pub async fn subscribe_swift_orders(
     client: &DriftClient,
     markets: &[MarketId],
     accept_sanitized: bool,
+    accept_deposit_trade: bool,
     swift_ws_override: Option<String>,
 ) -> SdkResult<SwiftOrderStream> {
     let base_url = if let Some(custom_base_url) = swift_ws_override {
@@ -349,6 +354,14 @@ pub async fn subscribe_swift_orders(
                             );
 
                             if let Some(deposit) = deposit {
+                                if !accept_deposit_trade {
+                                    log::debug!(
+                                        target: LOG_TARGET,
+                                        "skipping deposit+trade order: {}",
+                                        order.uuid
+                                    );
+                                    continue;
+                                }
                                 order.pre_deposit = Some(deposit.to_string());
                             }
 
