@@ -23,7 +23,7 @@ use crate::{
     },
     types::{
         accounts::HighLeverageModeConfig, ContractTier, OrderType, PositionDirection,
-        ProtectedMakerParams, SdkError, ValidityGuardRails,
+        ProtectedMakerParams, RevenueShareOrder, SdkError, ValidityGuardRails,
     },
     SdkResult,
 };
@@ -163,6 +163,7 @@ extern "C" {
         order_params: &types::OrderParams,
         accounts: &mut AccountsList,
         high_leverage_mode_config: Option<&'a AccountInfo<'a>>,
+        revenue_order_share: Option<&'a mut RevenueShareOrder>,
     ) -> FfiResult<bool>;
     #[allow(improper_ctypes)]
     pub fn order_params_will_auction_params_sanitize(
@@ -242,6 +243,7 @@ pub fn simulate_place_perp_order(
     order_params: &types::OrderParams,
     high_leverage_mode_config: Option<&mut accounts::HighLeverageModeConfig>,
     max_margin_ratio: Option<u16>,
+    revenue_share_order: Option<&mut RevenueShareOrder>,
 ) -> SdkResult<bool> {
     if order_params.high_leverage_mode() && high_leverage_mode_config.is_none() {
         return Err(SdkError::Generic(
@@ -269,9 +271,27 @@ pub fn simulate_place_perp_order(
                 false,
                 u64::MAX,
             );
-            unsafe { orders_place_perp_order(user, state, order_params, accounts, Some(&hlm)) }
+            unsafe {
+                orders_place_perp_order(
+                    user,
+                    state,
+                    order_params,
+                    accounts,
+                    Some(&hlm),
+                    revenue_share_order,
+                )
+            }
         }
-        None => unsafe { orders_place_perp_order(user, state, order_params, accounts, None) },
+        None => unsafe {
+            orders_place_perp_order(
+                user,
+                state,
+                order_params,
+                accounts,
+                None,
+                revenue_share_order,
+            )
+        },
     };
     to_sdk_result(res)
 }
@@ -1360,6 +1380,7 @@ mod tests {
             },
             None,
             None,
+            None,
         );
         assert!(res.is_ok_and(|truthy| truthy));
 
@@ -1384,6 +1405,7 @@ mod tests {
                 current_maintenance_users: 0,
                 padding2: Default::default(),
             }),
+            None,
             None,
         );
         dbg!(&res);
@@ -1520,6 +1542,7 @@ mod tests {
             },
             None,
             Some(2),
+            None,
         );
         assert!(res.is_ok_and(|truthy| truthy));
 
@@ -1544,6 +1567,7 @@ mod tests {
                 current_maintenance_users: 0,
                 padding2: Default::default(),
             }),
+            None,
             None,
         );
         dbg!(&res);
