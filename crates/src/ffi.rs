@@ -1805,13 +1805,13 @@ extern "C" {
     pub fn ffi_market_state_add_oracle_price(
         state: *mut FfiMarketState,
         market_index: u16,
-        price: &accounts::OraclePriceData,
+        price: &OraclePriceData,
     ) -> FfiResult<()>;
     #[allow(improper_ctypes)]
     pub fn ffi_market_state_add_quote_oracle_price(
         state: *mut FfiMarketState,
         market_index: u16,
-        price: &accounts::OraclePriceData,
+        price: &OraclePriceData,
     ) -> FfiResult<()>;
     #[allow(improper_ctypes)]
     pub fn ffi_calculate_simplified_margin_requirement(
@@ -1819,6 +1819,53 @@ extern "C" {
         market_state: *const FfiMarketState,
         margin_type: MarginRequirementType,
     ) -> FfiResult<FfiSimplifiedMarginCalculation>;
+    #[allow(improper_ctypes)]
+    pub fn ffi_calculate_simplified_margin_requirement_serialized(
+        user: &accounts::User,
+        market_data: &FfiSerializedMarketData,
+        margin_type: MarginRequirementType,
+    ) -> FfiResult<FfiSimplifiedMarginCalculation>;
+}
+
+/// Calculate simplified margin requirement with serialized market data
+/// This avoids complex FFI struct management by passing simple data structures
+pub fn calculate_simplified_margin_requirement_ffi(
+    user: &accounts::User,
+    market_data: &crate::market_state::SerializedMarketData,
+    margin_type: types::MarginRequirementType,
+) -> SdkResult<crate::market_state::SimplifiedMarginCalculation> {
+    // Convert to FFI-compatible types
+    let ffi_market_data = FfiSerializedMarketData {
+        spot_markets: market_data.spot_markets.as_slice(),
+        perp_markets: market_data.perp_markets.as_slice(),
+        oracle_prices: &market_data.oracle_prices,
+        quote_oracle_prices: &market_data.quote_oracle_prices,
+    };
+
+    let result = unsafe {
+        ffi_calculate_simplified_margin_requirement_serialized(user, &ffi_market_data, margin_type)
+    };
+
+    to_sdk_result(result).map(
+        |ffi_result| crate::market_state::SimplifiedMarginCalculation {
+            total_collateral: ffi_result.total_collateral.0,
+            margin_requirement: ffi_result.margin_requirement.0,
+            free_collateral: ffi_result.free_collateral.0,
+            spot_asset_value: ffi_result.spot_asset_value.0,
+            spot_liability_value: ffi_result.spot_liability_value.0,
+            perp_pnl: ffi_result.perp_pnl.0,
+            perp_liability_value: ffi_result.perp_liability_value.0,
+        },
+    )
+}
+
+/// FFI-compatible serialized market data
+#[repr(C)]
+pub struct FfiSerializedMarketData<'a> {
+    pub spot_markets: &'a [accounts::SpotMarket],
+    pub perp_markets: &'a [accounts::PerpMarket],
+    pub oracle_prices: &'a std::collections::HashMap<u16, OraclePriceData>,
+    pub quote_oracle_prices: &'a std::collections::HashMap<u16, OraclePriceData>,
 }
 
 /// Ergonomic wrapper for simplified margin calculations
@@ -1846,14 +1893,19 @@ impl FfiMarketStateWrapper {
     }
 
     /// Add oracle price data for a market
-    pub fn add_oracle_price(&self, market_index: u16, price: &accounts::OraclePriceData) -> SdkResult<()> {
+    pub fn add_oracle_price(&self, market_index: u16, price: &OraclePriceData) -> SdkResult<()> {
         let result = unsafe { ffi_market_state_add_oracle_price(self.inner, market_index, price) };
         to_sdk_result(result)
     }
 
     /// Add quote oracle price data for a market
-    pub fn add_quote_oracle_price(&self, market_index: u16, price: &accounts::OraclePriceData) -> SdkResult<()> {
-        let result = unsafe { ffi_market_state_add_quote_oracle_price(self.inner, market_index, price) };
+    pub fn add_quote_oracle_price(
+        &self,
+        market_index: u16,
+        price: &OraclePriceData,
+    ) -> SdkResult<()> {
+        let result =
+            unsafe { ffi_market_state_add_quote_oracle_price(self.inner, market_index, price) };
         to_sdk_result(result)
     }
 
@@ -1863,7 +1915,8 @@ impl FfiMarketStateWrapper {
         user: &accounts::User,
         margin_type: MarginRequirementType,
     ) -> SdkResult<abi_types::FfiSimplifiedMarginCalculation> {
-        let result = unsafe { ffi_calculate_simplified_margin_requirement(user, self.inner, margin_type) };
+        let result =
+            unsafe { ffi_calculate_simplified_margin_requirement(user, self.inner, margin_type) };
         to_sdk_result(result)
     }
 }
