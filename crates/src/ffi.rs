@@ -826,6 +826,54 @@ pub mod abi_types {
 
     /// C-ABI compatible result type for drift FFI calls
     pub type FfiResult<T> = RResult<T, u32>;
+
+    /// FFI-compatible simplified margin calculation result
+    #[repr(C)]
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    pub struct FfiSimplifiedMarginCalculation {
+        pub total_collateral: compat::i128,
+        pub margin_requirement: compat::u128,
+        pub free_collateral: compat::i128,
+        pub spot_asset_value: compat::u128,
+        pub spot_liability_value: compat::u128,
+        pub perp_pnl: compat::i128,
+        pub perp_liability_value: compat::u128,
+    }
+
+    /// FFI-compatible market state for simplified margin calculations
+    #[repr(C)]
+    pub struct FfiMarketState {
+        // This will be a pointer to the actual HashMapMarketState implementation
+        // We'll use a raw pointer to avoid lifetime issues across FFI boundary
+        pub inner: *mut std::ffi::c_void,
+    }
+
+    /// FFI compatible input types
+    pub mod compat {
+        //! ffi compatible input types
+
+        /// rust 1.76.0 ffi compatible i128
+        #[derive(Copy, Clone, Debug, PartialEq)]
+        #[repr(C, align(16))]
+        pub struct i128(pub std::primitive::i128);
+
+        impl From<std::primitive::i128> for self::i128 {
+            fn from(value: std::primitive::i128) -> Self {
+                Self(value)
+            }
+        }
+
+        /// rust 1.76.0 ffi compatible u128
+        #[derive(Copy, Clone, Debug, PartialEq)]
+        #[repr(C, align(16))]
+        pub struct u128(pub std::primitive::u128);
+
+        impl From<std::primitive::u128> for self::u128 {
+            fn from(value: std::primitive::u128) -> Self {
+                Self(value)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1734,5 +1782,102 @@ mod tests {
         assert_eq!(duration, 20);
         assert!(start > 0);
         assert!(end > 0);
+    }
+}
+
+// Simplified Margin Calculation FFI declarations
+extern "C" {
+    #[allow(improper_ctypes)]
+    pub fn ffi_market_state_new() -> *mut FfiMarketState;
+    #[allow(improper_ctypes)]
+    pub fn ffi_market_state_free(state: *mut FfiMarketState);
+    #[allow(improper_ctypes)]
+    pub fn ffi_market_state_add_spot_market(
+        state: *mut FfiMarketState,
+        market: &accounts::SpotMarket,
+    ) -> FfiResult<()>;
+    #[allow(improper_ctypes)]
+    pub fn ffi_market_state_add_perp_market(
+        state: *mut FfiMarketState,
+        market: &accounts::PerpMarket,
+    ) -> FfiResult<()>;
+    #[allow(improper_ctypes)]
+    pub fn ffi_market_state_add_oracle_price(
+        state: *mut FfiMarketState,
+        market_index: u16,
+        price: &accounts::OraclePriceData,
+    ) -> FfiResult<()>;
+    #[allow(improper_ctypes)]
+    pub fn ffi_market_state_add_quote_oracle_price(
+        state: *mut FfiMarketState,
+        market_index: u16,
+        price: &accounts::OraclePriceData,
+    ) -> FfiResult<()>;
+    #[allow(improper_ctypes)]
+    pub fn ffi_calculate_simplified_margin_requirement(
+        user: &accounts::User,
+        market_state: *const FfiMarketState,
+        margin_type: MarginRequirementType,
+    ) -> FfiResult<FfiSimplifiedMarginCalculation>;
+}
+
+/// Ergonomic wrapper for simplified margin calculations
+pub struct FfiMarketStateWrapper {
+    inner: *mut abi_types::FfiMarketState,
+}
+
+impl FfiMarketStateWrapper {
+    /// Create a new market state instance
+    pub fn new() -> Self {
+        let inner = unsafe { ffi_market_state_new() };
+        Self { inner }
+    }
+
+    /// Add a spot market to the state
+    pub fn add_spot_market(&self, market: &accounts::SpotMarket) -> SdkResult<()> {
+        let result = unsafe { ffi_market_state_add_spot_market(self.inner, market) };
+        to_sdk_result(result)
+    }
+
+    /// Add a perp market to the state
+    pub fn add_perp_market(&self, market: &accounts::PerpMarket) -> SdkResult<()> {
+        let result = unsafe { ffi_market_state_add_perp_market(self.inner, market) };
+        to_sdk_result(result)
+    }
+
+    /// Add oracle price data for a market
+    pub fn add_oracle_price(&self, market_index: u16, price: &accounts::OraclePriceData) -> SdkResult<()> {
+        let result = unsafe { ffi_market_state_add_oracle_price(self.inner, market_index, price) };
+        to_sdk_result(result)
+    }
+
+    /// Add quote oracle price data for a market
+    pub fn add_quote_oracle_price(&self, market_index: u16, price: &accounts::OraclePriceData) -> SdkResult<()> {
+        let result = unsafe { ffi_market_state_add_quote_oracle_price(self.inner, market_index, price) };
+        to_sdk_result(result)
+    }
+
+    /// Calculate simplified margin requirement
+    pub fn calculate_simplified_margin_requirement(
+        &self,
+        user: &accounts::User,
+        margin_type: MarginRequirementType,
+    ) -> SdkResult<abi_types::FfiSimplifiedMarginCalculation> {
+        let result = unsafe { ffi_calculate_simplified_margin_requirement(user, self.inner, margin_type) };
+        to_sdk_result(result)
+    }
+}
+
+impl Drop for FfiMarketStateWrapper {
+    fn drop(&mut self) {
+        if !self.inner.is_null() {
+            unsafe { ffi_market_state_free(self.inner) };
+        }
+    }
+}
+
+impl Default for FfiMarketStateWrapper {
+    fn default() -> Self {
+        Self::new()
     }
 }
