@@ -163,7 +163,7 @@ extern "C" {
         order_params: &types::OrderParams,
         accounts: &mut AccountsList,
         high_leverage_mode_config: Option<&'a AccountInfo<'a>>,
-        revenue_order_share: Option<&'a mut RevenueShareOrder>,
+        revenue_order_share: &mut Option<&mut RevenueShareOrder>,
     ) -> FfiResult<bool>;
     #[allow(improper_ctypes)]
     pub fn order_params_will_auction_params_sanitize(
@@ -236,14 +236,14 @@ pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
 /// Useful to verify an order can be placed given factors such as available margin, etc.
 ///
 /// Returns `true` if the order could be placed
-pub fn simulate_place_perp_order(
+pub fn simulate_place_perp_order<'a>(
     user: &mut accounts::User,
     accounts: &mut AccountsList,
     state: &accounts::State,
     order_params: &types::OrderParams,
     high_leverage_mode_config: Option<&mut accounts::HighLeverageModeConfig>,
     max_margin_ratio: Option<u16>,
-    revenue_share_order: Option<&mut RevenueShareOrder>,
+    revenue_share_order: &mut Option<&mut RevenueShareOrder>,
 ) -> SdkResult<bool> {
     if order_params.high_leverage_mode() && high_leverage_mode_config.is_none() {
         return Err(SdkError::Generic(
@@ -1380,7 +1380,7 @@ mod tests {
             },
             None,
             None,
-            None,
+            &mut None,
         );
         assert!(res.is_ok_and(|truthy| truthy));
 
@@ -1406,7 +1406,7 @@ mod tests {
                 padding2: Default::default(),
             }),
             None,
-            None,
+            &mut None,
         );
         dbg!(&res);
         assert!(res.is_ok_and(|truthy| truthy));
@@ -1542,7 +1542,7 @@ mod tests {
             },
             None,
             Some(2),
-            None,
+            &mut None,
         );
         assert!(res.is_ok_and(|truthy| truthy));
 
@@ -1568,7 +1568,7 @@ mod tests {
                 padding2: Default::default(),
             }),
             None,
-            None,
+            &mut None,
         );
         dbg!(&res);
         assert!(res.is_ok_and(|truthy| truthy));
