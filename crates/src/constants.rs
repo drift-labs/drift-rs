@@ -110,6 +110,18 @@ pub fn derive_drift_signer() -> Pubkey {
     account
 }
 
+pub fn derive_revenue_share(authority: &Pubkey) -> Pubkey {
+    let (account, _seed) =
+        Pubkey::find_program_address(&[&b"REV_SHARE"[..], authority.as_ref()], &PROGRAM_ID);
+    account
+}
+
+pub fn derive_revenue_share_escrow(authority: &Pubkey) -> Pubkey {
+    let (account, _seed) =
+        Pubkey::find_program_address(&[&b"REV_ESCROW"[..], authority.as_ref()], &PROGRAM_ID);
+    account
+}
+
 /// Helper methods for market data structs
 pub trait MarketExt {
     fn market_type(&self) -> &'static str;

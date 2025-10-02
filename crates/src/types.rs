@@ -594,8 +594,13 @@ impl ReferrerInfo {
 impl Order {
     pub const ORACLE_TRIGGER_MARKET_FLAG: u8 = 0b0000_0010;
     pub const SAFE_TRIGGER_ORDER_FLAG: u8 = 0b0000_0100;
+    pub const NEW_TRIGGER_REDUCE_ONLY_FLAG: u8 = 0b0000_1000;
+    pub const HAS_BUILDER_FLAG: u8 = 0b0001_0000;
     pub fn is_oracle_trigger_market(&self) -> bool {
         (self.bit_flags & Self::ORACLE_TRIGGER_MARKET_FLAG) != 0
+    }
+    pub fn has_builder(&self) -> bool {
+        (self.bit_flags & Self::HAS_BUILDER_FLAG) != 0
     }
 }
 
