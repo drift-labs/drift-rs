@@ -63,7 +63,6 @@ pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pu
 pub mod async_utils;
 pub mod ffi;
 pub mod jupiter;
-pub mod market_state;
 pub mod math;
 pub mod memcmp;
 pub mod utils;
