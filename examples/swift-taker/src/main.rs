@@ -60,6 +60,9 @@ async fn main() {
         uuid: nanoid!(8).as_bytes().try_into().unwrap(),
         take_profit_order_params: None,
         stop_loss_order_params: None,
+        max_margin_ratio: None,
+        builder_idx: None,
+        builder_fee_tenth_bps: None,
     });
     let signed_msg = hex::encode(swift_order.to_borsh());
     let signature = drift.wallet.sign_message(signed_msg.as_bytes()).unwrap();
@@ -84,9 +87,9 @@ async fn main() {
 async fn swift_place_order(drift: &DriftClient, swift_order_request: serde_json::Value) {
     println!("sending swift order: {swift_order_request:?}");
     let swift_url = if drift.context == Context::MainNet {
-        "https://swift.drift.trade/depositTrade"
+        "https://swift.drift.trade/orders"
     } else {
-        "https://master.swift.drift.trade/depositTrade"
+        "https://master.swift.drift.trade/orders"
     };
     let swift_cli = reqwest::Client::new();
     let req = swift_cli
