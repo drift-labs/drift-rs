@@ -220,6 +220,17 @@ impl SignedOrderInfo {
             pre_deposit,
         }
     }
+
+    pub fn has_builder(&self) -> bool {
+        match self.order {
+            SignedOrderType::Authority(inner) => {
+                inner.builder_fee_tenth_bps.is_some() && inner.builder_idx.is_some()
+            }
+            SignedOrderType::Delegated(inner) => {
+                inner.builder_fee_tenth_bps.is_some() && inner.builder_idx.is_some()
+            }
+        }
+    }
 }
 
 /// Emits swift orders from the Ws server

@@ -11,7 +11,7 @@ use crate::{
     account_map::AccountMap,
     blockhash_subscriber::BlockhashSubscriber,
     constants::{
-        derive_perp_market_account, derive_spot_market_account,
+        derive_perp_market_account, derive_revenue_share_escrow, derive_spot_market_account,
         ids::{drift_oracle_receiver_program, wormhole_program},
         state_account, MarketExt, ProgramData, DEFAULT_PUBKEY, PYTH_LAZER_STORAGE_ACCOUNT_KEY,
         SYSVAR_INSTRUCTIONS_PUBKEY, SYSVAR_RENT_PUBKEY,
@@ -63,6 +63,7 @@ pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pu
 pub mod async_utils;
 pub mod ffi;
 pub mod jupiter;
+pub mod market_state;
 pub mod math;
 pub mod memcmp;
 pub mod utils;
@@ -2385,6 +2386,13 @@ impl<'a> TransactionBuilder<'a> {
             ));
         }
 
+        if signed_order_info.has_builder() {
+            accounts.push(AccountMeta::new(
+                derive_revenue_share_escrow(&taker_account.authority),
+                false,
+            ));
+        }
+
         self.ixs.push(Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
@@ -2443,6 +2451,13 @@ impl<'a> TransactionBuilder<'a> {
                 .is_high_leverage_mode(MarginRequirementType::Maintenance)
         {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
+        }
+
+        if signed_order_info.has_builder() {
+            accounts.push(AccountMeta::new(
+                derive_revenue_share_escrow(&taker_account.authority),
+                false,
+            ));
         }
 
         let swift_taker_ix_data = signed_order_info.to_ix_data();
@@ -2727,7 +2742,7 @@ impl<'a> TransactionBuilder<'a> {
         target_pubkey: Option<&Pubkey>,
         target_account: Option<&User>,
     ) -> Self {
-        let accounts = build_accounts(
+        let mut accounts = build_accounts(
             self.program_data,
             types::accounts::SettlePnl {
                 state: *state_account(),
@@ -2743,6 +2758,14 @@ impl<'a> TransactionBuilder<'a> {
             std::iter::empty(),
             [MarketId::QUOTE_SPOT, MarketId::perp(market_index)].iter(),
         );
+
+        let target_user = target_account.unwrap_or(&self.account_data);
+        if target_user.orders.iter().any(|o| o.has_builder()) {
+            accounts.push(AccountMeta::new(
+                derive_revenue_share_escrow(&target_user.authority),
+                false,
+            ));
+        }
 
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
@@ -2770,7 +2793,7 @@ impl<'a> TransactionBuilder<'a> {
         target_account: Option<&User>,
     ) -> Self {
         let perp_iter: Vec<MarketId> = markets.iter().map(|i| MarketId::perp(*i)).collect();
-        let accounts = build_accounts(
+        let mut accounts = build_accounts(
             self.program_data,
             types::accounts::SettlePnl {
                 state: *state_account(),
@@ -2788,6 +2811,14 @@ impl<'a> TransactionBuilder<'a> {
                 .iter()
                 .chain(std::iter::once(&MarketId::QUOTE_SPOT)),
         );
+
+        let target_user = target_account.unwrap_or(&self.account_data);
+        if target_user.orders.iter().any(|o| o.has_builder()) {
+            accounts.push(AccountMeta::new(
+                derive_revenue_share_escrow(&target_user.authority),
+                false,
+            ));
+        }
 
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
@@ -2815,6 +2846,10 @@ impl<'a> TransactionBuilder<'a> {
     /// * `taker_stats` - the taker's user stats account data
     /// * `taker_order_id` - optional order ID to fill, if None fills the best available order
     /// * `makers` - list of maker user accounts that will provide liquidity
+    /// * `has_builder` - if true include RevenueShareEscrow account for the taker, otherwise
+    ///   try to infer from the taker's orders. This exists because the caller may have additional
+    ///   information about the builder status of the order, such as from decoding the Swift message.
+    ///   Worst case it will include the RevenueShareEscrow account optimistically.
     pub fn fill_perp_order(
         mut self,
         market_index: u16,
@@ -2823,6 +2858,7 @@ impl<'a> TransactionBuilder<'a> {
         taker_stats: &UserStats,
         taker_order_id: Option<u32>,
         makers: &[User],
+        has_builder: Option<bool>,
     ) -> Self {
         let mut accounts = build_accounts(
             self.program_data,
@@ -2854,6 +2890,25 @@ impl<'a> TransactionBuilder<'a> {
                 AccountMeta::new(Wallet::derive_user_account(&taker_stats.referrer, 0), false),
                 AccountMeta::new(Wallet::derive_stats_account(&taker_stats.referrer), false),
             ]);
+        }
+
+        let add_revenue_share_escrow = if let Some(has) = has_builder {
+            has
+        } else if let Some(order_id) = taker_order_id {
+            taker_account
+                .orders
+                .iter()
+                .find(|o| o.order_id == order_id)
+                .map_or(true, |o| o.has_builder())
+        } else {
+            // no taker_order_id, should be a swift order, include the revenue share escrow optimistically
+            true
+        };
+        if add_revenue_share_escrow {
+            accounts.push(AccountMeta::new(
+                derive_revenue_share_escrow(&taker_account.authority),
+                false,
+            ))
         }
 
         let ix = Instruction {
