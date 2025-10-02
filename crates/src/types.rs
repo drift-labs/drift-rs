@@ -797,3 +797,23 @@ pub type OnAccountFn = dyn Fn(&AccountUpdate) + Send + Sync + 'static;
 
 /// Empty callback function pointer that does nothing - useful as a no-op callback
 pub const EMPTY_ACCOUNT_CALLBACK: fn(&AccountUpdate) = |_: &AccountUpdate| {};
+
+impl accounts::State {
+    pub const MM_ORACLE_UPDATE_FLAG: u8 = 0b00000001;
+    pub const MEDIAN_TRIGGER_PRICE_FLAG: u8 = 0b00000010;
+    pub const BUILDER_CODES_FLAG: u8 = 0b00000100;
+    pub const BUILDER_REFERRAL_FLAG: u8 = 0b00001000;
+
+    pub fn has_mm_oracle_update_feature(&self) -> bool {
+        (self.feature_bit_flags & Self::MM_ORACLE_UPDATE_FLAG) != 0
+    }
+    pub fn has_median_trigger_price_feature(&self) -> bool {
+        (self.feature_bit_flags & Self::MEDIAN_TRIGGER_PRICE_FLAG) != 0
+    }
+    pub fn has_builder_codes_feature(&self) -> bool {
+        (self.feature_bit_flags & Self::BUILDER_CODES_FLAG) != 0
+    }
+    pub fn has_builder_referral_feature(&self) -> bool {
+        (self.feature_bit_flags & Self::BUILDER_REFERRAL_FLAG) != 0
+    }
+}
