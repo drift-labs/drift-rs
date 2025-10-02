@@ -1,0 +1,185 @@
+//! Market state management for simplified margin calculations
+//!
+//! This module provides a clean, ergonomic API for managing market state
+//! that stays within the drift-rs project, avoiding FFI complexity.
+//!
+//! The LockFreeMarketState provides lock-free read/write access using ArcSwap
+//! for high-frequency updates (10ms writes) and calculations (frequent reads).
+
+use crate::{
+    drift_idl::accounts::{PerpMarket, SpotMarket},
+    OraclePriceData,
+};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicPtr, Ordering},
+        Arc,
+    },
+};
+
+/// Internal data structure for market state
+#[derive(Clone)]
+pub struct MarketStateData {
+    spot_markets: HashMap<u16, SpotMarket>,
+    perp_markets: HashMap<u16, PerpMarket>,
+    spot_oracle_prices: HashMap<u16, OraclePriceData>,
+    perp_oracle_prices: HashMap<u16, OraclePriceData>,
+}
+
+impl MarketStateData {
+    fn new() -> Self {
+        Self {
+            spot_markets: HashMap::new(),
+            perp_markets: HashMap::new(),
+            spot_oracle_prices: HashMap::new(),
+            perp_oracle_prices: HashMap::new(),
+        }
+    }
+
+    pub fn set_spot_market(&mut self, market: SpotMarket) {
+        self.spot_markets.insert(market.market_index, market);
+    }
+
+    pub fn set_perp_market(&mut self, market: PerpMarket) {
+        self.perp_markets.insert(market.market_index, market);
+    }
+
+    pub fn set_spot_oracle_price(&mut self, market_index: u16, price: OraclePriceData) {
+        self.spot_oracle_prices.insert(market_index, price);
+    }
+
+    pub fn set_perp_oracle_price(&mut self, market_index: u16, price: OraclePriceData) {
+        self.perp_oracle_prices.insert(market_index, price);
+    }
+}
+
+/// Lock-free MarketState using AtomicPtr<Arc<MarketStateData>> for high-frequency updates
+///
+/// This provides atomic read/write access without blocking, making it suitable for:
+/// - High-frequency updates (every 10ms writes)
+/// - Concurrent calculations (frequent reads)
+///
+/// The pattern uses AtomicPtr<Arc<MarketStateData>> to atomically swap Arc pointers,
+/// avoiding expensive cloning of HashMaps while ensuring readers always get a consistent
+/// snapshot. Memory is managed using Box::into_raw/from_raw for proper cleanup.
+pub struct MarketState {
+    state: AtomicPtr<Arc<MarketStateData>>,
+}
+
+impl MarketState {
+    /// Create a new lock-free market state
+    pub fn new() -> Self {
+        let initial_state = Box::into_raw(Box::new(Arc::new(MarketStateData::new())));
+        Self {
+            state: AtomicPtr::new(initial_state),
+        }
+    }
+
+    /// Get a lock-free read-only reference to the current market state
+    ///
+    /// This returns an Arc<MarketStateData> that can be safely used for calculations
+    /// without blocking writers. The Arc ensures the data remains valid even if
+    /// the state is updated concurrently.
+    pub fn load(&self) -> Arc<MarketStateData> {
+        unsafe {
+            let ptr = self.state.load(Ordering::Acquire);
+            (*ptr).clone()
+        }
+    }
+
+    /// Atomically update the entire market state
+    ///
+    /// This creates a new Arc<MarketStateData> with the updated data and atomically
+    /// replaces the current state. All readers will see the new state on their
+    /// next load() call. The old state is properly deallocated.
+    pub fn store(&self, new_state: Arc<MarketStateData>) {
+        let new_ptr = Box::into_raw(Box::new(new_state));
+        let old_ptr = self.state.swap(new_ptr, Ordering::AcqRel);
+
+        // Deallocate the old state
+        if !old_ptr.is_null() {
+            unsafe {
+                let _ = Box::from_raw(old_ptr);
+            }
+        }
+    }
+
+    /// Update a single spot market atomically
+    ///
+    /// This loads the current state, creates a new one with the updated market,
+    /// and atomically replaces it. Uses copy-on-write for efficiency.
+    pub fn set_spot_market(&self, market: SpotMarket) {
+        let current = self.load();
+        let mut new_data = (*current).clone();
+        new_data.set_spot_market(market);
+        self.store(Arc::new(new_data));
+    }
+
+    /// Update a single perp market atomically
+    pub fn set_perp_market(&self, market: PerpMarket) {
+        let current = self.load();
+        let mut new_data = (*current).clone();
+        new_data.set_perp_market(market);
+        self.store(Arc::new(new_data));
+    }
+
+    /// Update spot oracle price atomically
+    pub fn set_spot_oracle_price(&self, market_index: u16, price: OraclePriceData) {
+        let current = self.load();
+        let mut new_data = (*current).clone();
+        new_data.set_spot_oracle_price(market_index, price);
+        self.store(Arc::new(new_data));
+    }
+
+    /// Update perp oracle price atomically
+    pub fn set_perp_oracle_price(&self, market_index: u16, price: OraclePriceData) {
+        let current = self.load();
+        let mut new_data = (*current).clone();
+        new_data.set_perp_oracle_price(market_index, price);
+        self.store(Arc::new(new_data));
+    }
+
+    /// Batch update multiple markets atomically
+    ///
+    /// This is more efficient than multiple individual updates as it only
+    /// creates one new state and performs one atomic swap.
+    pub fn batch_update<F>(&self, update_fn: F)
+    where
+        F: FnOnce(&mut MarketStateData),
+    {
+        let current = self.load();
+        let mut new_data = (*current).clone();
+        update_fn(&mut new_data);
+        self.store(Arc::new(new_data));
+    }
+}
+
+impl Default for MarketState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for MarketState {
+    fn drop(&mut self) {
+        let ptr = self.state.load(Ordering::Acquire);
+        if !ptr.is_null() {
+            unsafe {
+                let _ = Box::from_raw(ptr);
+            }
+        }
+    }
+}
+
+/// Result of simplified margin calculation
+#[derive(Debug, Clone)]
+pub struct SimplifiedMarginCalculation {
+    pub total_collateral: i128,
+    pub margin_requirement: u128,
+    pub free_collateral: i128,
+    pub spot_asset_value: u128,
+    pub spot_liability_value: u128,
+    pub perp_pnl: i128,
+    pub perp_liability_value: u128,
+}

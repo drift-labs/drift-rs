@@ -64,6 +64,7 @@ pub mod async_utils;
 pub mod ffi;
 pub mod jupiter;
 pub mod market_state;
+pub use market_state::{MarketState, SimplifiedMarginCalculation};
 pub mod math;
 pub mod memcmp;
 pub mod utils;

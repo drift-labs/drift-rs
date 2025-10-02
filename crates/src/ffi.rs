@@ -221,19 +221,21 @@ pub fn calculate_auction_price(
 
 use crate::market_state::{MarketState, SimplifiedMarginCalculation};
 impl MarketState {
-    /// Calculate simplified margin requirement using FFI
-    /// This is the ergonomic API you requested!
+    /// Calculate simplified margin requirement using FFI with lock-free access
     ///
-    /// Uses the high-performance direct FFI pattern with zero serialization overhead
-    /// The entire market state is passed as a reference across FFI
+    /// This provides lock-free read access for margin calculations.
+    /// The MarketStateData reference is passed directly to the FFI.
     pub fn calculate_simplified_margin_requirement(
         &self,
         user: &accounts::User,
         margin_type: MarginRequirementType,
     ) -> crate::SdkResult<SimplifiedMarginCalculation> {
-        // Call FFI function directly with the MarketState reference
+        // Load the current state atomically (lock-free read)
+        let state = self.load();
+
+        // Call FFI function with the MarketStateData reference
         let result =
-            unsafe { ffi_calculate_simplified_margin_requirement(user, self, margin_type) };
+            unsafe { ffi_calculate_simplified_margin_requirement(user, &*state, margin_type) };
 
         to_sdk_result(result).map(|ffi_result| SimplifiedMarginCalculation {
             total_collateral: ffi_result.total_collateral.0,
@@ -1818,7 +1820,7 @@ extern "C" {
     #[allow(improper_ctypes)]
     pub fn ffi_calculate_simplified_margin_requirement(
         user: &accounts::User,
-        market_state: &crate::market_state::MarketState,
+        market_state: &crate::market_state::MarketStateData,
         margin_type: MarginRequirementType,
     ) -> FfiResult<FfiSimplifiedMarginCalculation>;
 }
