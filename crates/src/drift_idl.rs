@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.140.0";
+pub const IDL_VERSION: &str = "2.141.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -22789,6 +22789,8 @@ pub mod events {
         pub maker_existing_quote_entry_amount: Option<u64>,
         pub maker_existing_base_asset_amount: Option<u64>,
         pub trigger_price: Option<u64>,
+        pub builder_idx: Option<u8>,
+        pub builder_fee: Option<u64>,
     }
     #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
