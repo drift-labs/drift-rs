@@ -1,5 +1,5 @@
 {
-  "version": "2.140.0",
+  "version": "2.141.0",
   "name": "drift",
   "instructions": [
     {
@@ -14027,6 +14027,20 @@
         },
         {
           "name": "triggerPrice",
+          "type": {
+            "option": "u64"
+          },
+          "index": false
+        },
+        {
+          "name": "builderIdx",
+          "type": {
+            "option": "u8"
+          },
+          "index": false
+        },
+        {
+          "name": "builderFee",
           "type": {
             "option": "u64"
           },
