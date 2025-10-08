@@ -230,12 +230,9 @@ impl MarketState {
         user: &accounts::User,
         margin_type: MarginRequirementType,
     ) -> crate::SdkResult<SimplifiedMarginCalculation> {
-        // Load the current state atomically (lock-free read)
         let state = self.load();
-
-        // Call FFI function with the MarketStateData reference
         let result =
-            unsafe { ffi_calculate_simplified_margin_requirement(user, &*state, margin_type) };
+            unsafe { margin_calculate_simplified_margin_requirement(user, &*state, margin_type) };
 
         to_sdk_result(result).map(|ffi_result| SimplifiedMarginCalculation {
             total_collateral: ffi_result.total_collateral.0,
@@ -1818,7 +1815,7 @@ mod tests {
 // Simplified Margin Calculation FFI declarations
 extern "C" {
     #[allow(improper_ctypes)]
-    pub fn ffi_calculate_simplified_margin_requirement(
+    pub fn margin_calculate_simplified_margin_requirement(
         user: &accounts::User,
         market_state: &crate::market_state::MarketStateData,
         margin_type: MarginRequirementType,

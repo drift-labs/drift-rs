@@ -54,15 +54,7 @@ impl MarketStateData {
     }
 }
 
-/// Lock-free MarketState using AtomicPtr<Arc<MarketStateData>> for high-frequency updates
-///
-/// This provides atomic read/write access without blocking, making it suitable for:
-/// - High-frequency updates (every 10ms writes)
-/// - Concurrent calculations (frequent reads)
-///
-/// The pattern uses AtomicPtr<Arc<MarketStateData>> to atomically swap Arc pointers,
-/// avoiding expensive cloning of HashMaps while ensuring readers always get a consistent
-/// snapshot. Memory is managed using Box::into_raw/from_raw for proper cleanup.
+/// Optimized storage for drift markets and oracles
 pub struct MarketState {
     state: AtomicPtr<Arc<MarketStateData>>,
 }
@@ -93,7 +85,7 @@ impl MarketState {
     /// This creates a new Arc<MarketStateData> with the updated data and atomically
     /// replaces the current state. All readers will see the new state on their
     /// next load() call. The old state is properly deallocated.
-    pub fn store(&self, new_state: Arc<MarketStateData>) {
+    fn store(&self, new_state: Arc<MarketStateData>) {
         let new_ptr = Box::into_raw(Box::new(new_state));
         let old_ptr = self.state.swap(new_ptr, Ordering::AcqRel);
 

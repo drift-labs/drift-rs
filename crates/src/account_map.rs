@@ -60,7 +60,10 @@ impl AccountMap {
             subscriptions: Arc::default(),
         }
     }
-    pub fn iter_accounts_with<'a, T: Pod + Discriminator>(&self, f: impl Fn(&Pubkey, &T, u64)) {
+    pub fn iter_accounts_with<'a, T: Pod + Discriminator>(
+        &self,
+        mut f: impl FnMut(&Pubkey, &T, u64),
+    ) {
         self.inner
             .iter()
             .filter(|x| &x.raw[..8] == T::DISCRIMINATOR)
