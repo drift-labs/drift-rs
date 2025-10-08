@@ -1,11 +1,7 @@
-use borsh::de::BorshDeserialize;
+use anchor_lang::AccountDeserialize;
 use drift_rs::{
     Context, DriftClient, RpcClient, TransactionBuilder, Wallet,
-    math::constants::PRICE_PRECISION,
-    types::{
-        MarketId, MarketType, OrderParams, OrderType, PositionDirection, PostOnlyParam,
-        accounts::User,
-    },
+    types::{MarketType, OrderParams, OrderType, PositionDirection, PostOnlyParam, accounts::User},
 };
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
@@ -64,7 +60,8 @@ async fn get_top_makers(
             &base64::engine::general_purpose::STANDARD,
             &maker.account_base64,
         )?;
-        let user_account = User::try_from_slice(&account_bytes)?;
+        let user_account = User::try_deserialize(&mut account_bytes.as_slice())
+            .expect("User deserializes");
         let maker_pubkey = Pubkey::from_str(&maker.user_account_pubkey)?;
 
         maker_infos.push((maker_pubkey, user_account));
