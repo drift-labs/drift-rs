@@ -165,7 +165,7 @@ async fn main() {
         std::borrow::Cow::Borrowed(&maker_subaccount_data),
         false,
     )
-    .with_priority_fee(1_000, Some(100_000))
+    .with_priority_fee(1_000, Some(200_000))
     .place_and_take(order, &makers, referrer, None, None)
     .build();
 
