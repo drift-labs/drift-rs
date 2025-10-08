@@ -9,7 +9,9 @@ use std::str::FromStr;
 
 #[derive(Debug, Deserialize)]
 struct TopMakerResponse {
+    #[serde(rename = "userAccountPubKey")]
     user_account_pubkey: String,
+    #[serde(rename = "accountBase64")]
     account_base64: String,
 }
 
