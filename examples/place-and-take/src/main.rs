@@ -1,11 +1,7 @@
-use borsh::de::BorshDeserialize;
+use anchor_lang::AccountDeserialize;
 use drift_rs::{
     Context, DriftClient, RpcClient, TransactionBuilder, Wallet,
-    math::constants::PRICE_PRECISION,
-    types::{
-        MarketId, MarketType, OrderParams, OrderType, PositionDirection, PostOnlyParam,
-        accounts::User,
-    },
+    types::{MarketType, OrderParams, OrderType, PositionDirection, PostOnlyParam, accounts::User},
 };
 use serde::Deserialize;
 use solana_pubkey::Pubkey;
@@ -13,7 +9,9 @@ use std::str::FromStr;
 
 #[derive(Debug, Deserialize)]
 struct TopMakerResponse {
+    #[serde(rename = "userAccountPubKey")]
     user_account_pubkey: String,
+    #[serde(rename = "accountBase64")]
     account_base64: String,
 }
 
@@ -64,7 +62,8 @@ async fn get_top_makers(
             &base64::engine::general_purpose::STANDARD,
             &maker.account_base64,
         )?;
-        let user_account = User::try_from_slice(&account_bytes)?;
+        let user_account = User::try_deserialize(&mut account_bytes.as_slice())
+            .expect("User deserializes");
         let maker_pubkey = Pubkey::from_str(&maker.user_account_pubkey)?;
 
         maker_infos.push((maker_pubkey, user_account));
@@ -165,7 +164,7 @@ async fn main() {
         std::borrow::Cow::Borrowed(&maker_subaccount_data),
         false,
     )
-    .with_priority_fee(1_000, Some(100_000))
+    .with_priority_fee(1_000, Some(200_000))
     .place_and_take(order, &makers, referrer, None, None)
     .build();
 
