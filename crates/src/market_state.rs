@@ -28,7 +28,7 @@ pub struct MarketStateData {
 }
 
 impl MarketStateData {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             spot_markets: HashMap::new(),
             perp_markets: HashMap::new(),
@@ -169,9 +169,4 @@ impl Drop for MarketState {
 pub struct SimplifiedMarginCalculation {
     pub total_collateral: i128,
     pub margin_requirement: u128,
-    pub free_collateral: i128,
-    pub spot_asset_value: u128,
-    pub spot_liability_value: u128,
-    pub perp_pnl: i128,
-    pub perp_liability_value: u128,
 }

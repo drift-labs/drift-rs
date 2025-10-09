@@ -235,13 +235,8 @@ impl MarketState {
             unsafe { margin_calculate_simplified_margin_requirement(user, &*state, margin_type) };
 
         to_sdk_result(result).map(|ffi_result| SimplifiedMarginCalculation {
-            total_collateral: ffi_result.total_collateral.0,
-            margin_requirement: ffi_result.margin_requirement.0,
-            free_collateral: ffi_result.free_collateral.0,
-            spot_asset_value: ffi_result.spot_asset_value.0,
-            spot_liability_value: ffi_result.spot_liability_value.0,
-            perp_pnl: ffi_result.perp_pnl.0,
-            perp_liability_value: ffi_result.perp_liability_value.0,
+            total_collateral: ffi_result.total_collateral,
+            margin_requirement: ffi_result.margin_requirement,
         })
     }
 }
@@ -855,16 +850,11 @@ pub mod abi_types {
     pub type FfiResult<T> = RResult<T, u32>;
 
     /// FFI-compatible simplified margin calculation result
-    #[repr(C)]
+    #[repr(C, align(16))]
     #[derive(Copy, Clone, Debug, PartialEq)]
     pub struct FfiSimplifiedMarginCalculation {
-        pub total_collateral: compat::i128,
-        pub margin_requirement: compat::u128,
-        pub free_collateral: compat::i128,
-        pub spot_asset_value: compat::u128,
-        pub spot_liability_value: compat::u128,
-        pub perp_pnl: compat::i128,
-        pub perp_liability_value: compat::u128,
+        pub total_collateral: i128,
+        pub margin_requirement: u128,
     }
 
     /// FFI-compatible market state for simplified margin calculations
@@ -874,33 +864,6 @@ pub mod abi_types {
         // We'll use a raw pointer to avoid lifetime issues across FFI boundary
         pub inner: *mut std::ffi::c_void,
     }
-
-    /// FFI compatible input types
-    pub mod compat {
-        //! ffi compatible input types
-
-        /// rust 1.76.0 ffi compatible i128
-        #[derive(Copy, Clone, Debug, PartialEq)]
-        #[repr(C, align(16))]
-        pub struct i128(pub std::primitive::i128);
-
-        impl From<std::primitive::i128> for self::i128 {
-            fn from(value: std::primitive::i128) -> Self {
-                Self(value)
-            }
-        }
-
-        /// rust 1.76.0 ffi compatible u128
-        #[derive(Copy, Clone, Debug, PartialEq)]
-        #[repr(C, align(16))]
-        pub struct u128(pub std::primitive::u128);
-
-        impl From<std::primitive::u128> for self::u128 {
-            fn from(value: std::primitive::u128) -> Self {
-                Self(value)
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -908,7 +871,10 @@ mod tests {
     use anchor_lang::Discriminator;
     use solana_sdk::{account::Account, pubkey::Pubkey};
 
-    use super::{simulate_place_perp_order, AccountWithKey, AccountsList, MarginContextMode};
+    use super::{
+        margin_calculate_simplified_margin_requirement, simulate_place_perp_order, AccountWithKey,
+        AccountsList, FfiResult, MarginContextMode,
+    };
     use crate::{
         accounts::State,
         constants::{self, ids::pyth_program},
@@ -1287,26 +1253,60 @@ mod tests {
                 ..Default::default()
             },
         }];
-        let spot_market = sol_spot_market();
-        let mut spot_markets = vec![AccountWithKey {
-            key: Pubkey::new_unique(),
-            account: Account {
-                owner: crate::constants::PROGRAM_ID,
-                data: [SpotMarket::DISCRIMINATOR, bytemuck::bytes_of(&spot_market)]
+        // Set up both USDC and SOL spot markets
+        let usdc_spot_market = usdc_spot_market();
+        let sol_spot_market = sol_spot_market();
+        let mut spot_markets = vec![
+            AccountWithKey {
+                key: Pubkey::new_unique(),
+                account: Account {
+                    owner: crate::constants::PROGRAM_ID,
+                    data: [
+                        SpotMarket::DISCRIMINATOR,
+                        bytemuck::bytes_of(&usdc_spot_market),
+                    ]
                     .concat()
                     .to_vec(),
+                    ..Default::default()
+                },
+            },
+            AccountWithKey {
+                key: Pubkey::new_unique(),
+                account: Account {
+                    owner: crate::constants::PROGRAM_ID,
+                    data: [
+                        SpotMarket::DISCRIMINATOR,
+                        bytemuck::bytes_of(&sol_spot_market),
+                    ]
+                    .concat()
+                    .to_vec(),
+                    ..Default::default()
+                },
+            },
+        ];
+
+        // Set up oracles for both markets
+        // USDC oracle (market index 0) - using quote asset oracle
+        let usdc_oracle = AccountWithKey {
+            key: usdc_spot_market.oracle,
+            account: Account {
+                data: get_account_bytes(&mut get_pyth_price(1, 6)).to_vec(), // 1 USD
+                owner: constants::ids::pyth_program::ID,
                 ..Default::default()
             },
-        }];
+        };
 
-        let mut oracles = [AccountWithKey {
-            key: Pubkey::new_unique(),
+        // SOL oracle (market index 1) - using the specific oracle pubkey
+        let sol_oracle = AccountWithKey {
+            key: sol_spot_market.oracle,
             account: Account {
                 data: get_account_bytes(&mut get_pyth_price(240, 9)).to_vec(),
                 owner: constants::ids::pyth_program::ID,
                 ..Default::default()
             },
-        }];
+        };
+
+        let mut oracles = [usdc_oracle, sol_oracle];
         let mut accounts = AccountsList::new(&mut perp_markets, &mut spot_markets, &mut oracles);
 
         let modes = [
@@ -1809,6 +1809,120 @@ mod tests {
         assert_eq!(duration, 20);
         assert!(start > 0);
         assert!(end > 0);
+    }
+
+    #[test]
+    fn ffi_test_calculate_simplified_margin_requirement() {
+        // Test the simplified margin requirement FFI function
+        // This should match the results from the existing margin calculation test
+        let btc_perp_index = 1_u16;
+        let mut user = User::default();
+        user.spot_positions[1] = SpotPosition {
+            market_index: 1,
+            scaled_balance: (1_000 * SPOT_BALANCE_PRECISION) as u64,
+            balance_type: SpotBalanceType::Deposit,
+            ..Default::default()
+        };
+        user.perp_positions[0] = PerpPosition {
+            market_index: btc_perp_index,
+            base_asset_amount: 100 * BASE_PRECISION_I64 as i64,
+            quote_asset_amount: -5_000 * QUOTE_PRECISION as i64,
+            ..Default::default()
+        };
+
+        // Create market state data similar to the existing test
+        let mut market_state_data = crate::market_state::MarketStateData::new();
+
+        // Add USDC spot market (market index 0) - required for quote asset
+        let usdc_spot_market = usdc_spot_market();
+        market_state_data.set_spot_market(usdc_spot_market);
+
+        // Add SOL spot market (market index 1)
+        let sol_spot_market = sol_spot_market();
+        market_state_data.set_spot_market(sol_spot_market);
+
+        // Add perp market with proper configuration
+        let perp_market = PerpMarket {
+            market_index: btc_perp_index,
+            margin_ratio_initial: 1_000 * MARGIN_PRECISION, // 10%
+            margin_ratio_maintenance: 500,                  // 5%
+            amm: AMM {
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        market_state_data.set_perp_market(perp_market);
+
+        // Add oracle prices
+        let sol_oracle_price = OraclePriceData {
+            price: 240 * QUOTE_PRECISION as i64,
+            confidence: 99 * PERCENTAGE_PRECISION as u64,
+            delay: 2,
+            has_sufficient_number_of_data_points: true,
+            sequence_id: None,
+        };
+
+        // Add oracle prices
+        let btc_oracle_price = OraclePriceData {
+            price: 120_000 * QUOTE_PRECISION as i64,
+            confidence: 99 * PERCENTAGE_PRECISION as u64,
+            delay: 2,
+            has_sufficient_number_of_data_points: true,
+            sequence_id: None,
+        };
+
+        // USDC oracle price (market index 0) - required for quote asset
+        let usdc_oracle_price = OraclePriceData {
+            price: QUOTE_PRECISION as i64, // 1 USD
+            confidence: 1,
+            delay: 0,
+            has_sufficient_number_of_data_points: true,
+            sequence_id: None,
+        };
+
+        market_state_data.set_spot_oracle_price(0, usdc_oracle_price); // USDC
+        market_state_data.set_spot_oracle_price(1, sol_oracle_price); // SOL
+        market_state_data.set_perp_oracle_price(btc_perp_index, btc_oracle_price);
+
+        // Test different margin requirement types
+        let margin_types = [
+            MarginRequirementType::Initial,
+            MarginRequirementType::Maintenance,
+        ];
+
+        for margin_type in margin_types.iter() {
+            let result = unsafe {
+                margin_calculate_simplified_margin_requirement(
+                    &user,
+                    &market_state_data,
+                    *margin_type,
+                )
+            };
+
+            // Verify the FFI call succeeds
+            assert!(
+                matches!(result, FfiResult::ROk(_)),
+                "FFI call should succeed for margin type: {:?}",
+                margin_type
+            );
+
+            let result = match result {
+                FfiResult::ROk(data) => data,
+                FfiResult::RErr(_) => panic!("FFI call failed for margin type: {:?}", margin_type),
+            };
+
+            // Verify we get reasonable values
+            assert!(
+                result.total_collateral != 0,
+                "Total collateral should not be zero for margin type: {:?}",
+                margin_type
+            );
+            assert!(
+                result.margin_requirement > 0,
+                "Margin requirement should be positive for margin type: {:?}",
+                margin_type
+            );
+        }
     }
 }
 
