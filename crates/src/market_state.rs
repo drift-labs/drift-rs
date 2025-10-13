@@ -6,6 +6,8 @@
 //! The LockFreeMarketState provides lock-free read/write access using ArcSwap
 //! for high-frequency updates (10ms writes) and calculations (frequent reads).
 
+use fxhash::FxBuildHasher;
+
 use crate::{
     drift_idl::accounts::{PerpMarket, SpotMarket},
     OraclePriceData,
@@ -19,24 +21,15 @@ use std::{
 };
 
 /// Internal data structure for market state
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct MarketStateData {
-    spot_markets: HashMap<u16, SpotMarket>,
-    perp_markets: HashMap<u16, PerpMarket>,
-    spot_oracle_prices: HashMap<u16, OraclePriceData>,
-    perp_oracle_prices: HashMap<u16, OraclePriceData>,
+    spot_markets: HashMap<u16, SpotMarket, FxBuildHasher>,
+    perp_markets: HashMap<u16, PerpMarket, FxBuildHasher>,
+    spot_oracle_prices: HashMap<u16, OraclePriceData, FxBuildHasher>,
+    perp_oracle_prices: HashMap<u16, OraclePriceData, FxBuildHasher>,
 }
 
 impl MarketStateData {
-    pub fn new() -> Self {
-        Self {
-            spot_markets: HashMap::new(),
-            perp_markets: HashMap::new(),
-            spot_oracle_prices: HashMap::new(),
-            perp_oracle_prices: HashMap::new(),
-        }
-    }
-
     pub fn set_spot_market(&mut self, market: SpotMarket) {
         self.spot_markets.insert(market.market_index, market);
     }
@@ -62,7 +55,7 @@ pub struct MarketState {
 impl MarketState {
     /// Create a new lock-free market state
     pub fn new() -> Self {
-        let initial_state = Box::into_raw(Box::new(Arc::new(MarketStateData::new())));
+        let initial_state = Box::into_raw(Box::new(Arc::new(MarketStateData::default())));
         Self {
             state: AtomicPtr::new(initial_state),
         }
