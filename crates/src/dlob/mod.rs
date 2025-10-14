@@ -18,7 +18,8 @@ use crate::{
     constants::ProgramData,
     dlob::util::order_hash,
     types::{
-        accounts::PerpMarket, MarketId, MarketType, Order, OrderTriggerCondition, OrderType,
+        accounts::{PerpMarket, User},
+        MarketId, MarketType, Order, OrderStatus, OrderTriggerCondition, OrderType,
         PositionDirection,
     },
 };
@@ -548,8 +549,94 @@ impl Orderbook {
     }
 }
 
-/// channel for sending order updates to DLOB instance
-pub type DLOBNotifier = crossbeam::channel::Sender<DLOBEvent>;
+/// Channel for sending User order updates to DLOB instance
+#[derive(Clone)]
+pub struct DLOBNotifier {
+    sender: crossbeam::channel::Sender<DLOBEvent>,
+}
+
+impl DLOBNotifier {
+    pub fn new(sender: crossbeam::channel::Sender<DLOBEvent>) -> Self {
+        Self { sender }
+    }
+
+    /// Updates the DLOB with user account changes by comparing old and new user states.
+    ///
+    /// This method processes user account updates and sends appropriate DLOB events to maintain
+    /// the order book state. It handles two scenarios:
+    /// 1. **User Update**: When both old and new user states are provided, it compares the orders
+    ///    and sends delta events for changes (creates, updates, removes)
+    /// 2. **New User**: When only a new user is provided, it creates events for all open orders
+    ///
+    /// # Parameters
+    ///
+    /// * `pubkey` - The public key of the user account being updated
+    /// * `old_user` - The previous state of the user account, if any. `None` indicates a new user
+    /// * `new_user` - The current state of the user account
+    /// * `slot` - The slot number when this update occurred
+    ///
+    /// # Behavior
+    ///
+    /// ## User Update (old_user is Some)
+    /// - Compares orders between old and new user states using `compare_user_orders`
+    /// - Sends `DLOBEvent::Order` events for each detected change (create/update/remove)
+    /// - Only processes orders that have changed between the two states
+    ///
+    /// ## New User (old_user is None)
+    /// - Iterates through all orders in the new user account
+    /// - Sends `DLOBEvent::create` events for open orders that are not fully filled
+    /// - Filters out closed or fully filled orders
+    ///
+    /// # Panics
+    ///
+    /// This method will panic if it cannot send events to the DLOB channel, which typically
+    /// indicates the DLOB processing thread has been dropped or the channel is full.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// // Update existing user
+    /// notifier.user_update(user_pubkey, Some(&old_user), &new_user, current_slot);
+    ///
+    /// // Add new user
+    /// notifier.user_update(user_pubkey, None, &new_user, current_slot);
+    /// ```
+    pub fn user_update(&self, pubkey: Pubkey, old_user: Option<&User>, new_user: &User, slot: u64) {
+        match old_user {
+            Some(old_user) => {
+                let user_order_deltas =
+                    crate::dlob::util::compare_user_orders(pubkey, &old_user, &new_user);
+                for delta in user_order_deltas {
+                    self.sender
+                        .send(DLOBEvent::Order { delta, slot })
+                        .expect("Failed to send DLOB event - channel may be closed");
+                }
+            }
+            None => {
+                for order in new_user.orders {
+                    if order.status == OrderStatus::Open
+                        && order.base_asset_amount > order.base_asset_amount_filled
+                    {
+                        self.sender
+                            .send(DLOBEvent::create_order(pubkey, order, slot))
+                            .expect("Failed to send DLOB event - channel may be closed");
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn slot_update(&self, market: MarketId, oracle_price: u64, slot: u64) {
+        self.sender
+            .send(DLOBEvent::SlotOrPriceUpdate {
+                slot,
+                market_index: market.index(),
+                market_type: market.kind(),
+                oracle_price,
+            })
+            .expect("Failed to send slot update event - channel may be closed");
+    }
+}
 
 /// Aggregates orderbooks for multiple markets
 pub struct DLOB {
@@ -633,7 +720,7 @@ impl DLOB {
             log::error!(target: "DLOB", "notifier thread finished");
         });
 
-        tx
+        DLOBNotifier::new(tx)
     }
     /// run function on a market Orderbook
     fn with_orderbook_mut(&self, market_id: MarketId, f: impl Fn(&mut Orderbook)) {
@@ -1359,6 +1446,15 @@ pub struct L3Book {
 }
 
 impl L3Book {
+    pub fn bbo<const N: usize>(&self) -> (Option<&L3Order>, Option<&L3Order>) {
+        (self.bids.first(), self.asks.first())
+    }
+    pub fn top_bids_exact<const N: usize>(&self) -> Option<&[L3Order; N]> {
+        self.bids.first_chunk()
+    }
+    pub fn top_asks_exact<const N: usize>(&self) -> Option<&[L3Order; N]> {
+        self.asks.first_chunk()
+    }
     fn from_orders(
         resting_limit_orders: &Orders<LimitOrder>,
         floating_limit_orders: &Orders<FloatingLimitOrder>,
@@ -1465,6 +1561,18 @@ impl std::fmt::Display for L2Book {
 }
 
 impl L2Book {
+    pub fn bbo<const N: usize>(&self) -> (Option<(u64, u64)>, Option<(u64, u64)>) {
+        (
+            self.bids.first_key_value().map(|x| (*x.0, *x.1)),
+            self.asks.first_key_value().map(|x| (*x.0, *x.1)),
+        )
+    }
+    pub fn top_bids(&self, count: usize) -> Vec<(u64, u64)> {
+        self.bids.iter().take(count).map(|x| (*x.0, *x.1)).collect()
+    }
+    pub fn top_asks(&self, count: usize) -> Vec<(u64, u64)> {
+        self.asks.iter().take(count).map(|x| (*x.0, *x.1)).collect()
+    }
     /// Bootstrap L2Book from resting limit orders
     fn from_limit_orders(resting_limit_orders: &Orders<LimitOrder>) -> Self {
         let mut bids: BTreeMap<u64, u64> = BTreeMap::new();

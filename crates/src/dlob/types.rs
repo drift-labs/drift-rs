@@ -136,6 +136,18 @@ pub enum DLOBEvent {
     },
 }
 
+impl DLOBEvent {
+    pub fn create_order(pubkey: Pubkey, order: Order, slot: u64) -> Self {
+        Self::Order {
+            delta: OrderDelta::Create {
+                user: pubkey,
+                order,
+            },
+            slot,
+        }
+    }
+}
+
 /// Order with dynamic price calculation
 pub(crate) trait DynamicPrice {
     fn get_price(&self, slot: u64, oracle_price: u64, tick_size: u64) -> u64;

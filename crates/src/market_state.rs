@@ -163,3 +163,8 @@ pub struct SimplifiedMarginCalculation {
     pub total_collateral: i128,
     pub margin_requirement: u128,
 }
+impl SimplifiedMarginCalculation {
+    pub fn margin_shortage(&self) -> i128 {
+        self.total_collateral - self.margin_requirement as i128
+    }
+}
