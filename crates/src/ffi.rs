@@ -2096,15 +2096,15 @@ mod tests {
         };
 
         // Create market state data
-        let mut market_state_data = crate::market_state::MarketStateData::default();
+        let mut market_state = crate::market_state::MarketState::default();
 
         // Add USDC spot market (market index 0) - required for quote asset
         let usdc_spot_market = usdc_spot_market();
-        market_state_data.set_spot_market(usdc_spot_market);
+        market_state.set_spot_market(usdc_spot_market);
 
         // Add SOL spot market (market index 1)
         let sol_spot_market = sol_spot_market();
-        market_state_data.set_spot_market(sol_spot_market);
+        market_state.set_spot_market(sol_spot_market);
 
         // Add perp market with proper configuration
         let perp_market = PerpMarket {
@@ -2116,7 +2116,7 @@ mod tests {
             },
             ..Default::default()
         };
-        market_state_data.set_perp_market(perp_market);
+        market_state.set_perp_market(perp_market);
 
         // Add oracle prices
         let sol_oracle_price = OraclePriceData {
@@ -2144,9 +2144,9 @@ mod tests {
             sequence_id: None,
         };
 
-        market_state_data.set_spot_oracle_price(0, usdc_oracle_price); // USDC
-        market_state_data.set_spot_oracle_price(1, sol_oracle_price); // SOL
-        market_state_data.set_perp_oracle_price(btc_perp_index, btc_oracle_price);
+        market_state.set_spot_oracle_price(0, usdc_oracle_price); // USDC
+        market_state.set_spot_oracle_price(1, sol_oracle_price); // SOL
+        market_state.set_perp_oracle_price(btc_perp_index, btc_oracle_price);
 
         let timestamp = 1_000_000;
 
@@ -2155,12 +2155,8 @@ mod tests {
 
         for margin_type in margin_types.iter() {
             // Test 1: Create cached margin calculation from user using FFI
-            let mut calculator = CachedMarginCalculation::from_user(
-                &user,
-                &market_state_data,
-                *margin_type,
-                timestamp,
-            );
+            let mut calculator =
+                CachedMarginCalculation::from_user(&user, &market_state, *margin_type, timestamp);
 
             // Verify we get reasonable initial values
             assert!(
@@ -2174,11 +2170,7 @@ mod tests {
             updated_spot_position.scaled_balance = (200 * SPOT_BALANCE_PRECISION) as u64; // Double the balance
 
             let free_collateral_before = calculator.free_collateral();
-            calculator.update_spot_position(
-                &updated_spot_position,
-                &market_state_data,
-                timestamp + 1,
-            );
+            calculator.update_spot_position(&updated_spot_position, &market_state, timestamp + 1);
 
             // Verify the update affected the calculation
             assert!(
@@ -2192,11 +2184,7 @@ mod tests {
             let mut updated_perp_position = user.perp_positions[0].clone();
             updated_perp_position.base_asset_amount = 20 * BASE_PRECISION_I64 as i64; // Double the position
 
-            calculator.update_perp_position(
-                &updated_perp_position,
-                &market_state_data,
-                timestamp + 2,
-            );
+            calculator.update_perp_position(&updated_perp_position, &market_state, timestamp + 2);
 
             dbg!(&calculator);
 

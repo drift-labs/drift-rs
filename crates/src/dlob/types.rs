@@ -18,7 +18,7 @@ use crate::{
 
 // Replace the key structs with type aliases
 type MarketOrderKey = (u64, u64);
-type OracleOrderKey = (u64, u64);
+type OracleOrderKey = (i64, u64);
 type LimitOrderKey = (u64, u64, u64);
 type FloatingLimitOrderKey = (i32, u64, u64);
 type TriggerOrderKey = (u64, u64);
@@ -190,7 +190,7 @@ impl MarketOrder {
 impl OrderKey for OracleOrder {
     type Key = OracleOrderKey;
     fn key(&self) -> Self::Key {
-        (self.slot, self.id)
+        (self.end_price_offset, self.id)
     }
 }
 
@@ -580,6 +580,10 @@ impl From<(u64, Order)> for TriggerOrder {
     }
 }
 
+/// A simple snapshot container for single writer, multiple reader access
+/// Uses RwLock for thread safety - readers can access concurrently, writer gets exclusive access
+/// A simple snapshot container for single writer, multiple reader access
+/// Uses RwLock for thread safety - readers can access concurrently, writer gets exclusive access
 pub struct Snapshot<T: Default> {
     inner: AtomicPtr<T>,
 }
@@ -616,7 +620,7 @@ impl<T: Default> Snapshot<T> {
 
 impl<T: Default> Default for Snapshot<T> {
     fn default() -> Self {
-        Self::new(Arc::new(T::default()))
+        Self::new(Arc::default())
     }
 }
 
