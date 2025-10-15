@@ -1,7 +1,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anchor_lang::{AnchorDeserialize, AnchorSerialize, Space};
-use arrayvec::ArrayVec;
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -67,15 +66,13 @@ impl SignedOrderType {
     /// This differs from `AnchorSerialize` as it does _not_ encode the enum byte
     ///
     /// DEV: Swift clients do not encode or decode the enum byte
-    pub fn to_borsh(&self) -> ArrayVec<u8, { SignedDelegateOrder::INIT_SPACE + 8 }> {
+    pub fn to_borsh(&self) -> Vec<u8> {
         // max variant size +8 (anchor discriminator len)
-        let mut buf = ArrayVec::new();
+        let mut buf = Vec::with_capacity(SignedDelegateOrder::INIT_SPACE + 8);
         match self {
             Self::Authority { ref raw, ref inner } => {
                 if let Some(raw) = raw {
-                    for byte in raw.as_bytes() {
-                        buf.push(*byte);
-                    }
+                    buf.extend_from_slice(raw.as_bytes());
                 } else {
                     (SWIFT_MSG_PREFIX).serialize(&mut buf).unwrap();
                     inner.serialize(&mut buf).unwrap();
@@ -83,9 +80,7 @@ impl SignedOrderType {
             }
             Self::Delegated { ref raw, ref inner } => {
                 if let Some(raw) = raw {
-                    for byte in raw.as_bytes() {
-                        buf.push(*byte);
-                    }
+                    buf.extend_from_slice(raw.as_bytes());
                 } else {
                     (SWIFT_DELEGATE_MSG_PREFIX).serialize(&mut buf).unwrap();
                     inner.serialize(&mut buf).unwrap();
