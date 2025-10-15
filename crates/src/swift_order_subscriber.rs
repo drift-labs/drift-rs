@@ -47,11 +47,13 @@ pub enum SignedOrderType {
     /// Swift order signed by authority keypair
     Authority {
         inner: SignedOrder,
+        /// hexified payload if received over Ws
         raw: Option<String>,
     },
     /// Swift order signed by a delegated keypair
     Delegated {
         inner: SignedDelegateOrder,
+        /// hexified payload if received over Ws
         raw: Option<String>,
     },
 }
@@ -63,32 +65,31 @@ impl SignedOrderType {
     }
     /// Serialize as a borsh buffer
     ///
-    /// This differs from `AnchorSerialize` as it does _not_ encode the enum byte
-    ///
     /// DEV: Swift clients do not encode or decode the enum byte
     pub fn to_borsh(&self) -> Vec<u8> {
         // max variant size +8 (anchor discriminator len)
-        let mut buf = Vec::with_capacity(SignedDelegateOrder::INIT_SPACE + 8);
         match self {
             Self::Authority { ref raw, ref inner } => {
                 if let Some(raw) = raw {
-                    buf.extend_from_slice(raw.as_bytes());
+                    hex::decode(raw).unwrap()
                 } else {
+                    let mut buf = Vec::with_capacity(SignedOrder::INIT_SPACE + 8);
                     (SWIFT_MSG_PREFIX).serialize(&mut buf).unwrap();
                     inner.serialize(&mut buf).unwrap();
+                    buf
                 }
             }
             Self::Delegated { ref raw, ref inner } => {
                 if let Some(raw) = raw {
-                    buf.extend_from_slice(raw.as_bytes());
+                    hex::decode(raw).unwrap()
                 } else {
+                    let mut buf = Vec::with_capacity(SignedDelegateOrder::INIT_SPACE + 8);
                     (SWIFT_DELEGATE_MSG_PREFIX).serialize(&mut buf).unwrap();
                     inner.serialize(&mut buf).unwrap();
+                    buf
                 }
             }
         }
-
-        buf
     }
 
     pub fn info(&self, taker_authority: &Pubkey) -> SignedMessageInfo {
@@ -195,7 +196,28 @@ impl SignedOrderInfo {
         // the swift message format can change
         // if the message was received from an external source then we have to preserve the serialization
         // if we are constructing it locally then it can be serialized without issue
-        hex::encode(self.order.to_borsh()).into_bytes()
+        match self.order {
+            SignedOrderType::Authority { ref raw, ref inner } => {
+                if let Some(raw) = raw {
+                    raw.as_bytes().into()
+                } else {
+                    let mut buf = Vec::with_capacity(SignedOrder::INIT_SPACE + 8);
+                    (SWIFT_MSG_PREFIX).serialize(&mut buf).unwrap();
+                    inner.serialize(&mut buf).unwrap();
+                    hex::encode(buf).into()
+                }
+            }
+            SignedOrderType::Delegated { ref raw, ref inner } => {
+                if let Some(raw) = raw {
+                    raw.as_bytes().into()
+                } else {
+                    let mut buf = Vec::with_capacity(SignedDelegateOrder::INIT_SPACE + 8);
+                    (SWIFT_DELEGATE_MSG_PREFIX).serialize(&mut buf).unwrap();
+                    inner.serialize(&mut buf).unwrap();
+                    hex::encode(buf).into()
+                }
+            }
+        }
     }
     /// convert swift order into anchor ix data
     pub fn to_ix_data(&self) -> Vec<u8> {
@@ -588,7 +610,7 @@ mod tests {
         let signed_message = order_notification.order;
         assert_eq!(
             signed_message.encode_for_signing().as_slice(),
-            b"c8d5a65e2234f55d0001010080841e0000000000000000000000000002000000000000000001320124c6aa950000000001786b2f94000000000000bb64a9150000000074735730364f6d380000000000"
+            b"c8d5a65e2234f55d0001010080841e0000000000000000000000000002000000000000000001320124c6aa950000000001786b2f94000000000000bb64a9150000000074735730364f6d380000"
         );
     }
 
@@ -676,7 +698,7 @@ mod tests {
                 raw.unwrap().as_str(),
                 order_message_raw,
                 "preserved order message from payload"
-            )
+            );
         } else {
             assert!(false, "unexpected variant");
         }
