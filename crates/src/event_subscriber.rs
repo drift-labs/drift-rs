@@ -1391,6 +1391,8 @@ mod test {
             taker_existing_base_asset_amount: None,
             taker_existing_quote_entry_amount: None,
             trigger_price: None,
+            builder_fee: None,
+            builder_idx: None,
         }
     }
 }

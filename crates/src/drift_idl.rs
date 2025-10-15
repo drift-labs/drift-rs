@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.141.0";
+pub const IDL_VERSION: &str = "2.142.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -1623,6 +1623,16 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketCurveUpdateIntensity {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdatePerpMarketReferencePriceOffsetDeadbandPct {
+        pub reference_price_offset_deadband_pct: u8,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdatePerpMarketReferencePriceOffsetDeadbandPct {
+        const DISCRIMINATOR: &[u8] = &[214, 73, 166, 11, 218, 76, 110, 163];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdatePerpMarketReferencePriceOffsetDeadbandPct {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdateLpCooldownTime {
         pub lp_cooldown_time: u64,
     }
@@ -2827,7 +2837,8 @@ pub mod types {
         pub quote_asset_amount_with_unsettled_lp: i64,
         pub reference_price_offset: i32,
         pub amm_inventory_spread_adjustment: i8,
-        pub padding: [u8; 3],
+        pub reference_price_offset_deadband_pct: u8,
+        pub padding: [u8; 2],
         pub last_funding_oracle_twap: i64,
     }
     #[repr(C)]
@@ -17933,6 +17944,82 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdatePerpMarketReferencePriceOffsetDeadbandPct {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+        pub perp_market: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdatePerpMarketReferencePriceOffsetDeadbandPct {
+        const DISCRIMINATOR: &[u8] = &[100, 14, 195, 191, 224, 46, 16, 141];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod
+        for UpdatePerpMarketReferencePriceOffsetDeadbandPct
+    {
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable
+        for UpdatePerpMarketReferencePriceOffsetDeadbandPct
+    {
+    }
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdatePerpMarketReferencePriceOffsetDeadbandPct {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdatePerpMarketReferencePriceOffsetDeadbandPct {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdatePerpMarketReferencePriceOffsetDeadbandPct {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.perp_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdatePerpMarketReferencePriceOffsetDeadbandPct {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdatePerpMarketReferencePriceOffsetDeadbandPct {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateLpCooldownTime {
         pub admin: Pubkey,
         pub state: Pubkey,
@@ -22993,6 +23080,7 @@ pub mod events {
         pub perp_amm_ex_fee_delta: i64,
         pub lp_aum: u128,
         pub lp_price: u128,
+        pub lp_pool: Pubkey,
     }
     #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
@@ -23018,6 +23106,7 @@ pub mod events {
         pub out_market_target_weight: i64,
         pub in_swap_id: u64,
         pub out_swap_id: u64,
+        pub lp_pool: Pubkey,
     }
     #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
@@ -23040,5 +23129,20 @@ pub mod events {
         pub last_aum_slot: u64,
         pub in_market_current_weight: i64,
         pub in_market_target_weight: i64,
+        pub lp_pool: Pubkey,
+    }
+    #[derive(Clone, Debug, PartialEq, Default)]
+    #[event]
+    pub struct LPBorrowLendDepositRecord {
+        pub ts: i64,
+        pub slot: u64,
+        pub spot_market_index: u16,
+        pub constituent_index: u16,
+        pub direction: DepositDirection,
+        pub token_balance: i64,
+        pub last_token_balance: i64,
+        pub interest_accrued_token_amount: i64,
+        pub amount_deposit_withdraw: u64,
+        pub lp_pool: Pubkey,
     }
 }
