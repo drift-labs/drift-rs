@@ -25,7 +25,7 @@ unsafe_pub = []
 
 [dependencies]
 abi_stable = { version = "0.11", default-features = false }
-ahash = "0.8.11"
+ahash = "0.8.12"
 anchor-lang = { version = "0.31", features = ["derive"] }
 arrayvec = "0.7.6"
 base64 = "0.22"
@@ -55,6 +55,7 @@ yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc",
 yellowstone-grpc-proto = { git = "https://github.com/rpcpool/yellowstone-grpc", branch = "master" }
 
 drift-pubsub-client = { version = "0.1.1", path = "crates/pubsub-client" }
+fxhash = "0.2.1"
 
 [dev-dependencies]
 bytes = "1"

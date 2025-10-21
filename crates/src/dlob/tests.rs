@@ -1,7 +1,13 @@
 use solana_sdk::pubkey::Pubkey;
+use std::sync::{Arc, Barrier};
+use std::thread;
+use std::time::Duration;
 
 use crate::{
-    dlob::{types::DynamicPrice, Direction, OrderKind, OrderMetadata, Orderbook, TakerOrder, DLOB},
+    dlob::{
+        types::DynamicPrice, Direction, OrderKind, OrderMetadata, Orderbook, Snapshot, TakerOrder,
+        DLOB,
+    },
     types::{MarketId, MarketType, Order, OrderType},
 };
 
@@ -385,7 +391,7 @@ fn dlob_l2_snapshot() {
     dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
 
     // Get the L2 snapshot
-    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp);
+    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp).unwrap();
 
     // Verify bid prices and sizes
     // At 1100: 2 (resting limit) + 6 (floating limit) = 8
@@ -413,7 +419,7 @@ fn dlob_l2_snapshot() {
 
     // Get updated L2 snapshot
     dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
-    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp);
+    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp).unwrap();
 
     // Verify new order was added
     assert_eq!(l2book.bids.get(&1075), Some(&8));
@@ -427,7 +433,7 @@ fn dlob_l2_snapshot() {
 
     // Get updated L2 snapshot
     dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
-    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp);
+    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp).unwrap();
 
     // Verify order was updated
     assert_eq!(l2book.bids.get(&1100), Some(&10)); // 4 (updated) + 6 (floating limit) = 10
@@ -441,7 +447,7 @@ fn dlob_l2_snapshot() {
 
     // Get updated L2 snapshot
     dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
-    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp);
+    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp).unwrap();
 
     // Verify order was removed
     assert_eq!(l2book.bids.get(&1050), None);
@@ -482,6 +488,7 @@ fn dlob_find_crosses_for_taker_order_full_fill() {
         result.orders[0],
         (
             OrderMetadata {
+                max_ts: 30,
                 order_id: 1,
                 user,
                 kind: OrderKind::Limit
@@ -494,6 +501,7 @@ fn dlob_find_crosses_for_taker_order_full_fill() {
         result.orders[1],
         (
             OrderMetadata {
+                max_ts: 30,
                 order_id: 2,
                 user,
                 kind: OrderKind::Limit
@@ -535,6 +543,7 @@ fn dlob_find_crosses_for_taker_order_partial_fill() {
         result.orders[0],
         (
             OrderMetadata {
+                max_ts: 30,
                 order_id: 1,
                 user,
                 kind: OrderKind::Limit
@@ -637,6 +646,7 @@ fn dlob_find_crosses_for_taker_order_floating_limit() {
         result.orders[0],
         (
             OrderMetadata {
+                max_ts: 30,
                 order_id: 1,
                 user,
                 kind: OrderKind::FloatingLimit,
@@ -682,6 +692,7 @@ fn dlob_find_crosses_for_taker_order_price_priority() {
         result.orders[0],
         (
             OrderMetadata {
+                max_ts: 30,
                 order_id: 2,
                 user,
                 kind: OrderKind::Limit
@@ -694,6 +705,7 @@ fn dlob_find_crosses_for_taker_order_price_priority() {
         result.orders[1],
         (
             OrderMetadata {
+                max_ts: 30,
                 order_id: 1,
                 user,
                 kind: OrderKind::Limit
@@ -1776,4 +1788,385 @@ fn dlob_trigger_order_transition_update() {
         assert_eq!(book.trigger_orders.bids.len(), 0);
         assert_eq!(book.market_orders.bids.len(), 1);
     }
+}
+
+// Test data structure for Snapshot testing
+#[derive(Debug, Clone, Default, PartialEq)]
+struct TestData {
+    value: u64,
+    counter: u32,
+    data: Vec<u8>,
+}
+
+impl TestData {
+    fn new(value: u64, counter: u32, data_size: usize) -> Self {
+        Self {
+            value,
+            counter,
+            data: vec![0u8; data_size],
+        }
+    }
+}
+
+#[test]
+fn snapshot_basic_functionality() {
+    let _ = env_logger::try_init();
+
+    // Create initial data
+    let initial_data = TestData::new(100, 0, 100);
+    let snapshot = Snapshot::new(Arc::new(initial_data));
+
+    // Test basic get
+    let data = snapshot.get();
+    assert_eq!(data.value, 100);
+    assert_eq!(data.counter, 0);
+    assert_eq!(data.data.len(), 100);
+
+    // Test update
+    let new_data = TestData::new(200, 1, 200);
+    snapshot.update(Arc::new(new_data));
+
+    let updated_data = snapshot.get();
+    assert_eq!(updated_data.value, 200);
+    assert_eq!(updated_data.counter, 1);
+    assert_eq!(updated_data.data.len(), 200);
+
+    // Test multiple updates
+    for i in 2..10 {
+        let new_data = TestData::new(200 + i as u64, i, 200 + i as usize);
+        snapshot.update(Arc::new(new_data));
+
+        let data = snapshot.get();
+        assert_eq!(data.value, 200 + i as u64);
+        assert_eq!(data.counter, i);
+        assert_eq!(data.data.len(), 200 + i as usize);
+    }
+}
+
+#[test]
+fn snapshot_simple_multithreaded() {
+    let _ = env_logger::try_init();
+
+    // Create initial data
+    let initial_data = TestData::new(100, 0, 100);
+    let snapshot = Arc::new(Snapshot::new(Arc::new(initial_data)));
+
+    const NUM_THREADS: usize = 2;
+    const NUM_ITERATIONS: usize = 10;
+
+    let barrier = Arc::new(Barrier::new(NUM_THREADS));
+    let mut handles = Vec::new();
+
+    // Spawn threads that both read and write
+    for _thread_id in 0..NUM_THREADS {
+        let snapshot = snapshot.clone();
+        let barrier = barrier.clone();
+
+        let handle = thread::spawn(move || {
+            barrier.wait(); // Wait for all threads to start
+
+            for i in 0..NUM_ITERATIONS {
+                // Read current value
+                let current = snapshot.get();
+                let current_value = current.value;
+
+                // Create new data with incremented value
+                let new_data = TestData::new(current_value + 1, i as u32, 100);
+
+                // Update snapshot
+                snapshot.update(Arc::new(new_data));
+
+                // Verify the update worked
+                let updated = snapshot.get();
+                assert!(updated.value >= current_value);
+                assert_eq!(updated.data.len(), 100);
+            }
+        });
+
+        handles.push(handle);
+    }
+
+    // Wait for all threads to complete
+    for handle in handles {
+        handle.join().expect("Thread should complete successfully");
+    }
+
+    // Verify final state
+    let final_data = snapshot.get();
+    assert!(final_data.value >= 100);
+    assert_eq!(final_data.data.len(), 100);
+}
+
+#[test]
+fn snapshot_multithreaded_readers_writers() {
+    let _ = env_logger::try_init();
+
+    // Create initial data
+    let initial_data = TestData::new(100, 0, 1024);
+    let snapshot = Arc::new(Snapshot::new(Arc::new(initial_data)));
+
+    const NUM_READERS: usize = 5;
+    const NUM_WRITERS: usize = 2;
+    const NUM_ITERATIONS: usize = 100;
+
+    let barrier = Arc::new(Barrier::new(NUM_READERS + NUM_WRITERS));
+    let mut handles = Vec::new();
+
+    // Spawn reader threads
+    for reader_id in 0..NUM_READERS {
+        let snapshot = snapshot.clone();
+        let barrier = barrier.clone();
+
+        let handle = thread::spawn(move || {
+            barrier.wait(); // Wait for all threads to start
+
+            for _ in 0..NUM_ITERATIONS {
+                let data = snapshot.get();
+
+                // Verify data integrity
+                assert!(
+                    data.value >= 100,
+                    "Reader {}: value should be >= 100",
+                    reader_id
+                );
+                assert!(
+                    data.counter <= NUM_ITERATIONS as u32,
+                    "Reader {}: counter too high",
+                    reader_id
+                );
+                assert_eq!(
+                    data.data.len(),
+                    1024,
+                    "Reader {}: data size mismatch",
+                    reader_id
+                );
+
+                // Small delay to increase chance of race conditions
+                if reader_id % 3 == 0 {
+                    thread::sleep(Duration::from_micros(1));
+                }
+            }
+        });
+
+        handles.push(handle);
+    }
+
+    // Spawn writer threads
+    for writer_id in 0..NUM_WRITERS {
+        let snapshot = snapshot.clone();
+        let barrier = barrier.clone();
+
+        let handle = thread::spawn(move || {
+            barrier.wait(); // Wait for all threads to start
+
+            for iteration in 0..NUM_ITERATIONS {
+                let new_data = TestData::new(100 + iteration as u64, iteration as u32, 1024);
+
+                snapshot.update(Arc::new(new_data));
+
+                // Small delay between updates
+                if writer_id % 2 == 0 {
+                    thread::sleep(Duration::from_micros(10));
+                }
+            }
+        });
+
+        handles.push(handle);
+    }
+
+    // Wait for all threads to complete
+    for handle in handles {
+        handle.join().expect("Thread should complete successfully");
+    }
+
+    // Verify final state
+    let final_data = snapshot.get();
+    assert!(final_data.value >= 100);
+    assert!(final_data.counter <= NUM_ITERATIONS as u32);
+    assert_eq!(final_data.data.len(), 1024);
+}
+
+#[test]
+fn snapshot_safe_usage_pattern() {
+    let _ = env_logger::try_init();
+
+    // Create initial data
+    let initial_data = TestData::new(100, 0, 100);
+    let snapshot = Arc::new(Snapshot::new(Arc::new(initial_data)));
+    let update_mutex = Arc::new(std::sync::Mutex::new(()));
+
+    const NUM_READER_THREADS: usize = 4;
+    const NUM_ITERATIONS: usize = 100;
+
+    let barrier = Arc::new(Barrier::new(NUM_READER_THREADS + 1)); // +1 for writer
+    let mut handles = Vec::new();
+
+    // Spawn reader threads (many readers, lock-free)
+    for _thread_id in 0..NUM_READER_THREADS {
+        let snapshot = snapshot.clone();
+        let barrier = barrier.clone();
+
+        let handle = thread::spawn(move || {
+            barrier.wait(); // Wait for all threads to start
+
+            for _i in 0..NUM_ITERATIONS {
+                // Read operation (lock-free)
+                let data = snapshot.get();
+                assert!(data.value >= 100);
+                assert_eq!(data.data.len(), 100);
+            }
+        });
+
+        handles.push(handle);
+    }
+
+    // Spawn single writer thread (synchronized)
+    let snapshot_writer = snapshot.clone();
+    let barrier = barrier.clone();
+    let update_mutex = update_mutex.clone();
+
+    let handle = thread::spawn(move || {
+        barrier.wait(); // Wait for all threads to start
+
+        for i in 0..NUM_ITERATIONS {
+            // Write operation (synchronized)
+            let _guard = update_mutex.lock().unwrap();
+            let new_data = TestData::new(100 + i as u64, i as u32, 100);
+            snapshot_writer.update(Arc::new(new_data));
+            // Guard is dropped here, releasing the lock
+        }
+    });
+
+    handles.push(handle);
+
+    // Wait for all threads to complete
+    for handle in handles {
+        handle.join().expect("Thread should complete successfully");
+    }
+
+    // Verify final state
+    let final_data = snapshot.get();
+    assert!(final_data.value >= 100);
+    assert_eq!(final_data.data.len(), 100);
+}
+
+#[test]
+fn snapshot_real_world_issue_reproduction() {
+    let _ = env_logger::try_init();
+
+    // Simulate real-world usage: set data, then read it back
+    let initial_data = TestData::new(42, 1, 100);
+    let snapshot = Snapshot::new(Arc::new(initial_data));
+
+    // Immediately read back - should get the data we just set
+    let data = snapshot.get();
+    assert_eq!(data.value, 42, "Should get the value we just set");
+    assert_eq!(data.counter, 1, "Should get the counter we just set");
+    assert_eq!(data.data.len(), 100, "Should get the data size we just set");
+
+    // Update with new data
+    let new_data = TestData::new(100, 2, 200);
+    snapshot.update(Arc::new(new_data));
+
+    // Read back immediately - should get the new data
+    let updated_data = snapshot.get();
+    assert_eq!(updated_data.value, 100, "Should get the updated value");
+    assert_eq!(updated_data.counter, 2, "Should get the updated counter");
+    assert_eq!(
+        updated_data.data.len(),
+        200,
+        "Should get the updated data size"
+    );
+
+    // Multiple rapid reads should be consistent
+    for _ in 0..10 {
+        let data = snapshot.get();
+        assert_eq!(data.value, 100, "Rapid reads should be consistent");
+        assert_eq!(data.counter, 2, "Rapid reads should be consistent");
+        assert_eq!(data.data.len(), 200, "Rapid reads should be consistent");
+    }
+}
+
+#[test]
+fn snapshot_simple_race_test() {
+    let _ = env_logger::try_init();
+
+    // Simple test: set data, then read it back in another thread
+    let initial_data = TestData::new(42, 1, 100);
+    let snapshot = Arc::new(Snapshot::new(Arc::new(initial_data)));
+
+    // Spawn a writer thread
+    let snapshot_writer = snapshot.clone();
+    let writer_handle = thread::spawn(move || {
+        for i in 0..100 {
+            let new_data = TestData::new(100 + i as u64, i as u32, 100);
+            snapshot_writer.update(Arc::new(new_data));
+            thread::sleep(Duration::from_micros(1));
+        }
+    });
+
+    // Spawn a reader thread
+    let snapshot_reader = snapshot.clone();
+    let reader_handle = thread::spawn(move || {
+        let mut default_count = 0;
+        let mut max_value = 0;
+
+        for _ in 0..100 {
+            let data = snapshot_reader.get();
+
+            if data.value == 0 && data.counter == 0 && data.data.len() == 0 {
+                default_count += 1;
+            }
+
+            if data.value > max_value {
+                max_value = data.value;
+            }
+
+            thread::sleep(Duration::from_micros(1));
+        }
+
+        (default_count, max_value)
+    });
+
+    // Wait for both threads
+    writer_handle.join().expect("Writer should complete");
+    let (default_count, max_value) = reader_handle.join().expect("Reader should complete");
+
+    // We should have seen some updates
+    assert!(
+        max_value > 0,
+        "Should have seen some non-default values, got max_value: {}",
+        max_value
+    );
+
+    // Report if we got default values
+    if default_count > 0 {
+        eprintln!(
+            "WARNING: Got {} default values out of 100 reads",
+            default_count
+        );
+    }
+}
+
+#[test]
+fn snapshot_default_behavior() {
+    let _ = env_logger::try_init();
+
+    // Test Default implementation
+    let snapshot: Snapshot<TestData> = Snapshot::default();
+
+    // Should be able to get default data
+    let data = snapshot.get();
+    assert_eq!(data.value, 0);
+    assert_eq!(data.counter, 0);
+    assert_eq!(data.data.len(), 0);
+
+    // Should be able to update
+    let new_data = TestData::new(123, 456, 789);
+    snapshot.update(Arc::new(new_data));
+
+    let updated_data = snapshot.get();
+    assert_eq!(updated_data.value, 123);
+    assert_eq!(updated_data.counter, 456);
+    assert_eq!(updated_data.data.len(), 789);
 }

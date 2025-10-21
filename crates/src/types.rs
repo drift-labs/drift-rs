@@ -130,17 +130,10 @@ pub struct MarketId {
     kind: MarketType,
 }
 
-// there are derived/auto-generated trait impls for `MarketType` so
-// it can be used a key in maps, within `MarketId`
-// doing here rather than adding to all structs or special casing in IDL generation
 impl core::cmp::Eq for MarketType {}
 impl core::hash::Hash for MarketType {
     fn hash<H: core::hash::Hasher>(&self, ra_expand_state: &mut H) {
         core::mem::discriminant(self).hash(ra_expand_state);
-        match self {
-            MarketType::Spot => {}
-            MarketType::Perp => {}
-        }
     }
 }
 

@@ -18,7 +18,7 @@ use crate::{
 
 // Replace the key structs with type aliases
 type MarketOrderKey = (u64, u64);
-type OracleOrderKey = (u64, u64);
+type OracleOrderKey = (i64, u64);
 type LimitOrderKey = (u64, u64, u64);
 type FloatingLimitOrderKey = (i32, u64, u64);
 type TriggerOrderKey = (u64, u64);
@@ -30,36 +30,41 @@ pub enum OrderKind {
     Market,
     /// auction oracle offset
     Oracle,
-    /// transient state before oracle limit order becomes resting
+    /// oracle limit order undergoing initial auction (taking)
     FloatingLimitAuction,
-    /// transient state before fixed limit order becomes resting
+    /// fixed limit order undergoing initial auction (taking)
     LimitAuction,
     /// resting limit order
     Limit,
     /// resting oracle limit order
     FloatingLimit,
-    /// trigger order that will result in Market or Oracle auction order
+    /// trigger order that will result in Market or Oracle auction order (untriggered)
     TriggerMarket,
-    /// trigger order that will result in Limit/Market auction order
+    /// trigger order that will result in Limit/Market auction order (untriggered)
     TriggerLimit,
+    /// Triggered oracle order
     OracleTriggered,
+    /// Triggered market order
     MarketTriggered,
+    /// Triggered limit order
     LimitTriggered,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy, PartialEq)]
 pub struct OrderMetadata {
+    pub max_ts: u64,
     pub order_id: u32,
     pub user: Pubkey,
     pub kind: OrderKind,
 }
 
 impl OrderMetadata {
-    pub fn new(user: Pubkey, kind: OrderKind, order_id: u32) -> Self {
+    pub fn new(user: Pubkey, kind: OrderKind, order_id: u32, max_ts: u64) -> Self {
         Self {
             user,
             kind,
             order_id,
+            max_ts,
         }
     }
 }
@@ -125,15 +130,27 @@ impl MakerCrosses {
 #[derive(Debug, PartialEq, Clone)]
 pub enum DLOBEvent {
     SlotOrPriceUpdate {
+        oracle_price: u64,
         slot: u64,
         market_index: u16,
         market_type: MarketType,
-        oracle_price: u64,
     },
     Order {
         delta: OrderDelta,
         slot: u64,
     },
+}
+
+impl DLOBEvent {
+    pub fn create_order(pubkey: Pubkey, order: Order, slot: u64) -> Self {
+        Self::Order {
+            delta: OrderDelta::Create {
+                user: pubkey,
+                order,
+            },
+            slot,
+        }
+    }
 }
 
 /// Order with dynamic price calculation
@@ -178,7 +195,7 @@ impl MarketOrder {
 impl OrderKey for OracleOrder {
     type Key = OracleOrderKey;
     fn key(&self) -> Self::Key {
-        (self.slot, self.id)
+        (self.end_price_offset, self.id)
     }
 }
 
@@ -300,6 +317,7 @@ pub(crate) struct TriggerOrder {
     /// static trigger price
     pub price: u64,
     pub slot: u64,
+    pub max_ts: u64,
     pub condition: OrderTriggerCondition,
     pub direction: Direction,
     pub kind: OrderType,
@@ -559,6 +577,7 @@ impl From<(u64, Order)> for TriggerOrder {
             size: order.base_asset_amount,
             price: order.trigger_price,
             condition: order.trigger_condition,
+            max_ts: order.max_ts.unsigned_abs(),
             slot: order.slot,
             direction: order.direction,
             kind: order.order_type,
@@ -568,6 +587,10 @@ impl From<(u64, Order)> for TriggerOrder {
     }
 }
 
+/// A simple snapshot container for single writer, multiple reader access
+/// Uses RwLock for thread safety - readers can access concurrently, writer gets exclusive access
+/// A simple snapshot container for single writer, multiple reader access
+/// Uses RwLock for thread safety - readers can access concurrently, writer gets exclusive access
 pub struct Snapshot<T: Default> {
     inner: AtomicPtr<T>,
 }
@@ -604,7 +627,7 @@ impl<T: Default> Snapshot<T> {
 
 impl<T: Default> Default for Snapshot<T> {
     fn default() -> Self {
-        Self::new(Arc::new(T::default()))
+        Self::new(Arc::default())
     }
 }
 

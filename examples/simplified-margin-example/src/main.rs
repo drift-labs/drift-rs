@@ -1,19 +1,20 @@
-//! Example demonstrating the simplified margin calculation FFI API
+//! Example demonstrating the simplified margin calculation API
 //! 
-//! This example shows how to use the ergonomic FfiMarketStateWrapper
+//! This example shows how to use the MarketState struct
 //! to calculate simplified margin requirements.
 
-use drift_rs::ffi::FfiMarketStateWrapper;
+use drift_rs::MarketState;
 use drift_rs::drift_idl::{
-    accounts::{SpotMarket, PerpMarket, User, OraclePriceData},
+    accounts::{SpotMarket, PerpMarket, User},
     types::MarginRequirementType,
 };
+use drift_rs::ffi::OraclePriceData;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Drift Simplified Margin Calculation Example");
     
     // Create a new market state
-    let market_state = FfiMarketStateWrapper::new();
+    let market_state = MarketState::new();
     
     // Example: Add a spot market (you would populate this with real data)
     let spot_market = SpotMarket {
@@ -37,9 +38,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     
     // Add markets and oracle data to the state
-    market_state.add_spot_market(&spot_market)?;
-    market_state.add_perp_market(&perp_market)?;
-    market_state.add_oracle_price(0, &oracle_price)?;
+    market_state.set_spot_market(spot_market);
+    market_state.set_perp_market(perp_market);
+    market_state.set_spot_oracle_price(0, oracle_price);
     
     // Example: Create a user (you would populate this with real data)
     let user = User {
@@ -54,13 +55,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?;
     
     println!("Margin Calculation Results:");
-    println!("  Total Collateral: {}", margin_calc.total_collateral.0);
-    println!("  Margin Requirement: {}", margin_calc.margin_requirement.0);
-    println!("  Free Collateral: {}", margin_calc.free_collateral.0);
-    println!("  Spot Asset Value: {}", margin_calc.spot_asset_value.0);
-    println!("  Spot Liability Value: {}", margin_calc.spot_liability_value.0);
-    println!("  Perp PnL: {}", margin_calc.perp_pnl.0);
-    println!("  Perp Liability Value: {}", margin_calc.perp_liability_value.0);
+    println!("  Total Collateral: {}", margin_calc.total_collateral);
+    println!("  Margin Requirement: {}", margin_calc.margin_requirement);
+    println!("  Free Collateral: {}", margin_calc.free_collateral);
+    println!("  Spot Asset Value: {}", margin_calc.spot_asset_value);
+    println!("  Spot Liability Value: {}", margin_calc.spot_liability_value);
+    println!("  Perp PnL: {}", margin_calc.perp_pnl);
+    println!("  Perp Liability Value: {}", margin_calc.perp_liability_value);
     
     Ok(())
 }

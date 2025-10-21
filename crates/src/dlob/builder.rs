@@ -3,9 +3,9 @@ use solana_sdk::pubkey::Pubkey;
 use crate::{
     account_map::AccountMap,
     accounts::User,
-    dlob::{DLOBEvent, DLOBNotifier, OrderDelta, DLOB},
+    dlob::{DLOBNotifier, DLOB},
     grpc::AccountUpdate,
-    types::{MarketId, OrderStatus},
+    types::MarketId,
     DriftClient,
 };
 
@@ -59,21 +59,7 @@ impl<'a> DLOBBuilder<'a> {
 
         let notifier_ref = notifier.clone();
         account_map.iter_accounts_with::<User>(move |pubkey, user, slot| {
-            for order in user.orders {
-                if order.status == OrderStatus::Open
-                    && order.base_asset_amount > order.base_asset_amount_filled
-                {
-                    notifier_ref
-                        .send(DLOBEvent::Order {
-                            delta: OrderDelta::Create {
-                                user: *pubkey,
-                                order,
-                            },
-                            slot,
-                        })
-                        .expect("sent");
-                }
-            }
+            notifier_ref.user_update(*pubkey, None, &user, slot);
         });
 
         Self {
@@ -98,61 +84,15 @@ impl<'a> DLOBBuilder<'a> {
         let notifier = self.notifier.clone();
         move |update| {
             let new_user = crate::utils::deser_zero_copy(update.data);
-            match account_map.account_data_and_slot::<User>(&update.pubkey) {
-                Some(stored) => {
-                    if stored.slot <= update.slot {
-                        let user_order_deltas = crate::dlob::util::compare_user_orders(
-                            update.pubkey,
-                            &stored.data,
-                            new_user,
-                        );
-                        for delta in user_order_deltas {
-                            notifier
-                                .send(DLOBEvent::Order {
-                                    delta,
-                                    slot: update.slot,
-                                })
-                                .expect("sent");
-                        }
-                    }
-                }
-                None => {
-                    for order in new_user.orders {
-                        if order.status == OrderStatus::Open
-                            && order.base_asset_amount > order.base_asset_amount_filled
-                        {
-                            notifier
-                                .send(DLOBEvent::Order {
-                                    delta: OrderDelta::Create {
-                                        user: update.pubkey,
-                                        order,
-                                    },
-                                    slot: update.slot,
-                                })
-                                .expect("sent");
-                        }
-                    }
-                }
-            }
+            let old_user = account_map
+                .account_data_and_slot::<User>(&update.pubkey)
+                .map(|x| x.data);
+            notifier.user_update(update.pubkey, old_user.as_ref(), new_user, update.slot);
         }
     }
 
     pub fn load_user(&self, pubkey: Pubkey, user: &User, slot: u64) {
-        for order in user.orders {
-            if order.status == OrderStatus::Open
-                && order.base_asset_amount > order.base_asset_amount_filled
-            {
-                self.notifier
-                    .send(DLOBEvent::Order {
-                        delta: OrderDelta::Create {
-                            user: pubkey,
-                            order,
-                        },
-                        slot,
-                    })
-                    .expect("sent");
-            }
-        }
+        self.notifier.user_update(pubkey, None, user, slot);
     }
 
     /// Returns a handler suitable for use in grpc_subscribe's on_slot
@@ -164,14 +104,7 @@ impl<'a> DLOBBuilder<'a> {
         move |new_slot| {
             for market in &market_ids {
                 if let Some(oracle_price) = drift.try_get_oracle_price_data_and_slot(*market) {
-                    notifier
-                        .send(DLOBEvent::SlotOrPriceUpdate {
-                            slot: new_slot,
-                            market_index: market.index(),
-                            market_type: market.kind(),
-                            oracle_price: oracle_price.data.price as u64,
-                        })
-                        .expect("sent");
+                    notifier.slot_update(*market, oracle_price.data.price as u64, new_slot);
                 }
             }
         }
