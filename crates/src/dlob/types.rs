@@ -587,19 +587,31 @@ impl From<(u64, Order)> for TriggerOrder {
     }
 }
 
-/// A simple snapshot container for single writer, multiple reader access
-/// Uses RwLock for thread safety - readers can access concurrently, writer gets exclusive access
-/// A simple snapshot container for single writer, multiple reader access
-/// Uses RwLock for thread safety - readers can access concurrently, writer gets exclusive access
-pub struct Snapshot<T: Default> {
-    inner: AtomicPtr<T>,
+/// Trait for types that can be cleared and reused in object pools
+pub trait Poolable: Default {
+    /// Clear the object's contents for reuse
+    fn clear(&mut self);
 }
 
-impl<T: Default> Snapshot<T> {
-    pub fn new(initial: Arc<T>) -> Self {
+/// A unified snapshot container with integrated object pooling
+/// Manages both snapshots and object pools for efficient memory reuse
+pub struct Snapshot<T: Poolable> {
+    /// Current snapshot data
+    inner: AtomicPtr<T>,
+    /// Pool of available objects for reuse
+    pool: Vec<T>,
+    /// Maximum pool size to prevent unbounded growth
+    max_pool_size: usize,
+}
+
+impl<T: Poolable> Snapshot<T> {
+    /// Create a new snapshot with integrated pooling
+    pub fn new(initial: Arc<T>, max_pool_size: usize) -> Self {
         let ptr = Arc::into_raw(initial) as *mut T;
         Self {
             inner: AtomicPtr::new(ptr),
+            pool: Vec::with_capacity(max_pool_size),
+            max_pool_size,
         }
     }
 
@@ -613,25 +625,45 @@ impl<T: Default> Snapshot<T> {
         }
     }
 
-    /// Atomically replace the snapshot (writer-only)
-    pub fn update(&self, new_book: Arc<T>) {
-        let new_ptr = Arc::into_raw(new_book) as *mut T;
+    /// Get the next available object from the pool, or create a new one
+    /// Returns the index of the object in the pool for later return
+    pub fn get_empty_snapshot(&mut self) -> T {
+        if let Some(obj) = self.pool.pop() {
+            obj
+        } else {
+            T::default()
+        }
+    }
+
+    /// Return an object to the pool for reuse
+    fn release_snapshot(&mut self, mut obj: T) {
+        if self.pool.len() < self.max_pool_size {
+            obj.clear();
+            self.pool.push(obj);
+        }
+    }
+
+    /// Atomically replace the snapshot and return old object to pool
+    pub fn update(&mut self, new_obj: T) {
+        let new_ptr = Arc::into_raw(Arc::new(new_obj)) as *mut T;
         let old_ptr = self
             .inner
             .swap(new_ptr, std::sync::atomic::Ordering::Release);
 
-        // SAFETY: we must drop the old Arc so it doesn't leak
-        unsafe { drop(Arc::from_raw(old_ptr)) };
+        // Return old object to pool for reuse
+        if let Ok(old_obj) = Arc::try_unwrap(unsafe { Arc::from_raw(old_ptr) }) {
+            self.release_snapshot(old_obj);
+        }
     }
 }
 
-impl<T: Default> Default for Snapshot<T> {
+impl<T: Poolable> Default for Snapshot<T> {
     fn default() -> Self {
-        Self::new(Arc::default())
+        Self::new(Arc::default(), 4) // Default pool size of 4
     }
 }
 
-impl<T: Default> Drop for Snapshot<T> {
+impl<T: Poolable> Drop for Snapshot<T> {
     fn drop(&mut self) {
         let ptr = self.inner.load(std::sync::atomic::Ordering::Acquire);
         // SAFETY: we own the pointer and can safely drop it

@@ -1,5 +1,5 @@
 [package]
-name = "simplified-margin-example"
+name = "simple-margin-calculation"
 version = "0.1.0"
 edition = "2021"
 
