@@ -485,28 +485,41 @@
         }
 
         .refresh-btn.loading {
-            position: relative;
-            color: transparent;
+            background: #666;
+            color: #999;
+            opacity: 0.7;
+            filter: grayscale(100%);
         }
 
-        .refresh-btn.loading::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 16px;
-            height: 16px;
-            margin: -8px 0 0 -8px;
-            border: 2px solid #000;
-            border-radius: 50%;
-            border-top-color: transparent;
-            animation: spin 0.8s linear infinite;
+        .pause-btn {
+            background: #ff6b6b;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.1s ease-in-out;
+            min-width: 80px;
+            text-align: center;
         }
 
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
+        .pause-btn:hover {
+            background: #ff4444;
+            transform: translateY(-1px);
+        }
+
+        .pause-btn.paused {
+            background: #00ff88;
+            color: #000;
+        }
+
+        .pause-btn.paused:hover {
+            background: #00cc6a;
+        }
+
+        .pause-btn:active {
+            transform: translateY(0);
         }
 
         @media (max-width: 768px) {
@@ -562,6 +575,9 @@
         </div>
         <div class="control-group">
             <button id="refreshBtn" class="refresh-btn">Refresh</button>
+        </div>
+        <div class="control-group">
+            <button id="pauseBtn" class="pause-btn">Pause</button>
         </div>
     </div>
 
@@ -659,6 +675,7 @@
     <script>
         let refreshInterval = null;
         let isRefreshing = false;
+        let isPaused = false;
 
         const statusEl = document.getElementById('status');
         const spreadEl = document.getElementById('spread');
@@ -675,6 +692,7 @@
         const refreshIntervalInput = document.getElementById('refreshInterval');
         const maxOrdersInput = document.getElementById('maxOrders');
         const refreshBtn = document.getElementById('refreshBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
         const takerToggleGroup = document.getElementById('takerToggleGroup');
         const showTakerOrdersCheckbox = document.getElementById('showTakerOrders');
 
@@ -987,14 +1005,32 @@
                 clearInterval(refreshInterval);
             }
 
-            const interval = parseInt(refreshIntervalInput.value);
-            refreshInterval = setInterval(fetchOrderbook, interval);
+            if (!isPaused) {
+                const interval = parseInt(refreshIntervalInput.value);
+                refreshInterval = setInterval(fetchOrderbook, interval);
+            }
         }
 
         function stopAutoRefresh() {
             if (refreshInterval) {
                 clearInterval(refreshInterval);
                 refreshInterval = null;
+            }
+        }
+
+        function togglePause() {
+            isPaused = !isPaused;
+            
+            if (isPaused) {
+                pauseBtn.textContent = 'Resume';
+                pauseBtn.classList.add('paused');
+                stopAutoRefresh();
+                updateStatus('Auto-refresh paused');
+            } else {
+                pauseBtn.textContent = 'Pause';
+                pauseBtn.classList.remove('paused');
+                startAutoRefresh();
+                updateStatus('Auto-refresh resumed');
             }
         }
 
@@ -1025,6 +1061,7 @@
 
         // Event listeners
         refreshBtn.addEventListener('click', fetchOrderbook);
+        pauseBtn.addEventListener('click', togglePause);
 
         l2ViewBtn.addEventListener('click', () => switchView('l2'));
         l3ViewBtn.addEventListener('click', () => switchView('l3'));
