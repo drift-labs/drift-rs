@@ -60,13 +60,7 @@ pub fn compare_user_orders(pubkey: Pubkey, old: &User, new: &User) -> Vec<OrderD
                     });
                 }
                 (_, OrderStatus::Open) => {
-                    // this transition doesn't make sense but could happen e.g due to a reorg
-                    log::warn!(target: "dlob", "unexpected order transition. old:{old_order:?} => new:{new_order:?}");
-                    deltas.push(OrderDelta::Update {
-                        user: pubkey,
-                        new_order: *new_order,
-                        old_order: *old_order,
-                    });
+                    // invalid transition e.g. out of order update
                 }
                 _ => {
                     // Same order, both not open - no change needed

@@ -1,7 +1,4 @@
-use std::{
-    fmt::Debug,
-    sync::{atomic::AtomicPtr, Arc},
-};
+use std::{fmt::Debug, sync::atomic::AtomicPtr};
 
 use arrayvec::ArrayVec;
 use solana_sdk::pubkey::Pubkey;
@@ -129,28 +126,15 @@ impl MakerCrosses {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum DLOBEvent {
+    /// market oracle and/or slot change
     SlotOrPriceUpdate {
         oracle_price: u64,
         slot: u64,
         market_index: u16,
         market_type: MarketType,
     },
-    Order {
-        delta: OrderDelta,
-        slot: u64,
-    },
-}
-
-impl DLOBEvent {
-    pub fn create_order(pubkey: Pubkey, order: Order, slot: u64) -> Self {
-        Self::Order {
-            delta: OrderDelta::Create {
-                user: pubkey,
-                order,
-            },
-            slot,
-        }
-    }
+    /// user order deltas
+    Deltas { deltas: Vec<OrderDelta>, slot: u64 },
 }
 
 /// Order with dynamic price calculation
@@ -587,86 +571,71 @@ impl From<(u64, Order)> for TriggerOrder {
     }
 }
 
-/// Trait for types that can be cleared and reused in object pools
-pub trait Poolable: Default {
-    /// Clear the object's contents for reuse
-    fn clear(&mut self);
+/// Double-buffered snapshot of T
+///
+/// Provides lock-free reads/write API
+pub struct Snapshot<T: Default> {
+    a: AtomicPtr<T>,
+    b: AtomicPtr<T>,
 }
 
-/// A unified snapshot container with integrated object pooling
-/// Manages both snapshots and object pools for efficient memory reuse
-pub struct Snapshot<T: Poolable> {
-    /// Current snapshot data
-    inner: AtomicPtr<T>,
-    /// Pool of available objects for reuse
-    pool: Vec<T>,
-    /// Maximum pool size to prevent unbounded growth
-    max_pool_size: usize,
-}
-
-impl<T: Poolable> Snapshot<T> {
-    /// Create a new snapshot with integrated pooling
-    pub fn new(initial: Arc<T>, max_pool_size: usize) -> Self {
-        let ptr = Arc::into_raw(initial) as *mut T;
-        Self {
-            inner: AtomicPtr::new(ptr),
-            pool: Vec::with_capacity(max_pool_size),
-            max_pool_size,
-        }
-    }
-
-    /// Get a cloned Arc<T> for readers (lock-free)
-    pub fn get(&self) -> Arc<T> {
-        let ptr = self.inner.load(std::sync::atomic::Ordering::Acquire);
-        // SAFETY: we never deallocate this pointer while in use
-        unsafe {
-            Arc::increment_strong_count(ptr);
-            Arc::from_raw(ptr)
-        }
-    }
-
-    /// Get the next available object from the pool, or create a new one
-    /// Returns the index of the object in the pool for later return
-    pub fn get_empty_snapshot(&mut self) -> T {
-        if let Some(obj) = self.pool.pop() {
-            obj
-        } else {
-            T::default()
-        }
-    }
-
-    /// Return an object to the pool for reuse
-    fn release_snapshot(&mut self, mut obj: T) {
-        if self.pool.len() < self.max_pool_size {
-            obj.clear();
-            self.pool.push(obj);
-        }
-    }
-
-    /// Atomically replace the snapshot and return old object to pool
-    pub fn update(&mut self, new_obj: T) {
-        let new_ptr = Arc::into_raw(Arc::new(new_obj)) as *mut T;
-        let old_ptr = self
-            .inner
-            .swap(new_ptr, std::sync::atomic::Ordering::Release);
-
-        // Return old object to pool for reuse
-        if let Ok(old_obj) = Arc::try_unwrap(unsafe { Arc::from_raw(old_ptr) }) {
-            self.release_snapshot(old_obj);
-        }
-    }
-}
-
-impl<T: Poolable> Default for Snapshot<T> {
+impl<T: Default> Default for Snapshot<T> {
     fn default() -> Self {
-        Self::new(Arc::default(), 4) // Default pool size of 4
+        Self::new(T::default(), T::default())
     }
 }
 
-impl<T: Poolable> Drop for Snapshot<T> {
+impl<T: Default> Snapshot<T> {
+    /// Create a new double buffer from two initial values.
+    pub fn new(a: T, b: T) -> Self {
+        let a = Box::into_raw(Box::new(a));
+        let b = Box::into_raw(Box::new(b));
+        Self {
+            a: AtomicPtr::new(a),
+            b: AtomicPtr::new(b),
+        }
+    }
+
+    /// Read the snapshot
+    #[inline]
+    pub fn read(&self) -> &T {
+        unsafe { &*self.a.load(std::sync::atomic::Ordering::Acquire) }
+    }
+
+    /// Write the snapshot
+    #[inline]
+    pub fn write<F>(&self, f: F)
+    where
+        F: FnOnce(&mut T),
+    {
+        let b = unsafe { &mut *self.b.load(std::sync::atomic::Ordering::Relaxed) };
+        f(b);
+        self.swap();
+    }
+
+    /// atomic swap of a/b pointers.
+    #[inline]
+    fn swap(&self) {
+        let a_ptr = self.a.load(std::sync::atomic::Ordering::Acquire);
+        let b_ptr = self.b.load(std::sync::atomic::Ordering::Acquire);
+        self.a.store(b_ptr, std::sync::atomic::Ordering::Release);
+        self.b.store(a_ptr, std::sync::atomic::Ordering::Release);
+    }
+}
+
+impl<T: Default> Drop for Snapshot<T> {
     fn drop(&mut self) {
-        let ptr = self.inner.load(std::sync::atomic::Ordering::Acquire);
-        // SAFETY: we own the pointer and can safely drop it
-        unsafe { drop(Arc::from_raw(ptr)) };
+        unsafe {
+            let a_ptr = self.a.load(std::sync::atomic::Ordering::Relaxed);
+            let b_ptr = self.b.load(std::sync::atomic::Ordering::Relaxed);
+
+            // Only drop non-null pointers to avoid double-free
+            if !a_ptr.is_null() {
+                drop(Box::from_raw(a_ptr));
+            }
+            if !b_ptr.is_null() {
+                drop(Box::from_raw(b_ptr));
+            }
+        }
     }
 }

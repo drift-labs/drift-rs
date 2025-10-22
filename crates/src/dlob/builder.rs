@@ -103,8 +103,10 @@ impl<'a> DLOBBuilder<'a> {
         let market_ids = self.market_ids.clone();
         move |new_slot| {
             for market in &market_ids {
-                if let Some(oracle_price) = drift.try_get_oracle_price_data_and_slot(*market) {
-                    notifier.slot_update(*market, oracle_price.data.price as u64, new_slot);
+                if let Ok(oracle_data) =
+                    drift.try_get_mmoracle_for_perp_market(market.index(), new_slot)
+                {
+                    notifier.slot_update(*market, oracle_data.price as u64, new_slot);
                 }
             }
         }
