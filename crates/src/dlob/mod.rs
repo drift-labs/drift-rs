@@ -703,7 +703,7 @@ impl DLOBNotifier {
     /// ```
     pub fn user_update(&self, pubkey: Pubkey, old_user: Option<&User>, new_user: &User, slot: u64) {
         let deltas = match old_user {
-            Some(old_user) => crate::dlob::util::compare_user_orders(pubkey, &old_user, &new_user),
+            Some(old_user) => crate::dlob::util::compare_user_orders(pubkey, old_user, new_user),
             None => new_user
                 .orders
                 .iter()
@@ -834,7 +834,7 @@ impl DLOB {
     }
 
     /// Get L2 Book from current orders with `oracle_price`
-    pub fn get_l2_snapshot(
+    pub fn get_l2_book(
         &self,
         market_index: u16,
         market_type: MarketType,
@@ -848,7 +848,7 @@ impl DLOB {
     }
 
     /// Get L3 Book from current orders with `oracle_price`
-    pub fn get_l3_snapshot(
+    pub fn get_l3_book(
         &self,
         market_index: u16,
         market_type: MarketType,

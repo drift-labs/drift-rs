@@ -253,7 +253,7 @@ impl MarketState {
         let result = unsafe {
             margin_calculate_simplified_margin_requirement(
                 user,
-                &*state,
+                &state,
                 margin_type,
                 margin_buffer.unwrap_or(0),
             )
@@ -278,7 +278,7 @@ impl MarketState {
         unsafe {
             incremental_margin_calculation_from_user(
                 user,
-                &*state,
+                &state,
                 margin_type,
                 ts,
                 margin_buffer.unwrap_or(0),
@@ -802,7 +802,7 @@ impl IncrementalMarginCalculation {
         unsafe {
             incremental_margin_calculation_from_user(
                 user,
-                &*m,
+                &m,
                 margin_type,
                 timestamp,
                 margin_buffer.unwrap_or(0),
@@ -833,12 +833,7 @@ impl IncrementalMarginCalculation {
     ) {
         let m = market_state.load();
         unsafe {
-            incremental_margin_calculation_update_spot_position(
-                self,
-                spot_position,
-                &*m,
-                timestamp,
-            );
+            incremental_margin_calculation_update_spot_position(self, spot_position, &m, timestamp);
         }
     }
 
@@ -851,12 +846,7 @@ impl IncrementalMarginCalculation {
     ) {
         let m = market_state.load();
         unsafe {
-            incremental_margin_calculation_update_perp_position(
-                self,
-                perp_position,
-                &*m,
-                timestamp,
-            );
+            incremental_margin_calculation_update_perp_position(self, perp_position, &m, timestamp);
         }
     }
 }

@@ -332,10 +332,10 @@ impl DriftClient {
     ///
     /// ## DEV
     /// - *a sanitized order may have its auction params modified by the program when
-    /// placed onchain. Makers should understand the time/price implications to accept these.
+    ///   placed onchain. Makers should understand the time/price implications to accept these.
     ///
     /// - 'deposit+trade' orders require fillers to send an attached, preceding deposit tx
-    /// before the swift order
+    ///   before the swift order
     ///
     /// Returns a stream of swift orders
     pub async fn subscribe_swift_orders(
@@ -2900,7 +2900,7 @@ impl<'a> TransactionBuilder<'a> {
                 .orders
                 .iter()
                 .find(|o| o.order_id == order_id)
-                .map_or(true, |o| o.has_builder())
+                .is_none_or(|o| o.has_builder())
         } else {
             // no taker_order_id, should be a swift order, include the revenue share escrow optimistically
             true
