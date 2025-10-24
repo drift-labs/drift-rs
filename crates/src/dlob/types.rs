@@ -127,12 +127,7 @@ impl MakerCrosses {
 #[derive(Debug, PartialEq, Clone)]
 pub enum DLOBEvent {
     /// market oracle and/or slot change
-    SlotOrPriceUpdate {
-        oracle_price: u64,
-        slot: u64,
-        market_index: u16,
-        market_type: MarketType,
-    },
+    SlotUpdate { slot: u64 },
     /// user order deltas
     Deltas { deltas: Vec<OrderDelta>, slot: u64 },
 }
@@ -267,8 +262,6 @@ pub struct LimitOrderView {
     pub slot: u64,
     /// Whether the order is post-only
     pub post_only: bool,
-    /// Whether the order is reduce-only
-    pub reduce_only: bool,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -385,48 +378,27 @@ impl DynamicPrice for MarketOrder {
     fn size(&self) -> u64 {
         self.size
     }
-    fn get_price(&self, slot: u64, oracle_price: u64, tick_size: u64) -> u64 {
-        match calculate_auction_price(
-            &Order {
-                slot: self.slot,
-                auction_duration: self.duration,
-                auction_start_price: self.start_price,
-                auction_end_price: self.end_price,
-                direction: self.direction,
-                order_type: OrderType::Market,
-                ..Default::default()
-            },
-            slot,
-            tick_size,
-            Some(oracle_price as i64),
-            false,
-        ) {
-            Ok(p) => p,
-            Err(err) => {
-                log::warn!(target: "dlob", "get_price failed: {err:?}, order: {:?}, tick size: {tick_size}", &self);
-                // offchain fallback
-                let slots_elapsed = slot.saturating_sub(self.slot) as i64;
-                let delta_denominator = self.duration as i64;
-                let delta_numerator = slots_elapsed.min(delta_denominator);
+    fn get_price(&self, slot: u64, _oracle_price: u64, tick_size: u64) -> u64 {
+        let slots_elapsed = slot.saturating_sub(self.slot) as i64;
+        let delta_denominator = self.duration as i64;
+        let delta_numerator = slots_elapsed.min(delta_denominator);
 
-                if delta_denominator == 0 {
-                    return self.end_price as u64;
-                }
-
-                let price = if self.direction == Direction::Long {
-                    let delta = (self.end_price.saturating_sub(self.start_price) * delta_numerator)
-                        / delta_denominator;
-                    self.start_price.saturating_add(delta)
-                } else {
-                    let delta = (self.start_price.saturating_sub(self.end_price) * delta_numerator)
-                        / delta_denominator;
-                    self.start_price.saturating_sub(delta)
-                };
-
-                let price = price.max(tick_size as i64);
-                standardize_price(price as u64, tick_size, self.direction)
-            }
+        if delta_denominator == 0 {
+            return self.end_price as u64;
         }
+
+        let price = if self.direction == Direction::Long {
+            let delta = (self.end_price.saturating_sub(self.start_price) * delta_numerator)
+                / delta_denominator;
+            self.start_price.saturating_add(delta)
+        } else {
+            let delta = (self.start_price.saturating_sub(self.end_price) * delta_numerator)
+                / delta_denominator;
+            self.start_price.saturating_sub(delta)
+        };
+
+        let price = price.max(tick_size as i64);
+        standardize_price(price as u64, tick_size, self.direction)
     }
 }
 
@@ -638,4 +610,17 @@ impl<T: Default> Drop for Snapshot<T> {
             }
         }
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct CrossingOrder {
+    pub order_view: LimitOrderView,
+    pub metadata: OrderMetadata,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct CrossingRegion {
+    pub slot: u64,
+    pub crossing_bids: Vec<CrossingOrder>,
+    pub crossing_asks: Vec<CrossingOrder>,
 }

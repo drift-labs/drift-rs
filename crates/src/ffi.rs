@@ -22,7 +22,7 @@ use crate::{
         standardize_price_i64,
     },
     types::{
-        accounts::HighLeverageModeConfig, ContractTier, OrderType, PositionDirection,
+        accounts::HighLeverageModeConfig, ContractTier, OrderParams, OrderType, PositionDirection,
         ProtectedMakerParams, RevenueShareOrder, SdkError, ValidityGuardRails,
     },
     SdkResult,
@@ -173,6 +173,13 @@ extern "C" {
         is_signed_msg: bool,
     ) -> FfiResult<bool>;
     #[allow(improper_ctypes)]
+    pub fn order_params_update_perp_auction_params(
+        order_params: &mut types::OrderParams,
+        perp_market: &accounts::PerpMarket,
+        oracle_price: i64,
+        is_signed_msg: bool,
+    );
+    #[allow(improper_ctypes)]
     pub fn order_calculate_auction_params_for_trigger_order(
         order: &types::Order,
         oracle_price: &OraclePriceData,
@@ -219,46 +226,17 @@ pub fn calculate_auction_price(
     to_sdk_result(res)
 }
 
-use crate::market_state::MarketStateData;
-/// Debug function to print MarketState contents in a terse format
-/// Format: perp: [idx|price|oracle], spot:[idx|price|oracle|decimals]
-use std::sync::Arc;
-pub fn debug_print_market_state(market_state: Arc<MarketStateData>) {
-    let market_state = market_state.clone();
-    println!("=== MarketState Debug ===");
-
-    // Print perp markets
-    print!("perp: [");
-    let mut perp_entries = Vec::new();
-    for (idx, market) in &market_state.perp_markets {
-        let oracle_price = market_state
-            .perp_oracle_prices
-            .get(idx)
-            .map(|p| p.price)
-            .unwrap_or(0);
-        perp_entries.push(format!("{}|{}|{}", idx, oracle_price, market.amm.oracle));
+impl OrderParams {
+    pub fn update_perp_auction_params(
+        &mut self,
+        perp_market: &accounts::PerpMarket,
+        oracle_price: i64,
+        is_signed_msg: bool,
+    ) {
+        unsafe {
+            order_params_update_perp_auction_params(self, perp_market, oracle_price, is_signed_msg)
+        }
     }
-    perp_entries.sort_by_key(|s| s.split('|').next().unwrap().parse::<u16>().unwrap());
-    println!("{}]", perp_entries.join(", "));
-
-    // Print spot markets
-    print!("spot: [");
-    let mut spot_entries = Vec::new();
-    for (idx, market) in &market_state.spot_markets {
-        let oracle_price = market_state
-            .spot_oracle_prices
-            .get(idx)
-            .map(|p| p.price)
-            .unwrap_or(0);
-        spot_entries.push(format!(
-            "{}|{}|{}|{}",
-            idx, oracle_price, market.oracle, market.decimals
-        ));
-    }
-    spot_entries.sort_by_key(|s| s.split('|').next().unwrap().parse::<u16>().unwrap());
-    println!("{}]", spot_entries.join(", "));
-
-    println!("========================");
 }
 
 impl MarketState {

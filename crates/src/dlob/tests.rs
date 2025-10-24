@@ -84,7 +84,7 @@ fn dlob_market_order_sorting() {
     order.auction_duration = 5;
     dlob.insert_order(&user, order);
 
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, 0);
+    dlob.update_slot(0);
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
@@ -195,7 +195,7 @@ fn dlob_floating_limit_order_sorting() {
     order.oracle_price_offset = -10;
     dlob.insert_order(&user, order);
 
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, 0);
+    dlob.update_slot(0);
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
@@ -275,7 +275,7 @@ fn dlob_oracle_order_sorting() {
     dlob.insert_order(&user, order);
 
     // orderbook updated
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
+    dlob.update_slot(0);
 
     let book = dlob
         .markets
@@ -286,7 +286,7 @@ fn dlob_oracle_order_sorting() {
     let bids: Vec<u64> = book
         .oracle_orders
         .bids
-        .iter()
+        .values()
         .map(|o| o.get_price(slot, oracle_price, 10))
         .collect();
     assert_eq!(&bids, &[140_000, 130_000, 110_000]);
@@ -295,7 +295,7 @@ fn dlob_oracle_order_sorting() {
     let asks: Vec<u64> = book
         .oracle_orders
         .asks
-        .iter()
+        .values()
         .map(|v| v.get_price(slot, oracle_price, 10))
         .collect();
     assert_eq!(&asks, &[130_000, 140_000, 150_000]);
@@ -388,10 +388,10 @@ fn dlob_l2_snapshot() {
     dlob.insert_order(&user, order);
 
     // Update slot and oracle price to calculate dynamic prices
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
+    dlob.update_slot(0);
 
     // Get the L2 snapshot
-    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp);
+    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp, oracle_price as u64);
 
     // Verify bid prices and sizes
     // At 1100: 2 (resting limit) + 6 (floating limit) = 8
@@ -418,8 +418,8 @@ fn dlob_l2_snapshot() {
     dlob.insert_order(&user, order);
 
     // Get updated L2 snapshot
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
-    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp);
+    dlob.update_slot(0);
+    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp, oracle_price as u64);
 
     // Verify new order was added
     assert_eq!(l2book.bids.get(&1075), Some(&8));
@@ -432,8 +432,8 @@ fn dlob_l2_snapshot() {
     dlob.update_order(&user, slot, new_order, old_order);
 
     // Get updated L2 snapshot
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
-    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp);
+    dlob.update_slot(0);
+    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp, oracle_price as u64);
 
     // Verify order was updated
     assert_eq!(l2book.bids.get(&1100), Some(&10)); // 4 (updated) + 6 (floating limit) = 10
@@ -446,8 +446,8 @@ fn dlob_l2_snapshot() {
     dlob.update_order(&user, slot, new_order, old_order);
 
     // Get updated L2 snapshot
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot, oracle_price);
-    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp);
+    dlob.update_slot(0);
+    let l2book = dlob.get_l2_snapshot(0, MarketType::Perp, oracle_price as u64);
 
     // Verify order was removed
     assert_eq!(l2book.bids.get(&1050), None);
@@ -735,7 +735,7 @@ fn dlob_auction_expiry_market_orders() {
     dlob.insert_order(&user, order);
 
     // Update to slot 104 - no orders should expire
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, 104, oracle_price);
+    dlob.update_slot(0);
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
@@ -747,7 +747,7 @@ fn dlob_auction_expiry_market_orders() {
     drop(book);
 
     // Update to slot 105 - first order should expire
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, 105, oracle_price);
+    dlob.update_slot(0);
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
@@ -759,7 +759,7 @@ fn dlob_auction_expiry_market_orders() {
     drop(book);
 
     // Update to slot 110 - second order should expire
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, 110, oracle_price);
+    dlob.update_slot(0);
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
@@ -790,7 +790,7 @@ fn dlob_auction_expiry_oracle_orders() {
     dlob.insert_order(&user, order);
 
     // Update to slot 104 - no orders should expire
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, 104, oracle_price);
+    dlob.update_slot(0);
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
@@ -801,7 +801,7 @@ fn dlob_auction_expiry_oracle_orders() {
     assert_eq!(book.floating_limit_orders.asks.len(), 0);
     drop(book);
     // Update to slot 105 - first order should expire
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, 105, oracle_price);
+    dlob.update_slot(0);
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
@@ -813,7 +813,7 @@ fn dlob_auction_expiry_oracle_orders() {
     drop(book);
 
     // Update to slot 110 - second order should expire
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, 110, oracle_price);
+    dlob.update_slot(0);
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
@@ -843,7 +843,7 @@ fn dlob_auction_expiry_non_limit_orders() {
     dlob.insert_order(&user, order);
 
     // Update to slot 104 - no orders should expire
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, 104, oracle_price);
+    dlob.update_slot(0);
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
@@ -855,7 +855,7 @@ fn dlob_auction_expiry_non_limit_orders() {
     drop(book);
 
     // Update to slot 105 - first order should expire and be removed
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, 105, oracle_price);
+    dlob.update_slot(0);
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
@@ -867,7 +867,7 @@ fn dlob_auction_expiry_non_limit_orders() {
     drop(book);
 
     // Update to slot 110 - second order should expire and be removed
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, 110, oracle_price);
+    dlob.update_slot(0);
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
@@ -905,7 +905,7 @@ fn dlob_auction_expiry_mixed_orders() {
     dlob.insert_order(&user, order);
 
     // Update to slot 105 - all orders should expire
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, 105, oracle_price);
+    dlob.update_slot(0);
     let book = dlob
         .markets
         .get(&MarketId::new(0, MarketType::Perp))
@@ -960,7 +960,7 @@ fn dlob_zero_size_order_handling() {
 
     // Update to slot after auction end
     drop(book); // release lock
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot + 6, oracle_price);
+    dlob.update_slot(0);
 
     let book = dlob
         .markets
@@ -987,7 +987,7 @@ fn dlob_zero_size_auction_orders() {
     dlob.insert_order(&user, order);
 
     // Update to slot after auction end
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot + 6, oracle_price);
+    dlob.update_slot(0);
 
     {
         // Verify no orders in book
@@ -1007,7 +1007,7 @@ fn dlob_zero_size_auction_orders() {
     dlob.insert_order(&user, order);
 
     // Update to slot after auction end
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot + 6, oracle_price);
+    dlob.update_slot(0);
 
     // Verify no orders in book
     {
@@ -1031,7 +1031,7 @@ fn dlob_zero_size_auction_orders() {
     dlob.insert_order(&user, order);
 
     // Update to slot after auction end
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, slot + 6, oracle_price);
+    dlob.update_slot(0);
 
     // Verify only non-zero size order was converted to limit order
     let book = dlob
@@ -1364,7 +1364,7 @@ fn dlob_trigger_order_transitions() {
     // --- Remove triggered limit order ---
     // Advance slot to ensure auction is completed
     let auction_complete_slot = slot + triggered_order2.auction_duration as u64 + 1;
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, auction_complete_slot, 0);
+    dlob.update_slot(0);
     dlob.remove_order(&user, auction_complete_slot, triggered_order2);
     {
         let book = dlob
@@ -1417,7 +1417,7 @@ fn dlob_metadata_consistency_after_auction_expiry_and_removal() {
 
     // Advance slot to expire the auction (slot 105 > slot + duration)
     let expired_slot = slot + 6; // slot 106
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, expired_slot, oracle_price);
+    dlob.update_slot(0);
 
     // Verify order moved to resting_limit_orders
     {
@@ -1513,7 +1513,7 @@ fn dlob_metadata_consistency_limit_auction_expiry_and_removal() {
 
     // Advance slot to expire the auction (slot 105 > slot + duration)
     let expired_slot = slot + 6; // slot 106
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, expired_slot, oracle_price);
+    dlob.update_slot(0);
 
     // Verify order moved to resting_limit_orders
     {
@@ -1602,7 +1602,7 @@ fn dlob_metadata_consistency_floating_limit_auction_expiry_and_removal() {
 
     // Advance slot to expire the auction (slot 105 > slot + duration)
     let expired_slot = slot + 6; // slot 106
-    dlob.update_slot_and_oracle_price(0, MarketType::Perp, expired_slot, oracle_price);
+    dlob.update_slot(0);
 
     // Verify order moved to floating_limit_orders
     {
@@ -1827,7 +1827,7 @@ fn snapshot_basic_functionality() {
     let snapshot = Snapshot::new(initial_data.clone(), initial_data);
 
     // Test basic get
-    let data = unsafe { &*snapshot.read() };
+    let data = snapshot.read();
     assert_eq!(data.value, 100);
     assert_eq!(data.counter, 0);
     assert_eq!(data.data.len(), 100);
@@ -1836,7 +1836,7 @@ fn snapshot_basic_functionality() {
     let new_data = TestData::new(200, 1, 200);
     snapshot.write(|data| *data = new_data);
 
-    let updated_data = unsafe { &*snapshot.read() };
+    let updated_data = snapshot.read();
     assert_eq!(updated_data.value, 200);
     assert_eq!(updated_data.counter, 1);
     assert_eq!(updated_data.data.len(), 200);
@@ -1846,258 +1846,9 @@ fn snapshot_basic_functionality() {
         let new_data = TestData::new(200 + i as u64, i, 200 + i as usize);
         snapshot.write(|data| *data = new_data);
 
-        let data = unsafe { &*snapshot.read() };
+        let data = snapshot.read();
         assert_eq!(data.value, 200 + i as u64);
         assert_eq!(data.counter, i);
         assert_eq!(data.data.len(), 200 + i as usize);
-    }
-}
-
-#[test]
-fn snapshot_simple_multithreaded() {
-    let _ = env_logger::try_init();
-
-    // Create initial data
-    let initial_data = TestData::new(100, 0, 100);
-    let snapshot = Arc::new(Mutex::new(Snapshot::new(
-        initial_data.clone(),
-        initial_data,
-    )));
-
-    const NUM_READERS: usize = 3;
-    const NUM_ITERATIONS: usize = 10;
-
-    let barrier = Arc::new(Barrier::new(NUM_READERS + 1)); // +1 for writer
-    let mut handles = Vec::new();
-
-    // Spawn reader threads
-    for reader_id in 0..NUM_READERS {
-        let snapshot = snapshot.clone();
-        let barrier = barrier.clone();
-
-        let handle = thread::spawn(move || {
-            barrier.wait(); // Wait for all threads to start
-
-            for _i in 0..NUM_ITERATIONS {
-                // Read current value (lock-free)
-                let current = unsafe { &*snapshot.lock().unwrap().read() };
-                let current_value = current.value;
-
-                // Verify data integrity
-                assert!(
-                    current_value >= 100,
-                    "Reader {}: value should be >= 100",
-                    reader_id
-                );
-                assert_eq!(
-                    current.data.len(),
-                    100,
-                    "Reader {}: data size mismatch",
-                    reader_id
-                );
-
-                // Small delay to increase chance of race conditions
-                if reader_id % 2 == 0 {
-                    thread::sleep(Duration::from_micros(1));
-                }
-            }
-        });
-
-        handles.push(handle);
-    }
-
-    // Spawn writer thread
-    let snapshot_writer = snapshot.clone();
-    let barrier_writer = barrier.clone();
-    let writer_handle = thread::spawn(move || {
-        barrier_writer.wait(); // Wait for all threads to start
-
-        for i in 0..NUM_ITERATIONS {
-            let new_data = TestData::new(100 + i as u64, i as u32, 100);
-            snapshot_writer
-                .lock()
-                .unwrap()
-                .write(|data| *data = new_data);
-            thread::sleep(Duration::from_micros(10));
-        }
-    });
-
-    // Wait for all threads to complete
-    for handle in handles {
-        handle
-            .join()
-            .expect("Reader thread should complete successfully");
-    }
-    writer_handle
-        .join()
-        .expect("Writer thread should complete successfully");
-
-    // Verify final state
-    let final_data = unsafe { &*snapshot.lock().unwrap().read() };
-    assert!(final_data.value >= 100);
-    assert_eq!(final_data.data.len(), 100);
-}
-
-#[test]
-fn snapshot_multithreaded_readers_writers() {
-    let _ = env_logger::try_init();
-
-    // Create initial data
-    let initial_data = TestData::new(100, 0, 1024);
-    let snapshot = Arc::new(Mutex::new(Snapshot::new(
-        initial_data.clone(),
-        initial_data,
-    )));
-
-    const NUM_READERS: usize = 5;
-    const NUM_ITERATIONS: usize = 30; // Reduced iterations for stability
-
-    let barrier = Arc::new(Barrier::new(NUM_READERS + 1)); // +1 for writer
-    let mut handles = Vec::new();
-
-    // Spawn reader threads
-    for reader_id in 0..NUM_READERS {
-        let snapshot = snapshot.clone();
-        let barrier = barrier.clone();
-
-        let handle = thread::spawn(move || {
-            barrier.wait(); // Wait for all threads to start
-
-            for _ in 0..NUM_ITERATIONS {
-                let data = unsafe { &*snapshot.lock().unwrap().read() };
-
-                // Verify data integrity
-                assert!(
-                    data.value >= 100,
-                    "Reader {}: value should be >= 100, got {}",
-                    reader_id,
-                    data.value
-                );
-                assert!(
-                    data.counter <= NUM_ITERATIONS as u32,
-                    "Reader {}: counter too high, got {}",
-                    reader_id,
-                    data.counter
-                );
-                assert_eq!(
-                    data.data.len(),
-                    1024,
-                    "Reader {}: data size mismatch, got {}",
-                    reader_id,
-                    data.data.len()
-                );
-
-                // Small delay to increase chance of race conditions
-                if reader_id % 3 == 0 {
-                    thread::sleep(Duration::from_micros(1));
-                }
-            }
-        });
-
-        handles.push(handle);
-    }
-
-    // Spawn single writer thread
-    let snapshot_writer = snapshot.clone();
-    let barrier_writer = barrier.clone();
-    let writer_handle = thread::spawn(move || {
-        barrier_writer.wait(); // Wait for all threads to start
-
-        for iteration in 0..NUM_ITERATIONS {
-            let new_data = TestData::new(100 + iteration as u64, iteration as u32, 1024);
-
-            snapshot_writer
-                .lock()
-                .unwrap()
-                .write(|data| *data = new_data);
-
-            // Small delay between updates
-            thread::sleep(Duration::from_micros(10));
-        }
-    });
-
-    // Wait for all threads to complete
-    for handle in handles {
-        handle
-            .join()
-            .expect("Reader thread should complete successfully");
-    }
-    writer_handle
-        .join()
-        .expect("Writer thread should complete successfully");
-
-    // Verify final state
-    let final_data = unsafe { &*snapshot.lock().unwrap().read() };
-    assert!(final_data.value >= 100);
-    assert!(final_data.counter <= NUM_ITERATIONS as u32);
-    assert_eq!(final_data.data.len(), 1024);
-}
-
-#[test]
-fn snapshot_simple_race_test() {
-    let _ = env_logger::try_init();
-
-    // Simple test: set data, then read it back in another thread
-    let initial_data = TestData::new(42, 1, 100);
-    let snapshot = Arc::new(Mutex::new(Snapshot::new(
-        initial_data.clone(),
-        initial_data,
-    )));
-
-    // Spawn a writer thread
-    let snapshot_writer = snapshot.clone();
-    let writer_handle = thread::spawn(move || {
-        for i in 0..30 {
-            // Reduced iterations for stability
-            let new_data = TestData::new(100 + i as u64, i as u32, 100);
-            snapshot_writer
-                .lock()
-                .unwrap()
-                .write(|data| *data = new_data);
-            thread::sleep(Duration::from_micros(1));
-        }
-    });
-
-    // Spawn a reader thread
-    let snapshot_reader = snapshot.clone();
-    let reader_handle = thread::spawn(move || {
-        let mut default_count = 0;
-        let mut max_value = 0;
-
-        for _ in 0..30 {
-            // Reduced iterations for stability
-            let data = unsafe { &*snapshot_reader.lock().unwrap().read() };
-
-            if data.value == 0 && data.counter == 0 && data.data.len() == 0 {
-                default_count += 1;
-            }
-
-            if data.value > max_value {
-                max_value = data.value;
-            }
-
-            thread::sleep(Duration::from_micros(1));
-        }
-
-        (default_count, max_value)
-    });
-
-    // Wait for both threads
-    writer_handle.join().expect("Writer should complete");
-    let (default_count, max_value) = reader_handle.join().expect("Reader should complete");
-
-    // We should have seen some updates
-    assert!(
-        max_value > 0,
-        "Should have seen some non-default values, got max_value: {}",
-        max_value
-    );
-
-    // Report if we got default values
-    if default_count > 0 {
-        eprintln!(
-            "WARNING: Got {} default values out of 30 reads",
-            default_count
-        );
     }
 }

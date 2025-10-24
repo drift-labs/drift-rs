@@ -5,8 +5,7 @@ use crate::{
     accounts::User,
     dlob::{DLOBNotifier, DLOB},
     grpc::AccountUpdate,
-    types::MarketId,
-    DriftClient,
+    Wallet,
 };
 
 /// Convenience builder for constructing and managing an event driven [`DLOB`] instance.
@@ -15,9 +14,6 @@ use crate::{
 /// ```example(no_run)
 /// use drift_rs::dlob::builder::DLOBBuilder;
 /// use drift_rs::types::MarketId;
-///
-/// // Define the markets you want to track
-/// let market_ids = vec![MarketId::new(1), MarketId::new(2)];
 ///
 /// // Construct the DLOBBuilder
 /// let builder = DLOBBuilder::new(market_ids);
@@ -31,7 +27,7 @@ use crate::{
 ///             .commitment(CommitmentLevel::Processed)
 ///             .usermap_on()
 ///             .on_user_account(builder.account_update_handler(drift.backend().account_map()))
-///             .on_slot(builder.slot_update_handler(drift.clone())),
+///             .on_slot(builder.slot_update_handler()),
 ///         true, // sync all the accounts on startup (required to populate the usermap)
 ///     )
 ///    .await;
@@ -42,18 +38,16 @@ use crate::{
 pub struct DLOBBuilder<'a> {
     dlob: &'a DLOB,
     notifier: DLOBNotifier,
-    market_ids: Vec<MarketId>,
 }
 
 impl<'a> DLOBBuilder<'a> {
-    /// Initialize a new DLOBBuilder instance
+    /// Initialize a new DLOBBuilder instance from an AccountMap
     ///
     /// ## Params
     ///
-    /// * `market_ids` - to build DLOB for
     /// * `account_map` - account_map with initial User accounts (i.e orders) to bootstrap orderbook
     ///
-    pub fn new(market_ids: Vec<MarketId>, account_map: &AccountMap) -> Self {
+    pub fn new(account_map: &AccountMap) -> Self {
         let dlob = Box::leak(Box::new(DLOB::default()));
         let notifier = dlob.spawn_notifier();
 
@@ -62,11 +56,31 @@ impl<'a> DLOBBuilder<'a> {
             notifier_ref.user_update(*pubkey, None, &user, slot);
         });
 
-        Self {
-            dlob,
-            notifier,
-            market_ids,
+        Self { dlob, notifier }
+    }
+
+    /// Initialize a new DLOBBuilder instance from list of User accounts
+    ///
+    /// ## Params
+    ///
+    /// * `users` - initial User accounts (i.e orders) to bootstrap orderbook
+    /// * `slot` - slot users were retrieved
+    ///
+    pub fn new_with_users<'u>(users: impl Iterator<Item = &'u User>, slot: u64) -> Self {
+        let dlob = Box::leak(Box::new(DLOB::default()));
+        let notifier = dlob.spawn_notifier();
+
+        let notifier_ref = notifier.clone();
+        for user in users {
+            notifier_ref.user_update(
+                Wallet::derive_user_account(&user.authority, user.sub_account_id),
+                None,
+                user,
+                slot,
+            );
         }
+
+        Self { dlob, notifier }
     }
 
     /// Return the DLOB instance
@@ -98,17 +112,10 @@ impl<'a> DLOBBuilder<'a> {
     /// Returns a handler suitable for use in grpc_subscribe's on_slot
     ///
     /// This will notify the DLOB of slot/price updates for the given markets and send the slot to slot_tx.
-    pub fn slot_update_handler(&self, drift: DriftClient) -> impl Fn(u64) + Send + Sync + 'static {
+    pub fn slot_update_handler(&self) -> impl Fn(u64) + Send + Sync + 'static {
         let notifier = self.notifier.clone();
-        let market_ids = self.market_ids.clone();
         move |new_slot| {
-            for market in &market_ids {
-                if let Ok(oracle_data) =
-                    drift.try_get_mmoracle_for_perp_market(market.index(), new_slot)
-                {
-                    notifier.slot_update(*market, oracle_data.price as u64, new_slot);
-                }
-            }
+            notifier.slot_update(new_slot);
         }
     }
 }

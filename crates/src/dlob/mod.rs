@@ -1,12 +1,9 @@
 use std::{
     cmp::Reverse,
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     fmt::Debug,
     iter::Peekable,
-    sync::{
-        atomic::{AtomicBool, AtomicU64},
-        Arc, Mutex,
-    },
+    sync::atomic::AtomicU64,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -25,21 +22,6 @@ use crate::{
     },
 };
 
-use serde::{Deserialize, Serialize};
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct CrossingOrder {
-    pub order_view: LimitOrderView,
-    pub metadata: OrderMetadata,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct CrossingRegion {
-    pub slot: u64,
-    pub crossing_bids: Vec<CrossingOrder>,
-    pub crossing_asks: Vec<CrossingOrder>,
-}
-
 pub mod builder;
 #[cfg(test)]
 mod tests;
@@ -49,238 +31,11 @@ pub mod util;
 pub use types::*;
 pub use util::OrderDelta;
 
+/// log target
+const TARGET: &str = "dlob";
+
 type Direction = PositionDirection;
-
-/// Order operation types for tracing
-#[derive(Debug, Clone, PartialEq)]
-pub enum OrderOperation {
-    Insert,
-    Update,
-    Remove,
-    Trigger,
-    AuctionComplete,
-    StatusChange,
-}
-
-/// Individual order operation trace entry
-#[derive(Debug, Clone)]
-pub struct OrderTraceEntry {
-    pub timestamp: u64,
-    pub slot: u64,
-    pub operation: OrderOperation,
-    pub order_id: u64,
-    pub user: Pubkey,
-    pub order_kind: OrderKind,
-    pub details: String,
-}
-
-/// Lightweight order trace logger for debugging order lifecycle issues
-///
-/// This logger captures all order operations (insert, update, remove) and stores them
-/// in memory with configurable limits. When the "failed to remove order" warning is hit,
-/// it automatically dumps the complete trace history for that order to help debug why
-/// the removal failed.
-///
-/// Example usage:
-/// ```rust
-/// // Access the trace logger from DLOB
-/// let traces = dlob.dump_order_traces(order_id);
-/// if let Some(traces) = traces {
-///     for trace in traces {
-///         println!("Order operation: {:?} at slot {}", trace.operation, trace.slot);
-///     }
-/// }
-/// ```
-pub struct OrderTraceLogger {
-    traces: Arc<Mutex<HashMap<u64, Vec<OrderTraceEntry>>>>,
-    max_traces_per_order: usize,
-    max_total_orders: usize,
-}
-
-impl OrderTraceLogger {
-    pub fn new(max_traces_per_order: usize, max_total_orders: usize) -> Self {
-        Self {
-            traces: Arc::new(Mutex::new(HashMap::new())),
-            max_traces_per_order,
-            max_total_orders,
-        }
-    }
-
-    /// Log an order operation
-    pub fn log_operation(
-        &self,
-        order_id: u64,
-        user: Pubkey,
-        slot: u64,
-        operation: OrderOperation,
-        order_kind: OrderKind,
-        details: String,
-    ) {
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
-
-        let entry = OrderTraceEntry {
-            timestamp,
-            slot,
-            operation,
-            order_id,
-            user,
-            order_kind,
-            details,
-        };
-
-        if let Ok(mut traces) = self.traces.lock() {
-            // Clean up old traces if we have too many orders
-            if traces.len() >= self.max_total_orders {
-                // Remove oldest order traces (simple cleanup)
-                if let Some(oldest_key) = traces.keys().next().copied() {
-                    traces.remove(&oldest_key);
-                }
-            }
-
-            let order_traces = traces.entry(order_id).or_insert_with(Vec::new);
-
-            // Limit traces per order
-            if order_traces.len() >= self.max_traces_per_order {
-                order_traces.remove(0); // Remove oldest entry
-            }
-
-            order_traces.push(entry);
-        }
-    }
-
-    /// Dump all traces for a specific order (called when warning is hit)
-    pub fn dump_order_traces(&self, order_id: u64) -> Option<Vec<OrderTraceEntry>> {
-        if let Ok(traces) = self.traces.lock() {
-            traces.get(&order_id).cloned()
-        } else {
-            None
-        }
-    }
-
-    /// Clear traces for a specific order
-    pub fn clear_order_traces(&self, order_id: u64) {
-        if let Ok(mut traces) = self.traces.lock() {
-            traces.remove(&order_id);
-        }
-    }
-
-    /// Clear all traces
-    pub fn clear_all_traces(&self) {
-        if let Ok(mut traces) = self.traces.lock() {
-            traces.clear();
-        }
-    }
-}
-
-/// Collection of orders with dynamic prices e.g. oracle auctions
-///
-/// priority changes with every slot and oracle price change
-struct DynamicOrders<T: DynamicPrice + OrderKey + Debug> {
-    pub bids: Vec<T>,
-    pub asks: Vec<T>,
-    /// True if the orderbook requires sorting before use
-    is_dirty: AtomicBool,
-}
-
-impl<T: DynamicPrice + OrderKey + Debug> Default for DynamicOrders<T> {
-    fn default() -> Self {
-        Self {
-            bids: Vec::new(),
-            asks: Vec::new(),
-            is_dirty: AtomicBool::new(false),
-        }
-    }
-}
-
-impl<T> DynamicOrders<T>
-where
-    T: DynamicPrice + OrderKey + Clone + From<(u64, Order)> + Debug,
-{
-    /// True if the orderbook was updated and needs to be sorted before use
-    pub fn is_dirty(&self) -> bool {
-        self.is_dirty.load(std::sync::atomic::Ordering::Relaxed)
-    }
-    /// Make the orderbook as dirty
-    fn mark_dirty(&self) {
-        self.is_dirty
-            .store(true, std::sync::atomic::Ordering::Release);
-    }
-    /// Mark the orderbook as clean
-    fn mark_clean(&self) {
-        self.is_dirty
-            .store(false, std::sync::atomic::Ordering::Release);
-    }
-    pub fn sort(&mut self, slot: u64, oracle_price: u64, market_tick_size: u64) {
-        if self.is_dirty() {
-            log::trace!(target: "dlob", "sorting dynamic orders");
-            self.bids
-                .sort_by_key(|x| Reverse(x.get_price(slot, oracle_price, market_tick_size)));
-            self.asks
-                .sort_by_key(|x| x.get_price(slot, oracle_price, market_tick_size));
-        }
-        self.mark_clean();
-    }
-
-    fn insert_raw(&mut self, is_bid: bool, order: T) {
-        if is_bid {
-            self.bids.push(order);
-        } else {
-            self.asks.push(order);
-        }
-        self.mark_dirty();
-    }
-
-    pub fn insert(&mut self, order_id: u64, order: Order) {
-        self.insert_raw(Direction::Long == order.direction, (order_id, order).into());
-    }
-
-    pub fn remove(&mut self, order_id: u64, order: Order) -> bool {
-        match order.direction {
-            Direction::Long => {
-                let order: T = (order_id, order).into();
-                if let Some(idx) = self.bids.iter().position(|x| x.key() == order.key()) {
-                    log::trace!(target: "dlob", "DynamicOrders: remove {order_id} at: {idx}");
-                    self.bids.swap_remove(idx);
-                    log::trace!(target: "bids", "bids: {:?}", self.bids);
-                    self.mark_dirty();
-                    true
-                } else {
-                    log::trace!(target: "dlob", "DynamicOrders: remove {order_id} not found");
-                    false
-                }
-            }
-            Direction::Short => {
-                let order: T = (order_id, order).into();
-                if let Some(idx) = self.asks.iter().position(|x| x.key() == order.key()) {
-                    log::trace!(target: "dlob", "DynamicOrders: remove {order_id} at: {idx}");
-                    self.asks.swap_remove(idx);
-                    log::trace!(target: "dlob", "asks: {:?}", self.asks);
-                    self.mark_dirty();
-                    true
-                } else {
-                    log::trace!(target: "dlob", "DynamicOrders: remove {order_id} not found");
-                    false
-                }
-            }
-        }
-    }
-
-    /// Returns true if the order was updated, false if it was removed
-    pub fn update(&mut self, order_id: u64, new_order: Order, old_order: Order) -> bool {
-        let remaining_size = new_order.base_asset_amount - new_order.base_asset_amount_filled;
-        self.remove(order_id, old_order);
-
-        if remaining_size != 0 {
-            self.insert(order_id, new_order);
-            true
-        } else {
-            false
-        }
-    }
-}
+type MetadataMap = DashMap<u64, OrderMetadata, FxBuildHasher>;
 
 /// Collection of orders with fixed prices e.g. resting limit orders
 #[derive(Debug)]
@@ -325,8 +80,8 @@ impl<T: Clone + Debug + From<(u64, Order)> + OrderKey> Orders<T> {
 
     pub fn update(&mut self, order_id: u64, new_order: Order, old_order: Order) -> bool {
         let remaining_size = new_order.base_asset_amount - new_order.base_asset_amount_filled;
-        let old_order: T = (order_id, old_order).into();
-        let old_key = old_order.key();
+        let old_order_for_key: T = (order_id, old_order).into();
+        let old_key = old_order_for_key.key();
         match new_order.direction {
             Direction::Long => {
                 if self.bids.remove(&Reverse(old_key)).is_some() {
@@ -347,7 +102,7 @@ impl<T: Clone + Debug + From<(u64, Order)> + OrderKey> Orders<T> {
                 }
             }
         }
-        log::warn!(target: "dlob", "update not found: {order_id}, {old_order:?}, {new_order:?}");
+        log::warn!(target: TARGET, "update not found: {order_id}, {old_order:?}, {new_order:?}");
 
         false
     }
@@ -361,9 +116,9 @@ impl<T: Clone + Debug + From<(u64, Order)> + OrderKey> Orders<T> {
 #[derive(Default)]
 struct Orderbook {
     /// market auctions with fixed price bounds, changes by slot
-    market_orders: DynamicOrders<MarketOrder>,
+    market_orders: Orders<MarketOrder>,
     /// oracle auctions with dynamic price bounds, changes by slot
-    oracle_orders: DynamicOrders<OracleOrder>,
+    oracle_orders: Orders<OracleOrder>,
     /// orders to fill at fixed price
     resting_limit_orders: Orders<LimitOrder>,
     /// orders to fill at offset from oracle price
@@ -371,16 +126,10 @@ struct Orderbook {
     /// list of (un)triggered orders
     /// triggered orders are moved to market_orders or oracle_orders
     trigger_orders: Orders<TriggerOrder>,
-    /// L2 book snapshot
-    l2_snapshot: Snapshot<L2Book>,
-    /// L3 book snapshot
-    l3_snapshot: Snapshot<L3Book>,
     /// market tick size
     market_tick_size: u64,
     /// slot where dynamic orders where last checked
     last_modified_slot: u64,
-    /// Last oracle price used for snapshot
-    last_oracle_price: u64,
     /// market index of this book
     market_index: u16,
 }
@@ -389,130 +138,185 @@ impl Orderbook {
     /// Create a new Orderbook with object pools for efficient memory management
     pub fn new(market_index: u16, market_tick_size: u64) -> Self {
         Self {
-            market_orders: DynamicOrders::default(),
-            oracle_orders: DynamicOrders::default(),
+            market_orders: Orders::default(),
+            oracle_orders: Orders::default(),
             resting_limit_orders: Orders::default(),
             floating_limit_orders: Orders::default(),
             trigger_orders: Orders::default(),
-            l2_snapshot: Snapshot::default(),
-            l3_snapshot: Snapshot::default(),
             market_tick_size,
             last_modified_slot: 0,
             market_index,
-            last_oracle_price: 0,
         }
     }
 
-    /// Evaluate dynamic order prices for some `slot` and `oracle_price`
-    pub fn update_slot_and_oracle_price(&mut self, slot: u64, oracle_price: u64) {
-        log::trace!(target: "dlob","update book. market:{},slot:{slot},oracle:{oracle_price}", self.market_index);
+    /// Update auction order prices to new `slot`
+    pub fn update_slot(&mut self, slot: u64) {
+        log::trace!(target: TARGET,"update book slot. market:{},slot:{slot}", self.market_index);
         self.expire_auction_orders(slot);
-        self.market_orders
-            .sort(slot, oracle_price, self.market_tick_size);
-        self.oracle_orders
-            .sort(slot, oracle_price, self.market_tick_size);
-
         self.last_modified_slot = slot;
-        self.last_oracle_price = oracle_price;
     }
 
     /// Expire all auctions past current `slot`
     ///
     /// limit orders with finishing auctions are moved to resting orders
     fn expire_auction_orders(&mut self, slot: u64) {
-        self.market_orders.asks.retain(|x| {
+        self.market_orders.asks.retain(|_, x| {
             let is_auction_complete = x.is_auction_complete(slot);
             if is_auction_complete {
                 if x.is_limit && x.size > 0 {
-                    log::trace!(target: "dlob", "market auction => resting: {}@{}", x.id, slot);
+                    log::trace!(target: TARGET, "market auction => resting: {}@{}", x.id, slot);
                     self.resting_limit_orders
                         .insert_raw(false, x.to_limit_order());
                 } else {
-                    log::trace!(target: "dlob", "market auction expired: {}@{}", x.id, slot);
+                    log::trace!(target: TARGET, "market auction expired: {}@{}", x.id, slot);
                 }
             }
             !is_auction_complete
         });
-        self.market_orders.bids.retain(|x| {
+        self.market_orders.bids.retain(|_, x| {
             let is_auction_complete = x.is_auction_complete(slot);
             if is_auction_complete {
                 if x.is_limit && x.size > 0 {
-                    log::trace!(target: "dlob", "market auction => resting:: {}@{}", x.id, slot);
+                    log::trace!(target: TARGET, "market auction => resting:: {}@{}", x.id, slot);
                     self.resting_limit_orders
                         .insert_raw(true, x.to_limit_order());
                 } else {
-                    log::trace!(target: "dlob", "market auction expired: {}@{}", x.id, slot);
+                    log::trace!(target: TARGET, "market auction expired: {}@{}", x.id, slot);
                 }
             }
             !is_auction_complete
         });
-        self.oracle_orders.asks.retain(|x| {
+        self.oracle_orders.asks.retain(|_, x| {
             let is_auction_complete = x.is_auction_complete(slot);
             if is_auction_complete {
                 if x.is_limit && x.size > 0 {
-                    log::trace!(target: "dlob", "oracle auction => resting:: {}@{}", x.id, slot);
+                    log::trace!(target: TARGET, "oracle auction => resting:: {}@{}", x.id, slot);
                     self.floating_limit_orders
                         .insert_raw(false, x.to_floating_limit_order());
                 } else {
-                    log::trace!(target: "dlob", "oracle auction expired:: {}@{}", x.id, slot);
+                    log::trace!(target: TARGET, "oracle auction expired:: {}@{}", x.id, slot);
                 }
             }
             !is_auction_complete
         });
-        self.oracle_orders.bids.retain(|x| {
+        self.oracle_orders.bids.retain(|_, x| {
             let is_auction_complete = x.is_auction_complete(slot);
             if is_auction_complete {
                 if x.is_limit && x.size > 0 {
-                    log::trace!(target: "dlob", "oracle auction => resting:: {}@{}", x.id, slot);
+                    log::trace!(target: TARGET, "oracle auction => resting:: {}@{}", x.id, slot);
                     self.floating_limit_orders
                         .insert_raw(true, x.to_floating_limit_order());
                 } else {
-                    log::trace!(target: "dlob", "oracle auction expired:: {}@{}", x.id, slot);
+                    log::trace!(target: TARGET, "oracle auction expired:: {}@{}", x.id, slot);
                 }
             }
             !is_auction_complete
         });
     }
 
-    /// Update the L2 snapshot using integrated pooling for efficiency
-    fn update_l2_view(&mut self, slot: u64, oracle_price: u64) {
-        self.l2_snapshot.write(|l2| {
-            l2.initialize_from_orders(
-                &self.resting_limit_orders,
-                &self.floating_limit_orders,
-                &self.trigger_orders,
-                &self.market_orders,
-                &self.oracle_orders,
-                slot,
-                oracle_price,
-                self.market_tick_size,
-            );
-        });
+    pub fn get_maker_bids_l3(&self, oracle_price: u64, metadata: &MetadataMap) -> Vec<L3Order> {
+        let mut result = Vec::with_capacity(
+            self.resting_limit_orders.bids.len() + self.floating_limit_orders.bids.len(),
+        );
+        let buffer_s = 4;
+        let now_unix_s = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + buffer_s;
+
+        result.extend(
+            self.resting_limit_orders
+                .bids
+                .values()
+                .filter(|o| !o.is_expired(now_unix_s))
+                .filter_map(|o| {
+                    metadata.get(&o.id).map(|meta| L3Order {
+                        price: o.get_price(),
+                        max_ts: o.max_ts,
+                        size: o.size,
+                        reduce_only: o.reduce_only,
+                        order_id: meta.order_id,
+                        user: meta.user,
+                        kind: meta.kind,
+                    })
+                }),
+        );
+        result.extend(
+            self.floating_limit_orders
+                .bids
+                .values()
+                .filter(|o| !o.is_expired(now_unix_s))
+                .filter_map(|o| {
+                    metadata.get(&o.id).map(|meta| L3Order {
+                        price: o.get_price(oracle_price, self.market_tick_size),
+                        max_ts: o.max_ts,
+                        size: o.size,
+                        reduce_only: o.reduce_only,
+                        order_id: meta.order_id,
+                        user: meta.user,
+                        kind: meta.kind,
+                    })
+                }),
+        );
+
+        // Sort by price in descending order (best bid first)
+        result.sort_by(|a, b| b.price.cmp(&a.price));
+        result
     }
 
-    /// Update the L3 snapshot using integrated pooling for efficiency
-    fn update_l3_view(
-        &mut self,
-        slot: u64,
-        oracle_price: u64,
-        metadata: &DashMap<u64, OrderMetadata, FxBuildHasher>,
-    ) {
-        self.l3_snapshot.write(|book| {
-            book.initialize_from_orders(
-                &self.resting_limit_orders,
-                &self.floating_limit_orders,
-                &self.trigger_orders,
-                &self.market_orders,
-                &self.oracle_orders,
-                metadata,
-                slot,
-                oracle_price,
-                self.market_tick_size,
-            );
-        });
+    pub fn get_maker_asks_l3(&self, oracle_price: u64, metadata: &MetadataMap) -> Vec<L3Order> {
+        let mut result = Vec::with_capacity(
+            self.resting_limit_orders.asks.len() + self.floating_limit_orders.asks.len(),
+        );
+        let buffer_s = 4;
+        let now_unix_s = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + buffer_s;
+
+        result.extend(
+            self.resting_limit_orders
+                .asks
+                .values()
+                .filter(|o| !o.is_expired(now_unix_s))
+                .filter_map(|o| {
+                    metadata.get(&o.id).map(|meta| L3Order {
+                        price: o.get_price(),
+                        max_ts: o.max_ts,
+                        size: o.size,
+                        reduce_only: o.reduce_only,
+                        order_id: meta.order_id,
+                        user: meta.user,
+                        kind: meta.kind,
+                    })
+                }),
+        );
+        result.extend(
+            self.floating_limit_orders
+                .asks
+                .values()
+                .filter(|o| !o.is_expired(now_unix_s))
+                .filter_map(|o| {
+                    metadata.get(&o.id).map(|meta| L3Order {
+                        price: o.get_price(oracle_price, self.market_tick_size),
+                        max_ts: o.max_ts,
+                        size: o.size,
+                        reduce_only: o.reduce_only,
+                        order_id: meta.order_id,
+                        user: meta.user,
+                        kind: meta.kind,
+                    })
+                }),
+        );
+
+        // Sort by price in descending order (best bid first)
+        result.sort_by(|a, b| b.price.cmp(&a.price));
+        result
     }
 
-    pub fn get_limit_bids(&self, oracle_price: u64) -> Vec<LimitOrderView> {
+    fn get_limit_bids(&self, oracle_price: u64) -> Vec<LimitOrderView> {
         let mut result = Vec::with_capacity(
             self.resting_limit_orders.bids.len() + self.floating_limit_orders.bids.len(),
         );
@@ -533,7 +337,6 @@ impl Orderbook {
                     size: o.size,
                     post_only: o.post_only,
                     slot: o.slot,
-                    reduce_only: o.reduce_only,
                 }),
         );
         result.extend(
@@ -547,7 +350,6 @@ impl Orderbook {
                     size: o.size,
                     slot: o.slot,
                     post_only: o.post_only,
-                    reduce_only: o.reduce_only,
                 }),
         );
 
@@ -556,7 +358,7 @@ impl Orderbook {
         result
     }
 
-    pub fn get_limit_asks(&self, oracle_price: u64) -> Vec<LimitOrderView> {
+    fn get_limit_asks(&self, oracle_price: u64) -> Vec<LimitOrderView> {
         let mut result = Vec::with_capacity(
             self.resting_limit_orders.asks.len() + self.floating_limit_orders.asks.len(),
         );
@@ -577,7 +379,6 @@ impl Orderbook {
                     size: o.size,
                     slot: o.slot,
                     post_only: o.post_only,
-                    reduce_only: o.reduce_only,
                 }),
         );
         result.extend(
@@ -591,7 +392,6 @@ impl Orderbook {
                     size: o.size,
                     slot: o.slot,
                     post_only: o.post_only,
-                    reduce_only: o.reduce_only,
                 }),
         );
 
@@ -602,7 +402,7 @@ impl Orderbook {
 
     fn get_taker_asks(
         &self,
-        slot: u64,
+        min_slot: u64,
         oracle_price: u64,
         trigger_price: u64,
         perp_market: Option<&PerpMarket>,
@@ -612,15 +412,16 @@ impl Orderbook {
                 + self.oracle_orders.asks.len()
                 + self.trigger_orders.asks.len(),
         );
+        let slot = min_slot.max(self.last_modified_slot);
 
-        result.extend(self.market_orders.asks.iter().map(|o| {
+        result.extend(self.market_orders.asks.values().map(|o| {
             (
                 o.id,
                 o.get_price(slot, oracle_price, self.market_tick_size),
                 o.size,
             )
         }));
-        result.extend(self.oracle_orders.asks.iter().map(|o| {
+        result.extend(self.oracle_orders.asks.values().map(|o| {
             (
                 o.id,
                 o.get_price(slot, oracle_price, self.market_tick_size),
@@ -648,7 +449,6 @@ impl Orderbook {
     ///
     /// # Parameters
     ///
-    /// * `slot` - Current slot number for price calculations
     /// * `oracle_price` - Current oracle price for dynamic order pricing
     /// * `trigger_price` - Price threshold for trigger order evaluation
     /// * `perp_market` - Optional perp market for trigger order price calculations
@@ -657,42 +457,21 @@ impl Orderbook {
     /// # Returns
     ///
     /// Returns a `Vec<L3Order>` containing detailed taker ask orders sorted by price ascending.
-    ///
-    /// # Performance Note
-    ///
-    /// This method performs real-time calculations for frequent queries, prefer using
-    /// the L3 snapshot via `get_l3_snapshot()` and accessing `taker_asks` field
-    ///
-    /// # Example
-    /// ```rust
-    /// let taker_asks = orderbook.get_taker_asks_l3(
-    ///     current_slot,
-    ///     oracle_price,
-    ///     trigger_price,
-    ///     perp_market,
-    ///     &metadata
-    /// );
-    ///
-    /// for order in taker_asks {
-    ///     println!("Taker ask: {} @ {} by user {}",
-    ///         order.size, order.price, order.user);
-    /// }
-    /// ```
     pub fn get_taker_asks_l3(
         &self,
-        slot: u64,
         oracle_price: u64,
         trigger_price: u64,
         perp_market: Option<&PerpMarket>,
-        metadata: &DashMap<u64, OrderMetadata, FxBuildHasher>,
+        metadata: &MetadataMap,
     ) -> Vec<L3Order> {
         let mut result = Vec::with_capacity(
             self.market_orders.asks.len()
                 + self.oracle_orders.asks.len()
                 + self.trigger_orders.asks.len(),
         );
+        let slot = self.last_modified_slot;
 
-        result.extend(self.market_orders.asks.iter().filter_map(|o| {
+        result.extend(self.market_orders.asks.values().filter_map(|o| {
             metadata.get(&o.id).map(|meta| L3Order {
                 price: o.get_price(slot, oracle_price, self.market_tick_size),
                 max_ts: o.max_ts,
@@ -703,7 +482,7 @@ impl Orderbook {
                 kind: meta.kind,
             })
         }));
-        result.extend(self.oracle_orders.asks.iter().filter_map(|o| {
+        result.extend(self.oracle_orders.asks.values().filter_map(|o| {
             metadata.get(&o.id).map(|meta| L3Order {
                 price: o.get_price(slot, oracle_price, self.market_tick_size),
                 max_ts: o.max_ts,
@@ -746,7 +525,7 @@ impl Orderbook {
 
     fn get_taker_bids(
         &self,
-        slot: u64,
+        min_slot: u64,
         oracle_price: u64,
         trigger_price: u64,
         perp_market: Option<&PerpMarket>,
@@ -756,15 +535,16 @@ impl Orderbook {
                 + self.oracle_orders.bids.len()
                 + self.trigger_orders.bids.len(),
         );
+        let slot = min_slot.max(self.last_modified_slot);
 
-        result.extend(self.market_orders.bids.iter().map(|o| {
+        result.extend(self.market_orders.bids.values().map(|o| {
             (
                 o.id,
                 o.get_price(slot, oracle_price, self.market_tick_size),
                 o.size,
             )
         }));
-        result.extend(self.oracle_orders.bids.iter().map(|o| {
+        result.extend(self.oracle_orders.bids.values().map(|o| {
             (
                 o.id,
                 o.get_price(slot, oracle_price, self.market_tick_size),
@@ -799,7 +579,6 @@ impl Orderbook {
     ///
     /// # Parameters
     ///
-    /// * `slot` - Current slot number for price calculations
     /// * `oracle_price` - Current oracle price for dynamic order pricing
     /// * `trigger_price` - Price threshold for trigger order evaluation
     /// * `perp_market` - Optional perp market for trigger order price calculations
@@ -808,42 +587,21 @@ impl Orderbook {
     /// # Returns
     ///
     /// Returns a `Vec<L3Order>` containing detailed taker bid orders sorted by price descending.
-    ///
-    /// # Performance Note
-    ///
-    /// This method performs real-time calculations for frequent queries, prefer using
-    /// the L3 snapshot via `get_l3_snapshot()` and accessing `taker_asks` field
-    ///
-    /// # Example
-    /// ```rust
-    /// let taker_bids = orderbook.get_taker_bids_l3(
-    ///     current_slot,
-    ///     oracle_price,
-    ///     trigger_price,
-    ///     perp_market,
-    ///     &metadata
-    /// );
-    ///
-    /// for order in taker_bids {
-    ///     println!("Taker bid: {} @ {} by user {}",
-    ///         order.size, order.price, order.user);
-    /// }
-    /// ```
     pub fn get_taker_bids_l3(
         &self,
-        slot: u64,
         oracle_price: u64,
         trigger_price: u64,
         perp_market: Option<&PerpMarket>,
-        metadata: &DashMap<u64, OrderMetadata, FxBuildHasher>,
+        metadata: &MetadataMap,
     ) -> Vec<L3Order> {
         let mut result = Vec::with_capacity(
             self.market_orders.bids.len()
                 + self.oracle_orders.bids.len()
                 + self.trigger_orders.bids.len(),
         );
+        let slot = self.last_modified_slot;
 
-        result.extend(self.market_orders.bids.iter().filter_map(|o| {
+        result.extend(self.market_orders.bids.values().filter_map(|o| {
             metadata.get(&o.id).map(|meta| L3Order {
                 price: o.get_price(slot, oracle_price, self.market_tick_size),
                 max_ts: o.max_ts,
@@ -854,7 +612,7 @@ impl Orderbook {
                 kind: meta.kind,
             })
         }));
-        result.extend(self.oracle_orders.bids.iter().filter_map(|o| {
+        result.extend(self.oracle_orders.bids.values().filter_map(|o| {
             metadata.get(&o.id).map(|meta| L3Order {
                 price: o.get_price(slot, oracle_price, self.market_tick_size),
                 max_ts: o.max_ts,
@@ -964,14 +722,10 @@ impl DLOBNotifier {
             .expect("Failed to send DLOB event - channel may be closed");
     }
 
-    pub fn slot_update(&self, market: MarketId, oracle_price: u64, slot: u64) {
+    #[inline]
+    pub fn slot_update(&self, slot: u64) {
         self.sender
-            .send(DLOBEvent::SlotOrPriceUpdate {
-                slot,
-                market_index: market.index(),
-                market_type: market.kind(),
-                oracle_price,
-            })
+            .send(DLOBEvent::SlotUpdate { slot })
             .expect("Failed to send slot update event - channel may be closed");
     }
 }
@@ -981,17 +735,11 @@ pub struct DLOB {
     /// Map from market to orderbook
     markets: DashMap<MarketId, Orderbook, FxBuildHasher>,
     /// Map from DLOB internal order ID to order metadata
-    metadata: DashMap<u64, OrderMetadata, FxBuildHasher>,
+    metadata: MetadataMap,
     /// static drift program data e.g market tick sizes
     program_data: &'static ProgramData,
     /// last slot update
     last_modified_slot: AtomicU64,
-    /// Maintain live L2 snapshots (default: true)
-    enable_l2_snapshot: AtomicBool,
-    /// Maintain live L3 snapshots (default: true)
-    enable_l3_snapshot: AtomicBool,
-    /// Order trace logger for debugging order lifecycle issues
-    trace_logger: OrderTraceLogger,
 }
 
 impl Default for DLOB {
@@ -1001,63 +749,20 @@ impl Default for DLOB {
             metadata: DashMap::default(),
             program_data: Box::leak(Box::new(ProgramData::uninitialized())),
             last_modified_slot: Default::default(),
-            enable_l2_snapshot: AtomicBool::new(true),
-            enable_l3_snapshot: AtomicBool::new(true),
-            trace_logger: OrderTraceLogger::new(50, 1000), // 50 traces per order, 1000 orders max
         }
     }
 }
 
 impl DLOB {
-    /// Disable live L2 snapshots for all orderbooks
-    pub fn disable_l2_snapshot(&self) {
-        self.enable_l2_snapshot
-            .store(false, std::sync::atomic::Ordering::Relaxed);
-    }
-    /// Disable live L3 snapshots for all orderbooks
-    pub fn disable_l3_snapshot(&self) {
-        self.enable_l3_snapshot
-            .store(false, std::sync::atomic::Ordering::Relaxed);
-    }
-
-    /// Get access to the order trace logger for configuration and cleanup
-    pub fn trace_logger(&self) -> &OrderTraceLogger {
-        &self.trace_logger
-    }
-
-    /// Manually dump traces for a specific order (useful for debugging)
-    pub fn dump_order_traces(&self, order_id: u64) -> Option<Vec<OrderTraceEntry>> {
-        self.trace_logger.dump_order_traces(order_id)
-    }
-
-    /// Clear traces for a specific order
-    pub fn clear_order_traces(&self, order_id: u64) {
-        self.trace_logger.clear_order_traces(order_id);
-    }
-
-    /// Clear all order traces
-    pub fn clear_all_traces(&self) {
-        self.trace_logger.clear_all_traces();
-    }
-
     /// Provides a writer channel into the DLOB which acts as a sink for external events
     pub fn spawn_notifier(&'static self) -> DLOBNotifier {
         let (tx, rx) = crossbeam::channel::bounded(2048);
         std::thread::spawn(move || {
+            dbg!(rx.len());
             while let Ok(event) = rx.recv() {
                 match event {
-                    DLOBEvent::SlotOrPriceUpdate {
-                        slot,
-                        market_index,
-                        market_type,
-                        oracle_price,
-                    } => {
-                        self.update_slot_and_oracle_price(
-                            market_index,
-                            market_type,
-                            slot,
-                            oracle_price,
-                        );
+                    DLOBEvent::SlotUpdate { slot } => {
+                        self.update_slot(slot);
                     }
                     DLOBEvent::Deltas { slot, deltas } => {
                         for delta in deltas {
@@ -1080,11 +785,12 @@ impl DLOB {
                     }
                 }
             }
-            log::error!(target: "DLOB", "notifier thread finished");
+            log::error!(target: TARGET, "notifier thread finished");
         });
 
         DLOBNotifier::new(tx)
     }
+
     /// run function on a market Orderbook
     fn with_orderbook_mut(&self, market_id: &MarketId, f: impl Fn(RefMut<MarketId, Orderbook>)) {
         let ob = self.markets.entry(*market_id).or_insert({
@@ -1106,75 +812,53 @@ impl DLOB {
         f(ob);
     }
 
-    /// Update orderbook slot and oracle price for market
-    pub fn update_slot_and_oracle_price(
-        &self,
-        market_index: u16,
-        market_type: MarketType,
-        slot: u64,
-        oracle_price: u64,
-    ) {
+    /// Update orderbook slot for all markets
+    fn update_slot(&self, slot: u64) {
         let last_modified_slot = self
             .last_modified_slot
             .load(std::sync::atomic::Ordering::Relaxed);
 
         if slot < last_modified_slot {
             log::warn!(
-                target: "dlob", "ignoring out of order slot update: update:{slot},ours:{last_modified_slot}",
+                target: TARGET, "ignoring out of order slot update: update:{slot},ours:{last_modified_slot}",
             );
             return;
         }
 
-        self.with_orderbook_mut(
-            &MarketId::new(market_index, market_type),
-            |mut orderbook| {
-                orderbook.update_slot_and_oracle_price(slot, oracle_price);
-                // Update snapshots after sorting dynamic orders
-                if self
-                    .enable_l2_snapshot
-                    .load(std::sync::atomic::Ordering::Relaxed)
-                {
-                    orderbook.update_l2_view(slot, oracle_price);
-                }
-                if self
-                    .enable_l3_snapshot
-                    .load(std::sync::atomic::Ordering::Relaxed)
-                {
-                    orderbook.update_l3_view(slot, oracle_price, &self.metadata);
-                }
-            },
-        );
+        for mut market in self.markets.iter_mut() {
+            market.value_mut().update_slot(slot);
+        }
 
         self.last_modified_slot
             .store(slot, std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// Get a lock-free snapshot of the L2 order book
-    ///
-    /// This is safe to call from any thread and will always return a consistent view
-    ///
-    /// ## Panics
-    /// - if L2 snapshots are not enabled
-    pub fn get_l2_snapshot(&self, market_index: u16, market_type: MarketType) -> L2Book {
+    /// Get L2 Book from current orders with `oracle_price`
+    pub fn get_l2_snapshot(
+        &self,
+        market_index: u16,
+        market_type: MarketType,
+        oracle_price: u64,
+    ) -> L2Book {
         let book = self
             .markets
             .get(&MarketId::new(market_index, market_type))
-            .expect("l2 snapshot enabled");
-        book.l2_snapshot.read().clone()
+            .expect("orderbook exists for market");
+        L2Book::default().load_orderbook(&book, oracle_price)
     }
 
-    /// Get a lock-free snapshot of the L3 order book
-    ///
-    /// This is safe to call from any thread and will always return a consistent view
-    ///
-    /// ## Panics
-    /// - if L3 snapshots are not enabled
-    pub fn get_l3_snapshot(&self, market_index: u16, market_type: MarketType) -> L3Book {
+    /// Get L3 Book from current orders with `oracle_price`
+    pub fn get_l3_snapshot(
+        &self,
+        market_index: u16,
+        market_type: MarketType,
+        oracle_price: u64,
+    ) -> L3Book {
         let book = self
             .markets
             .get(&MarketId::new(market_index, market_type))
-            .expect("l3 snapshot enabled");
-        book.l3_snapshot.read().clone()
+            .expect("orderbook exists for market");
+        L3Book::default().load_orderbook(&book, &self.metadata, oracle_price)
     }
 
     pub fn find_crossing_region(
@@ -1229,30 +913,17 @@ impl DLOB {
 
     fn update_order(&self, user: &Pubkey, slot: u64, new_order: Order, old_order: Order) {
         let order_id = order_hash(user, new_order.order_id);
-        log::trace!(target: "dlob", "update order: {order_id}{},{:?}", old_order.order_id, new_order.order_type);
+        log::trace!(target: TARGET, "update order: {order_id}{},{:?}", old_order.order_id, new_order.order_type);
 
         if new_order.status != OrderStatus::Open {
-            log::info!(target: "dlob", "update into remove: {order_id:?}");
+            log::info!(target: TARGET, "update into remove: {order_id:?}");
             self.remove_order(user, slot, new_order);
             return;
         }
 
-        // Log order update for tracing
-        self.trace_logger.log_operation(
-            order_id,
-            *user,
-            slot,
-            OrderOperation::Update,
-            OrderKind::Market, // Will be updated based on metadata
-            format!(
-                "Updating order: old_status={:?}, new_status={:?}",
-                old_order.status, new_order.status
-            ),
-        );
-
         self.with_orderbook_mut(&MarketId::new(new_order.market_index, new_order.market_type), |mut orderbook| {
             if let Some(metadata) = self.metadata.get(&order_id) {
-                log::trace!(target: "dlob", "update ({order_id}): {:?}", metadata.kind);
+                log::trace!(target: TARGET, "update ({order_id}): {:?}", metadata.kind);
                 match metadata.kind {
                     OrderKind::Market | OrderKind::MarketTriggered => {
                         orderbook.market_orders.update(order_id, new_order, old_order);
@@ -1263,10 +934,10 @@ impl DLOB {
                     OrderKind::LimitAuction | OrderKind::LimitTriggered => {
                         // if the auction completed, check if order moved to resting
                         if (new_order.slot + new_order.auction_duration as u64) > slot {
-                            log::trace!(target: "dlob", "update limit auction: {order_id}");
+                            log::trace!(target: TARGET, "update limit auction: {order_id}");
                             orderbook.market_orders.update(order_id, new_order, old_order);
                         } else {
-                            log::trace!(target: "dlob", "update limit auction (resting): {order_id}");
+                            log::trace!(target: TARGET, "update limit auction (resting): {order_id}");
                             orderbook.market_orders.remove(order_id, old_order);
                             orderbook.resting_limit_orders.update(order_id, new_order, old_order);
                         }
@@ -1274,10 +945,10 @@ impl DLOB {
                     OrderKind::FloatingLimitAuction => {
                         // if the auction completed, check if order moved to resting
                         if (new_order.slot + new_order.auction_duration as u64) > slot {
-                            log::trace!(target: "dlob", "update oracle limit: {order_id}");
+                            log::trace!(target: TARGET, "update oracle limit: {order_id}");
                             orderbook.oracle_orders.update(order_id, new_order, old_order);
                         } else {
-                            log::trace!(target: "dlob", "update oracle limit (resting): {order_id}");
+                            log::trace!(target: TARGET, "update oracle limit (resting): {order_id}");
                             orderbook.oracle_orders.remove(order_id, old_order);
                             orderbook.floating_limit_orders.update(order_id, new_order, old_order);
                         }
@@ -1289,7 +960,7 @@ impl DLOB {
                         orderbook.floating_limit_orders.update(order_id, new_order, old_order);
                     }
                     OrderKind::TriggerMarket => {
-                        log::trace!(target: "dlob", "update trigger market order: {order_id},{:?}", new_order);
+                        log::trace!(target: TARGET, "update trigger market order: {order_id},{:?}", new_order);
                         match new_order.trigger_condition {
                             OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
                                 orderbook.trigger_orders.update(order_id, new_order, old_order);
@@ -1310,14 +981,14 @@ impl DLOB {
                         }
                     }
                     OrderKind::TriggerLimit => {
-                        log::trace!(target: "dlob", "update trigger limit order: {order_id},{:?}", new_order);
+                        log::trace!(target: TARGET, "update trigger limit order: {order_id},{:?}", new_order);
                         match new_order.trigger_condition {
                             OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
                                 orderbook.trigger_orders.update(order_id, new_order, old_order);
                             }
                             OrderTriggerCondition::TriggeredAbove | OrderTriggerCondition::TriggeredBelow => {
                                 // order has been triggered, its an ordinary auction order now
-                                log::trace!(target: "dlob", "trigger limit => market auction: {order_id}");
+                                log::trace!(target: TARGET, "trigger limit => market auction: {order_id}");
                                 orderbook.trigger_orders.remove(order_id, old_order);
                                 orderbook.market_orders.insert(order_id, new_order);
                                 drop(metadata); // drop the borrow
@@ -1333,21 +1004,11 @@ impl DLOB {
     fn remove_order(&self, user: &Pubkey, slot: u64, order: Order) {
         let order_id = order_hash(user, order.order_id);
 
-        // Log order removal for tracing
-        self.trace_logger.log_operation(
-            order_id,
-            *user,
-            slot,
-            OrderOperation::Remove,
-            OrderKind::Market, // Will be updated based on metadata
-            format!("Removing order: status={:?}", order.status),
-        );
-
         self.with_orderbook_mut(&MarketId::new(order.market_index, order.market_type), |mut orderbook| {
             if let Some((_, metadata)) = self.metadata.remove(&order_id) {
                 let mut order_removed;
 
-                log::trace!(target: "dlob", "remove order: {order_id} @ status: {:?}, kind: {:?}/{:?}, slot: {slot}", order.status, metadata.kind, order.order_type);
+                log::trace!(target: TARGET, "remove order: {order_id} @ status: {:?}, kind: {:?}/{:?}, slot: {slot}", order.status, metadata.kind, order.order_type);
 
                 match metadata.kind {
                     OrderKind::Market | OrderKind::MarketTriggered => {
@@ -1358,19 +1019,19 @@ impl DLOB {
                     }
                     OrderKind::LimitAuction | OrderKind::LimitTriggered => {
                         // if the auction completed, check if order moved to resting
-                        log::trace!(target: "dlob", "remove auction limit order: {order_id}");
+                        log::trace!(target: TARGET, "remove auction limit order: {order_id}");
                         order_removed = orderbook.market_orders.remove(order_id, order);
                         if !order_removed {
-                            log::trace!(target: "dlob", "remove auction limit order (resting): {order_id}");
+                            log::trace!(target: TARGET, "remove auction limit order (resting): {order_id}");
                             order_removed = orderbook.resting_limit_orders.remove(order_id, order);
                         }
                     }
                     OrderKind::FloatingLimitAuction => {
                         // if the auction completed, check if order moved to resting
-                        log::trace!(target: "dlob", "remove oracle order: {order_id}, order.slot: {}, order.duration: {}", order.slot, order.auction_duration);
+                        log::trace!(target: TARGET, "remove oracle order: {order_id}, order.slot: {}, order.duration: {}", order.slot, order.auction_duration);
                         order_removed = orderbook.oracle_orders.remove(order_id, order);
                         if !order_removed {
-                            log::trace!(target: "dlob", "remove oraclmargin_infoe limit order: {order_id}");
+                            log::trace!(target: TARGET, "remove oraclmargin_infoe limit order: {order_id}");
                             order_removed = orderbook.floating_limit_orders.remove(order_id, order);
                         }
                     }
@@ -1381,24 +1042,14 @@ impl DLOB {
                         order_removed = orderbook.floating_limit_orders.remove(order_id, order);
                     }
                     OrderKind::TriggerMarket | OrderKind::TriggerLimit => {
-                        log::trace!(target: "dlob", "trigger order: {order_id},{:?}", order.trigger_condition);
+                        log::trace!(target: TARGET, "trigger order: {order_id},{:?}", order.trigger_condition);
                         order_removed = orderbook.trigger_orders.remove(order_id, order);
                     }
                 }
 
                 let auction_expired = slot > order.slot + order.auction_duration as u64;
                 if !order_removed && !auction_expired  {
-                    log::warn!(target: "dlob", "failed to remove order {order_id} from orderbook, keeping metadata. order_kind: {:?}, user: {}, order_id: {}", metadata.kind, metadata.user, metadata.order_id);
-
-                    // Dump order traces for debugging
-                    if let Some(traces) = self.trace_logger.dump_order_traces(order_id) {
-                        log::error!(target: "dlob", "=== ORDER TRACE DUMP for order_id: {} ===", order_id);
-                        for (i, trace) in traces.iter().enumerate() {
-                            log::error!(target: "dlob", "Trace {}: slot={}, op={:?}, kind={:?}, details={}", 
-                                i + 1, trace.slot, trace.operation, trace.order_kind, trace.details);
-                        }
-                        log::error!(target: "dlob", "=== END ORDER TRACE DUMP ===");
-                    }
+                    log::warn!(target: TARGET, "failed to remove order {order_id} from orderbook. order_kind: {:?}, user: {}, order_id: {}", metadata.kind, metadata.user, metadata.order_id);
                 }
             }
         });
@@ -1406,55 +1057,39 @@ impl DLOB {
 
     fn insert_order(&self, user: &Pubkey, order: Order) {
         let order_id = order_hash(user, order.order_id);
-        log::trace!(target: "dlob", "insert order: {order_id}");
-
-        // Log order insertion for tracing
-        self.trace_logger.log_operation(
-            order_id,
-            *user,
-            order.slot,
-            OrderOperation::Insert,
-            OrderKind::Market, // Will be updated based on order type
-            format!("Inserting order: {:?}", order.order_type),
-        );
+        log::trace!(target: TARGET, "insert order: {order_id}");
 
         if order.base_asset_amount <= order.base_asset_amount_filled {
-            log::trace!(target: "dlob", "skipping fully filled order: {order:?}");
+            log::trace!(target: TARGET, "skipping fully filled order: {order:?}");
             return;
         }
 
         self.with_orderbook_mut(
             &MarketId::new(order.market_index, order.market_type),
             |mut orderbook| {
-                match order.order_type {
+               let kind = match order.order_type {
                     OrderType::Market => {
                         orderbook.market_orders.insert(order_id, order);
-                        let metadata = OrderMetadata::new(*user, OrderKind::Market, order.order_id, order.max_ts.unsigned_abs());
-                        self.metadata.insert(order_id, metadata);
+                        OrderKind::Market
                     }
                     OrderType::Oracle => {
                         orderbook.oracle_orders.insert(order_id, order);
-                        let metadata = OrderMetadata::new(*user, OrderKind::Oracle, order.order_id, order.max_ts.unsigned_abs());
-                        self.metadata.insert(order_id, metadata);
+                        OrderKind::Oracle
                     }
                     OrderType::Limit => {
                         /*
-                        making order
-                        - limit order with POST_ONLY=true
-                        - limit order with POST_ONLY=false, auction completed
-
-                        taking_limit orders can cross, only older
-                        LIMIT orders with both POST_ONLY cannot cross
-                        LIMIT orders with both POST_ONLY=FALSE can cross, older is maker
-                        LIMIT order with 1 POST_ONLY=TRUE can become maker for 1 POST_ONLY=FALSE
+                        maker orders:
+                            - limit order with POST_ONLY=true
+                            - limit order with POST_ONLY=false and auction is completed*
+                        crossing:
+                            - limit orders with both POST_ONLY=true cannot cross
+                            - limit orders with both POST_ONLY=FALSE can cross, *older order becomes maker
+                            - limit order with POST_ONLY=TRUE can become maker for POST_ONLY=FALSE
                         */
                         let is_floating = order.oracle_price_offset != 0;
                         let is_post_only = order.post_only;
                         let is_auction = order.auction_duration != 0;
                         let order_kind = if !is_post_only {
-                            // taker orders but can be maker in some circumstances, namely:
-                            // 1) auction is complete and taker order is market/oracle
-                            // 2) auction is complete, and taker order is limit and newer
                             match (is_auction, is_floating) {
                                 (true, true) => {
                                     orderbook.oracle_orders.insert(order_id, order);
@@ -1483,68 +1118,43 @@ impl DLOB {
                                 OrderKind::Limit
                             }
                         };
-
-                        log::trace!(target: "dlob", "insert limit order: {order_id},{:?}", order_kind);
-                        let metadata = OrderMetadata::new(*user, order_kind, order.order_id, order.max_ts.unsigned_abs());
-                        self.metadata.insert(order_id, metadata);
-
+                        log::trace!(target: TARGET, "insert limit order: {order_id},{:?}", order_kind);
+                        order_kind
                     }
                     OrderType::TriggerMarket => match order.trigger_condition {
                         OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
+                            log::trace!(target: TARGET, "insert trigger market order: {order_id}");
                             orderbook.trigger_orders.insert(order_id, order);
-                            log::trace!(target: "dlob", "insert trigger market order: {order_id}");
-                            let metadata = OrderMetadata::new(*user, OrderKind::TriggerMarket, order.order_id, order.max_ts.unsigned_abs());
-                            self.metadata.insert(order_id, metadata);
+                            OrderKind::TriggerMarket
 
                         }
-                        OrderTriggerCondition::TriggeredAbove
-                        | OrderTriggerCondition::TriggeredBelow => {
+                        OrderTriggerCondition::TriggeredAbove | OrderTriggerCondition::TriggeredBelow => {
                             if order.is_oracle_trigger_market() {
-                                log::trace!(target: "dlob", "insert triggered oracle order: {order_id}");
+                                log::trace!(target: TARGET, "insert triggered oracle order: {order_id}");
                                 orderbook.oracle_orders.insert(order_id, order);
-                                let metadata = OrderMetadata::new(
-                                    *user,
-                                    OrderKind::OracleTriggered,
-                                    order.order_id,
-                                    order.max_ts.unsigned_abs(),
-                                );
-                                self.metadata.insert(order_id, metadata);
-
+                                OrderKind::OracleTriggered
                             } else {
-                                log::trace!(target: "dlob", "insert triggered market order: {order_id}");
+                                log::trace!(target: TARGET, "insert triggered market order: {order_id}");
                                 orderbook.market_orders.insert(order_id, order);
-                                let metadata = OrderMetadata::new(
-                                    *user,
-                                    OrderKind::MarketTriggered,
-                                    order.order_id,
-                                    order.max_ts.unsigned_abs(),
-                                );
-                                self.metadata.insert(order_id, metadata);
-
-                            }
+                                OrderKind::MarketTriggered
+                           }
                         }
                     },
                     OrderType::TriggerLimit => match order.trigger_condition {
                         OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
+                            log::trace!(target: TARGET, "insert trigger limit order: {order_id}");
                             orderbook.trigger_orders.insert(order_id, order);
-                            log::trace!(target: "dlob", "insert trigger limit order: {order_id}");
-                            let metadata = OrderMetadata::new(*user, OrderKind::TriggerLimit, order.order_id, order.max_ts.unsigned_abs());
-                            self.metadata.insert(order_id, metadata);
+                            OrderKind::TriggerLimit
                         }
                         OrderTriggerCondition::TriggeredAbove
                         | OrderTriggerCondition::TriggeredBelow => {
-                            log::trace!(target: "dlob", "insert triggered limit order: {order_id}");
+                            log::trace!(target: TARGET, "insert triggered limit order: {order_id}");
                             orderbook.market_orders.insert(order_id, order);
-                            let metadata = OrderMetadata::new(
-                                *user,
-                                OrderKind::LimitTriggered,
-                                order.order_id,
-                                order.max_ts.unsigned_abs(),
-                            );
-                            self.metadata.insert(order_id, metadata);
+                            OrderKind::LimitTriggered
                         }
                     },
-                }
+                };
+                self.metadata.insert(order_id, OrderMetadata::new(*user, kind, order.order_id, order.max_ts.unsigned_abs()));
             },
         );
     }
@@ -1576,7 +1186,7 @@ impl DLOB {
         }
     }
 
-    /// At the current slot return all auctions crossing resting limit orders
+    /// At the current slot return all auctions crossing resting limit orders (i.e uncross)
     ///
     /// ## Panics
     ///
@@ -1597,7 +1207,7 @@ impl DLOB {
 
         let vamm_bid = perp_market.map(|m| m.bid_price(None));
         let vamm_ask = perp_market.map(|m| m.ask_price(None));
-        log::trace!(target: "dlob", "VAMM market={} bid={vamm_bid:?} ask={vamm_ask:?}", market_index);
+        log::trace!(target: TARGET, "VAMM market={} bid={vamm_bid:?} ask={vamm_ask:?}", market_index);
 
         let taker_asks = book.get_taker_asks(slot, oracle_price, trigger_price, perp_market);
         let taker_bids = book.get_taker_bids(slot, oracle_price, trigger_price, perp_market);
@@ -1658,7 +1268,7 @@ impl DLOB {
                     break;
                 }
             } else {
-                log::warn!(target: "dlob", "missing metadata for order: {oid}");
+                log::warn!(target: TARGET, "missing metadata for order: {oid}");
                 continue;
             }
         }
@@ -1690,7 +1300,7 @@ impl DLOB {
                     break;
                 }
             } else {
-                log::warn!(target: "dlob", "missing metadata for order: {oid}");
+                log::warn!(target: TARGET, "missing metadata for order: {oid}");
                 continue;
             }
         }
@@ -1705,7 +1315,7 @@ impl DLOB {
         }
     }
 
-    /// At the current slot and oracle price return all auctions crossing resting limit orders
+    /// At the current slot and oracle price return all orders crossing a given taker order
     ///
     /// # Parameters
     ///
@@ -1792,7 +1402,7 @@ impl DLOB {
                 }
 
                 if candidates.len() == candidates.capacity() {
-                    log::debug!(target: "dlob", "reached max number crosses");
+                    log::debug!(target: TARGET, "reached max number crosses");
                     break;
                 }
                 if remaining_size == 0 {
@@ -1800,7 +1410,7 @@ impl DLOB {
                 }
             } else {
                 log::warn!(
-                    target: "dlob",
+                    target: TARGET,
                     "metadata missing. order:{internal_order_id},check_slot:{current_slot},book_slot:{resting_order_slot}"
                 );
                 resting_limit_orders.next();
@@ -1867,7 +1477,6 @@ impl L3Book {
     /// Get the top N maker bids (resting limit orders) sorted by price descending
     ///
     /// Returns an iterator over the highest-priced maker bids.
-    /// Useful for analyzing resting liquidity on the bid side.
     pub fn top_bids(&self, count: usize) -> impl Iterator<Item = &L3Order> {
         self.bids.iter().take(count)
     }
@@ -1875,7 +1484,6 @@ impl L3Book {
     /// Get the top N maker asks (resting limit orders) sorted by price ascending
     ///
     /// Returns an iterator over the lowest-priced maker asks.
-    /// Useful for analyzing resting liquidity on the ask side.
     pub fn top_asks(&self, count: usize) -> impl Iterator<Item = &L3Order> {
         self.asks.iter().take(count)
     }
@@ -1884,7 +1492,6 @@ impl L3Book {
     ///
     /// Returns an iterator over the highest-priced taker bids.
     /// These are orders that can immediately execute against resting asks.
-    /// Useful for analyzing immediate execution pressure on the bid side.
     pub fn top_taker_bids(&self, count: usize) -> impl Iterator<Item = &L3Order> {
         self.taker_bids.iter().take(count)
     }
@@ -1893,7 +1500,6 @@ impl L3Book {
     ///
     /// Returns an iterator over the lowest-priced taker asks.
     /// These are orders that can immediately execute against resting bids.
-    /// Useful for analyzing immediate execution pressure on the ask side.
     pub fn top_taker_asks(&self, count: usize) -> impl Iterator<Item = &L3Order> {
         self.taker_asks.iter().take(count)
     }
@@ -1913,28 +1519,29 @@ impl L3Book {
     pub fn top_asks_exact<const N: usize>(&self) -> Option<&[L3Order; N]> {
         self.asks.first_chunk()
     }
-    /// Initialize an L3Book with given orders
-    fn initialize_from_orders(
-        &mut self,
-        resting_limit_orders: &Orders<LimitOrder>,
-        floating_limit_orders: &Orders<FloatingLimitOrder>,
-        trigger_orders: &Orders<TriggerOrder>,
-        market_orders: &DynamicOrders<MarketOrder>,
-        oracle_orders: &DynamicOrders<OracleOrder>,
-        metadata: &DashMap<u64, OrderMetadata, FxBuildHasher>,
-        slot: u64,
-        oracle_price: u64,
-        market_tick_size: u64,
-    ) {
+    /// Reset this instance for later reuse
+    fn reset(&mut self) {
         self.bids.clear();
         self.asks.clear();
         self.taker_asks.clear();
         self.taker_bids.clear();
-        self.slot = slot;
+        self.slot = 0;
+        self.oracle_price = 0;
+    }
+    /// Populate an `L3Book` instance given an `Orderbook` and metadata
+    fn load_orderbook(
+        mut self,
+        orderbook: &Orderbook,
+        metadata: &MetadataMap,
+        oracle_price: u64,
+    ) -> Self {
+        self.reset();
+        self.slot = orderbook.last_modified_slot;
         self.oracle_price = oracle_price;
+        let market_tick_size = orderbook.market_tick_size;
 
         // Add resting limit orders
-        for order in resting_limit_orders.bids.values() {
+        for order in orderbook.resting_limit_orders.bids.values() {
             if let Some(meta) = metadata.get(&order.id) {
                 self.bids.push(L3Order {
                     price: order.get_price(),
@@ -1948,7 +1555,7 @@ impl L3Book {
             }
         }
 
-        for order in resting_limit_orders.asks.values() {
+        for order in orderbook.resting_limit_orders.asks.values() {
             if let Some(meta) = metadata.get(&order.id) {
                 self.asks.push(L3Order {
                     price: order.get_price(),
@@ -1963,7 +1570,8 @@ impl L3Book {
         }
 
         // Add trigger orders
-        for order in trigger_orders
+        for order in orderbook
+            .trigger_orders
             .bids
             .values()
             .filter(|o| o.price <= oracle_price)
@@ -1981,7 +1589,8 @@ impl L3Book {
             }
         }
 
-        for order in trigger_orders
+        for order in orderbook
+            .trigger_orders
             .asks
             .values()
             .filter(|o| o.price >= oracle_price)
@@ -2000,7 +1609,7 @@ impl L3Book {
         }
 
         // Add floating limit orders
-        for order in floating_limit_orders.bids.values() {
+        for order in orderbook.floating_limit_orders.bids.values() {
             if let Some(meta) = metadata.get(&order.id) {
                 self.bids.push(L3Order {
                     price: order.get_price(oracle_price, market_tick_size),
@@ -2014,7 +1623,7 @@ impl L3Book {
             }
         }
 
-        for order in floating_limit_orders.asks.values() {
+        for order in orderbook.floating_limit_orders.asks.values() {
             if let Some(meta) = metadata.get(&order.id) {
                 self.asks.push(L3Order {
                     price: order.get_price(oracle_price, market_tick_size),
@@ -2029,10 +1638,10 @@ impl L3Book {
         }
 
         // Add market orders as taker orders
-        for order in &market_orders.asks {
+        for order in orderbook.market_orders.asks.values() {
             if let Some(meta) = metadata.get(&order.id) {
                 self.taker_asks.push(L3Order {
-                    price: order.get_price(slot, oracle_price, market_tick_size),
+                    price: order.get_price(self.slot, oracle_price, market_tick_size),
                     size: order.size(),
                     reduce_only: order.reduce_only,
                     user: meta.user,
@@ -2043,10 +1652,10 @@ impl L3Book {
             }
         }
 
-        for order in &market_orders.bids {
+        for order in orderbook.market_orders.bids.values() {
             if let Some(meta) = metadata.get(&order.id) {
                 self.taker_bids.push(L3Order {
-                    price: order.get_price(slot, oracle_price, market_tick_size),
+                    price: order.get_price(self.slot, oracle_price, market_tick_size),
                     size: order.size(),
                     reduce_only: order.reduce_only,
                     user: meta.user,
@@ -2058,10 +1667,10 @@ impl L3Book {
         }
 
         // Add oracle orders as taker orders
-        for order in &oracle_orders.bids {
+        for order in orderbook.oracle_orders.bids.values() {
             if let Some(meta) = metadata.get(&order.id) {
                 self.taker_bids.push(L3Order {
-                    price: order.get_price(slot, oracle_price, market_tick_size),
+                    price: order.get_price(self.slot, oracle_price, market_tick_size),
                     size: order.size(),
                     reduce_only: order.reduce_only,
                     user: meta.user,
@@ -2072,10 +1681,10 @@ impl L3Book {
             }
         }
 
-        for order in &oracle_orders.asks {
+        for order in orderbook.oracle_orders.asks.values() {
             if let Some(meta) = metadata.get(&order.id) {
                 self.taker_asks.push(L3Order {
-                    price: order.get_price(slot, oracle_price, market_tick_size),
+                    price: order.get_price(self.slot, oracle_price, market_tick_size),
                     size: order.size(),
                     reduce_only: order.reduce_only,
                     user: meta.user,
@@ -2094,6 +1703,8 @@ impl L3Book {
         self.taker_bids.sort_by(|a, b| b.price.cmp(&a.price));
         // Sort taker asks in ascending order (lowest first)
         self.taker_asks.sort_by(|a, b| a.price.cmp(&b.price));
+
+        self
     }
 }
 
@@ -2179,7 +1790,6 @@ impl L2Book {
     /// Get the top N maker bids (resting limit orders) sorted by price descending
     ///
     /// Returns a vector of `(price, size)` tuples for the highest-priced maker bids.
-    /// Useful for analyzing resting liquidity on the bid side.
     ///
     /// # Example
     /// ```rust
@@ -2195,7 +1805,6 @@ impl L2Book {
     /// Get the top N maker asks (resting limit orders) sorted by price ascending
     ///
     /// Returns a vector of `(price, size)` tuples for the lowest-priced maker asks.
-    /// Useful for analyzing resting liquidity on the ask side.
     ///
     /// # Example
     /// ```rust
@@ -2212,7 +1821,6 @@ impl L2Book {
     ///
     /// Returns a vector of `(price, size)` tuples for the highest-priced taker bids.
     /// These are orders that can immediately execute against resting asks.
-    /// Useful for analyzing immediate execution pressure on the bid side.
     ///
     /// # Example
     /// ```rust
@@ -2233,7 +1841,6 @@ impl L2Book {
     ///
     /// Returns a vector of `(price, size)` tuples for the lowest-priced taker asks.
     /// These are orders that can immediately execute against resting bids.
-    /// Useful for analyzing immediate execution pressure on the ask side.
     ///
     /// # Example
     /// ```rust
@@ -2250,53 +1857,53 @@ impl L2Book {
             .collect()
     }
 
+    fn reset(&mut self) {
+        self.bids.clear();
+        self.asks.clear();
+        self.taker_asks.clear();
+        self.taker_bids.clear();
+        self.slot = 0;
+        self.oracle_price = 0;
+    }
+
     /// Initialize the L2Book with all order types
     ///
     /// This function consolidates all the orderbook initialization logic into a single call.
     /// It processes resting limit orders, floating limit orders, and dynamic orders (market/oracle)
     /// in the correct order to build a complete L2 orderbook snapshot.
-    fn initialize_from_orders(
-        &mut self,
-        resting_limit_orders: &Orders<LimitOrder>,
-        floating_limit_orders: &Orders<FloatingLimitOrder>,
-        trigger_orders: &Orders<TriggerOrder>,
-        market_orders: &DynamicOrders<MarketOrder>,
-        oracle_orders: &DynamicOrders<OracleOrder>,
-        slot: u64,
-        oracle_price: u64,
-        market_tick_size: u64,
-    ) {
-        self.bids.clear();
-        self.asks.clear();
-        self.taker_asks.clear();
-        self.taker_bids.clear();
-        self.slot = slot;
+    fn load_orderbook(mut self, orderbook: &Orderbook, oracle_price: u64) -> Self {
+        self.reset();
+        self.slot = orderbook.last_modified_slot;
         self.oracle_price = oracle_price;
+        let market_tick_size = orderbook.market_tick_size;
+
+        // TODO: filter/handle max leverage orders
 
         // Process resting limit orders (fixed price orders)
-        for order in resting_limit_orders.bids.values() {
+        for order in orderbook.resting_limit_orders.bids.values() {
             let size = self.bids.entry(order.price).or_insert(0);
             *size = size.saturating_add(order.size);
         }
-        for order in resting_limit_orders.asks.values() {
+        for order in orderbook.resting_limit_orders.asks.values() {
             let size = self.asks.entry(order.price).or_insert(0);
             *size = size.saturating_add(order.size);
         }
 
         // Process floating limit orders (oracle-relative price orders)
-        for order in floating_limit_orders.bids.values() {
+        for order in orderbook.floating_limit_orders.bids.values() {
             let price = order.get_price(oracle_price, market_tick_size);
             let size = self.bids.entry(price).or_insert(0);
             *size = size.saturating_add(order.size);
         }
-        for order in floating_limit_orders.asks.values() {
+        for order in orderbook.floating_limit_orders.asks.values() {
             let price = order.get_price(oracle_price, market_tick_size);
             let size = self.asks.entry(price).or_insert(0);
             *size = size.saturating_add(order.size);
         }
 
         // Process trigger orders as taker orders
-        for order in trigger_orders
+        for order in orderbook
+            .trigger_orders
             .bids
             .values()
             .filter(|o| o.price <= oracle_price)
@@ -2305,7 +1912,8 @@ impl L2Book {
             let size = self.taker_bids.entry(price).or_insert(0);
             *size = size.saturating_add(order.size);
         }
-        for order in trigger_orders
+        for order in orderbook
+            .trigger_orders
             .asks
             .values()
             .filter(|o| o.price >= oracle_price)
@@ -2316,27 +1924,29 @@ impl L2Book {
         }
 
         // Process market orders as taker orders
-        for order in &market_orders.bids {
-            let price = order.get_price(slot, oracle_price, market_tick_size);
+        for order in orderbook.market_orders.bids.values() {
+            let price = order.get_price(self.slot, oracle_price, market_tick_size);
             let size = self.taker_bids.entry(price).or_insert(0);
             *size = size.saturating_add(order.size());
         }
-        for order in &market_orders.asks {
-            let price = order.get_price(slot, oracle_price, market_tick_size);
+        for order in orderbook.market_orders.asks.values() {
+            let price = order.get_price(self.slot, oracle_price, market_tick_size);
             let size = self.taker_asks.entry(price).or_insert(0);
             *size = size.saturating_add(order.size());
         }
 
         // Process oracle orders as taker orders
-        for order in &oracle_orders.bids {
-            let price = order.get_price(slot, oracle_price, market_tick_size);
+        for order in orderbook.oracle_orders.bids.values() {
+            let price = order.get_price(self.slot, oracle_price, market_tick_size);
             let size = self.taker_bids.entry(price).or_insert(0);
             *size = size.saturating_add(order.size());
         }
-        for order in &oracle_orders.asks {
-            let price = order.get_price(slot, oracle_price, market_tick_size);
+        for order in orderbook.oracle_orders.asks.values() {
+            let price = order.get_price(self.slot, oracle_price, market_tick_size);
             let size = self.taker_asks.entry(price).or_insert(0);
             *size = size.saturating_add(order.size());
         }
+
+        self
     }
 }

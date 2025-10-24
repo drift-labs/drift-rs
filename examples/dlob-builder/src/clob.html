@@ -573,6 +573,11 @@
                 <input type="checkbox" id="showTakerOrders" checked> Show Taker Orders
             </label>
         </div>
+        <div class="control-group" id="takerOnlyToggleGroup" style="display: none;">
+            <label>
+                <input type="checkbox" id="takerOrdersOnly"> Taker Orders Only
+            </label>
+        </div>
         <div class="control-group">
             <button id="refreshBtn" class="refresh-btn">Refresh</button>
         </div>
@@ -695,6 +700,8 @@
         const pauseBtn = document.getElementById('pauseBtn');
         const takerToggleGroup = document.getElementById('takerToggleGroup');
         const showTakerOrdersCheckbox = document.getElementById('showTakerOrders');
+        const takerOnlyToggleGroup = document.getElementById('takerOnlyToggleGroup');
+        const takerOrdersOnlyCheckbox = document.getElementById('takerOrdersOnly');
 
         let currentView = 'l2';
 
@@ -858,6 +865,7 @@
         function renderL3Orderbook(data) {
             const maxOrders = parseInt(maxOrdersInput.value);
             const showTaker = showTakerOrdersCheckbox.checked;
+            const takerOnly = takerOrdersOnlyCheckbox.checked;
 
             // Clear existing data
             asksTableEl.innerHTML = '';
@@ -871,14 +879,21 @@
             const sortedTakerAsks = [...data.taker_asks].sort((a, b) => a.price - b.price);
             const sortedTakerBids = [...data.taker_bids].sort((a, b) => b.price - a.price);
 
-            // Combine maker and taker orders if taker orders are enabled
-            let allAsks = sortedAsks;
-            let allBids = sortedBids;
+            // Determine which orders to show based on toggle states
+            let allAsks, allBids;
             
-            if (showTaker) {
+            if (takerOnly) {
+                // Show only taker orders
+                allAsks = sortedTakerAsks;
+                allBids = sortedTakerBids;
+            } else if (showTaker) {
                 // Merge taker orders with maker orders
                 allAsks = [...sortedAsks, ...sortedTakerAsks].sort((a, b) => a.price - b.price);
                 allBids = [...sortedBids, ...sortedTakerBids].sort((a, b) => b.price - a.price);
+            } else {
+                // Show only maker orders
+                allAsks = sortedAsks;
+                allBids = sortedBids;
             }
 
             // Render asks
@@ -888,7 +903,7 @@
                 row.className = 'clickable';
                 
                 // Check if this is a taker order
-                const isTaker = showTaker && (data.taker_asks.some(t => t.order_id === order.order_id));
+                const isTaker = (showTaker || takerOnly) && (data.taker_asks.some(t => t.order_id === order.order_id));
                 if (isTaker) {
                     row.classList.add('taker-order');
                 }
@@ -923,7 +938,7 @@
                 row.className = 'clickable';
                 
                 // Check if this is a taker order
-                const isTaker = showTaker && (data.taker_bids.some(t => t.order_id === order.order_id));
+                const isTaker = (showTaker || takerOnly) && (data.taker_bids.some(t => t.order_id === order.order_id));
                 if (isTaker) {
                     row.classList.add('taker-order');
                 }
@@ -964,7 +979,13 @@
                 spreadEl.style.display = 'none';
             }
 
-            updateStatus(`L3 Orderbook updated - Slot: ${data.slot}, Oracle: ${formatPrice(data.oracle_price)}${showTaker ? ' (with taker orders)' : ''}`);
+            let statusMessage = `L3 Orderbook updated - Slot: ${data.slot}, Oracle: ${formatPrice(data.oracle_price)}`;
+            if (takerOnly) {
+                statusMessage += ' (taker orders only)';
+            } else if (showTaker) {
+                statusMessage += ' (with taker orders)';
+            }
+            updateStatus(statusMessage);
         }
 
         async function fetchOrderbook() {
@@ -1043,6 +1064,7 @@
                 l2ContainerEl.style.display = 'grid';
                 l3ContainerEl.style.display = 'none';
                 takerToggleGroup.style.display = 'flex';
+                takerOnlyToggleGroup.style.display = 'none';
                 document.getElementById('priceGroupingGroup').style.display = 'flex';
             } else {
                 l2ViewBtn.classList.remove('active');
@@ -1050,6 +1072,7 @@
                 l2ContainerEl.style.display = 'none';
                 l3ContainerEl.style.display = 'grid';
                 takerToggleGroup.style.display = 'flex';
+                takerOnlyToggleGroup.style.display = 'flex';
                 document.getElementById('priceGroupingGroup').style.display = 'none';
             }
 
@@ -1067,6 +1090,12 @@
         l3ViewBtn.addEventListener('click', () => switchView('l3'));
 
         showTakerOrdersCheckbox.addEventListener('change', () => {
+            stopAutoRefresh();
+            fetchOrderbook();
+            startAutoRefresh();
+        });
+
+        takerOrdersOnlyCheckbox.addEventListener('change', () => {
             stopAutoRefresh();
             fetchOrderbook();
             startAutoRefresh();

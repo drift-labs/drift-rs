@@ -9,8 +9,10 @@ use axum::{
     Router,
 };
 use drift_rs::{
-    dlob::builder::DLOBBuilder, dlob::DLOB, types::MarketType, Context, DriftClient,
-    GrpcSubscribeOpts, RpcClient,
+    dlob::builder::DLOBBuilder,
+    dlob::DLOB,
+    types::{MarketId, MarketType},
+    Context, DriftClient, GrpcSubscribeOpts, RpcClient,
 };
 use serde::{Deserialize, Serialize};
 use solana_commitment_config::CommitmentLevel;
@@ -69,11 +71,18 @@ struct L3Query {
 
 async fn get_l2_orderbook(
     Query(params): Query<L2Query>,
-    State(dlob): State<Arc<&'static DLOB>>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<L2Response>, StatusCode> {
     // Get the L2 snapshot from the DLOB
-    let l2_book = dlob.get_l2_snapshot(params.market_index, MarketType::Perp);
-
+    let price = state
+        .drift
+        .try_get_oracle_price_data_and_slot(MarketId::perp(params.market_index))
+        .unwrap()
+        .data
+        .price as u64;
+    let l2_book = state
+        .dlob
+        .get_l2_snapshot(params.market_index, MarketType::Perp, price);
     // Convert BTreeMap to Vec<OrderbookLevel> for JSON serialization
     let asks: Vec<OrderbookLevel> = l2_book
         .asks
@@ -124,11 +133,18 @@ async fn get_l2_orderbook(
 
 async fn get_l3_orderbook(
     Query(params): Query<L3Query>,
-    State(dlob): State<Arc<&'static DLOB>>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<Json<L3Response>, StatusCode> {
     // Get the L3 snapshot from the DLOB
-    let l3_book = dlob.get_l3_snapshot(params.market_index, MarketType::Perp);
-
+    let price = state
+        .drift
+        .try_get_oracle_price_data_and_slot(MarketId::perp(params.market_index))
+        .unwrap()
+        .data
+        .price as u64;
+    let l3_book = state
+        .dlob
+        .get_l3_snapshot(params.market_index, MarketType::Perp, price);
     // Convert L3Order to L3OrderResponse for JSON serialization
     let convert_order = |order: &drift_rs::dlob::L3Order| L3OrderResponse {
         price: order.price,
@@ -160,6 +176,11 @@ async fn clob_ui() -> Html<&'static str> {
     Html(include_str!("clob.html"))
 }
 
+struct AppState {
+    drift: DriftClient,
+    dlob: &'static DLOB,
+}
+
 #[tokio::main]
 async fn main() {
     let _ = dotenv::dotenv();
@@ -175,7 +196,6 @@ async fn main() {
     .await
     .expect("initialized client");
 
-    let markets = drift.get_all_perp_market_ids();
     let account_map = drift.backend().account_map();
     println!("syncing initial User accounts/orders");
     account_map
@@ -183,7 +203,7 @@ async fn main() {
         .await
         .expect("synced user accounts");
 
-    let dlob_builder = DLOBBuilder::new(markets, account_map);
+    let dlob_builder = DLOBBuilder::new(account_map);
 
     println!("starting gRPC subscription to live order changes");
     let grpc_url = std::env::var("GRPC_URL").expect("GRPC_URL set");
@@ -196,7 +216,7 @@ async fn main() {
                 .commitment(CommitmentLevel::Processed)
                 .usermap_on()
                 .on_user_account(dlob_builder.account_update_handler(account_map))
-                .on_slot(dlob_builder.slot_update_handler(drift.clone())),
+                .on_slot(dlob_builder.slot_update_handler()),
             true,
         )
         .await;
@@ -206,7 +226,10 @@ async fn main() {
         std::process::exit(1);
     }
 
-    let dlob_arc = Arc::new(dlob_builder.dlob());
+    let state = Arc::new(AppState {
+        dlob: dlob_builder.dlob(),
+        drift,
+    });
 
     // Build the web server
     let app = Router::new()
@@ -214,7 +237,7 @@ async fn main() {
         .route("/l2", get(get_l2_orderbook))
         .route("/l3", get(get_l3_orderbook))
         .layer(ServiceBuilder::new().layer(CorsLayer::permissive()))
-        .with_state(dlob_arc);
+        .with_state(state);
 
     println!("Starting web server on http://localhost:8080");
     println!("CLOB UI: http://localhost:8080/");
