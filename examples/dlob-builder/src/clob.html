@@ -214,18 +214,6 @@
             z-index: 1;
         }
 
-        .taker-order {
-            opacity: 0.7;
-            border-left: 3px solid #ffa500;
-        }
-
-        .taker-order .l2-price {
-            font-style: italic;
-        }
-
-        .taker-order .l2-size {
-            color: #ffa500;
-        }
 
         .control-group label {
             display: flex;
@@ -568,16 +556,6 @@
                 <option value="10">10</option>
             </select>
         </div>
-        <div class="control-group" id="takerToggleGroup" style="display: none;">
-            <label>
-                <input type="checkbox" id="showTakerOrders" checked> Show Taker Orders
-            </label>
-        </div>
-        <div class="control-group" id="takerOnlyToggleGroup" style="display: none;">
-            <label>
-                <input type="checkbox" id="takerOrdersOnly"> Taker Orders Only
-            </label>
-        </div>
         <div class="control-group">
             <button id="refreshBtn" class="refresh-btn">Refresh</button>
         </div>
@@ -698,10 +676,6 @@
         const maxOrdersInput = document.getElementById('maxOrders');
         const refreshBtn = document.getElementById('refreshBtn');
         const pauseBtn = document.getElementById('pauseBtn');
-        const takerToggleGroup = document.getElementById('takerToggleGroup');
-        const showTakerOrdersCheckbox = document.getElementById('showTakerOrders');
-        const takerOnlyToggleGroup = document.getElementById('takerOnlyToggleGroup');
-        const takerOrdersOnlyCheckbox = document.getElementById('takerOrdersOnly');
 
         let currentView = 'l2';
 
@@ -761,7 +735,6 @@
 
         function renderL2Orderbook(data) {
             const maxOrders = parseInt(maxOrdersInput.value);
-            const showTaker = showTakerOrdersCheckbox.checked;
             const priceGrouping = parseFloat(document.getElementById('priceGrouping').value);
 
             // Clear existing data
@@ -772,23 +745,9 @@
             const sortedAsks = [...data.asks].sort((a, b) => a.price - b.price);
             const sortedBids = [...data.bids].sort((a, b) => b.price - a.price);
 
-            // Sort taker orders
-            const sortedTakerAsks = [...data.taker_asks].sort((a, b) => a.price - b.price);
-            const sortedTakerBids = [...data.taker_bids].sort((a, b) => b.price - a.price);
-
-            // Combine maker and taker orders if taker orders are enabled
-            let allAsks = sortedAsks;
-            let allBids = sortedBids;
-
-            if (showTaker) {
-                // Merge taker orders with maker orders
-                allAsks = [...sortedAsks, ...sortedTakerAsks].sort((a, b) => a.price - b.price);
-                allBids = [...sortedBids, ...sortedTakerBids].sort((a, b) => b.price - a.price);
-            }
-
             // Group orders by price level
-            const groupedAsks = groupOrdersByPriceLevel(allAsks, priceGrouping);
-            const groupedBids = groupOrdersByPriceLevel(allBids, priceGrouping);
+            const groupedAsks = groupOrdersByPriceLevel(sortedAsks, priceGrouping);
+            const groupedBids = groupOrdersByPriceLevel(sortedBids, priceGrouping);
 
             // Calculate max size for depth visualization
             const allSizes = [...groupedAsks, ...groupedBids].map(level => level.size);
@@ -802,11 +761,6 @@
             asksToShow.forEach(level => {
                 const row = document.createElement('tr');
                 const depthPercent = (level.size / maxSize) * 100;
-                const isTaker = showTaker && (data.taker_asks.some(t => t.price === level.price && t.size === level.size));
-
-                if (isTaker) {
-                    row.className = 'taker-order';
-                }
 
                 row.innerHTML = `
                     <td class="l2-price ask">${formatPrice(level.price)}</td>
@@ -826,11 +780,6 @@
             bidsToShow.forEach(level => {
                 const row = document.createElement('tr');
                 const depthPercent = (level.size / maxSize) * 100;
-                const isTaker = showTaker && (data.taker_bids.some(t => t.price === level.price && t.size === level.size));
-
-                if (isTaker) {
-                    row.className = 'taker-order';
-                }
 
                 row.innerHTML = `
                     <td class="l2-price bid">${formatPrice(level.price)}</td>
@@ -859,13 +808,11 @@
                 spreadEl.style.display = 'none';
             }
 
-            updateStatus(`L2 Orderbook updated - Slot: ${data.slot}, Oracle: ${formatPrice(data.oracle_price)}, Market: ${data.market_index}${showTaker ? ' (with taker orders)' : ''}`);
+            updateStatus(`L2 Orderbook updated - Slot: ${data.slot}, Oracle: ${formatPrice(data.oracle_price)}, Market: ${data.market_index}`);
         }
 
         function renderL3Orderbook(data) {
             const maxOrders = parseInt(maxOrdersInput.value);
-            const showTaker = showTakerOrdersCheckbox.checked;
-            const takerOnly = takerOrdersOnlyCheckbox.checked;
 
             // Clear existing data
             asksTableEl.innerHTML = '';
@@ -874,39 +821,12 @@
             // Sort asks by price ascending (lowest first)
             const sortedAsks = [...data.asks].sort((a, b) => a.price - b.price);
             const sortedBids = [...data.bids].sort((a, b) => b.price - a.price);
-            
-            // Sort taker orders
-            const sortedTakerAsks = [...data.taker_asks].sort((a, b) => a.price - b.price);
-            const sortedTakerBids = [...data.taker_bids].sort((a, b) => b.price - a.price);
-
-            // Determine which orders to show based on toggle states
-            let allAsks, allBids;
-            
-            if (takerOnly) {
-                // Show only taker orders
-                allAsks = sortedTakerAsks;
-                allBids = sortedTakerBids;
-            } else if (showTaker) {
-                // Merge taker orders with maker orders
-                allAsks = [...sortedAsks, ...sortedTakerAsks].sort((a, b) => a.price - b.price);
-                allBids = [...sortedBids, ...sortedTakerBids].sort((a, b) => b.price - a.price);
-            } else {
-                // Show only maker orders
-                allAsks = sortedAsks;
-                allBids = sortedBids;
-            }
 
             // Render asks
-            const asksToShow = allAsks.slice(0, maxOrders);
+            const asksToShow = sortedAsks.slice(0, maxOrders);
             asksToShow.forEach(order => {
                 const row = document.createElement('tr');
                 row.className = 'clickable';
-                
-                // Check if this is a taker order
-                const isTaker = (showTaker || takerOnly) && (data.taker_asks.some(t => t.order_id === order.order_id));
-                if (isTaker) {
-                    row.classList.add('taker-order');
-                }
                 
                 // Add order type specific styling
                 const orderClass = getOrderRowClass(order.kind);
@@ -932,16 +852,10 @@
             });
 
             // Render bids
-            const bidsToShow = allBids.slice(0, maxOrders);
+            const bidsToShow = sortedBids.slice(0, maxOrders);
             bidsToShow.forEach(order => {
                 const row = document.createElement('tr');
                 row.className = 'clickable';
-                
-                // Check if this is a taker order
-                const isTaker = (showTaker || takerOnly) && (data.taker_bids.some(t => t.order_id === order.order_id));
-                if (isTaker) {
-                    row.classList.add('taker-order');
-                }
                 
                 // Add order type specific styling
                 const orderClass = getOrderRowClass(order.kind);
@@ -979,13 +893,7 @@
                 spreadEl.style.display = 'none';
             }
 
-            let statusMessage = `L3 Orderbook updated - Slot: ${data.slot}, Oracle: ${formatPrice(data.oracle_price)}`;
-            if (takerOnly) {
-                statusMessage += ' (taker orders only)';
-            } else if (showTaker) {
-                statusMessage += ' (with taker orders)';
-            }
-            updateStatus(statusMessage);
+            updateStatus(`L3 Orderbook updated - Slot: ${data.slot}, Oracle: ${formatPrice(data.oracle_price)}`);
         }
 
         async function fetchOrderbook() {
@@ -1063,16 +971,12 @@
                 l3ViewBtn.classList.remove('active');
                 l2ContainerEl.style.display = 'grid';
                 l3ContainerEl.style.display = 'none';
-                takerToggleGroup.style.display = 'flex';
-                takerOnlyToggleGroup.style.display = 'none';
                 document.getElementById('priceGroupingGroup').style.display = 'flex';
             } else {
                 l2ViewBtn.classList.remove('active');
                 l3ViewBtn.classList.add('active');
                 l2ContainerEl.style.display = 'none';
                 l3ContainerEl.style.display = 'grid';
-                takerToggleGroup.style.display = 'flex';
-                takerOnlyToggleGroup.style.display = 'flex';
                 document.getElementById('priceGroupingGroup').style.display = 'none';
             }
 
@@ -1089,17 +993,6 @@
         l2ViewBtn.addEventListener('click', () => switchView('l2'));
         l3ViewBtn.addEventListener('click', () => switchView('l3'));
 
-        showTakerOrdersCheckbox.addEventListener('change', () => {
-            stopAutoRefresh();
-            fetchOrderbook();
-            startAutoRefresh();
-        });
-
-        takerOrdersOnlyCheckbox.addEventListener('change', () => {
-            stopAutoRefresh();
-            fetchOrderbook();
-            startAutoRefresh();
-        });
 
         document.getElementById('priceGrouping').addEventListener('change', () => {
             if (currentView === 'l2') {

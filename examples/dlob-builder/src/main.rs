@@ -32,8 +32,6 @@ struct L2Response {
     oracle_price: u64,
     asks: Vec<OrderbookLevel>,
     bids: Vec<OrderbookLevel>,
-    taker_asks: Vec<OrderbookLevel>,
-    taker_bids: Vec<OrderbookLevel>,
     market_index: u16,
 }
 
@@ -59,8 +57,6 @@ struct L3Response {
     oracle_price: u64,
     bids: Vec<L3OrderResponse>,
     asks: Vec<L3OrderResponse>,
-    taker_bids: Vec<L3OrderResponse>,
-    taker_asks: Vec<L3OrderResponse>,
     market_index: u16,
 }
 
@@ -82,7 +78,7 @@ async fn get_l2_orderbook(
         .price as u64;
     let l2_book = state
         .dlob
-        .get_l2_snapshot(params.market_index, MarketType::Perp, price);
+        .get_l2_book(params.market_index, MarketType::Perp, price);
     // Convert BTreeMap to Vec<OrderbookLevel> for JSON serialization
     let asks: Vec<OrderbookLevel> = l2_book
         .asks
@@ -102,31 +98,11 @@ async fn get_l2_orderbook(
         })
         .collect();
 
-    let taker_asks: Vec<OrderbookLevel> = l2_book
-        .taker_asks
-        .iter()
-        .map(|(price, size)| OrderbookLevel {
-            price: *price,
-            size: *size,
-        })
-        .collect();
-
-    let taker_bids: Vec<OrderbookLevel> = l2_book
-        .taker_bids
-        .iter()
-        .map(|(price, size)| OrderbookLevel {
-            price: *price,
-            size: *size,
-        })
-        .collect();
-
     Ok(Json(L2Response {
         slot: l2_book.slot,
         oracle_price: l2_book.oracle_price,
         asks,
         bids,
-        taker_asks,
-        taker_bids,
         market_index: params.market_index,
     }))
 }
@@ -144,7 +120,7 @@ async fn get_l3_orderbook(
         .price as u64;
     let l3_book = state
         .dlob
-        .get_l3_snapshot(params.market_index, MarketType::Perp, price);
+        .get_l3_book(params.market_index, MarketType::Perp, price);
     // Convert L3Order to L3OrderResponse for JSON serialization
     let convert_order = |order: &drift_rs::dlob::L3Order| L3OrderResponse {
         price: order.price,
@@ -158,16 +134,12 @@ async fn get_l3_orderbook(
 
     let bids: Vec<L3OrderResponse> = l3_book.bids.iter().map(convert_order).collect();
     let asks: Vec<L3OrderResponse> = l3_book.asks.iter().map(convert_order).collect();
-    let taker_bids: Vec<L3OrderResponse> = l3_book.taker_bids.iter().map(convert_order).collect();
-    let taker_asks: Vec<L3OrderResponse> = l3_book.taker_asks.iter().map(convert_order).collect();
 
     Ok(Json(L3Response {
         slot: l3_book.slot,
         oracle_price: l3_book.oracle_price,
         bids,
         asks,
-        taker_bids,
-        taker_asks,
         market_index: params.market_index,
     }))
 }
