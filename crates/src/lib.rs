@@ -63,6 +63,8 @@ pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pu
 pub mod async_utils;
 pub mod ffi;
 pub mod jupiter;
+pub mod market_state;
+pub use market_state::MarketState;
 pub mod math;
 pub mod memcmp;
 pub mod utils;
@@ -330,10 +332,10 @@ impl DriftClient {
     ///
     /// ## DEV
     /// - *a sanitized order may have its auction params modified by the program when
-    /// placed onchain. Makers should understand the time/price implications to accept these.
+    ///   placed onchain. Makers should understand the time/price implications to accept these.
     ///
     /// - 'deposit+trade' orders require fillers to send an attached, preceding deposit tx
-    /// before the swift order
+    ///   before the swift order
     ///
     /// Returns a stream of swift orders
     pub async fn subscribe_swift_orders(
@@ -2898,7 +2900,7 @@ impl<'a> TransactionBuilder<'a> {
                 .orders
                 .iter()
                 .find(|o| o.order_id == order_id)
-                .map_or(true, |o| o.has_builder())
+                .is_none_or(|o| o.has_builder())
         } else {
             // no taker_order_id, should be a swift order, include the revenue share escrow optimistically
             true
@@ -3125,6 +3127,62 @@ impl<'a> TransactionBuilder<'a> {
                 market_index,
                 liquidator_max_base_asset_amount,
                 limit_price,
+            }),
+        };
+
+        self.ixs.push(liquidate_ix);
+        self
+    }
+
+    /// Liquidate a perp position with fill for a given user.
+    ///
+    /// This method constructs a liquidation instruction for a perpetual market position that includes
+    /// maker orders to fill the liquidated position. The liquidator will be the subaccount associated
+    /// with this `TransactionBuilder` (i.e., the builder's default subaccount).
+    ///
+    /// # Parameters
+    /// - `market_index`: The index of the perp market to liquidate on.
+    /// - `liquidatee`: The user account (liquidatee) whose position will be liquidated.
+    /// - `makers`: Array of maker users whose orders will be used to fill the liquidated position.
+    ///
+    /// # Returns
+    /// Returns an updated `TransactionBuilder` with the liquidation instruction appended.
+    pub fn liquidate_perp_with_fill(
+        mut self,
+        market_index: u16,
+        liquidatee: &User,
+        makers: &[User],
+    ) -> Self {
+        let mut accounts = build_accounts(
+            self.program_data,
+            types::accounts::LiquidatePerpWithFill {
+                state: *state_account(),
+                authority: self.authority,
+                user: Wallet::derive_user_account(&liquidatee.authority, liquidatee.sub_account_id),
+                user_stats: Wallet::derive_stats_account(&liquidatee.authority),
+                liquidator: self.sub_account,
+                liquidator_stats: Wallet::derive_stats_account(&self.owner()),
+            },
+            [&self.account_data, liquidatee].into_iter().chain(makers),
+            std::iter::empty(),
+            std::iter::once(&MarketId::perp(market_index)),
+        );
+
+        for maker in makers {
+            accounts.extend([
+                AccountMeta::new(
+                    Wallet::derive_user_account(&maker.authority, maker.sub_account_id),
+                    false,
+                ),
+                AccountMeta::new(Wallet::derive_stats_account(&maker.authority), false),
+            ]);
+        }
+
+        let liquidate_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::LiquidatePerpWithFill {
+                market_index,
             }),
         };
 

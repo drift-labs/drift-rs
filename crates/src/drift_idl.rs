@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.142.0";
+pub const IDL_VERSION: &str = "2.143.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -1890,15 +1890,15 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketProtectedMakerParams {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct UpdatePerpMarketTakerSpeedBumpOverride {
-        pub taker_speed_bump_override: i8,
+    pub struct UpdatePerpMarketOracleLowRiskSlotDelayOverride {
+        pub oracle_low_risk_slot_delay_override: i8,
     }
     #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdatePerpMarketTakerSpeedBumpOverride {
-        const DISCRIMINATOR: &[u8] = &[31, 39, 5, 25, 228, 50, 1, 0];
+    impl anchor_lang::Discriminator for UpdatePerpMarketOracleLowRiskSlotDelayOverride {
+        const DISCRIMINATOR: &[u8] = &[124, 108, 147, 229, 109, 117, 123, 3];
     }
     #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdatePerpMarketTakerSpeedBumpOverride {}
+    impl anchor_lang::InstructionData for UpdatePerpMarketOracleLowRiskSlotDelayOverride {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdatePerpMarketAmmSpreadAdjustment {
         pub amm_spread_adjustment: i8,
@@ -2829,7 +2829,7 @@ pub mod types {
         pub last_oracle_valid: bool,
         pub target_base_asset_amount_per_lp: i32,
         pub per_lp_base: i8,
-        pub taker_speed_bump_override: i8,
+        pub oracle_low_risk_slot_delay_override: i8,
         pub amm_spread_adjustment: i8,
         pub oracle_slot_delay_override: i8,
         pub mm_oracle_sequence_id: u64,
@@ -3354,7 +3354,10 @@ pub mod types {
         TooUncertain,
         StaleForMargin,
         InsufficientDataPoints,
-        StaleForAMM,
+        StaleForAMM {
+            immediate: bool,
+            low_risk: bool,
+        },
         Valid,
     }
     #[derive(
@@ -3375,7 +3378,8 @@ pub mod types {
         SettlePnl,
         TriggerOrder,
         FillOrderMatch,
-        FillOrderAmm,
+        FillOrderAmmLowRisk,
+        FillOrderAmmImmediate,
         Liquidate,
         MarginCalc,
         UpdateTwap,
@@ -3890,24 +3894,6 @@ pub mod types {
         Speculative,
         HighlySpeculative,
         Isolated,
-    }
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
-    pub enum AMMAvailability {
-        #[default]
-        Immediate,
-        AfterMinDuration,
-        Unavailable,
     }
     #[derive(
         AnchorSerialize,
@@ -19722,25 +19708,31 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct UpdatePerpMarketTakerSpeedBumpOverride {
+    pub struct UpdatePerpMarketOracleLowRiskSlotDelayOverride {
         pub admin: Pubkey,
         pub state: Pubkey,
         pub perp_market: Pubkey,
     }
     #[automatically_derived]
-    impl anchor_lang::Discriminator for UpdatePerpMarketTakerSpeedBumpOverride {
-        const DISCRIMINATOR: &[u8] = &[17, 22, 210, 50, 255, 103, 140, 64];
+    impl anchor_lang::Discriminator for UpdatePerpMarketOracleLowRiskSlotDelayOverride {
+        const DISCRIMINATOR: &[u8] = &[58, 119, 21, 6, 125, 151, 70, 83];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketTakerSpeedBumpOverride {}
+    unsafe impl anchor_lang::__private::bytemuck::Pod
+        for UpdatePerpMarketOracleLowRiskSlotDelayOverride
+    {
+    }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdatePerpMarketTakerSpeedBumpOverride {}
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable
+        for UpdatePerpMarketOracleLowRiskSlotDelayOverride
+    {
+    }
     #[automatically_derived]
-    impl anchor_lang::ZeroCopy for UpdatePerpMarketTakerSpeedBumpOverride {}
+    impl anchor_lang::ZeroCopy for UpdatePerpMarketOracleLowRiskSlotDelayOverride {}
     #[automatically_derived]
-    impl anchor_lang::InstructionData for UpdatePerpMarketTakerSpeedBumpOverride {}
+    impl anchor_lang::InstructionData for UpdatePerpMarketOracleLowRiskSlotDelayOverride {}
     #[automatically_derived]
-    impl ToAccountMetas for UpdatePerpMarketTakerSpeedBumpOverride {
+    impl ToAccountMetas for UpdatePerpMarketOracleLowRiskSlotDelayOverride {
         fn to_account_metas(&self) -> Vec<AccountMeta> {
             vec![
                 AccountMeta {
@@ -19762,7 +19754,7 @@ pub mod accounts {
         }
     }
     #[automatically_derived]
-    impl anchor_lang::AccountSerialize for UpdatePerpMarketTakerSpeedBumpOverride {
+    impl anchor_lang::AccountSerialize for UpdatePerpMarketOracleLowRiskSlotDelayOverride {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
             if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
@@ -19774,7 +19766,7 @@ pub mod accounts {
         }
     }
     #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for UpdatePerpMarketTakerSpeedBumpOverride {
+    impl anchor_lang::AccountDeserialize for UpdatePerpMarketOracleLowRiskSlotDelayOverride {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {

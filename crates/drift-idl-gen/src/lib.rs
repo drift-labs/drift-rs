@@ -173,7 +173,7 @@ fn generate_idl_types(idl: &Idl) -> String {
         );
         let type_tokens = match &type_def.type_def {
             TypeData::Enum { variants } => {
-                let has_complex_variant = variants.iter().any(|v| match v {
+                let has_complex_first_variant = variants.iter().next().is_some_and(|v| match v {
                     EnumVariant::Complex { .. } => true,
                     _ => false,
                 });
@@ -209,15 +209,24 @@ fn generate_idl_types(idl: &Idl) -> String {
                                         #field_name: #field_type,
                                     }
                                 });
-                                quote! {
-                                    #variant_name {
-                                        #(#field_tokens)*
-                                    },
+                                if i == 0 && !has_complex_first_variant {
+                                    quote! {
+                                        #[default]
+                                        #variant_name {
+                                            #(#field_tokens)*
+                                        },
+                                    }
+                                } else {
+                                    quote! {
+                                        #variant_name {
+                                            #(#field_tokens)*
+                                        },
+                                    }
                                 }
                             }
                         });
 
-                if has_complex_variant {
+                if has_complex_first_variant {
                     quote! {
                         #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Serialize, Deserialize, Copy, Clone, Debug, PartialEq)]
                         pub enum #type_name {

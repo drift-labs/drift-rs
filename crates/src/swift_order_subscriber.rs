@@ -68,28 +68,27 @@ impl SignedOrderType {
     /// DEV: Swift clients do not encode or decode the enum byte
     pub fn to_borsh(&self) -> Vec<u8> {
         // max variant size +8 (anchor discriminator len)
+        let mut buf = Vec::with_capacity(SignedDelegateOrder::INIT_SPACE + 8);
         match self {
             Self::Authority { ref raw, ref inner } => {
                 if let Some(raw) = raw {
-                    hex::decode(raw).unwrap()
+                    buf.extend_from_slice(raw.as_bytes());
                 } else {
-                    let mut buf = Vec::with_capacity(SignedOrder::INIT_SPACE + 8);
                     (SWIFT_MSG_PREFIX).serialize(&mut buf).unwrap();
                     inner.serialize(&mut buf).unwrap();
-                    buf
                 }
             }
             Self::Delegated { ref raw, ref inner } => {
                 if let Some(raw) = raw {
-                    hex::decode(raw).unwrap()
+                    buf.extend_from_slice(raw.as_bytes());
                 } else {
-                    let mut buf = Vec::with_capacity(SignedDelegateOrder::INIT_SPACE + 8);
                     (SWIFT_DELEGATE_MSG_PREFIX).serialize(&mut buf).unwrap();
                     inner.serialize(&mut buf).unwrap();
-                    buf
                 }
             }
         }
+
+        buf
     }
 
     pub fn info(&self, taker_authority: &Pubkey) -> SignedMessageInfo {

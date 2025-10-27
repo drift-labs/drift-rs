@@ -2,6 +2,8 @@
 //! FFI shims
 //! Defines wrapper types for ergonomic access to drift-program logic
 //!
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use abi_stable::std_types::ROption;
 use anchor_lang::{prelude::AccountInfo, Discriminator};
 use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
@@ -14,15 +16,13 @@ use crate::{
         errors::ErrorCode,
         types::{self, ContractType, MarginRequirementType, OracleSource},
     },
+    market_state::MarketState,
     math::{
-        constants::{
-            BID_ASK_SPREAD_PRECISION_I128, BID_ASK_SPREAD_PRECISION_U128,
-            PERCENTAGE_PRECISION_I128, QUOTE_PRECISION_I64,
-        },
+        constants::{BID_ASK_SPREAD_PRECISION_I64, PERCENTAGE_PRECISION_I128, QUOTE_PRECISION_I64},
         standardize_price_i64,
     },
     types::{
-        accounts::HighLeverageModeConfig, ContractTier, OrderType, PositionDirection,
+        accounts::HighLeverageModeConfig, ContractTier, OrderParams, OrderType, PositionDirection,
         ProtectedMakerParams, RevenueShareOrder, SdkError, ValidityGuardRails,
     },
     SdkResult,
@@ -173,6 +173,13 @@ extern "C" {
         is_signed_msg: bool,
     ) -> FfiResult<bool>;
     #[allow(improper_ctypes)]
+    pub fn order_params_update_perp_auction_params(
+        order_params: &mut types::OrderParams,
+        perp_market: &accounts::PerpMarket,
+        oracle_price: i64,
+        is_signed_msg: bool,
+    );
+    #[allow(improper_ctypes)]
     pub fn order_calculate_auction_params_for_trigger_order(
         order: &types::Order,
         oracle_price: &OraclePriceData,
@@ -217,6 +224,67 @@ pub fn calculate_auction_price(
         )
     };
     to_sdk_result(res)
+}
+
+impl OrderParams {
+    pub fn update_perp_auction_params(
+        &mut self,
+        perp_market: &accounts::PerpMarket,
+        oracle_price: i64,
+        is_signed_msg: bool,
+    ) {
+        unsafe {
+            order_params_update_perp_auction_params(self, perp_market, oracle_price, is_signed_msg)
+        }
+    }
+}
+
+impl MarketState {
+    /// Calculate margin requirement for user
+    ///
+    /// this is a more lightweight/optimized version of `calculate_margin_requirement_and_total_collateral_and_liability_info`
+    pub fn calculate_simplified_margin_requirement(
+        &self,
+        user: &accounts::User,
+        margin_type: MarginRequirementType,
+        margin_buffer: Option<u32>,
+    ) -> crate::SdkResult<SimplifiedMarginCalculation> {
+        let state = self.load();
+        let result = unsafe {
+            margin_calculate_simplified_margin_requirement(
+                user,
+                &state,
+                margin_type,
+                margin_buffer.unwrap_or(0),
+            )
+        };
+
+        to_sdk_result(result)
+    }
+    /// Calculate margin requirement for user
+    ///
+    /// incremental version allows partial updates e.g. when specific positions or oracle prices change
+    pub fn calculate_incremental_margin_requirement(
+        &self,
+        user: &accounts::User,
+        margin_type: MarginRequirementType,
+        margin_buffer: Option<u32>,
+    ) -> IncrementalMarginCalculation {
+        let state = self.load();
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        unsafe {
+            incremental_margin_calculation_from_user(
+                user,
+                &state,
+                margin_type,
+                ts,
+                margin_buffer.unwrap_or(0),
+            )
+        }
+    }
 }
 
 pub fn calculate_margin_requirement_and_total_collateral_and_liability_info(
@@ -659,10 +727,10 @@ impl accounts::PerpMarket {
     ///
     pub fn bid_price(&self, reserve_price: Option<u64>) -> u64 {
         let adjusted_spread = (-(self.amm.short_spread as i32)) + self.amm.reference_price_offset;
-        let multiplier = BID_ASK_SPREAD_PRECISION_I128 + adjusted_spread as i128;
-
+        let multiplier = BID_ASK_SPREAD_PRECISION_I64 + adjusted_spread as i64;
         let reserve_price = reserve_price.unwrap_or(self.reserve_price());
-        (reserve_price * multiplier as u64) / BID_ASK_SPREAD_PRECISION_U128 as u64
+
+        (reserve_price * multiplier.unsigned_abs()) / BID_ASK_SPREAD_PRECISION_I64 as u64
     }
 
     /// Return AMM's ask price
@@ -673,10 +741,10 @@ impl accounts::PerpMarket {
     ///
     pub fn ask_price(&self, reserve_price: Option<u64>) -> u64 {
         let adjusted_spread = self.amm.long_spread as i32 + self.amm.reference_price_offset;
-        let multiplier = BID_ASK_SPREAD_PRECISION_I128 + adjusted_spread as i128;
+        let multiplier = BID_ASK_SPREAD_PRECISION_I64 + adjusted_spread as i64;
         let reserve_price = reserve_price.unwrap_or(self.reserve_price());
 
-        (reserve_price * multiplier as u64) / BID_ASK_SPREAD_PRECISION_U128 as u64
+        (reserve_price * multiplier.unsigned_abs()) / BID_ASK_SPREAD_PRECISION_I64 as u64
     }
 }
 
@@ -713,6 +781,72 @@ fn to_sdk_result<T>(value: FfiResult<T>) -> SdkResult<T> {
                 std::mem::transmute::<u32, ErrorCode>(code - anchor_lang::error::ERROR_CODE_OFFSET)
             };
             Err(crate::SdkError::Anchor(Box::new(error_code.into())))
+        }
+    }
+}
+
+impl IncrementalMarginCalculation {
+    /// Return free collateral amount
+    pub fn free_collateral(&self) -> i128 {
+        self.total_collateral - self.margin_requirement as i128
+    }
+    /// Create a new cached margin calculation from a user account
+    pub fn from_user(
+        user: &accounts::User,
+        market_state: &MarketState,
+        margin_type: MarginRequirementType,
+        timestamp: u64,
+        margin_buffer: Option<u32>,
+    ) -> Self {
+        let m = market_state.load();
+        unsafe {
+            incremental_margin_calculation_from_user(
+                user,
+                &m,
+                margin_type,
+                timestamp,
+                margin_buffer.unwrap_or(0),
+            )
+        }
+    }
+
+    /// Create a new cached margin calculation from a user account with current timestamp
+    pub fn from_user_now(
+        user: &accounts::User,
+        market_state: &MarketState,
+        margin_type: MarginRequirementType,
+        margin_buffer: Option<u32>,
+    ) -> Self {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        Self::from_user(user, market_state, margin_type, timestamp, margin_buffer)
+    }
+
+    /// Update the cached calculation with a spot position change
+    pub fn update_spot_position(
+        &mut self,
+        spot_position: &types::SpotPosition,
+        market_state: &MarketState,
+        timestamp: u64,
+    ) {
+        let m = market_state.load();
+        unsafe {
+            incremental_margin_calculation_update_spot_position(self, spot_position, &m, timestamp);
+        }
+    }
+
+    /// Update the cached calculation with a perp position change
+    pub fn update_perp_position(
+        &mut self,
+        perp_position: &types::PerpPosition,
+        market_state: &MarketState,
+        timestamp: u64,
+    ) {
+        let m = market_state.load();
+        unsafe {
+            incremental_margin_calculation_update_perp_position(self, perp_position, &m, timestamp);
         }
     }
 }
@@ -779,8 +913,6 @@ pub mod abi_types {
         StandardCustom(MarginRequirementType),
     }
 
-    // TODO: simplified version of MarginCalculation
-    // can pipe through fill struct if needed
     #[repr(C, align(16))]
     #[derive(Copy, Clone, Debug, PartialEq)]
     pub struct MarginCalculation {
@@ -828,50 +960,101 @@ pub mod abi_types {
     pub type FfiResult<T> = RResult<T, u32>;
 
     /// FFI-compatible simplified margin calculation result
-    #[repr(C)]
+    #[repr(C, align(16))]
     #[derive(Copy, Clone, Debug, PartialEq)]
-    pub struct FfiSimplifiedMarginCalculation {
-        pub total_collateral: compat::i128,
-        pub margin_requirement: compat::u128,
-        pub free_collateral: compat::i128,
-        pub spot_asset_value: compat::u128,
-        pub spot_liability_value: compat::u128,
-        pub perp_pnl: compat::i128,
-        pub perp_liability_value: compat::u128,
+    pub struct SimplifiedMarginCalculation {
+        pub total_collateral: i128,
+        pub total_collateral_buffer: i128,
+        pub margin_requirement: u128,
+        pub margin_requirement_plus_buffer: u128,
     }
 
-    /// FFI-compatible market state for simplified margin calculations
-    #[repr(C)]
-    pub struct FfiMarketState {
-        // This will be a pointer to the actual HashMapMarketState implementation
-        // We'll use a raw pointer to avoid lifetime issues across FFI boundary
-        pub inner: *mut std::ffi::c_void,
+    /// FFI-compatible incremental margin calculation
+    ///
+    /// This struct must match the FFI-side struct exactly for proper alignment
+    #[repr(C, align(16))]
+    #[derive(Clone)]
+    pub struct IncrementalMarginCalculation {
+        pub total_collateral: i128,
+        pub total_collateral_buffer: i128,
+        pub margin_requirement: u128,
+        pub margin_requirement_plus_buffer: u128,
+        pub spot_collateral: [PositionCollateral; 8],
+        pub perp_collateral: [PositionCollateral; 8],
+        pub last_updated: u64,
+        pub user_custom_margin_ratio: u32,
+        pub margin_buffer: u32,
+        pub margin_type: MarginRequirementType,
+        pub user_high_leverage_mode: bool,
+        pub user_pool_id: u8,
     }
 
-    /// FFI compatible input types
-    pub mod compat {
-        //! ffi compatible input types
+    impl std::fmt::Debug for IncrementalMarginCalculation {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let total_collateral_formatted =
+                format!("{:.2}", self.total_collateral as f64 / 1_000_000.0);
+            let margin_requirement_formatted =
+                format!("{:.2}", self.margin_requirement as f64 / 1_000_000.0);
 
-        /// rust 1.76.0 ffi compatible i128
-        #[derive(Copy, Clone, Debug, PartialEq)]
-        #[repr(C, align(16))]
-        pub struct i128(pub std::primitive::i128);
+            let total_collateral_buffer_formatted =
+                format!("{:.2}", self.total_collateral_buffer as f64 / 1_000_000.0);
+            let margin_requirement_buffer_formatted = format!(
+                "{:.2}",
+                self.margin_requirement_plus_buffer as f64 / 1_000_000.0
+            );
 
-        impl From<std::primitive::i128> for self::i128 {
-            fn from(value: std::primitive::i128) -> Self {
-                Self(value)
-            }
+            f.debug_struct("CachedMarginCalculation")
+                .field("total_collateral", &total_collateral_formatted)
+                .field(
+                    "total_collateral_buffer",
+                    &total_collateral_buffer_formatted,
+                )
+                .field("margin_requirement", &margin_requirement_formatted)
+                .field(
+                    "margin_requirement_buffer",
+                    &margin_requirement_buffer_formatted,
+                )
+                .field("margin_type", &self.margin_type)
+                .field("user_high_leverage_mode", &self.user_high_leverage_mode)
+                .field("user_custom_margin_ratio", &self.user_custom_margin_ratio)
+                .field("last_updated", &self.last_updated)
+                .finish()
         }
+    }
 
-        /// rust 1.76.0 ffi compatible u128
-        #[derive(Copy, Clone, Debug, PartialEq)]
-        #[repr(C, align(16))]
-        pub struct u128(pub std::primitive::u128);
+    /// FFI-compatible position collateral contribution
+    /// This struct must match the FFI-side struct exactly for proper alignment
+    #[repr(C, align(16))]
+    #[derive(Clone, Copy, Default)]
+    pub struct PositionCollateral {
+        pub collateral_value: i128,
+        pub collateral_buffer: i128,
+        pub liability_value: u128,
+        pub liability_buffer: u128,
+        pub last_updated: u64,
+        pub market_index: u16,
+    }
 
-        impl From<std::primitive::u128> for self::u128 {
-            fn from(value: std::primitive::u128) -> Self {
-                Self(value)
+    impl std::fmt::Debug for PositionCollateral {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            let mut fields = vec![format!("market_index: {}", self.market_index)];
+
+            if self.collateral_value > 0 {
+                let asset_formatted = format!("{:.2}", self.collateral_value as f64 / 1_000_000.0);
+                fields.push(format!("+{}", asset_formatted));
             }
+
+            if self.liability_value > 0 {
+                let liability_formatted =
+                    format!("{:.2}", self.liability_value as f64 / 1_000_000.0);
+                fields.push(format!("-{}", liability_formatted));
+            }
+
+            if self.last_updated > 0 {
+                fields.push(format!("last_updated: {}", self.last_updated));
+            }
+
+            write!(f, "PositionCollateral {{ {} }}", fields.join(", "))
         }
     }
 }
@@ -881,7 +1064,10 @@ mod tests {
     use anchor_lang::Discriminator;
     use solana_sdk::{account::Account, pubkey::Pubkey};
 
-    use super::{simulate_place_perp_order, AccountWithKey, AccountsList, MarginContextMode};
+    use super::{
+        margin_calculate_simplified_margin_requirement, simulate_place_perp_order, AccountWithKey,
+        AccountsList, FfiResult, MarginContextMode,
+    };
     use crate::{
         accounts::State,
         constants::{self, ids::pyth_program},
@@ -896,7 +1082,7 @@ mod tests {
         ffi::{
             calculate_auction_price,
             calculate_margin_requirement_and_total_collateral_and_liability_info,
-            check_ffi_version, get_oracle_price, OraclePriceData,
+            check_ffi_version, get_oracle_price, IncrementalMarginCalculation, OraclePriceData,
         },
         math::constants::{
             BASE_PRECISION, BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, MARGIN_PRECISION,
@@ -1260,26 +1446,60 @@ mod tests {
                 ..Default::default()
             },
         }];
-        let spot_market = sol_spot_market();
-        let mut spot_markets = vec![AccountWithKey {
-            key: Pubkey::new_unique(),
-            account: Account {
-                owner: crate::constants::PROGRAM_ID,
-                data: [SpotMarket::DISCRIMINATOR, bytemuck::bytes_of(&spot_market)]
+        // Set up both USDC and SOL spot markets
+        let usdc_spot_market = usdc_spot_market();
+        let sol_spot_market = sol_spot_market();
+        let mut spot_markets = vec![
+            AccountWithKey {
+                key: Pubkey::new_unique(),
+                account: Account {
+                    owner: crate::constants::PROGRAM_ID,
+                    data: [
+                        SpotMarket::DISCRIMINATOR,
+                        bytemuck::bytes_of(&usdc_spot_market),
+                    ]
                     .concat()
                     .to_vec(),
+                    ..Default::default()
+                },
+            },
+            AccountWithKey {
+                key: Pubkey::new_unique(),
+                account: Account {
+                    owner: crate::constants::PROGRAM_ID,
+                    data: [
+                        SpotMarket::DISCRIMINATOR,
+                        bytemuck::bytes_of(&sol_spot_market),
+                    ]
+                    .concat()
+                    .to_vec(),
+                    ..Default::default()
+                },
+            },
+        ];
+
+        // Set up oracles for both markets
+        // USDC oracle (market index 0) - using quote asset oracle
+        let usdc_oracle = AccountWithKey {
+            key: usdc_spot_market.oracle,
+            account: Account {
+                data: get_account_bytes(&mut get_pyth_price(1, 6)).to_vec(), // 1 USD
+                owner: constants::ids::pyth_program::ID,
                 ..Default::default()
             },
-        }];
+        };
 
-        let mut oracles = [AccountWithKey {
-            key: Pubkey::new_unique(),
+        // SOL oracle (market index 1) - using the specific oracle pubkey
+        let sol_oracle = AccountWithKey {
+            key: sol_spot_market.oracle,
             account: Account {
                 data: get_account_bytes(&mut get_pyth_price(240, 9)).to_vec(),
                 owner: constants::ids::pyth_program::ID,
                 ..Default::default()
             },
-        }];
+        };
+
+        let mut oracles = [usdc_oracle, sol_oracle];
         let mut accounts = AccountsList::new(&mut perp_markets, &mut spot_markets, &mut oracles);
 
         let modes = [
@@ -1783,4 +2003,302 @@ mod tests {
         assert!(start > 0);
         assert!(end > 0);
     }
+
+    #[test]
+    fn ffi_test_calculate_simplified_margin_requirement() {
+        // Test the simplified margin requirement FFI function
+        // This should match the results from the existing margin calculation test
+        let btc_perp_index = 1_u16;
+        let mut user = User::default();
+        user.spot_positions[1] = SpotPosition {
+            market_index: 1,
+            scaled_balance: (1_000 * SPOT_BALANCE_PRECISION) as u64,
+            balance_type: SpotBalanceType::Deposit,
+            ..Default::default()
+        };
+        user.perp_positions[0] = PerpPosition {
+            market_index: btc_perp_index,
+            base_asset_amount: 100 * BASE_PRECISION_I64 as i64,
+            quote_asset_amount: -5_000 * QUOTE_PRECISION as i64,
+            ..Default::default()
+        };
+
+        // Create market state data similar to the existing test
+        let mut market_state_data = crate::market_state::MarketStateData::default();
+
+        // Add USDC spot market (market index 0) - required for quote asset
+        let usdc_spot_market = usdc_spot_market();
+        market_state_data.set_spot_market(usdc_spot_market);
+
+        // Add SOL spot market (market index 1)
+        let sol_spot_market = sol_spot_market();
+        market_state_data.set_spot_market(sol_spot_market);
+
+        // Add perp market with proper configuration
+        let perp_market = PerpMarket {
+            market_index: btc_perp_index,
+            margin_ratio_initial: 1_000 * MARGIN_PRECISION, // 10%
+            margin_ratio_maintenance: 500,                  // 5%
+            amm: AMM {
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        market_state_data.set_perp_market(perp_market);
+
+        // Add oracle prices
+        let sol_oracle_price = OraclePriceData {
+            price: 240 * QUOTE_PRECISION as i64,
+            confidence: 99 * PERCENTAGE_PRECISION as u64,
+            delay: 2,
+            has_sufficient_number_of_data_points: true,
+            sequence_id: None,
+        };
+
+        // Add oracle prices
+        let btc_oracle_price = OraclePriceData {
+            price: 120_000 * QUOTE_PRECISION as i64,
+            confidence: 99 * PERCENTAGE_PRECISION as u64,
+            delay: 2,
+            has_sufficient_number_of_data_points: true,
+            sequence_id: None,
+        };
+
+        // USDC oracle price (market index 0) - required for quote asset
+        let usdc_oracle_price = OraclePriceData {
+            price: QUOTE_PRECISION as i64, // 1 USD
+            confidence: 1,
+            delay: 0,
+            has_sufficient_number_of_data_points: true,
+            sequence_id: None,
+        };
+
+        market_state_data.set_spot_oracle_price(0, usdc_oracle_price); // USDC
+        market_state_data.set_spot_oracle_price(1, sol_oracle_price); // SOL
+        market_state_data.set_perp_oracle_price(btc_perp_index, btc_oracle_price);
+
+        // Test different margin requirement types
+        let margin_types = [
+            MarginRequirementType::Initial,
+            MarginRequirementType::Maintenance,
+        ];
+
+        for margin_type in margin_types.iter() {
+            let result = unsafe {
+                margin_calculate_simplified_margin_requirement(
+                    &user,
+                    &market_state_data,
+                    *margin_type,
+                    0,
+                )
+            };
+
+            // Verify the FFI call succeeds
+            assert!(
+                matches!(result, FfiResult::ROk(_)),
+                "FFI call should succeed for margin type: {:?}",
+                margin_type
+            );
+
+            let result = match result {
+                FfiResult::ROk(data) => data,
+                FfiResult::RErr(_) => panic!("FFI call failed for margin type: {:?}", margin_type),
+            };
+
+            // Verify we get reasonable values
+            assert!(
+                result.total_collateral != 0,
+                "Total collateral should not be zero for margin type: {:?}",
+                margin_type
+            );
+            assert!(
+                result.margin_requirement > 0,
+                "Margin requirement should be positive for margin type: {:?}",
+                margin_type
+            );
+        }
+    }
+
+    #[test]
+    fn ffi_test_incremental_margin_calculation() {
+        // Test the cached margin calculation FFI functions
+        let btc_perp_index = 1_u16;
+        let mut user = User::default();
+        user.spot_positions[1] = SpotPosition {
+            market_index: 1,
+            scaled_balance: (100 * SPOT_BALANCE_PRECISION) as u64, // Smaller amount to avoid overflow
+            balance_type: SpotBalanceType::Deposit,
+            ..Default::default()
+        };
+        user.perp_positions[0] = PerpPosition {
+            market_index: btc_perp_index,
+            base_asset_amount: 10 * BASE_PRECISION_I64 as i64, // Smaller amount
+            quote_asset_amount: -500 * QUOTE_PRECISION as i64, // Smaller amount
+            ..Default::default()
+        };
+
+        // Create market state data
+        let market_state = crate::market_state::MarketState::default();
+
+        // Add USDC spot market (market index 0) - required for quote asset
+        let usdc_spot_market = usdc_spot_market();
+        market_state.set_spot_market(usdc_spot_market);
+
+        // Add SOL spot market (market index 1)
+        let sol_spot_market = sol_spot_market();
+        market_state.set_spot_market(sol_spot_market);
+
+        // Add perp market with proper configuration
+        let perp_market = PerpMarket {
+            market_index: btc_perp_index,
+            margin_ratio_initial: 1_000 * MARGIN_PRECISION, // 10%
+            margin_ratio_maintenance: 500,                  // 5%
+            amm: AMM {
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        market_state.set_perp_market(perp_market);
+
+        // Add oracle prices
+        let sol_oracle_price = OraclePriceData {
+            price: 240 * QUOTE_PRECISION as i64,
+            confidence: 99 * PERCENTAGE_PRECISION as u64,
+            delay: 2,
+            has_sufficient_number_of_data_points: true,
+            sequence_id: None,
+        };
+
+        let btc_oracle_price = OraclePriceData {
+            price: 120_000 * QUOTE_PRECISION as i64,
+            confidence: 99 * PERCENTAGE_PRECISION as u64,
+            delay: 2,
+            has_sufficient_number_of_data_points: true,
+            sequence_id: None,
+        };
+
+        // USDC oracle price (market index 0) - required for quote asset
+        let usdc_oracle_price = OraclePriceData {
+            price: QUOTE_PRECISION as i64, // 1 USD
+            confidence: 1,
+            delay: 0,
+            has_sufficient_number_of_data_points: true,
+            sequence_id: None,
+        };
+
+        market_state.set_spot_oracle_price(0, usdc_oracle_price); // USDC
+        market_state.set_spot_oracle_price(1, sol_oracle_price); // SOL
+        market_state.set_perp_oracle_price(btc_perp_index, btc_oracle_price);
+
+        let timestamp = 1_000_000;
+
+        // Test different margin requirement types
+        let margin_types = [MarginRequirementType::Maintenance];
+
+        for margin_type in margin_types.iter() {
+            // Test 1: Create cached margin calculation from user using FFI
+            let mut calculator = IncrementalMarginCalculation::from_user(
+                &user,
+                &market_state,
+                *margin_type,
+                timestamp,
+                None,
+            );
+
+            // Verify we get reasonable initial values
+            assert!(
+                calculator.total_collateral != 0,
+                "Total collateral should not be zero for margin type: {:?}",
+                margin_type
+            );
+
+            // Test 2: Update spot position using FFI
+            let mut updated_spot_position = user.spot_positions[1].clone();
+            updated_spot_position.scaled_balance = (200 * SPOT_BALANCE_PRECISION) as u64; // Double the balance
+
+            let free_collateral_before = calculator.free_collateral();
+            calculator.update_spot_position(&updated_spot_position, &market_state, timestamp + 1);
+
+            // Verify the update affected the calculation
+            assert!(
+                calculator.free_collateral() != free_collateral_before,
+                "free collateral should change after perp position update"
+            );
+            // The FFI function should have been called (values might not change due to implementation)
+            // Just verify the function completed without error
+
+            // Test 3: Update perp position using FFI
+            let mut updated_perp_position = user.perp_positions[0].clone();
+            updated_perp_position.base_asset_amount = 20 * BASE_PRECISION_I64 as i64; // Double the position
+
+            calculator.update_perp_position(&updated_perp_position, &market_state, timestamp + 2);
+
+            dbg!(&calculator);
+
+            assert!(
+                calculator.free_collateral() != free_collateral_before,
+                "free collateral should change after perp position update"
+            );
+
+            // Verify the update affected the calculation
+            assert!(
+                calculator.total_collateral != 0,
+                "Total collateral should still be non-zero after perp position update"
+            );
+            // The FFI function should have been called (values might not change due to implementation)
+            // Just verify the function completed without error
+
+            // Test 5: Verify metadata is accessible (FFI might not preserve margin type exactly)
+            assert!(
+                calculator.margin_type == *margin_type,
+                "Margin type should match the input: expected {:?}, got {:?}",
+                margin_type,
+                calculator.margin_type
+            );
+
+            // Test 6: Verify other fields are accessible
+            // Note: Free collateral can be negative if margin requirement exceeds total collateral
+            assert!(
+                calculator.free_collateral() != 0 || calculator.total_collateral == 0,
+                "Free collateral should be calculated correctly"
+            );
+        }
+    }
+}
+
+// Simplified Margin Calculation FFI declarations
+extern "C" {
+    #[allow(improper_ctypes)]
+    pub fn margin_calculate_simplified_margin_requirement(
+        user: &accounts::User,
+        market_state: &crate::market_state::MarketStateData,
+        margin_type: MarginRequirementType,
+        margin_buffer: u32,
+    ) -> FfiResult<SimplifiedMarginCalculation>;
+
+    // Cached Margin Calculation FFI declarations
+    #[allow(improper_ctypes)]
+    pub fn incremental_margin_calculation_from_user(
+        user: &accounts::User,
+        market_state: &crate::market_state::MarketStateData,
+        margin_type: MarginRequirementType,
+        timestamp: u64,
+        margin_buffer: u32,
+    ) -> IncrementalMarginCalculation;
+
+    #[allow(improper_ctypes)]
+    pub fn incremental_margin_calculation_update_spot_position(
+        cached: &mut IncrementalMarginCalculation,
+        spot_position: &types::SpotPosition,
+        market_state: &crate::market_state::MarketStateData,
+        timestamp: u64,
+    );
+
+    #[allow(improper_ctypes)]
+    pub fn incremental_margin_calculation_update_perp_position(
+        cached: &mut IncrementalMarginCalculation,
+        perp_position: &types::PerpPosition,
+        market_state: &crate::market_state::MarketStateData,
+        timestamp: u64,
+    );
 }

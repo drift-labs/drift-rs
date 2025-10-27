@@ -1,7 +1,4 @@
-use std::{
-    fmt::Debug,
-    sync::{atomic::AtomicPtr, Arc},
-};
+use std::{fmt::Debug, sync::atomic::AtomicPtr};
 
 use arrayvec::ArrayVec;
 use solana_sdk::pubkey::Pubkey;
@@ -18,7 +15,7 @@ use crate::{
 
 // Replace the key structs with type aliases
 type MarketOrderKey = (u64, u64);
-type OracleOrderKey = (u64, u64);
+type OracleOrderKey = (i64, u64);
 type LimitOrderKey = (u64, u64, u64);
 type FloatingLimitOrderKey = (i32, u64, u64);
 type TriggerOrderKey = (u64, u64);
@@ -30,36 +27,41 @@ pub enum OrderKind {
     Market,
     /// auction oracle offset
     Oracle,
-    /// transient state before oracle limit order becomes resting
+    /// oracle limit order undergoing initial auction (taking)
     FloatingLimitAuction,
-    /// transient state before fixed limit order becomes resting
+    /// fixed limit order undergoing initial auction (taking)
     LimitAuction,
     /// resting limit order
     Limit,
     /// resting oracle limit order
     FloatingLimit,
-    /// trigger order that will result in Market or Oracle auction order
+    /// trigger order that will result in Market or Oracle auction order (untriggered)
     TriggerMarket,
-    /// trigger order that will result in Limit/Market auction order
+    /// trigger order that will result in Limit/Market auction order (untriggered)
     TriggerLimit,
+    /// Triggered oracle order
     OracleTriggered,
+    /// Triggered market order
     MarketTriggered,
+    /// Triggered limit order
     LimitTriggered,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy, PartialEq)]
 pub struct OrderMetadata {
+    pub max_ts: u64,
     pub order_id: u32,
     pub user: Pubkey,
     pub kind: OrderKind,
 }
 
 impl OrderMetadata {
-    pub fn new(user: Pubkey, kind: OrderKind, order_id: u32) -> Self {
+    pub fn new(user: Pubkey, kind: OrderKind, order_id: u32, max_ts: u64) -> Self {
         Self {
             user,
             kind,
             order_id,
+            max_ts,
         }
     }
 }
@@ -124,16 +126,10 @@ impl MakerCrosses {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum DLOBEvent {
-    SlotOrPriceUpdate {
-        slot: u64,
-        market_index: u16,
-        market_type: MarketType,
-        oracle_price: u64,
-    },
-    Order {
-        delta: OrderDelta,
-        slot: u64,
-    },
+    /// market oracle and/or slot change
+    SlotUpdate { slot: u64 },
+    /// user order deltas
+    Deltas { deltas: Vec<OrderDelta>, slot: u64 },
 }
 
 /// Order with dynamic price calculation
@@ -178,7 +174,7 @@ impl MarketOrder {
 impl OrderKey for OracleOrder {
     type Key = OracleOrderKey;
     fn key(&self) -> Self::Key {
-        (self.slot, self.id)
+        (self.end_price_offset, self.id)
     }
 }
 
@@ -266,8 +262,6 @@ pub struct LimitOrderView {
     pub slot: u64,
     /// Whether the order is post-only
     pub post_only: bool,
-    /// Whether the order is reduce-only
-    pub reduce_only: bool,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -300,6 +294,7 @@ pub(crate) struct TriggerOrder {
     /// static trigger price
     pub price: u64,
     pub slot: u64,
+    pub max_ts: u64,
     pub condition: OrderTriggerCondition,
     pub direction: Direction,
     pub kind: OrderType,
@@ -383,48 +378,27 @@ impl DynamicPrice for MarketOrder {
     fn size(&self) -> u64 {
         self.size
     }
-    fn get_price(&self, slot: u64, oracle_price: u64, tick_size: u64) -> u64 {
-        match calculate_auction_price(
-            &Order {
-                slot: self.slot,
-                auction_duration: self.duration,
-                auction_start_price: self.start_price,
-                auction_end_price: self.end_price,
-                direction: self.direction,
-                order_type: OrderType::Market,
-                ..Default::default()
-            },
-            slot,
-            tick_size,
-            Some(oracle_price as i64),
-            false,
-        ) {
-            Ok(p) => p,
-            Err(err) => {
-                log::warn!(target: "dlob", "get_price failed: {err:?}, order: {:?}, tick size: {tick_size}", &self);
-                // offchain fallback
-                let slots_elapsed = slot.saturating_sub(self.slot) as i64;
-                let delta_denominator = self.duration as i64;
-                let delta_numerator = slots_elapsed.min(delta_denominator);
+    fn get_price(&self, slot: u64, _oracle_price: u64, tick_size: u64) -> u64 {
+        let slots_elapsed = slot.saturating_sub(self.slot) as i64;
+        let delta_denominator = self.duration as i64;
+        let delta_numerator = slots_elapsed.min(delta_denominator);
 
-                if delta_denominator == 0 {
-                    return self.end_price as u64;
-                }
-
-                let price = if self.direction == Direction::Long {
-                    let delta = (self.end_price.saturating_sub(self.start_price) * delta_numerator)
-                        / delta_denominator;
-                    self.start_price.saturating_add(delta)
-                } else {
-                    let delta = (self.start_price.saturating_sub(self.end_price) * delta_numerator)
-                        / delta_denominator;
-                    self.start_price.saturating_sub(delta)
-                };
-
-                let price = price.max(tick_size as i64);
-                standardize_price(price as u64, tick_size, self.direction)
-            }
+        if delta_denominator == 0 {
+            return self.end_price as u64;
         }
+
+        let price = if self.direction == Direction::Long {
+            let delta = (self.end_price.saturating_sub(self.start_price) * delta_numerator)
+                / delta_denominator;
+            self.start_price.saturating_add(delta)
+        } else {
+            let delta = (self.start_price.saturating_sub(self.end_price) * delta_numerator)
+                / delta_denominator;
+            self.start_price.saturating_sub(delta)
+        };
+
+        let price = price.max(tick_size as i64);
+        standardize_price(price as u64, tick_size, self.direction)
     }
 }
 
@@ -559,6 +533,7 @@ impl From<(u64, Order)> for TriggerOrder {
             size: order.base_asset_amount,
             price: order.trigger_price,
             condition: order.trigger_condition,
+            max_ts: order.max_ts.unsigned_abs(),
             slot: order.slot,
             direction: order.direction,
             kind: order.order_type,
@@ -568,50 +543,84 @@ impl From<(u64, Order)> for TriggerOrder {
     }
 }
 
+/// Double-buffered snapshot of T
+///
+/// Provides lock-free reads/write API
 pub struct Snapshot<T: Default> {
-    inner: AtomicPtr<T>,
-}
-
-impl<T: Default> Snapshot<T> {
-    pub fn new(initial: Arc<T>) -> Self {
-        let ptr = Arc::into_raw(initial) as *mut T;
-        Self {
-            inner: AtomicPtr::new(ptr),
-        }
-    }
-
-    /// Get a cloned Arc<T> for readers (lock-free)
-    pub fn get(&self) -> Arc<T> {
-        let ptr = self.inner.load(std::sync::atomic::Ordering::Acquire);
-        // SAFETY: we never deallocate this pointer while in use
-        unsafe {
-            Arc::increment_strong_count(ptr);
-            Arc::from_raw(ptr)
-        }
-    }
-
-    /// Atomically replace the snapshot (writer-only)
-    pub fn update(&self, new_book: Arc<T>) {
-        let new_ptr = Arc::into_raw(new_book) as *mut T;
-        let old_ptr = self
-            .inner
-            .swap(new_ptr, std::sync::atomic::Ordering::Release);
-
-        // SAFETY: we must drop the old Arc so it doesn't leak
-        unsafe { drop(Arc::from_raw(old_ptr)) };
-    }
+    a: AtomicPtr<T>,
+    b: AtomicPtr<T>,
 }
 
 impl<T: Default> Default for Snapshot<T> {
     fn default() -> Self {
-        Self::new(Arc::new(T::default()))
+        Self::new(T::default(), T::default())
+    }
+}
+
+impl<T: Default> Snapshot<T> {
+    /// Create a new double buffer from two initial values.
+    pub fn new(a: T, b: T) -> Self {
+        let a = Box::into_raw(Box::new(a));
+        let b = Box::into_raw(Box::new(b));
+        Self {
+            a: AtomicPtr::new(a),
+            b: AtomicPtr::new(b),
+        }
+    }
+
+    /// Read the snapshot
+    #[inline]
+    pub fn read(&self) -> &T {
+        unsafe { &*self.a.load(std::sync::atomic::Ordering::Acquire) }
+    }
+
+    /// Write the snapshot
+    #[inline]
+    pub fn write<F>(&self, f: F)
+    where
+        F: FnOnce(&mut T),
+    {
+        let b = unsafe { &mut *self.b.load(std::sync::atomic::Ordering::Relaxed) };
+        f(b);
+        self.swap();
+    }
+
+    /// atomic swap of a/b pointers.
+    #[inline]
+    fn swap(&self) {
+        let a_ptr = self.a.load(std::sync::atomic::Ordering::Acquire);
+        let b_ptr = self.b.load(std::sync::atomic::Ordering::Acquire);
+        self.a.store(b_ptr, std::sync::atomic::Ordering::Release);
+        self.b.store(a_ptr, std::sync::atomic::Ordering::Release);
     }
 }
 
 impl<T: Default> Drop for Snapshot<T> {
     fn drop(&mut self) {
-        let ptr = self.inner.load(std::sync::atomic::Ordering::Acquire);
-        // SAFETY: we own the pointer and can safely drop it
-        unsafe { drop(Arc::from_raw(ptr)) };
+        unsafe {
+            let a_ptr = self.a.load(std::sync::atomic::Ordering::Relaxed);
+            let b_ptr = self.b.load(std::sync::atomic::Ordering::Relaxed);
+
+            // Only drop non-null pointers to avoid double-free
+            if !a_ptr.is_null() {
+                drop(Box::from_raw(a_ptr));
+            }
+            if !b_ptr.is_null() {
+                drop(Box::from_raw(b_ptr));
+            }
+        }
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct CrossingOrder {
+    pub order_view: LimitOrderView,
+    pub metadata: OrderMetadata,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct CrossingRegion {
+    pub slot: u64,
+    pub crossing_bids: Vec<CrossingOrder>,
+    pub crossing_asks: Vec<CrossingOrder>,
 }

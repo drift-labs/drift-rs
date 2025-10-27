@@ -6,6 +6,13 @@ edition = "2021"
 [dependencies]
 dotenv = "0.15.0"
 drift-rs = { path = "../../../drift-rs", features = ["unsafe_pub"] }
+env_logger = "*"
 solana-commitment-config = "2"
 solana-keypair= "2"
 tokio = "*"
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+notify = "6.1"
