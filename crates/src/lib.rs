@@ -3082,6 +3082,64 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
+    /// Liquidate a spot position for a given user account.
+    ///
+    /// The liquidator will be the subaccount associated with this `TransactionBuilder` (i.e., the builder's default subaccount).
+    ///
+    /// # Parameters
+    /// - `asset_market_index`: The index of the spot market to use as collateral.
+    /// - `liability_market_index`: The market index of liquidatee position.
+    /// - `user_account`: the user account to liquidate (liquidatee)
+    /// - `liquidator_max_liability_transfer`: The maximum base asset amount the liquidator is willing to liquidate.
+    /// - `limit_price`: Optional limit price for the liquidation (if `None`, no limit is set).
+    ///
+    /// # Returns
+    /// Returns an updated `TransactionBuilder` with the liquidation instruction appended.
+    pub fn liquidate_spot(
+        mut self,
+        asset_market_index: u16,
+        liability_market_index: u16,
+        user_account: &User,
+        liquidator_max_liability_transfer: u128,
+        limit_price: Option<u64>,
+    ) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::LiquidateSpot {
+                state: *state_account(),
+                authority: self.authority,
+                user: Wallet::derive_user_account(
+                    &user_account.authority,
+                    user_account.sub_account_id,
+                ),
+                user_stats: Wallet::derive_stats_account(&user_account.authority),
+                liquidator: self.sub_account,
+                liquidator_stats: Wallet::derive_stats_account(&self.owner()),
+            },
+            [&self.account_data, user_account].into_iter(),
+            std::iter::empty(),
+            [
+                MarketId::spot(asset_market_index),
+                MarketId::spot(liability_market_index),
+            ]
+            .iter(),
+        );
+
+        let liquidate_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::LiquidateSpot {
+                asset_market_index,
+                liability_market_index,
+                liquidator_max_liability_transfer,
+                limit_price,
+            }),
+        };
+
+        self.ixs.push(liquidate_ix);
+        self
+    }
+
     /// Liquidate a perp position for a given user.
     ///
     /// This method constructs a liquidation instruction for a perpetual market position.
