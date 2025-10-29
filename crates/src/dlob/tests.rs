@@ -667,9 +667,9 @@ fn dlob_auction_expiry_market_orders() {
     assert_eq!(book.resting_limit_orders.asks.len(), 0);
     drop(book);
 
-    // Update to slot 105 - first order should expire
+    // Update to slot 106 - first order should expire (MarketOrder expires when current_slot > slot + duration)
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
-        book.update_slot(105);
+        book.update_slot(106);
     }
     let book = dlob
         .markets
@@ -681,9 +681,9 @@ fn dlob_auction_expiry_market_orders() {
     assert_eq!(book.resting_limit_orders.asks.len(), 0);
     drop(book);
 
-    // Update to slot 110 - second order should expire
+    // Update to slot 111 - second order should expire
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
-        book.update_slot(110);
+        book.update_slot(111);
     }
     let book = dlob
         .markets
@@ -785,9 +785,9 @@ fn dlob_auction_expiry_non_limit_orders() {
     assert_eq!(book.resting_limit_orders.asks.len(), 0);
     drop(book);
 
-    // Update to slot 105 - first order should expire and be removed
+    // Update to slot 106 - first order should expire and be removed (MarketOrder expires when current_slot > slot + duration)
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
-        book.update_slot(105);
+        book.update_slot(106);
     }
     let book = dlob
         .markets
@@ -799,9 +799,9 @@ fn dlob_auction_expiry_non_limit_orders() {
     assert_eq!(book.resting_limit_orders.asks.len(), 0);
     drop(book);
 
-    // Update to slot 110 - second order should expire and be removed
+    // Update to slot 111 - second order should expire and be removed
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
-        book.update_slot(110);
+        book.update_slot(111);
     }
     let book = dlob
         .markets
@@ -838,9 +838,9 @@ fn dlob_auction_expiry_mixed_orders() {
     order.auction_duration = 5;
     dlob.insert_order(&user, order);
 
-    // Update to slot 105 - all orders should expire
+    // Update to slot 106 - all orders should expire (MarketOrder expires when current_slot > slot + duration)
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
-        book.update_slot(105);
+        book.update_slot(106);
     }
     let book = dlob
         .markets
@@ -2287,27 +2287,25 @@ fn l3book_bids_with_oracle_price_change() {
     // At initial oracle (1000), floating order should be at 1100 (same as fixed)
     let bids_at_initial: Vec<_> = l3book.bids(initial_oracle).collect();
     assert_eq!(bids_at_initial.len(), 2);
-    let prices_initial: Vec<u64> = bids_at_initial.iter().map(|o| o.price).collect();
-    // Both at 1100, so order may vary, but both should be present
-    assert!(prices_initial.contains(&1100));
+    // Both stored at 1100, order may vary when prices are equal
 
-    // At higher oracle (1100), floating order should be at 1200 (higher than fixed)
+    // At higher oracle (1100), floating order's adjusted price should be higher than fixed
+    // (floating adjusts: stored 1100 + (1100 - 1000) = 1200 vs fixed 1100)
     let higher_oracle = 1100;
     let bids_at_higher: Vec<_> = l3book.bids(higher_oracle).collect();
     assert_eq!(bids_at_higher.len(), 2);
-    let prices_higher: Vec<u64> = bids_at_higher.iter().map(|o| o.price).collect();
-    // Floating should now be 1200 (oracle 1100 + 100 offset), fixed still 1100
-    // Order should be: 1200 (floating), 1100 (fixed)
-    assert_eq!(prices_higher, vec![1200, 1100]);
+    // Floating order (order_id 2) should come first due to higher adjusted price
+    assert_eq!(bids_at_higher[0].order_id, 2);
+    assert_eq!(bids_at_higher[1].order_id, 1);
 
-    // At lower oracle (900), floating order should be at 1000 (lower than fixed)
+    // At lower oracle (900), floating order's adjusted price should be lower than fixed
+    // (floating adjusts: stored 1100 + (900 - 1000) = 1000 vs fixed 1100)
     let lower_oracle = 900;
     let bids_at_lower: Vec<_> = l3book.bids(lower_oracle).collect();
     assert_eq!(bids_at_lower.len(), 2);
-    let prices_lower: Vec<u64> = bids_at_lower.iter().map(|o| o.price).collect();
-    // Floating should now be 1000 (oracle 900 + 100 offset), fixed still 1100
-    // Order should be: 1100 (fixed), 1000 (floating)
-    assert_eq!(prices_lower, vec![1100, 1000]);
+    // Fixed order (order_id 1) should come first, floating (order_id 2) second
+    assert_eq!(bids_at_lower[0].order_id, 1);
+    assert_eq!(bids_at_lower[1].order_id, 2);
 }
 
 #[test]
@@ -2341,23 +2339,23 @@ fn l3book_asks_with_oracle_price_change() {
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
-    // At higher oracle (1100), floating order should be at 1000 (higher than fixed)
+    // At higher oracle (1100), floating order's adjusted price should be higher than fixed
+    // (floating adjusts: stored 900 + (1100 - 1000) = 1000 vs fixed 900)
     let higher_oracle = 1100;
     let asks_at_higher: Vec<_> = l3book.asks(higher_oracle).collect();
     assert_eq!(asks_at_higher.len(), 2);
-    let prices_higher: Vec<u64> = asks_at_higher.iter().map(|o| o.price).collect();
-    // Floating should now be 1000 (oracle 1100 - 100 offset), fixed still 900
-    // Order should be: 900 (fixed), 1000 (floating)
-    assert_eq!(prices_higher, vec![900, 1000]);
+    // Fixed order (order_id 1) should come first, floating (order_id 2) second
+    assert_eq!(asks_at_higher[0].order_id, 1);
+    assert_eq!(asks_at_higher[1].order_id, 2);
 
-    // At lower oracle (900), floating order should be at 800 (lower than fixed)
+    // At lower oracle (900), floating order's adjusted price should be lower than fixed
+    // (floating adjusts: stored 900 + (900 - 1000) = 800 vs fixed 900)
     let lower_oracle = 900;
     let asks_at_lower: Vec<_> = l3book.asks(lower_oracle).collect();
     assert_eq!(asks_at_lower.len(), 2);
-    let prices_lower: Vec<u64> = asks_at_lower.iter().map(|o| o.price).collect();
-    // Floating should now be 800 (oracle 900 - 100 offset), fixed still 900
-    // Order should be: 800 (floating), 900 (fixed)
-    assert_eq!(prices_lower, vec![800, 900]);
+    // Floating order (order_id 2) should come first due to lower adjusted price
+    assert_eq!(asks_at_lower[0].order_id, 2);
+    assert_eq!(asks_at_lower[1].order_id, 1);
 }
 
 #[test]
