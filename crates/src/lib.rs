@@ -3140,6 +3140,160 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
+    /// Liquidate a spot position using an external swap (begin phase)
+    ///
+    /// This is the first step of a two phase liquidation that involves swapping collateral.
+    /// Must be followed by an external swap instruction and then liquidate_spot_with_swap_end.
+    ///
+    /// # Parameters
+    /// - `asset_market_index`: The spot market index of the asset (collateral)
+    /// - `liability_market_index`: The spot market index of the liability (borrow)
+    /// - `swap_amount`: The amount to swap
+    /// - `user_account`: The user account being liquidated
+    ///
+    /// # Returns
+    /// Returns the updated `TransactionBuilder` with the instruction appended.
+    pub fn liquidate_spot_with_swap_begin(
+        mut self,
+        asset_market_index: u16,
+        liability_market_index: u16,
+        swap_amount: u64,
+        user_account: &User,
+    ) -> Self {
+        let asset_spot_market = self
+            .program_data
+            .spot_market_config_by_index(asset_market_index)
+            .expect("asset spot market exists");
+        let liability_spot_market = self
+            .program_data
+            .spot_market_config_by_index(liability_market_index)
+            .expect("liability spot market exists");
+
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::LiquidateSpotWithSwapBegin {
+                state: *state_account(),
+                authority: self.authority,
+                liquidator: self.sub_account,
+                liquidator_stats: Wallet::derive_stats_account(&self.owner()),
+                user: Wallet::derive_user_account(
+                    &user_account.authority,
+                    user_account.sub_account_id,
+                ),
+                user_stats: Wallet::derive_stats_account(&user_account.authority),
+                liability_spot_market_vault: liability_spot_market.vault,
+                asset_spot_market_vault: asset_spot_market.vault,
+                liability_token_account: Wallet::derive_associated_token_address(
+                    &self.authority,
+                    liability_spot_market,
+                ),
+                asset_token_account: Wallet::derive_associated_token_address(
+                    &self.authority,
+                    asset_spot_market,
+                ),
+                token_program: liability_spot_market.token_program(),
+                drift_signer: constants::derive_drift_signer(),
+                instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+            },
+            [&self.account_data, user_account].into_iter(),
+            std::iter::empty(),
+            [
+                MarketId::spot(asset_market_index),
+                MarketId::spot(liability_market_index),
+            ]
+            .iter(),
+        );
+
+        let liquidate_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::LiquidateSpotWithSwapBegin {
+                asset_market_index,
+                liability_market_index,
+                swap_amount,
+            }),
+        };
+
+        self.ixs.push(liquidate_ix);
+        self
+    }
+
+    /// Liquidate a spot position using an external swap (end phase)
+    ///
+    /// This completes the liquidation after the external swap has been executed.
+    /// Must be preceded by liquidate_spot_with_swap_begin and an external swap instruction.
+    ///
+    ///
+    /// # Parameters
+    /// - `asset_market_index`: The spot market index of the asset (collateral)
+    /// - `liability_market_index`: The spot market index of the liability (borrow)
+    /// - `user_account`: The user account being liquidated
+    ///
+    /// # Returns
+    /// Returns the updated `TransactionBuilder` with the instruction appended.
+    pub fn liquidate_spot_with_swap_end(
+        mut self,
+        asset_market_index: u16,
+        liability_market_index: u16,
+        user_account: &User,
+    ) -> Self {
+        let asset_spot_market = self
+            .program_data
+            .spot_market_config_by_index(asset_market_index)
+            .expect("asset spot market exists");
+        let liability_spot_market = self
+            .program_data
+            .spot_market_config_by_index(liability_market_index)
+            .expect("liability spot market exists");
+
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::LiquidateSpotWithSwapEnd {
+                state: *state_account(),
+                authority: self.authority,
+                liquidator: self.sub_account,
+                liquidator_stats: Wallet::derive_stats_account(&self.owner()),
+                user: Wallet::derive_user_account(
+                    &user_account.authority,
+                    user_account.sub_account_id,
+                ),
+                user_stats: Wallet::derive_stats_account(&user_account.authority),
+                liability_spot_market_vault: liability_spot_market.vault,
+                asset_spot_market_vault: asset_spot_market.vault,
+                liability_token_account: Wallet::derive_associated_token_address(
+                    &self.authority,
+                    liability_spot_market,
+                ),
+                asset_token_account: Wallet::derive_associated_token_address(
+                    &self.authority,
+                    asset_spot_market,
+                ),
+                token_program: liability_spot_market.token_program(),
+                drift_signer: constants::derive_drift_signer(),
+                instructions: SYSVAR_INSTRUCTIONS_PUBKEY,
+            },
+            [&self.account_data, user_account].into_iter(),
+            std::iter::empty(),
+            [
+                MarketId::spot(asset_market_index),
+                MarketId::spot(liability_market_index),
+            ]
+            .iter(),
+        );
+
+        let liquidate_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::LiquidateSpotWithSwapEnd {
+                asset_market_index,
+                liability_market_index,
+            }),
+        };
+
+        self.ixs.push(liquidate_ix);
+        self
+    }
+
     /// Liquidate a perp position for a given user.
     ///
     /// This method constructs a liquidation instruction for a perpetual market position.
