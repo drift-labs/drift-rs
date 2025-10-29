@@ -1,4 +1,7 @@
-use std::{fmt::Debug, sync::atomic::AtomicPtr};
+use std::{
+    fmt::Debug,
+    sync::{atomic::AtomicPtr, Arc},
+};
 
 use arrayvec::ArrayVec;
 use solana_sdk::pubkey::Pubkey;
@@ -8,8 +11,8 @@ use crate::{
     ffi::{calculate_auction_price, OraclePriceData},
     math::standardize_price,
     types::{
-        accounts::PerpMarket, MarketType, Order, OrderParams, OrderStatus, OrderTriggerCondition,
-        OrderType, SdkResult,
+        accounts::PerpMarket, MarketId, MarketType, Order, OrderParams, OrderStatus,
+        OrderTriggerCondition, OrderType, SdkResult,
     },
 };
 
@@ -45,6 +48,17 @@ pub enum OrderKind {
     MarketTriggered,
     /// Triggered limit order
     LimitTriggered,
+}
+
+impl OrderKind {
+    /// Returns true if the order is a taker order
+    pub fn is_taker(&self) -> bool {
+        !self.is_maker()
+    }
+    /// Returns true if the order is a maker order
+    pub fn is_maker(&self) -> bool {
+        matches!(self, OrderKind::Limit | OrderKind::FloatingLimit)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy, PartialEq)]
@@ -126,8 +140,12 @@ impl MakerCrosses {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum DLOBEvent {
-    /// market oracle and/or slot change
-    SlotUpdate { slot: u64 },
+    /// dlob slot and/or oracle update
+    SlotAndOracleUpdate {
+        slot: u64,
+        oracle_price: u64,
+        market: MarketId,
+    },
     /// user order deltas
     Deltas { deltas: Vec<OrderDelta>, slot: u64 },
 }
@@ -154,7 +172,7 @@ impl OrderKey for MarketOrder {
 impl MarketOrder {
     /// Check if this auction order has completed
     pub fn is_auction_complete(&self, current_slot: u64) -> bool {
-        (self.slot + self.duration as u64) <= current_slot
+        current_slot.saturating_sub(self.slot) > self.duration as u64
     }
 
     /// Convert to LimitOrder when auction completes
@@ -546,22 +564,22 @@ impl From<(u64, Order)> for TriggerOrder {
 /// Double-buffered snapshot of T
 ///
 /// Provides lock-free reads/write API
-pub struct Snapshot<T: Default> {
+pub struct Snapshot<T: Default + Clone> {
     a: AtomicPtr<T>,
     b: AtomicPtr<T>,
 }
 
-impl<T: Default> Default for Snapshot<T> {
+impl<T: Default + Clone> Default for Snapshot<T> {
     fn default() -> Self {
         Self::new(T::default(), T::default())
     }
 }
 
-impl<T: Default> Snapshot<T> {
+impl<T: Default + Clone> Snapshot<T> {
     /// Create a new double buffer from two initial values.
     pub fn new(a: T, b: T) -> Self {
-        let a = Box::into_raw(Box::new(a));
-        let b = Box::into_raw(Box::new(b));
+        let a = Arc::into_raw(Arc::new(a)) as *mut T;
+        let b = Arc::into_raw(Arc::new(b)) as *mut T;
         Self {
             a: AtomicPtr::new(a),
             b: AtomicPtr::new(b),
@@ -570,8 +588,12 @@ impl<T: Default> Snapshot<T> {
 
     /// Read the snapshot
     #[inline]
-    pub fn read(&self) -> &T {
-        unsafe { &*self.a.load(std::sync::atomic::Ordering::Acquire) }
+    pub fn read(&self) -> Arc<T> {
+        unsafe {
+            let ptr = self.a.load(std::sync::atomic::Ordering::Acquire);
+            Arc::increment_strong_count(ptr);
+            Arc::from_raw(ptr)
+        }
     }
 
     /// Write the snapshot
@@ -580,8 +602,12 @@ impl<T: Default> Snapshot<T> {
     where
         F: FnOnce(&mut T),
     {
-        let b = unsafe { &mut *self.b.load(std::sync::atomic::Ordering::Relaxed) };
-        f(b);
+        let b_ptr = self.b.load(std::sync::atomic::Ordering::Relaxed);
+        let b = unsafe { Arc::from_raw(b_ptr as *const T) };
+        let mut b_mut = Arc::try_unwrap(b).unwrap_or_else(|arc| (*arc).clone());
+        f(&mut b_mut);
+        let new_b = Arc::into_raw(Arc::new(b_mut)) as *mut T;
+        self.b.store(new_b, std::sync::atomic::Ordering::Relaxed);
         self.swap();
     }
 
@@ -595,7 +621,7 @@ impl<T: Default> Snapshot<T> {
     }
 }
 
-impl<T: Default> Drop for Snapshot<T> {
+impl<T: Default + Clone> Drop for Snapshot<T> {
     fn drop(&mut self) {
         unsafe {
             let a_ptr = self.a.load(std::sync::atomic::Ordering::Relaxed);
@@ -603,10 +629,10 @@ impl<T: Default> Drop for Snapshot<T> {
 
             // Only drop non-null pointers to avoid double-free
             if !a_ptr.is_null() {
-                drop(Box::from_raw(a_ptr));
+                drop(Arc::from_raw(a_ptr));
             }
             if !b_ptr.is_null() {
-                drop(Box::from_raw(b_ptr));
+                drop(Arc::from_raw(b_ptr));
             }
         }
     }
@@ -623,4 +649,87 @@ pub struct CrossingRegion {
     pub slot: u64,
     pub crossing_bids: Vec<CrossingOrder>,
     pub crossing_asks: Vec<CrossingOrder>,
+}
+
+#[derive(Debug, Clone)]
+pub struct L3Order {
+    /// point in time limit price of the order at some slot & oracle price
+    pub price: u64,
+    /// base asset amount of the order
+    pub size: u64,
+    /// order expiry ts
+    pub max_ts: u64,
+    /// program assigned order id
+    pub order_id: u32,
+    pub kind: OrderKind,
+    /// user subaccount of the order
+    pub user: Pubkey,
+    /// internal order flags
+    pub(crate) flags: u8,
+}
+
+impl L3Order {
+    /// when set indicates order is reduce only
+    pub(crate) const RO_FLAG: u8 = 0b1000_0000;
+    /// When set indicates order direction is long
+    pub(crate) const IS_LONG: u8 = 0b0100_0000;
+    /// when set and order kind is trigger, this bit indicates 'trigger above'
+    /// conversely, 'trigger below' when unset
+    pub(crate) const IS_TRIGGER_ABOVE: u8 = 0b0010_0000;
+    /// True if this is a long order, false otherwise
+    pub fn is_long(&self) -> bool {
+        self.flags & Self::IS_LONG > 0
+    }
+    /// True if this is a reduce only order, false otherwise
+    pub fn is_reduce_only(&self) -> bool {
+        self.flags & Self::RO_FLAG > 0
+    }
+    pub fn is_trigger_above(&self) -> bool {
+        self.flags & Self::IS_TRIGGER_ABOVE > 0
+    }
+    /// Calculate the 'limit' price of an _untriggered_ perp trigger order
+    ///
+    /// i.e. if order was triggered onchain immediately at the current `slot` and `oracle_price`
+    pub fn post_trigger_price(
+        &self,
+        slot: u64,
+        oracle_price: u64,
+        perp_market: &PerpMarket,
+    ) -> Option<u64> {
+        if matches!(
+            self.kind,
+            OrderKind::TriggerMarket | OrderKind::TriggerLimit
+        ) {
+            let condition = if self.flags & Self::IS_TRIGGER_ABOVE > 0 {
+                OrderTriggerCondition::Above
+            } else {
+                OrderTriggerCondition::Below
+            };
+            let order = TriggerOrder {
+                id: 0,
+                size: self.size,
+                reduce_only: self.is_reduce_only(),
+                max_ts: self.max_ts,
+                direction: if self.is_long() {
+                    Direction::Long
+                } else {
+                    Direction::Short
+                },
+                condition,
+                slot,
+                ..Default::default()
+            };
+            order.get_price(slot, oracle_price, Some(perp_market)).ok()
+        } else {
+            None
+        }
+    }
+    /// True if order is maker only
+    pub fn is_maker(&self) -> bool {
+        self.kind.is_maker()
+    }
+    /// True if order is taker only
+    pub fn is_taker(&self) -> bool {
+        self.kind.is_taker()
+    }
 }

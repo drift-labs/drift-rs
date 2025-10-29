@@ -3,7 +3,10 @@ use std::{
     collections::BTreeMap,
     fmt::Debug,
     iter::Peekable,
-    sync::atomic::AtomicU64,
+    sync::{
+        atomic::{AtomicBool, AtomicU64},
+        Arc,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -37,7 +40,7 @@ const TARGET: &str = "dlob";
 type Direction = PositionDirection;
 type MetadataMap = DashMap<u64, OrderMetadata, FxBuildHasher>;
 
-/// Collection of orders with fixed prices e.g. resting limit orders
+/// Collection of orders
 #[derive(Debug)]
 struct Orders<T: OrderKey + Debug + Clone> {
     pub bids: BTreeMap<Reverse<T::Key>, T>,
@@ -126,17 +129,21 @@ struct Orderbook {
     /// list of (un)triggered orders
     /// triggered orders are moved to market_orders or oracle_orders
     trigger_orders: Orders<TriggerOrder>,
+    /// L2 book snapshot
+    l2_snapshot: Snapshot<L2Book>,
+    /// L3 book snapshot
+    l3_snapshot: Snapshot<L3Book>,
     /// market tick size
     market_tick_size: u64,
     /// slot where dynamic orders where last checked
     last_modified_slot: u64,
     /// market index of this book
-    market_index: u16,
+    market: MarketId,
 }
 
 impl Orderbook {
     /// Create a new Orderbook with object pools for efficient memory management
-    pub fn new(market_index: u16, market_tick_size: u64) -> Self {
+    pub fn new(market: MarketId, market_tick_size: u64) -> Self {
         Self {
             market_orders: Orders::default(),
             oracle_orders: Orders::default(),
@@ -145,13 +152,29 @@ impl Orderbook {
             trigger_orders: Orders::default(),
             market_tick_size,
             last_modified_slot: 0,
-            market_index,
+            market,
+            l2_snapshot: Default::default(),
+            l3_snapshot: Default::default(),
         }
+    }
+
+    /// Update the L2 snapshot
+    pub fn update_l2_view(&self, oracle_price: u64) {
+        self.l2_snapshot.write(|b| {
+            b.load_orderbook(&self, oracle_price);
+        });
+    }
+
+    /// Update the L3 snapshot
+    pub fn update_l3_view(&self, oracle_price: u64, metadata: &MetadataMap) {
+        self.l3_snapshot.write(|b| {
+            b.load_orderbook(&self, oracle_price, metadata);
+        });
     }
 
     /// Update auction order prices to new `slot`
     pub fn update_slot(&mut self, slot: u64) {
-        log::trace!(target: TARGET,"update book slot. market:{},slot:{slot}", self.market_index);
+        log::trace!(target: TARGET,"update book slot. market:{},slot:{slot}", self.market.index());
         self.expire_auction_orders(slot);
         self.last_modified_slot = slot;
     }
@@ -212,108 +235,6 @@ impl Orderbook {
             }
             !is_auction_complete
         });
-    }
-
-    pub fn get_maker_bids_l3(&self, oracle_price: u64, metadata: &MetadataMap) -> Vec<L3Order> {
-        let mut result = Vec::with_capacity(
-            self.resting_limit_orders.bids.len() + self.floating_limit_orders.bids.len(),
-        );
-        let buffer_s = 4;
-        let now_unix_s = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-            + buffer_s;
-
-        result.extend(
-            self.resting_limit_orders
-                .bids
-                .values()
-                .filter(|o| !o.is_expired(now_unix_s))
-                .filter_map(|o| {
-                    metadata.get(&o.id).map(|meta| L3Order {
-                        price: o.get_price(),
-                        max_ts: o.max_ts,
-                        size: o.size,
-                        reduce_only: o.reduce_only,
-                        order_id: meta.order_id,
-                        user: meta.user,
-                        kind: meta.kind,
-                    })
-                }),
-        );
-        result.extend(
-            self.floating_limit_orders
-                .bids
-                .values()
-                .filter(|o| !o.is_expired(now_unix_s))
-                .filter_map(|o| {
-                    metadata.get(&o.id).map(|meta| L3Order {
-                        price: o.get_price(oracle_price, self.market_tick_size),
-                        max_ts: o.max_ts,
-                        size: o.size,
-                        reduce_only: o.reduce_only,
-                        order_id: meta.order_id,
-                        user: meta.user,
-                        kind: meta.kind,
-                    })
-                }),
-        );
-
-        // Sort by price in descending order (best bid first)
-        result.sort_by(|a, b| b.price.cmp(&a.price));
-        result
-    }
-
-    pub fn get_maker_asks_l3(&self, oracle_price: u64, metadata: &MetadataMap) -> Vec<L3Order> {
-        let mut result = Vec::with_capacity(
-            self.resting_limit_orders.asks.len() + self.floating_limit_orders.asks.len(),
-        );
-        let buffer_s = 4;
-        let now_unix_s = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-            + buffer_s;
-
-        result.extend(
-            self.resting_limit_orders
-                .asks
-                .values()
-                .filter(|o| !o.is_expired(now_unix_s))
-                .filter_map(|o| {
-                    metadata.get(&o.id).map(|meta| L3Order {
-                        price: o.get_price(),
-                        max_ts: o.max_ts,
-                        size: o.size,
-                        reduce_only: o.reduce_only,
-                        order_id: meta.order_id,
-                        user: meta.user,
-                        kind: meta.kind,
-                    })
-                }),
-        );
-        result.extend(
-            self.floating_limit_orders
-                .asks
-                .values()
-                .filter(|o| !o.is_expired(now_unix_s))
-                .filter_map(|o| {
-                    metadata.get(&o.id).map(|meta| L3Order {
-                        price: o.get_price(oracle_price, self.market_tick_size),
-                        max_ts: o.max_ts,
-                        size: o.size,
-                        reduce_only: o.reduce_only,
-                        order_id: meta.order_id,
-                        user: meta.user,
-                        kind: meta.kind,
-                    })
-                }),
-        );
-
-        // Sort by price in ascending order (best ask first - lowest price)
-        result.sort_by(|a, b| a.price.cmp(&b.price));
-        result
     }
 
     fn get_limit_bids(&self, oracle_price: u64) -> Vec<LimitOrderView> {
@@ -444,85 +365,6 @@ impl Orderbook {
         result
     }
 
-    /// Get taker ask orders (market, oracle, trigger orders)
-    /// Orders are sorted by price ascending (best ask first).
-    ///
-    /// # Parameters
-    ///
-    /// * `oracle_price` - Current oracle price for dynamic order pricing
-    /// * `trigger_price` - Price threshold for trigger order evaluation
-    /// * `perp_market` - Optional perp market for trigger order price calculations
-    /// * `metadata` - Order metadata map for user and order information
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Vec<L3Order>` containing detailed taker ask orders sorted by price ascending.
-    pub fn get_taker_asks_l3(
-        &self,
-        oracle_price: u64,
-        trigger_price: u64,
-        perp_market: Option<&PerpMarket>,
-        metadata: &MetadataMap,
-    ) -> Vec<L3Order> {
-        let mut result = Vec::with_capacity(
-            self.market_orders.asks.len()
-                + self.oracle_orders.asks.len()
-                + self.trigger_orders.asks.len(),
-        );
-        let slot = self.last_modified_slot;
-
-        result.extend(self.market_orders.asks.values().filter_map(|o| {
-            metadata.get(&o.id).map(|meta| L3Order {
-                price: o.get_price(slot, oracle_price, self.market_tick_size),
-                max_ts: o.max_ts,
-                size: o.size,
-                reduce_only: o.reduce_only,
-                order_id: meta.order_id,
-                user: meta.user,
-                kind: meta.kind,
-            })
-        }));
-        result.extend(self.oracle_orders.asks.values().filter_map(|o| {
-            metadata.get(&o.id).map(|meta| L3Order {
-                price: o.get_price(slot, oracle_price, self.market_tick_size),
-                max_ts: o.max_ts,
-                size: o.size(),
-                reduce_only: o.reduce_only,
-                order_id: meta.order_id,
-                user: meta.user,
-                kind: meta.kind,
-            })
-        }));
-        let unix_now_s = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        result.extend(self.trigger_orders.asks.values().filter_map(|o| {
-            // checking untriggered orders that will trigger at current oracle price
-            if o.will_trigger_at(trigger_price) {
-                o.get_price(slot, oracle_price, perp_market)
-                    .ok()
-                    .and_then(|price| {
-                        metadata.get(&o.id).map(|meta| L3Order {
-                            price,
-                            max_ts: o.max_ts.max(unix_now_s + 30),
-                            size: o.size,
-                            reduce_only: o.reduce_only,
-                            order_id: meta.order_id,
-                            user: meta.user,
-                            kind: meta.kind,
-                        })
-                    })
-            } else {
-                None
-            }
-        }));
-
-        // Sort by price in ascending order (best ask first)
-        result.sort_by(|a, b| a.price.cmp(&b.price));
-        result
-    }
-
     fn get_taker_bids(
         &self,
         min_slot: u64,
@@ -571,92 +413,6 @@ impl Orderbook {
 
         // Sort by price in descending order (best bid first)
         result.sort_by(|a, b| b.1.cmp(&a.1));
-        result
-    }
-
-    /// Get taker bid orders (market, oracle, trigger orders)
-    /// Orders are sorted by price descending (best bid first).
-    ///
-    /// # Parameters
-    ///
-    /// * `oracle_price` - Current oracle price for dynamic order pricing
-    /// * `trigger_price` - Price threshold for trigger order evaluation
-    /// * `perp_market` - Optional perp market for trigger order price calculations
-    /// * `metadata` - Order metadata map for user and order information
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Vec<L3Order>` containing detailed taker bid orders sorted by price descending.
-    pub fn get_taker_bids_l3(
-        &self,
-        oracle_price: u64,
-        trigger_price: u64,
-        perp_market: Option<&PerpMarket>,
-        metadata: &MetadataMap,
-    ) -> Vec<L3Order> {
-        let mut result = Vec::with_capacity(
-            self.market_orders.bids.len()
-                + self.oracle_orders.bids.len()
-                + self.trigger_orders.bids.len(),
-        );
-        let slot = self.last_modified_slot;
-
-        result.extend(self.market_orders.bids.values().filter_map(|o| {
-            metadata.get(&o.id).map(|meta| L3Order {
-                price: o.get_price(slot, oracle_price, self.market_tick_size),
-                max_ts: o.max_ts,
-                size: o.size,
-                reduce_only: o.reduce_only,
-                order_id: meta.order_id,
-                user: meta.user,
-                kind: meta.kind,
-            })
-        }));
-        result.extend(self.oracle_orders.bids.values().filter_map(|o| {
-            metadata.get(&o.id).map(|meta| L3Order {
-                price: o.get_price(slot, oracle_price, self.market_tick_size),
-                max_ts: o.max_ts,
-                size: o.size(),
-                reduce_only: o.reduce_only,
-                order_id: meta.order_id,
-                user: meta.user,
-                kind: meta.kind,
-            })
-        }));
-
-        let unix_now_s = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        result.extend(
-            self.trigger_orders
-                .bids
-                .values()
-                // rely on trigger order sorting for early exit
-                .filter_map(|o| {
-                    // checking untriggered orders that will trigger at current oracle price
-                    if o.will_trigger_at(trigger_price) {
-                        o.get_price(slot, oracle_price, perp_market)
-                            .ok()
-                            .and_then(|price| {
-                                metadata.get(&o.id).map(|meta| L3Order {
-                                    price,
-                                    max_ts: o.max_ts.max(unix_now_s + 30), // 30s is the default max_ts
-                                    size: o.size,
-                                    reduce_only: o.reduce_only,
-                                    order_id: meta.order_id,
-                                    user: meta.user,
-                                    kind: meta.kind,
-                                })
-                            })
-                    } else {
-                        None
-                    }
-                }),
-        );
-
-        // Sort by price in descending order (best bid first)
-        result.sort_by(|a, b| b.price.cmp(&a.price));
         result
     }
 }
@@ -723,14 +479,24 @@ impl DLOBNotifier {
     }
 
     #[inline]
-    pub fn slot_update(&self, slot: u64) {
+    pub fn slot_and_oracle_update(&self, market: MarketId, slot: u64, oracle_price: u64) {
         self.sender
-            .send(DLOBEvent::SlotUpdate { slot })
+            .send(DLOBEvent::SlotAndOracleUpdate {
+                slot,
+                oracle_price,
+                market,
+            })
             .expect("Failed to send slot update event - channel may be closed");
     }
 }
 
 /// Aggregates orderbooks for multiple markets
+///
+/// The DLOB is incrementally built and event driven, consumers spawn the notifier and submit slot and user order updates
+/// to maintain live orderbook state.
+///
+/// Users can call [`get_l3_snapshot`](DLOB::get_l3_snapshot) to obtain an L3 snapshot
+/// and inspect the bids and asks through the returned `L3Book`.
 pub struct DLOB {
     /// Map from market to orderbook
     markets: DashMap<MarketId, Orderbook, FxBuildHasher>,
@@ -740,6 +506,10 @@ pub struct DLOB {
     program_data: &'static ProgramData,
     /// last slot update
     last_modified_slot: AtomicU64,
+    // Maintain live L2 snapshots (default: false)
+    enable_l2_snapshot: AtomicBool,
+    // Maintain live L3 snapshots (default: true)
+    enable_l3_snapshot: AtomicBool,
 }
 
 impl Default for DLOB {
@@ -749,20 +519,35 @@ impl Default for DLOB {
             metadata: DashMap::default(),
             program_data: Box::leak(Box::new(ProgramData::uninitialized())),
             last_modified_slot: Default::default(),
+            enable_l2_snapshot: AtomicBool::new(false),
+            enable_l3_snapshot: AtomicBool::new(true),
         }
     }
 }
 
 impl DLOB {
+    /// Enable live L2 snapshots for all orderbooks (default: disabled)
+    pub fn enable_l2_snapshot(&self) {
+        self.enable_l2_snapshot
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+    /// Disable live L3 snapshots for all orderbooks (default: enabled)
+    pub fn disable_l3_snapshot(&self) {
+        self.enable_l3_snapshot
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+    }
     /// Provides a writer channel into the DLOB which acts as a sink for external events
     pub fn spawn_notifier(&'static self) -> DLOBNotifier {
         let (tx, rx) = crossbeam::channel::bounded(2048);
         std::thread::spawn(move || {
-            dbg!(rx.len());
             while let Ok(event) = rx.recv() {
                 match event {
-                    DLOBEvent::SlotUpdate { slot } => {
-                        self.update_slot(slot);
+                    DLOBEvent::SlotAndOracleUpdate {
+                        market,
+                        slot,
+                        oracle_price,
+                    } => {
+                        self.update_slot_and_oracle_price(market, slot, oracle_price);
                     }
                     DLOBEvent::Deltas { slot, deltas } => {
                         for delta in deltas {
@@ -807,13 +592,13 @@ impl DLOB {
                     .map(|m| m.order_tick_size)
                     .unwrap_or(1),
             };
-            Orderbook::new(market_id.index(), market_tick_size)
+            Orderbook::new(*market_id, market_tick_size)
         });
         f(ob);
     }
 
-    /// Update orderbook slot for all markets
-    fn update_slot(&self, slot: u64) {
+    /// Update orderbook slot and oracle price for market
+    fn update_slot_and_oracle_price(&self, market: MarketId, slot: u64, oracle_price: u64) {
         let last_modified_slot = self
             .last_modified_slot
             .load(std::sync::atomic::Ordering::Relaxed);
@@ -825,152 +610,46 @@ impl DLOB {
             return;
         }
 
-        for mut market in self.markets.iter_mut() {
-            market.value_mut().update_slot(slot);
-        }
+        self.with_orderbook_mut(&market, |mut book| {
+            book.update_slot(slot);
+            if self
+                .enable_l2_snapshot
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                book.update_l2_view(oracle_price);
+            }
+            if self
+                .enable_l3_snapshot
+                .load(std::sync::atomic::Ordering::Relaxed)
+            {
+                book.update_l3_view(oracle_price, &self.metadata);
+            }
+        });
 
         self.last_modified_slot
             .store(slot, std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// Get an L2 book of current orders with `oracle_price`
+    /// Get an L2 book of current orders
     ///
-    /// It is valid for the current slot and oracle price
-    pub fn get_l2_book(
-        &self,
-        market_index: u16,
-        market_type: MarketType,
-        oracle_price: u64,
-    ) -> L2Book {
+    /// It is valid at the current slot
+    pub fn get_l2_snapshot(&self, market_index: u16, market_type: MarketType) -> Arc<L2Book> {
         let book = self
             .markets
             .get(&MarketId::new(market_index, market_type))
             .expect("orderbook exists for market");
-        L2Book::default().load_orderbook(&book, oracle_price)
+        book.l2_snapshot.read()
     }
 
-    /// Get an L3 book of current orders with `oracle_price`
+    /// Get an L3 book of current orders
     ///
-    /// It is valid for the current slot and oracle price
-    pub fn get_l3_book(
-        &self,
-        market_index: u16,
-        market_type: MarketType,
-        oracle_price: u64,
-    ) -> L3Book {
+    /// It is valid at the current slot
+    pub fn get_l3_snapshot(&self, market_index: u16, market_type: MarketType) -> Arc<L3Book> {
         let book = self
             .markets
             .get(&MarketId::new(market_index, market_type))
             .expect("orderbook exists for market");
-        L3Book::default().load_orderbook(&book, &self.metadata, oracle_price)
-    }
-
-    /// Get taker ask orders (market, oracle, trigger orders) for a specific market
-    /// Orders are sorted by price ascending (best ask first).
-    ///
-    /// # Parameters
-    ///
-    /// * `market_index` - The market index
-    /// * `market_type` - The market type (Perp or Spot)
-    /// * `oracle_price` - Current oracle price for dynamic order pricing
-    /// * `trigger_price` - Price threshold for trigger order evaluation
-    /// * `perp_market` - Optional perp market for trigger order price calculations
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Vec<L3Order>` containing detailed taker ask orders sorted by price ascending.
-    pub fn get_taker_asks_l3(
-        &self,
-        market_index: u16,
-        market_type: MarketType,
-        oracle_price: u64,
-        trigger_price: u64,
-        perp_market: Option<&PerpMarket>,
-    ) -> Vec<L3Order> {
-        let book = self
-            .markets
-            .get(&MarketId::new(market_index, market_type))
-            .expect("orderbook exists for market");
-        book.get_taker_asks_l3(oracle_price, trigger_price, perp_market, &self.metadata)
-    }
-
-    /// Get taker bid orders (market, oracle, trigger orders) for a specific market
-    /// Orders are sorted by price descending (best bid first).
-    ///
-    /// # Parameters
-    ///
-    /// * `market_index` - The market index
-    /// * `market_type` - The market type (Perp or Spot)
-    /// * `oracle_price` - Current oracle price for dynamic order pricing
-    /// * `trigger_price` - Price threshold for trigger order evaluation
-    /// * `perp_market` - Optional perp market for trigger order price calculations
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Vec<L3Order>` containing detailed taker bid orders sorted by price descending.
-    pub fn get_taker_bids_l3(
-        &self,
-        market_index: u16,
-        market_type: MarketType,
-        oracle_price: u64,
-        trigger_price: u64,
-        perp_market: Option<&PerpMarket>,
-    ) -> Vec<L3Order> {
-        let book = self
-            .markets
-            .get(&MarketId::new(market_index, market_type))
-            .expect("orderbook exists for market");
-        book.get_taker_bids_l3(oracle_price, trigger_price, perp_market, &self.metadata)
-    }
-
-    /// Get maker bid orders (resting limit orders) for a specific market
-    /// Orders are sorted by price descending (best bid first).
-    ///
-    /// # Parameters
-    ///
-    /// * `market_index` - The market index
-    /// * `market_type` - The market type (Perp or Spot)
-    /// * `oracle_price` - Current oracle price for dynamic order pricing
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Vec<L3Order>` containing detailed maker bid orders sorted by price descending.
-    pub fn get_maker_bids_l3(
-        &self,
-        market_index: u16,
-        market_type: MarketType,
-        oracle_price: u64,
-    ) -> Vec<L3Order> {
-        let book = self
-            .markets
-            .get(&MarketId::new(market_index, market_type))
-            .expect("orderbook exists for market");
-        book.get_maker_bids_l3(oracle_price, &self.metadata)
-    }
-
-    /// Get maker ask orders (resting limit orders) for a specific market
-    /// Orders are sorted by price ascending (best ask first).
-    ///
-    /// # Parameters
-    ///
-    /// * `market_index` - The market index
-    /// * `market_type` - The market type (Perp or Spot)
-    /// * `oracle_price` - Current oracle price for dynamic order pricing
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Vec<L3Order>` containing detailed maker ask orders sorted by price ascending.
-    pub fn get_maker_asks_l3(
-        &self,
-        market_index: u16,
-        market_type: MarketType,
-        oracle_price: u64,
-    ) -> Vec<L3Order> {
-        let book = self
-            .markets
-            .get(&MarketId::new(market_index, market_type))
-            .expect("orderbook exists for market");
-        book.get_maker_asks_l3(oracle_price, &self.metadata)
+        book.l3_snapshot.read()
     }
 
     pub fn find_crossing_region(
@@ -1143,7 +822,7 @@ impl DLOB {
                         log::trace!(target: TARGET, "remove oracle order: {order_id}, order.slot: {}, order.duration: {}", order.slot, order.auction_duration);
                         order_removed = orderbook.oracle_orders.remove(order_id, order);
                         if !order_removed {
-                            log::trace!(target: TARGET, "remove oraclmargin_infoe limit order: {order_id}");
+                            log::trace!(target: TARGET, "remove limit order: {order_id}");
                             order_removed = orderbook.floating_limit_orders.remove(order_id, order);
                         }
                     }
@@ -1159,8 +838,8 @@ impl DLOB {
                     }
                 }
 
-                let auction_expired = slot > order.slot + order.auction_duration as u64;
-                if !order_removed && !auction_expired  {
+                let is_auction_expired = slot.saturating_sub(order.slot) > order.auction_duration as u64;
+                if !order_removed && !is_auction_expired  {
                     log::warn!(target: TARGET, "failed to remove order {order_id} from orderbook. order_kind: {:?}, user: {}, order_id: {}", metadata.kind, metadata.user, metadata.order_id);
                 }
             }
@@ -1539,84 +1218,125 @@ impl DLOB {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct L3Order {
-    /// point in time limit price of the order at some slot & oracle price
-    pub price: u64,
-    pub size: u64,
-    /// order expiry ts
-    pub max_ts: u64,
-    pub order_id: u32,
-    pub reduce_only: bool,
-    pub kind: OrderKind,
-    /// user subaccount of the order
-    pub user: Pubkey,
-}
-
+/// L3 Orderbook view
 #[derive(Debug, Default, Clone)]
 pub struct L3Book {
     pub slot: u64,
-    pub oracle_price: u64,
-    /// Maker orders (resting limit orders)
-    pub bids: Vec<L3Order>,
-    /// Maker orders (resting limit orders)
-    pub asks: Vec<L3Order>,
+    /// oracle price used to construct the snapshot
+    oracle_price: u64,
+    bids: Vec<L3Order>,
+    asks: Vec<L3Order>,
+    floating_bids: Vec<L3Order>,
+    floating_asks: Vec<L3Order>,
 }
 
 impl L3Book {
-    /// Get the best bid and ask from maker orders (resting limit orders)
+    /// Return iterator over list of trigger-able bids at given `trigger_price`
+    pub fn trigger_bids(&self, trigger_price: u64) -> impl Iterator<Item = &L3Order> {
+        self.bids.iter().filter(move |x| {
+            matches!(x.kind, OrderKind::TriggerMarket | OrderKind::TriggerLimit)
+                && ((x.is_trigger_above() && trigger_price > x.price)
+                    || (!x.is_trigger_above() && trigger_price < x.price))
+        })
+    }
+    /// Return iterator over list of trigger-able asks at given `trigger_price`
+    pub fn trigger_asks(&self, trigger_price: u64) -> impl Iterator<Item = &L3Order> {
+        self.asks.iter().filter(move |x| {
+            matches!(x.kind, OrderKind::TriggerMarket | OrderKind::TriggerLimit)
+                && ((x.is_trigger_above() && trigger_price > x.price)
+                    || (!x.is_trigger_above() && trigger_price < x.price))
+        })
+    }
+    /// Get all L3 bids
     ///
-    /// Returns `(best_bid, best_ask)` where each is an `Option<&L3Order>`.
-    /// The best bid is the highest price bid, and the best ask is the lowest price ask.
-    /// Returns `None` if there are no orders on that side.
-    pub fn bbo(&self) -> (Option<&L3Order>, Option<&L3Order>) {
-        (self.bids.first(), self.asks.first())
+    /// # Parameters
+    /// - `oracle_price`: oracle price for floating order price calculations
+    ///
+    /// # Returns
+    /// Returns an iterator over the bids
+    pub fn bids(&self, oracle_price: u64) -> impl Iterator<Item = &L3Order> {
+        let mut bids_iter = self.bids.iter().peekable();
+        let mut floating_bids_iter = self.floating_bids.iter().peekable();
+        let oracle_price_diff = oracle_price as i64 - self.oracle_price as i64;
+
+        std::iter::from_fn(
+            move || match (bids_iter.peek(), floating_bids_iter.peek()) {
+                (Some(fixed), Some(floating)) => {
+                    let adjusted_floating_price =
+                        (floating.price as i64 + oracle_price_diff).max(0) as u64;
+                    if adjusted_floating_price > fixed.price {
+                        floating_bids_iter.next()
+                    } else {
+                        bids_iter.next()
+                    }
+                }
+                (Some(_), None) => bids_iter.next(),
+                (None, Some(_)) => floating_bids_iter.next(),
+                (None, None) => None,
+            },
+        )
+    }
+    /// Get the top N bids
+    ///
+    /// # Parameters
+    /// - `count`: Maximum number of bids to return
+    /// - `oracle_price`: Current oracle price for floating order price adjustments
+    ///
+    /// # Returns
+    /// Returns an iterator over the highest-priced bids
+    pub fn top_bids(&self, count: usize, oracle_price: u64) -> impl Iterator<Item = &L3Order> {
+        self.bids(oracle_price).take(count)
     }
 
-    /// Get the top N maker bids (resting limit orders) sorted by price descending
+    /// Get all L3 asks
     ///
-    /// Returns an iterator over the highest-priced maker bids.
-    pub fn top_bids(&self, count: usize) -> impl Iterator<Item = &L3Order> {
-        self.bids.iter().take(count)
+    /// # Parameters
+    /// - `oracle_price`: oracle price for floating order price calculations
+    ///
+    /// # Returns
+    /// Returns an iterator over the asks
+    pub fn asks(&self, oracle_price: u64) -> impl Iterator<Item = &L3Order> {
+        let mut asks_iter = self.asks.iter().peekable();
+        let mut floating_asks_iter = self.floating_asks.iter().peekable();
+        let oracle_price_diff = oracle_price as i64 - self.oracle_price as i64;
+
+        std::iter::from_fn(
+            move || match (asks_iter.peek(), floating_asks_iter.peek()) {
+                (Some(fixed), Some(floating)) => {
+                    let adjusted_floating_price =
+                        (floating.price as i64 + oracle_price_diff).max(0) as u64;
+                    if adjusted_floating_price < fixed.price {
+                        floating_asks_iter.next()
+                    } else {
+                        asks_iter.next()
+                    }
+                }
+                (Some(_), None) => asks_iter.next(),
+                (None, Some(_)) => floating_asks_iter.next(),
+                (None, None) => None,
+            },
+        )
     }
 
-    /// Get the top N maker asks (resting limit orders) sorted by price ascending
+    /// Get the top N asks
     ///
-    /// Returns an iterator over the lowest-priced maker asks.
-    pub fn top_asks(&self, count: usize) -> impl Iterator<Item = &L3Order> {
-        self.asks.iter().take(count)
+    /// # Parameters
+    /// - `count`: Maximum number of asks to return
+    /// - `oracle_price`: oracle price for floating order price adjustments
+    ///
+    /// # Returns
+    /// Returns an iterator over the lowest-priced asks
+    pub fn top_asks(&self, count: usize, oracle_price: u64) -> impl Iterator<Item = &L3Order> {
+        self.asks(oracle_price).take(count)
     }
 
-    /// Get exactly N maker bids as a fixed-size array slice
-    ///
-    /// Returns `Some(&[L3Order; N])` if there are at least N bids, `None` otherwise.
-    /// Useful when you need exactly N orders and want to avoid dynamic allocation.
-    pub fn top_bids_exact<const N: usize>(&self) -> Option<&[L3Order; N]> {
-        self.bids.first_chunk()
-    }
-
-    /// Get exactly N maker asks as a fixed-size array slice
-    ///
-    /// Returns `Some(&[L3Order; N])` if there are at least N asks, `None` otherwise.
-    /// Useful when you need exactly N orders and want to avoid dynamic allocation.
-    pub fn top_asks_exact<const N: usize>(&self) -> Option<&[L3Order; N]> {
-        self.asks.first_chunk()
-    }
-    /// Reset this instance for later reuse
-    fn reset(&mut self) {
+    /// Populate an `L3Book` instance given an `Orderbook` and `metadata`
+    fn load_orderbook(&mut self, orderbook: &Orderbook, oracle_price: u64, metadata: &MetadataMap) {
         self.bids.clear();
         self.asks.clear();
-        self.slot = 0;
-        self.oracle_price = 0;
-    }
-    /// Populate an `L3Book` instance given an `Orderbook` and metadata
-    fn load_orderbook(
-        mut self,
-        orderbook: &Orderbook,
-        metadata: &MetadataMap,
-        oracle_price: u64,
-    ) -> Self {
-        self.reset();
+        self.floating_bids.clear();
+        self.floating_asks.clear();
+
         self.slot = orderbook.last_modified_slot;
         self.oracle_price = oracle_price;
         let market_tick_size = orderbook.market_tick_size;
@@ -1627,7 +1347,7 @@ impl L3Book {
                 self.bids.push(L3Order {
                     price: order.get_price(),
                     size: order.size,
-                    reduce_only: order.reduce_only,
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)) | L3Order::IS_LONG,
                     user: meta.user,
                     order_id: meta.order_id,
                     kind: meta.kind,
@@ -1641,7 +1361,7 @@ impl L3Book {
                 self.asks.push(L3Order {
                     price: order.get_price(),
                     size: order.size,
-                    reduce_only: order.reduce_only,
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
                     kind: meta.kind,
@@ -1651,17 +1371,21 @@ impl L3Book {
         }
 
         // Add trigger orders
+        //
+        // intentionally include some trigger orders with 20bps leniency around oracle
+        // this allows subsequent queries to the snapshot to yield these orders if in range
+        let oracle_price_with_buffer = oracle_price + (oracle_price / 20_000);
         for order in orderbook
             .trigger_orders
             .bids
             .values()
-            .filter(|o| o.price <= oracle_price)
+            .filter(|x| x.price <= oracle_price_with_buffer)
         {
             if let Some(meta) = metadata.get(&order.id) {
                 self.bids.push(L3Order {
                     price: order.price,
                     size: order.size,
-                    reduce_only: order.reduce_only,
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)) | L3Order::IS_LONG,
                     user: meta.user,
                     order_id: meta.order_id,
                     kind: meta.kind,
@@ -1670,21 +1394,50 @@ impl L3Book {
             }
         }
 
+        let oracle_price_with_buffer = oracle_price - (oracle_price / 20_000);
         for order in orderbook
             .trigger_orders
             .asks
             .values()
-            .filter(|o| o.price >= oracle_price)
+            .filter(|x| x.price >= oracle_price_with_buffer)
         {
             if let Some(meta) = metadata.get(&order.id) {
                 self.asks.push(L3Order {
                     price: order.price,
                     size: order.size,
-                    reduce_only: order.reduce_only,
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
                     kind: meta.kind,
                     max_ts: order.max_ts,
+                });
+            }
+        }
+
+        for order in orderbook.market_orders.bids.values() {
+            if let Some(meta) = metadata.get(&order.id) {
+                self.bids.push(L3Order {
+                    price: order.get_price(self.slot, oracle_price, market_tick_size),
+                    size: order.size(),
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)) | L3Order::IS_LONG,
+                    user: meta.user,
+                    order_id: meta.order_id,
+                    max_ts: order.max_ts,
+                    kind: meta.kind,
+                });
+            }
+        }
+
+        for order in orderbook.market_orders.asks.values() {
+            if let Some(meta) = metadata.get(&order.id) {
+                self.asks.push(L3Order {
+                    price: order.get_price(self.slot, oracle_price, market_tick_size),
+                    size: order.size(),
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)),
+                    user: meta.user,
+                    order_id: meta.order_id,
+                    max_ts: order.max_ts,
+                    kind: meta.kind,
                 });
             }
         }
@@ -1692,10 +1445,10 @@ impl L3Book {
         // Add floating limit orders
         for order in orderbook.floating_limit_orders.bids.values() {
             if let Some(meta) = metadata.get(&order.id) {
-                self.bids.push(L3Order {
+                self.floating_bids.push(L3Order {
                     price: order.get_price(oracle_price, market_tick_size),
                     size: order.size,
-                    reduce_only: order.reduce_only,
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)) | L3Order::IS_LONG,
                     user: meta.user,
                     order_id: meta.order_id,
                     max_ts: order.max_ts,
@@ -1706,39 +1459,10 @@ impl L3Book {
 
         for order in orderbook.floating_limit_orders.asks.values() {
             if let Some(meta) = metadata.get(&order.id) {
-                self.asks.push(L3Order {
+                self.floating_asks.push(L3Order {
                     price: order.get_price(oracle_price, market_tick_size),
                     size: order.size,
-                    reduce_only: order.reduce_only,
-                    user: meta.user,
-                    order_id: meta.order_id,
-                    max_ts: order.max_ts,
-                    kind: meta.kind,
-                });
-            }
-        }
-
-        for order in orderbook.market_orders.bids.values() {
-            if let Some(meta) = metadata.get(&order.id) {
-                self.bids.push(L3Order {
-                    price: order.get_price(self.slot, oracle_price, market_tick_size),
-                    size: order.size(),
-                    reduce_only: order.reduce_only,
-                    user: meta.user,
-                    order_id: meta.order_id,
-                    max_ts: order.max_ts,
-                    kind: meta.kind,
-                });
-            }
-        }
-
-        // Add market orders as taker orders
-        for order in orderbook.market_orders.asks.values() {
-            if let Some(meta) = metadata.get(&order.id) {
-                self.asks.push(L3Order {
-                    price: order.get_price(self.slot, oracle_price, market_tick_size),
-                    size: order.size(),
-                    reduce_only: order.reduce_only,
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
                     max_ts: order.max_ts,
@@ -1750,10 +1474,10 @@ impl L3Book {
         // Add oracle orders as taker orders
         for order in orderbook.oracle_orders.bids.values() {
             if let Some(meta) = metadata.get(&order.id) {
-                self.bids.push(L3Order {
+                self.floating_bids.push(L3Order {
                     price: order.get_price(self.slot, oracle_price, market_tick_size),
                     size: order.size(),
-                    reduce_only: order.reduce_only,
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)) | L3Order::IS_LONG,
                     user: meta.user,
                     order_id: meta.order_id,
                     max_ts: order.max_ts,
@@ -1764,10 +1488,10 @@ impl L3Book {
 
         for order in orderbook.oracle_orders.asks.values() {
             if let Some(meta) = metadata.get(&order.id) {
-                self.asks.push(L3Order {
+                self.floating_asks.push(L3Order {
                     price: order.get_price(self.slot, oracle_price, market_tick_size),
                     size: order.size(),
-                    reduce_only: order.reduce_only,
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
                     max_ts: order.max_ts,
@@ -1780,8 +1504,10 @@ impl L3Book {
         self.bids.sort_by(|a, b| b.price.cmp(&a.price));
         // Sort asks in ascending order (lowest first)
         self.asks.sort_by(|a, b| a.price.cmp(&b.price));
-
-        self
+        // Sort bids in descending order (highest first)
+        self.floating_bids.sort_by(|a, b| b.price.cmp(&a.price));
+        // Sort asks in ascending order (lowest first)
+        self.floating_asks.sort_by(|a, b| a.price.cmp(&b.price));
     }
 }
 
@@ -1880,7 +1606,7 @@ impl L2Book {
     /// Initialize the L2Book with all order types
     ///
     /// NOTE: orders with size 64::MAX indicate max leverage orders
-    fn load_orderbook(mut self, orderbook: &Orderbook, oracle_price: u64) -> Self {
+    fn load_orderbook(&mut self, orderbook: &Orderbook, oracle_price: u64) {
         self.reset();
         self.slot = orderbook.last_modified_slot;
         self.oracle_price = oracle_price;
@@ -1959,7 +1685,5 @@ impl L2Book {
 
             *size = size.saturating_add(order.size);
         }
-
-        self
     }
 }

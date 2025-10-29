@@ -9,8 +9,7 @@ use axum::{
     Router,
 };
 use drift_rs::{
-    dlob::builder::DLOBBuilder,
-    dlob::DLOB,
+    dlob::{builder::DLOBBuilder, DLOB},
     types::{MarketId, MarketType},
     Context, DriftClient, GrpcSubscribeOpts, RpcClient,
 };
@@ -63,22 +62,18 @@ struct L3Response {
 #[derive(Deserialize)]
 struct L3Query {
     market_index: u16,
+    #[serde(default)]
+    max_orders: Option<usize>,
 }
 
 async fn get_l2_orderbook(
     Query(params): Query<L2Query>,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<L2Response>, StatusCode> {
-    // Get the L2 snapshot from the DLOB
-    let price = state
-        .drift
-        .try_get_oracle_price_data_and_slot(MarketId::perp(params.market_index))
-        .unwrap()
-        .data
-        .price as u64;
     let l2_book = state
         .dlob
-        .get_l2_book(params.market_index, MarketType::Perp, price);
+        .get_l2_snapshot(params.market_index, MarketType::Perp);
+
     // Convert BTreeMap to Vec<OrderbookLevel> for JSON serialization
     let asks: Vec<OrderbookLevel> = l2_book
         .asks
@@ -112,32 +107,41 @@ async fn get_l3_orderbook(
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<L3Response>, StatusCode> {
     // Get the L3 snapshot from the DLOB
-    let price = state
+    let oracle_price = state
         .drift
         .try_get_oracle_price_data_and_slot(MarketId::perp(params.market_index))
         .unwrap()
         .data
         .price as u64;
+
     let l3_book = state
         .dlob
-        .get_l3_book(params.market_index, MarketType::Perp, price);
+        .get_l3_snapshot(params.market_index, MarketType::Perp);
+
     // Convert L3Order to L3OrderResponse for JSON serialization
     let convert_order = |order: &drift_rs::dlob::L3Order| L3OrderResponse {
         price: order.price,
         size: order.size,
         max_ts: order.max_ts,
         order_id: order.order_id,
-        reduce_only: order.reduce_only,
+        reduce_only: order.is_reduce_only(),
         kind: format!("{:?}", order.kind),
         user: order.user.to_string(),
     };
 
-    let bids: Vec<L3OrderResponse> = l3_book.bids.iter().map(convert_order).collect();
-    let asks: Vec<L3OrderResponse> = l3_book.asks.iter().map(convert_order).collect();
+    let max_orders = params.max_orders.unwrap_or(usize::MAX);
+    let bids: Vec<L3OrderResponse> = l3_book
+        .top_bids(max_orders, oracle_price)
+        .map(convert_order)
+        .collect();
+    let asks: Vec<L3OrderResponse> = l3_book
+        .top_asks(max_orders, oracle_price)
+        .map(convert_order)
+        .collect();
 
     Ok(Json(L3Response {
         slot: l3_book.slot,
-        oracle_price: l3_book.oracle_price,
+        oracle_price,
         bids,
         asks,
         market_index: params.market_index,
@@ -156,7 +160,7 @@ struct AppState {
 #[tokio::main]
 async fn main() {
     let _ = dotenv::dotenv();
-    let _ = env_logger::init();
+    env_logger::init();
 
     let rpc_url = std::env::var("RPC_URL")
         .unwrap_or_else(|_| "https://api.mainnet-beta.solana.com".to_string());
@@ -180,6 +184,10 @@ async fn main() {
     println!("starting gRPC subscription to live order changes");
     let grpc_url = std::env::var("GRPC_URL").expect("GRPC_URL set");
     let grpc_x_token = std::env::var("GRPC_X_TOKEN").expect("GRPC_X_TOKEN set");
+
+    // let all_perp_markets = drift.get_all_perp_market_ids();
+    let perp_markets = vec![MarketId::perp(0), MarketId::perp(1), MarketId::perp(2)];
+
     let res = drift
         .grpc_subscribe(
             grpc_url,
@@ -188,7 +196,7 @@ async fn main() {
                 .commitment(CommitmentLevel::Processed)
                 .usermap_on()
                 .on_user_account(dlob_builder.account_update_handler(account_map))
-                .on_slot(dlob_builder.slot_update_handler()),
+                .on_slot(dlob_builder.slot_update_handler(drift.clone(), perp_markets)),
             true,
         )
         .await;
@@ -198,10 +206,9 @@ async fn main() {
         std::process::exit(1);
     }
 
-    let state = Arc::new(AppState {
-        dlob: dlob_builder.dlob(),
-        drift,
-    });
+    let dlob = dlob_builder.dlob();
+    dlob.enable_l2_snapshot(); // disabled by default
+    let state = Arc::new(AppState { dlob, drift });
 
     // Build the web server
     let app = Router::new()
