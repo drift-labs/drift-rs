@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.144.0";
+pub const IDL_VERSION: &str = "2.145.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -1120,6 +1120,7 @@ pub mod instructions {
         pub curve_update_intensity: u8,
         pub amm_jit_intensity: u8,
         pub name: [u8; 32],
+        pub lp_pool_id: u8,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for InitializePerpMarket {
@@ -1127,6 +1128,22 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializePerpMarket {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct InitializeAmmCache {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for InitializeAmmCache {
+        const DISCRIMINATOR: &[u8] = &[38, 60, 171, 158, 203, 58, 137, 8];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for InitializeAmmCache {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateInitialAmmCacheInfo {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateInitialAmmCacheInfo {
+        const DISCRIMINATOR: &[u8] = &[157, 210, 109, 67, 212, 170, 12, 107];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateInitialAmmCacheInfo {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct InitializePredictionMarket {}
     #[automatically_derived]
@@ -1198,6 +1215,37 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketExpiry {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdatePerpMarketLpPoolPausedOperations {
+        pub lp_paused_operations: u8,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdatePerpMarketLpPoolPausedOperations {
+        const DISCRIMINATOR: &[u8] = &[181, 94, 93, 146, 51, 89, 32, 135];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdatePerpMarketLpPoolPausedOperations {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdatePerpMarketLpPoolStatus {
+        pub lp_status: u8,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdatePerpMarketLpPoolStatus {
+        const DISCRIMINATOR: &[u8] = &[67, 6, 252, 61, 54, 88, 89, 233];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdatePerpMarketLpPoolStatus {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdatePerpMarketLpPoolFeeTransferScalar {
+        pub optional_lp_fee_transfer_scalar: Option<u8>,
+        pub optional_lp_net_pnl_transfer_scalar: Option<u8>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdatePerpMarketLpPoolFeeTransferScalar {
+        const DISCRIMINATOR: &[u8] = &[94, 228, 237, 109, 100, 185, 4, 81];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdatePerpMarketLpPoolFeeTransferScalar {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct SettleExpiredMarketPoolsToRevenuePool {}
     #[automatically_derived]
@@ -1337,6 +1385,16 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdatePerpMarketLiquidationFee {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdatePerpMarketLpPoolId {
+        pub lp_pool_id: u8,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdatePerpMarketLpPoolId {
+        const DISCRIMINATOR: &[u8] = &[119, 208, 154, 88, 165, 92, 21, 188];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdatePerpMarketLpPoolId {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdateInsuranceFundUnstakingPeriod {
         pub insurance_fund_unstaking_period: i64,
@@ -2222,6 +2280,333 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for ChangeApprovedBuilder {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct InitializeLpPool {
+        pub lp_pool_id: u8,
+        pub min_mint_fee: i64,
+        pub max_aum: u128,
+        pub max_settle_quote_amount_per_market: u64,
+        pub whitelist_mint: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for InitializeLpPool {
+        const DISCRIMINATOR: &[u8] = &[242, 64, 1, 222, 142, 46, 204, 227];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for InitializeLpPool {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateFeatureBitFlagsSettleLpPool {
+        pub enable: bool,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateFeatureBitFlagsSettleLpPool {
+        const DISCRIMINATOR: &[u8] = &[186, 28, 78, 230, 155, 83, 242, 26];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateFeatureBitFlagsSettleLpPool {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateFeatureBitFlagsSwapLpPool {
+        pub enable: bool,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateFeatureBitFlagsSwapLpPool {
+        const DISCRIMINATOR: &[u8] = &[83, 16, 150, 12, 102, 3, 22, 58];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateFeatureBitFlagsSwapLpPool {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateFeatureBitFlagsMintRedeemLpPool {
+        pub enable: bool,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateFeatureBitFlagsMintRedeemLpPool {
+        const DISCRIMINATOR: &[u8] = &[26, 11, 142, 122, 206, 159, 9, 45];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateFeatureBitFlagsMintRedeemLpPool {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct InitializeConstituent {
+        pub spot_market_index: u16,
+        pub decimals: u8,
+        pub max_weight_deviation: i64,
+        pub swap_fee_min: i64,
+        pub swap_fee_max: i64,
+        pub max_borrow_token_amount: u64,
+        pub oracle_staleness_threshold: u64,
+        pub cost_to_trade: i32,
+        pub constituent_derivative_index: Option<i16>,
+        pub constituent_derivative_depeg_threshold: u64,
+        pub derivative_weight: u64,
+        pub volatility: u64,
+        pub gamma_execution: u8,
+        pub gamma_inventory: u8,
+        pub xi: u8,
+        pub new_constituent_correlations: Vec<i64>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for InitializeConstituent {
+        const DISCRIMINATOR: &[u8] = &[12, 196, 45, 218, 93, 89, 0, 33];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for InitializeConstituent {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateConstituentStatus {
+        pub new_status: u8,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateConstituentStatus {
+        const DISCRIMINATOR: &[u8] = &[76, 159, 211, 239, 182, 214, 6, 15];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateConstituentStatus {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateConstituentPausedOperations {
+        pub paused_operations: u8,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateConstituentPausedOperations {
+        const DISCRIMINATOR: &[u8] = &[185, 122, 153, 191, 131, 177, 132, 208];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateConstituentPausedOperations {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateConstituentParams {
+        pub constituent_params: ConstituentParams,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateConstituentParams {
+        const DISCRIMINATOR: &[u8] = &[238, 130, 122, 31, 12, 104, 192, 122];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateConstituentParams {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateLpPoolParams {
+        pub lp_pool_params: LpPoolParams,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateLpPoolParams {
+        const DISCRIMINATOR: &[u8] = &[217, 92, 2, 255, 27, 167, 178, 81];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateLpPoolParams {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct AddAmmConstituentMappingData {
+        pub amm_constituent_mapping_data: Vec<AddAmmConstituentMappingDatum>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for AddAmmConstituentMappingData {
+        const DISCRIMINATOR: &[u8] = &[164, 236, 130, 40, 118, 179, 46, 235];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for AddAmmConstituentMappingData {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateAmmConstituentMappingData {
+        pub amm_constituent_mapping_data: Vec<AddAmmConstituentMappingDatum>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateAmmConstituentMappingData {
+        const DISCRIMINATOR: &[u8] = &[84, 70, 33, 167, 133, 107, 59, 24];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateAmmConstituentMappingData {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct RemoveAmmConstituentMappingData {
+        pub perp_market_index: u16,
+        pub constituent_index: u16,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for RemoveAmmConstituentMappingData {
+        const DISCRIMINATOR: &[u8] = &[20, 183, 211, 162, 16, 52, 229, 115];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for RemoveAmmConstituentMappingData {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateConstituentCorrelationData {
+        pub index1: u16,
+        pub index2: u16,
+        pub correlation: i64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateConstituentCorrelationData {
+        const DISCRIMINATOR: &[u8] = &[79, 14, 19, 73, 221, 106, 62, 109];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateConstituentCorrelationData {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateLpConstituentTargetBase {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateLpConstituentTargetBase {
+        const DISCRIMINATOR: &[u8] = &[157, 65, 50, 207, 59, 236, 161, 110];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateLpConstituentTargetBase {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateLpPoolAum {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateLpPoolAum {
+        const DISCRIMINATOR: &[u8] = &[88, 113, 137, 206, 246, 247, 171, 142];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateLpPoolAum {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateAmmCache {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateAmmCache {
+        const DISCRIMINATOR: &[u8] = &[88, 4, 63, 94, 83, 224, 255, 130];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateAmmCache {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct OverrideAmmCacheInfo {
+        pub market_index: u16,
+        pub override_params: OverrideAmmCacheParams,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for OverrideAmmCacheInfo {
+        const DISCRIMINATOR: &[u8] = &[189, 198, 128, 9, 49, 145, 201, 115];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for OverrideAmmCacheInfo {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct ResetAmmCache {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ResetAmmCache {
+        const DISCRIMINATOR: &[u8] = &[150, 7, 213, 149, 115, 168, 0, 41];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ResetAmmCache {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct LpPoolSwap {
+        pub in_market_index: u16,
+        pub out_market_index: u16,
+        pub in_amount: u64,
+        pub min_out_amount: u64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for LpPoolSwap {
+        const DISCRIMINATOR: &[u8] = &[36, 161, 39, 49, 227, 1, 35, 226];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for LpPoolSwap {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct ViewLpPoolSwapFees {
+        pub in_market_index: u16,
+        pub out_market_index: u16,
+        pub in_amount: u64,
+        pub in_target_weight: i64,
+        pub out_target_weight: i64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ViewLpPoolSwapFees {
+        const DISCRIMINATOR: &[u8] = &[126, 189, 109, 189, 170, 156, 3, 46];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ViewLpPoolSwapFees {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct LpPoolAddLiquidity {
+        pub in_market_index: u16,
+        pub in_amount: u128,
+        pub min_mint_amount: u64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for LpPoolAddLiquidity {
+        const DISCRIMINATOR: &[u8] = &[49, 135, 246, 103, 93, 146, 220, 141];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for LpPoolAddLiquidity {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct LpPoolRemoveLiquidity {
+        pub in_market_index: u16,
+        pub in_amount: u64,
+        pub min_out_amount: u128,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for LpPoolRemoveLiquidity {
+        const DISCRIMINATOR: &[u8] = &[164, 36, 193, 252, 196, 157, 138, 43];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for LpPoolRemoveLiquidity {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct ViewLpPoolAddLiquidityFees {
+        pub in_market_index: u16,
+        pub in_amount: u128,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ViewLpPoolAddLiquidityFees {
+        const DISCRIMINATOR: &[u8] = &[80, 66, 226, 161, 70, 142, 119, 84];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ViewLpPoolAddLiquidityFees {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct ViewLpPoolRemoveLiquidityFees {
+        pub in_market_index: u16,
+        pub in_amount: u64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ViewLpPoolRemoveLiquidityFees {
+        const DISCRIMINATOR: &[u8] = &[47, 12, 9, 102, 12, 226, 197, 89];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ViewLpPoolRemoveLiquidityFees {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct BeginLpSwap {
+        pub in_market_index: u16,
+        pub out_market_index: u16,
+        pub amount_in: u64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for BeginLpSwap {
+        const DISCRIMINATOR: &[u8] = &[64, 44, 24, 199, 48, 125, 67, 91];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for BeginLpSwap {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct EndLpSwap {
+        pub in_market_index: u16,
+        pub out_market_index: u16,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for EndLpSwap {
+        const DISCRIMINATOR: &[u8] = &[99, 125, 214, 165, 129, 175, 253, 135];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for EndLpSwap {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateConstituentOracleInfo {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateConstituentOracleInfo {
+        const DISCRIMINATOR: &[u8] = &[198, 117, 231, 250, 147, 33, 127, 161];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateConstituentOracleInfo {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct DepositToProgramVault {
+        pub amount: u64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for DepositToProgramVault {
+        const DISCRIMINATOR: &[u8] = &[235, 171, 121, 80, 57, 239, 147, 220];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for DepositToProgramVault {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct WithdrawFromProgramVault {
+        pub amount: u64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for WithdrawFromProgramVault {
+        const DISCRIMINATOR: &[u8] = &[120, 40, 183, 149, 232, 18, 224, 151];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for WithdrawFromProgramVault {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct SettlePerpToLpPool {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for SettlePerpToLpPool {
+        const DISCRIMINATOR: &[u8] = &[5, 98, 46, 188, 10, 59, 2, 249];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for SettlePerpToLpPool {}
 }
 pub mod types {
     #![doc = r" IDL types"]
@@ -2346,6 +2731,147 @@ pub mod types {
         pub net_unsettled_funding_pnl: Option<i64>,
         pub update_amm_summary_stats: Option<bool>,
         pub exclude_total_liq_fee: Option<bool>,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct ConstituentParams {
+        pub max_weight_deviation: Option<i64>,
+        pub swap_fee_min: Option<i64>,
+        pub swap_fee_max: Option<i64>,
+        pub max_borrow_token_amount: Option<u64>,
+        pub oracle_staleness_threshold: Option<u64>,
+        pub cost_to_trade_bps: Option<i32>,
+        pub constituent_derivative_index: Option<i16>,
+        pub derivative_weight: Option<u64>,
+        pub volatility: Option<u64>,
+        pub gamma_execution: Option<u8>,
+        pub gamma_inventory: Option<u8>,
+        pub xi: Option<u8>,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct LpPoolParams {
+        pub max_settle_quote_amount: Option<u64>,
+        pub volatility: Option<u64>,
+        pub gamma_execution: Option<u8>,
+        pub xi: Option<u8>,
+        pub max_aum: Option<u128>,
+        pub whitelist_mint: Option<Pubkey>,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct OverrideAmmCacheParams {
+        pub quote_owed_from_lp_pool: Option<i64>,
+        pub last_settle_slot: Option<u64>,
+        pub last_fee_pool_token_amount: Option<u128>,
+        pub last_net_pnl_pool_token_amount: Option<i128>,
+        pub amm_position_scalar: Option<u8>,
+        pub amm_inventory_limit: Option<i64>,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct AddAmmConstituentMappingDatum {
+        pub constituent_index: u16,
+        pub perp_market_index: u16,
+        pub weight: i64,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct CacheInfo {
+        pub oracle: Pubkey,
+        pub last_fee_pool_token_amount: u128,
+        pub last_net_pnl_pool_token_amount: i128,
+        pub last_exchange_fees: u128,
+        pub last_settle_amm_ex_fees: u128,
+        pub last_settle_amm_pnl: i128,
+        pub position: i64,
+        pub slot: u64,
+        pub last_settle_amount: u64,
+        pub last_settle_slot: u64,
+        pub last_settle_ts: i64,
+        pub quote_owed_from_lp_pool: i64,
+        pub amm_inventory_limit: i64,
+        pub oracle_price: i64,
+        pub oracle_slot: u64,
+        pub oracle_source: u8,
+        pub oracle_validity: u8,
+        pub lp_status_for_perp_market: u8,
+        pub amm_position_scalar: u8,
+        #[serde(skip)]
+        pub padding: Padding<36>,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct AmmCacheFixed {
+        pub bump: u8,
+        pub pad: [u8; 3],
+        pub len: u32,
     }
     #[repr(C)]
     #[derive(
@@ -2512,6 +3038,126 @@ pub mod types {
         Debug,
         PartialEq,
     )]
+    pub struct ConstituentSpotBalance {
+        pub scaled_balance: u128,
+        pub cumulative_deposits: i64,
+        pub market_index: u16,
+        pub balance_type: SpotBalanceType,
+        #[serde(skip)]
+        pub padding: Padding<5>,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct AmmConstituentDatum {
+        pub perp_market_index: u16,
+        pub constituent_index: u16,
+        #[serde(skip)]
+        pub padding: Padding<4>,
+        pub last_slot: u64,
+        pub weight: i64,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct AmmConstituentMappingFixed {
+        pub lp_pool: Pubkey,
+        pub bump: u8,
+        pub pad: [u8; 3],
+        pub len: u32,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct TargetsDatum {
+        pub cost_to_trade_bps: i32,
+        #[serde(skip)]
+        pub padding: Padding<4>,
+        pub target_base: i64,
+        pub last_oracle_slot: u64,
+        pub last_position_slot: u64,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct ConstituentTargetBaseFixed {
+        pub lp_pool: Pubkey,
+        pub bump: u8,
+        pub pad: [u8; 3],
+        pub len: u32,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct ConstituentCorrelationsFixed {
+        pub lp_pool: Pubkey,
+        pub bump: u8,
+        pub pad: [u8; 3],
+        pub len: u32,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
     pub struct MarketIdentifier {
         pub market_type: MarketType,
         pub market_index: u16,
@@ -2630,6 +3276,7 @@ pub mod types {
         pub max_margin_ratio: Option<u16>,
         pub builder_idx: Option<u8>,
         pub builder_fee_tenth_bps: Option<u16>,
+        pub isolated_position_deposit: Option<u64>,
     }
     #[repr(C)]
     #[derive(
@@ -2654,6 +3301,7 @@ pub mod types {
         pub max_margin_ratio: Option<u16>,
         pub builder_idx: Option<u8>,
         pub builder_fee_tenth_bps: Option<u16>,
+        pub isolated_position_deposit: Option<u64>,
     }
     #[repr(C)]
     #[derive(
@@ -2737,7 +3385,8 @@ pub mod types {
     pub struct PoolBalance {
         pub scaled_balance: u128,
         pub market_index: u16,
-        pub padding: [u8; 6],
+        #[serde(skip)]
+        pub padding: Padding<6>,
     }
     #[repr(C)]
     #[derive(
@@ -2838,7 +3487,8 @@ pub mod types {
         pub reference_price_offset: i32,
         pub amm_inventory_spread_adjustment: i8,
         pub reference_price_offset_deadband_pct: u8,
-        pub padding: [u8; 2],
+        #[serde(skip)]
+        pub padding: Padding<2>,
         pub last_funding_oracle_twap: i64,
     }
     #[repr(C)]
@@ -2864,7 +3514,8 @@ pub mod types {
         pub bit_flags: u8,
         pub user_order_index: u8,
         pub market_type: MarketType,
-        pub padding: [u8; 10],
+        #[serde(skip)]
+        pub padding: Padding<10>,
     }
     #[repr(C)]
     #[derive(
@@ -2882,7 +3533,8 @@ pub mod types {
     pub struct BuilderInfo {
         pub authority: Pubkey,
         pub max_fee_tenth_bps: u16,
-        pub padding: [u8; 6],
+        #[serde(skip)]
+        pub padding: Padding<6>,
     }
     #[repr(C)]
     #[derive(
@@ -3122,7 +3774,8 @@ pub mod types {
         pub market_index: u16,
         pub balance_type: SpotBalanceType,
         pub open_orders: u8,
-        pub padding: [u8; 4],
+        #[serde(skip)]
+        pub padding: Padding<4>,
     }
     #[repr(C)]
     #[derive(
@@ -3149,7 +3802,8 @@ pub mod types {
         pub lp_shares: u64,
         pub last_base_asset_amount_per_lp: i64,
         pub last_quote_asset_amount_per_lp: i64,
-        pub padding: [u8; 2],
+        #[serde(skip)]
+        pub padding: Padding<2>,
         pub max_margin_ratio: u16,
         pub market_index: u16,
         pub open_orders: u8,
@@ -3194,7 +3848,8 @@ pub mod types {
         pub auction_duration: u8,
         pub posted_slot_tail: u8,
         pub bit_flags: u8,
-        pub padding: [u8; 1],
+        #[serde(skip)]
+        pub padding: Padding<1>,
     }
     #[derive(
         AnchorSerialize,
@@ -3329,6 +3984,24 @@ pub mod types {
         Debug,
         PartialEq,
     )]
+    pub enum SettlementDirection {
+        #[default]
+        ToLpPool,
+        FromLpPool,
+        None,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
     pub enum MarginRequirementType {
         #[default]
         Initial,
@@ -3386,6 +4059,9 @@ pub mod types {
         UpdateAMMCurve,
         OracleOrderPrice,
         UseMMOraclePrice,
+        UpdateAmmCache,
+        UpdateLpPoolAum,
+        LpPoolSwap,
     }
     #[derive(
         AnchorSerialize,
@@ -3659,6 +4335,23 @@ pub mod types {
         Deserialize,
         Copy,
         Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub enum ConstituentStatus {
+        #[default]
+        ReduceOnly,
+        Decommissioned,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
         Debug,
         PartialEq,
     )]
@@ -3844,6 +4537,41 @@ pub mod types {
         Debug,
         PartialEq,
     )]
+    pub enum PerpLpOperation {
+        #[default]
+        TrackAmmRevenue,
+        SettleQuoteOwed,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub enum ConstituentLpOperation {
+        #[default]
+        Swap,
+        Deposit,
+        Withdraw,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
     pub enum MarketStatus {
         #[default]
         Initialized,
@@ -3855,6 +4583,24 @@ pub mod types {
         ReduceOnly,
         Settlement,
         Delisted,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub enum LpStatus {
+        #[default]
+        Uncollateralized,
+        Active,
+        Decommissioning,
     }
     #[derive(
         AnchorSerialize,
@@ -4043,6 +4789,24 @@ pub mod types {
         MedianTriggerPrice,
         BuilderCodes,
         BuilderReferral,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub enum LpPoolFeatureBitFlags {
+        #[default]
+        SettleLpPool,
+        SwapLpPool,
+        MintRedeemLpPool,
     }
     #[derive(
         AnchorSerialize,
@@ -4259,6 +5023,49 @@ pub mod types {
 pub mod accounts {
     #![doc = r" IDL Account types"]
     use super::{types::*, *};
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize, AnchorDeserialize, Serialize, Deserialize, Clone, Default, Debug, PartialEq,
+    )]
+    pub struct AmmCache {
+        pub bump: u8,
+        #[serde(skip)]
+        pub padding: Padding<3>,
+        pub cache: Vec<CacheInfo>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for AmmCache {
+        const DISCRIMINATOR: &[u8] = &[213, 114, 161, 56, 20, 22, 2, 59];
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for AmmCache {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for AmmCache {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
     #[repr(C)]
     #[derive(
         AnchorSerialize,
@@ -4479,9 +5286,11 @@ pub mod accounts {
         pub max_users: u32,
         pub current_users: u32,
         pub reduce_only: u8,
-        pub padding1: [u8; 3],
+        #[serde(skip)]
+        pub padding1: Padding<3>,
         pub current_maintenance_users: u32,
-        pub padding2: [u8; 24],
+        #[serde(skip)]
+        pub padding2: Padding<24>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for HighLeverageModeConfig {
@@ -4551,7 +5360,8 @@ pub mod accounts {
         pub max_slippage_bps: u16,
         pub swap_mode: u8,
         pub status: u8,
-        pub padding2: [u8; 32],
+        #[serde(skip)]
+        pub padding2: Padding<32>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for IfRebalanceConfig {
@@ -4730,6 +5540,308 @@ pub mod accounts {
         Debug,
         PartialEq,
     )]
+    pub struct LPPool {
+        pub pubkey: Pubkey,
+        pub mint: Pubkey,
+        pub whitelist_mint: Pubkey,
+        pub constituent_target_base: Pubkey,
+        pub constituent_correlations: Pubkey,
+        pub max_aum: u128,
+        pub last_aum: u128,
+        pub cumulative_quote_sent_to_perp_markets: u128,
+        pub cumulative_quote_received_from_perp_markets: u128,
+        pub total_mint_redeem_fees_paid: i128,
+        pub last_aum_slot: u64,
+        pub max_settle_quote_amount: u64,
+        pub padding_: u64,
+        pub mint_redeem_id: u64,
+        pub settle_id: u64,
+        pub min_mint_fee: i64,
+        pub token_supply: u64,
+        pub volatility: u64,
+        pub constituents: u16,
+        pub quote_consituent_index: u16,
+        pub bump: u8,
+        pub gamma_execution: u8,
+        pub xi: u8,
+        pub target_oracle_delay_fee_bps_per10_slots: u8,
+        pub target_position_delay_fee_bps_per10_slots: u8,
+        pub lp_pool_id: u8,
+        #[serde(skip)]
+        pub padding: Padding<174>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for LPPool {
+        const DISCRIMINATOR: &[u8] = &[228, 152, 141, 224, 161, 170, 11, 89];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for LPPool {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for LPPool {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for LPPool {}
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for LPPool {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for LPPool {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct Constituent {
+        pub pubkey: Pubkey,
+        pub mint: Pubkey,
+        pub lp_pool: Pubkey,
+        pub vault: Pubkey,
+        pub total_swap_fees: i128,
+        pub spot_balance: ConstituentSpotBalance,
+        pub last_spot_balance_token_amount: i64,
+        pub cumulative_spot_interest_accrued_token_amount: i64,
+        pub max_weight_deviation: i64,
+        pub swap_fee_min: i64,
+        pub swap_fee_max: i64,
+        pub max_borrow_token_amount: u64,
+        pub vault_token_balance: u64,
+        pub last_oracle_price: i64,
+        pub last_oracle_slot: u64,
+        pub oracle_staleness_threshold: u64,
+        pub flash_loan_initial_token_amount: u64,
+        pub next_swap_id: u64,
+        pub derivative_weight: u64,
+        pub volatility: u64,
+        pub constituent_derivative_depeg_threshold: u64,
+        pub constituent_derivative_index: i16,
+        pub spot_market_index: u16,
+        pub constituent_index: u16,
+        pub decimals: u8,
+        pub bump: u8,
+        pub vault_bump: u8,
+        pub gamma_inventory: u8,
+        pub gamma_execution: u8,
+        pub xi: u8,
+        pub status: u8,
+        pub paused_operations: u8,
+        #[serde(skip)]
+        pub padding: Padding<162>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for Constituent {
+        const DISCRIMINATOR: &[u8] = &[0, 61, 36, 35, 177, 76, 216, 205];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for Constituent {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for Constituent {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for Constituent {}
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for Constituent {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for Constituent {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize, AnchorDeserialize, Serialize, Deserialize, Clone, Default, Debug, PartialEq,
+    )]
+    pub struct AmmConstituentMapping {
+        pub lp_pool: Pubkey,
+        pub bump: u8,
+        #[serde(skip)]
+        pub padding: Padding<3>,
+        pub weights: Vec<AmmConstituentDatum>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for AmmConstituentMapping {
+        const DISCRIMINATOR: &[u8] = &[254, 89, 5, 173, 66, 54, 214, 247];
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for AmmConstituentMapping {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for AmmConstituentMapping {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize, AnchorDeserialize, Serialize, Deserialize, Clone, Default, Debug, PartialEq,
+    )]
+    pub struct ConstituentTargetBase {
+        pub lp_pool: Pubkey,
+        pub bump: u8,
+        #[serde(skip)]
+        pub padding: Padding<3>,
+        pub targets: Vec<TargetsDatum>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ConstituentTargetBase {
+        const DISCRIMINATOR: &[u8] = &[255, 142, 134, 71, 125, 66, 198, 99];
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for ConstituentTargetBase {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for ConstituentTargetBase {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize, AnchorDeserialize, Serialize, Deserialize, Clone, Default, Debug, PartialEq,
+    )]
+    pub struct ConstituentCorrelations {
+        pub lp_pool: Pubkey,
+        pub bump: u8,
+        #[serde(skip)]
+        pub padding: Padding<3>,
+        pub correlations: Vec<i64>,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ConstituentCorrelations {
+        const DISCRIMINATOR: &[u8] = &[124, 203, 115, 33, 18, 162, 67, 216];
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for ConstituentCorrelations {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for ConstituentCorrelations {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
     pub struct PrelaunchOracle {
         pub price: i64,
         pub max_price: i64,
@@ -4829,10 +5941,14 @@ pub mod accounts {
         pub high_leverage_margin_ratio_maintenance: u16,
         pub protected_maker_limit_price_divisor: u8,
         pub protected_maker_dynamic_divisor: u8,
-        pub padding1: u32,
+        pub lp_fee_transfer_scalar: u8,
+        pub lp_status: u8,
+        pub lp_paused_operations: u8,
+        pub lp_exchange_fee_excluscion_scalar: u8,
         pub last_fill_price: u64,
+        pub lp_pool_id: u8,
         #[serde(skip)]
-        pub padding: Padding<24>,
+        pub padding: Padding<23>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PerpMarket {
@@ -5342,8 +6458,9 @@ pub mod accounts {
         pub max_number_of_sub_accounts: u16,
         pub max_initialize_user_fee: u16,
         pub feature_bit_flags: u8,
+        pub lp_pool_feature_bit_flags: u8,
         #[serde(skip)]
-        pub padding: Padding<9>,
+        pub padding: Padding<8>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for State {
@@ -5426,7 +6543,8 @@ pub mod accounts {
         pub has_open_auction: bool,
         pub margin_mode: MarginMode,
         pub pool_id: u8,
-        pub padding1: [u8; 3],
+        #[serde(skip)]
+        pub padding1: Padding<3>,
         pub last_fuel_bonus_update_ts: u32,
         #[serde(skip)]
         pub padding: Padding<12>,
@@ -5499,7 +6617,8 @@ pub mod accounts {
         pub number_of_sub_accounts_created: u16,
         pub referrer_status: u8,
         pub disable_update_perp_bid_ask_twap: bool,
-        pub padding1: [u8; 1],
+        #[serde(skip)]
+        pub padding1: Padding<1>,
         pub fuel_overflow_status: u8,
         pub fuel_insurance: u32,
         pub fuel_deposits: u32,
@@ -14339,6 +15458,7 @@ pub mod accounts {
         pub admin: Pubkey,
         pub state: Pubkey,
         pub perp_market: Pubkey,
+        pub amm_cache: Pubkey,
         pub oracle: Pubkey,
         pub rent: Pubkey,
         pub system_program: Pubkey,
@@ -14375,6 +15495,11 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
+                    pubkey: self.amm_cache,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
                     pubkey: self.oracle,
                     is_signer: false,
                     is_writable: false,
@@ -14406,6 +15531,158 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for InitializePerpMarket {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct InitializeAmmCache {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+        pub amm_cache: Pubkey,
+        pub rent: Pubkey,
+        pub system_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for InitializeAmmCache {
+        const DISCRIMINATOR: &[u8] = &[74, 188, 43, 183, 246, 2, 34, 111];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeAmmCache {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for InitializeAmmCache {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for InitializeAmmCache {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for InitializeAmmCache {}
+    #[automatically_derived]
+    impl ToAccountMetas for InitializeAmmCache {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.amm_cache,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.rent,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.system_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for InitializeAmmCache {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for InitializeAmmCache {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateInitialAmmCacheInfo {
+        pub state: Pubkey,
+        pub admin: Pubkey,
+        pub amm_cache: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateInitialAmmCacheInfo {
+        const DISCRIMINATOR: &[u8] = &[45, 44, 89, 96, 114, 152, 209, 119];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateInitialAmmCacheInfo {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateInitialAmmCacheInfo {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateInitialAmmCacheInfo {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateInitialAmmCacheInfo {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateInitialAmmCacheInfo {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.amm_cache,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateInitialAmmCacheInfo {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateInitialAmmCacheInfo {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -14920,6 +16197,222 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketExpiry {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdatePerpMarketLpPoolPausedOperations {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+        pub perp_market: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdatePerpMarketLpPoolPausedOperations {
+        const DISCRIMINATOR: &[u8] = &[38, 66, 194, 247, 81, 103, 70, 138];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketLpPoolPausedOperations {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdatePerpMarketLpPoolPausedOperations {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdatePerpMarketLpPoolPausedOperations {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdatePerpMarketLpPoolPausedOperations {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdatePerpMarketLpPoolPausedOperations {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.perp_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdatePerpMarketLpPoolPausedOperations {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdatePerpMarketLpPoolPausedOperations {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdatePerpMarketLpPoolStatus {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+        pub perp_market: Pubkey,
+        pub amm_cache: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdatePerpMarketLpPoolStatus {
+        const DISCRIMINATOR: &[u8] = &[4, 253, 188, 96, 229, 181, 140, 126];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketLpPoolStatus {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdatePerpMarketLpPoolStatus {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdatePerpMarketLpPoolStatus {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdatePerpMarketLpPoolStatus {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdatePerpMarketLpPoolStatus {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.perp_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.amm_cache,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdatePerpMarketLpPoolStatus {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdatePerpMarketLpPoolStatus {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdatePerpMarketLpPoolFeeTransferScalar {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+        pub perp_market: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdatePerpMarketLpPoolFeeTransferScalar {
+        const DISCRIMINATOR: &[u8] = &[32, 69, 153, 186, 13, 213, 126, 118];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketLpPoolFeeTransferScalar {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdatePerpMarketLpPoolFeeTransferScalar {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdatePerpMarketLpPoolFeeTransferScalar {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdatePerpMarketLpPoolFeeTransferScalar {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdatePerpMarketLpPoolFeeTransferScalar {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.perp_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdatePerpMarketLpPoolFeeTransferScalar {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdatePerpMarketLpPoolFeeTransferScalar {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -16008,6 +17501,76 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for UpdatePerpMarketLiquidationFee {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdatePerpMarketLpPoolId {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+        pub perp_market: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdatePerpMarketLpPoolId {
+        const DISCRIMINATOR: &[u8] = &[109, 83, 44, 37, 183, 187, 19, 9];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdatePerpMarketLpPoolId {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdatePerpMarketLpPoolId {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdatePerpMarketLpPoolId {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdatePerpMarketLpPoolId {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdatePerpMarketLpPoolId {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.perp_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdatePerpMarketLpPoolId {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdatePerpMarketLpPoolId {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -18652,6 +20215,7 @@ pub mod accounts {
         pub perp_market: Pubkey,
         pub oracle: Pubkey,
         pub old_oracle: Pubkey,
+        pub amm_cache: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UpdatePerpMarketOracle {
@@ -18693,6 +20257,11 @@ pub mod accounts {
                     pubkey: self.old_oracle,
                     is_signer: false,
                     is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.amm_cache,
+                    is_signer: false,
+                    is_writable: true,
                 },
             ]
         }
@@ -22054,6 +23623,2808 @@ pub mod accounts {
                 .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
         }
     }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct InitializeLpPool {
+        pub admin: Pubkey,
+        pub lp_pool: Pubkey,
+        pub mint: Pubkey,
+        pub lp_pool_token_vault: Pubkey,
+        pub amm_constituent_mapping: Pubkey,
+        pub constituent_target_base: Pubkey,
+        pub constituent_correlations: Pubkey,
+        pub state: Pubkey,
+        pub token_program: Pubkey,
+        pub rent: Pubkey,
+        pub system_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for InitializeLpPool {
+        const DISCRIMINATOR: &[u8] = &[175, 163, 51, 19, 6, 194, 50, 80];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeLpPool {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for InitializeLpPool {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for InitializeLpPool {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for InitializeLpPool {}
+    #[automatically_derived]
+    impl ToAccountMetas for InitializeLpPool {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.mint,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool_token_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.amm_constituent_mapping,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_target_base,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_correlations,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.rent,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.system_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for InitializeLpPool {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for InitializeLpPool {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateFeatureBitFlagsSettleLpPool {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateFeatureBitFlagsSettleLpPool {
+        const DISCRIMINATOR: &[u8] = &[6, 211, 43, 97, 187, 204, 63, 134];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateFeatureBitFlagsSettleLpPool {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateFeatureBitFlagsSettleLpPool {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateFeatureBitFlagsSettleLpPool {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateFeatureBitFlagsSettleLpPool {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateFeatureBitFlagsSettleLpPool {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateFeatureBitFlagsSettleLpPool {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateFeatureBitFlagsSettleLpPool {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateFeatureBitFlagsSwapLpPool {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateFeatureBitFlagsSwapLpPool {
+        const DISCRIMINATOR: &[u8] = &[19, 212, 181, 234, 96, 3, 111, 191];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateFeatureBitFlagsSwapLpPool {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateFeatureBitFlagsSwapLpPool {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateFeatureBitFlagsSwapLpPool {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateFeatureBitFlagsSwapLpPool {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateFeatureBitFlagsSwapLpPool {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateFeatureBitFlagsSwapLpPool {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateFeatureBitFlagsSwapLpPool {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateFeatureBitFlagsMintRedeemLpPool {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateFeatureBitFlagsMintRedeemLpPool {
+        const DISCRIMINATOR: &[u8] = &[248, 134, 197, 180, 108, 15, 195, 40];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateFeatureBitFlagsMintRedeemLpPool {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateFeatureBitFlagsMintRedeemLpPool {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateFeatureBitFlagsMintRedeemLpPool {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateFeatureBitFlagsMintRedeemLpPool {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateFeatureBitFlagsMintRedeemLpPool {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateFeatureBitFlagsMintRedeemLpPool {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateFeatureBitFlagsMintRedeemLpPool {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct InitializeConstituent {
+        pub state: Pubkey,
+        pub admin: Pubkey,
+        pub lp_pool: Pubkey,
+        pub constituent_target_base: Pubkey,
+        pub constituent_correlations: Pubkey,
+        pub constituent: Pubkey,
+        pub spot_market: Pubkey,
+        pub spot_market_mint: Pubkey,
+        pub constituent_vault: Pubkey,
+        pub rent: Pubkey,
+        pub system_program: Pubkey,
+        pub token_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for InitializeConstituent {
+        const DISCRIMINATOR: &[u8] = &[16, 130, 89, 67, 58, 248, 183, 71];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for InitializeConstituent {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for InitializeConstituent {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for InitializeConstituent {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for InitializeConstituent {}
+    #[automatically_derived]
+    impl ToAccountMetas for InitializeConstituent {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_target_base,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_correlations,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market_mint,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.rent,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.system_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for InitializeConstituent {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for InitializeConstituent {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateConstituentStatus {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+        pub constituent: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateConstituentStatus {
+        const DISCRIMINATOR: &[u8] = &[62, 11, 179, 105, 13, 0, 16, 211];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateConstituentStatus {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateConstituentStatus {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateConstituentStatus {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateConstituentStatus {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateConstituentStatus {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateConstituentStatus {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateConstituentStatus {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateConstituentPausedOperations {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+        pub constituent: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateConstituentPausedOperations {
+        const DISCRIMINATOR: &[u8] = &[222, 186, 140, 75, 26, 33, 198, 248];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateConstituentPausedOperations {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateConstituentPausedOperations {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateConstituentPausedOperations {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateConstituentPausedOperations {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateConstituentPausedOperations {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateConstituentPausedOperations {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateConstituentPausedOperations {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateConstituentParams {
+        pub lp_pool: Pubkey,
+        pub constituent_target_base: Pubkey,
+        pub admin: Pubkey,
+        pub state: Pubkey,
+        pub constituent: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateConstituentParams {
+        const DISCRIMINATOR: &[u8] = &[40, 118, 202, 125, 178, 190, 161, 1];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateConstituentParams {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateConstituentParams {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateConstituentParams {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateConstituentParams {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateConstituentParams {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_target_base,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateConstituentParams {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateConstituentParams {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateLpPoolParams {
+        pub lp_pool: Pubkey,
+        pub admin: Pubkey,
+        pub state: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateLpPoolParams {
+        const DISCRIMINATOR: &[u8] = &[234, 178, 33, 234, 103, 110, 101, 153];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateLpPoolParams {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateLpPoolParams {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateLpPoolParams {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateLpPoolParams {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateLpPoolParams {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateLpPoolParams {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateLpPoolParams {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct AddAmmConstituentMappingData {
+        pub admin: Pubkey,
+        pub lp_pool: Pubkey,
+        pub amm_constituent_mapping: Pubkey,
+        pub constituent_target_base: Pubkey,
+        pub state: Pubkey,
+        pub system_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for AddAmmConstituentMappingData {
+        const DISCRIMINATOR: &[u8] = &[173, 209, 180, 210, 64, 153, 114, 241];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for AddAmmConstituentMappingData {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for AddAmmConstituentMappingData {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for AddAmmConstituentMappingData {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for AddAmmConstituentMappingData {}
+    #[automatically_derived]
+    impl ToAccountMetas for AddAmmConstituentMappingData {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.amm_constituent_mapping,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_target_base,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.system_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for AddAmmConstituentMappingData {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for AddAmmConstituentMappingData {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateAmmConstituentMappingData {
+        pub admin: Pubkey,
+        pub lp_pool: Pubkey,
+        pub amm_constituent_mapping: Pubkey,
+        pub system_program: Pubkey,
+        pub state: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateAmmConstituentMappingData {
+        const DISCRIMINATOR: &[u8] = &[215, 140, 19, 243, 43, 114, 16, 182];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateAmmConstituentMappingData {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateAmmConstituentMappingData {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateAmmConstituentMappingData {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateAmmConstituentMappingData {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateAmmConstituentMappingData {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.amm_constituent_mapping,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.system_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateAmmConstituentMappingData {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateAmmConstituentMappingData {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct RemoveAmmConstituentMappingData {
+        pub admin: Pubkey,
+        pub lp_pool: Pubkey,
+        pub amm_constituent_mapping: Pubkey,
+        pub system_program: Pubkey,
+        pub state: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for RemoveAmmConstituentMappingData {
+        const DISCRIMINATOR: &[u8] = &[234, 218, 223, 122, 134, 5, 95, 134];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for RemoveAmmConstituentMappingData {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for RemoveAmmConstituentMappingData {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for RemoveAmmConstituentMappingData {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for RemoveAmmConstituentMappingData {}
+    #[automatically_derived]
+    impl ToAccountMetas for RemoveAmmConstituentMappingData {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.amm_constituent_mapping,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.system_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for RemoveAmmConstituentMappingData {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for RemoveAmmConstituentMappingData {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateConstituentCorrelationData {
+        pub admin: Pubkey,
+        pub lp_pool: Pubkey,
+        pub constituent_correlations: Pubkey,
+        pub state: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateConstituentCorrelationData {
+        const DISCRIMINATOR: &[u8] = &[185, 55, 109, 5, 115, 24, 148, 38];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateConstituentCorrelationData {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateConstituentCorrelationData {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateConstituentCorrelationData {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateConstituentCorrelationData {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateConstituentCorrelationData {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_correlations,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateConstituentCorrelationData {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateConstituentCorrelationData {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateLpConstituentTargetBase {
+        pub state: Pubkey,
+        pub keeper: Pubkey,
+        pub amm_constituent_mapping: Pubkey,
+        pub constituent_target_base: Pubkey,
+        pub amm_cache: Pubkey,
+        pub lp_pool: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateLpConstituentTargetBase {
+        const DISCRIMINATOR: &[u8] = &[222, 159, 185, 241, 143, 98, 83, 158];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateLpConstituentTargetBase {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateLpConstituentTargetBase {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateLpConstituentTargetBase {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateLpConstituentTargetBase {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateLpConstituentTargetBase {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.keeper,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.amm_constituent_mapping,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_target_base,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.amm_cache,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateLpConstituentTargetBase {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateLpConstituentTargetBase {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateLpPoolAum {
+        pub state: Pubkey,
+        pub keeper: Pubkey,
+        pub lp_pool: Pubkey,
+        pub constituent_target_base: Pubkey,
+        pub amm_cache: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateLpPoolAum {
+        const DISCRIMINATOR: &[u8] = &[59, 61, 200, 130, 66, 13, 57, 67];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateLpPoolAum {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateLpPoolAum {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateLpPoolAum {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateLpPoolAum {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateLpPoolAum {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.keeper,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_target_base,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.amm_cache,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateLpPoolAum {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateLpPoolAum {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateAmmCache {
+        pub keeper: Pubkey,
+        pub state: Pubkey,
+        pub amm_cache: Pubkey,
+        pub quote_market: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateAmmCache {
+        const DISCRIMINATOR: &[u8] = &[85, 115, 192, 121, 41, 157, 139, 170];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateAmmCache {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateAmmCache {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateAmmCache {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateAmmCache {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateAmmCache {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.keeper,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.amm_cache,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.quote_market,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateAmmCache {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateAmmCache {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct OverrideAmmCacheInfo {
+        pub state: Pubkey,
+        pub admin: Pubkey,
+        pub amm_cache: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for OverrideAmmCacheInfo {
+        const DISCRIMINATOR: &[u8] = &[253, 209, 112, 15, 184, 24, 159, 175];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for OverrideAmmCacheInfo {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for OverrideAmmCacheInfo {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for OverrideAmmCacheInfo {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for OverrideAmmCacheInfo {}
+    #[automatically_derived]
+    impl ToAccountMetas for OverrideAmmCacheInfo {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.amm_cache,
+                    is_signer: false,
+                    is_writable: true,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for OverrideAmmCacheInfo {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for OverrideAmmCacheInfo {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct ResetAmmCache {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+        pub amm_cache: Pubkey,
+        pub system_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ResetAmmCache {
+        const DISCRIMINATOR: &[u8] = &[75, 164, 27, 11, 182, 200, 242, 116];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for ResetAmmCache {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ResetAmmCache {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for ResetAmmCache {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ResetAmmCache {}
+    #[automatically_derived]
+    impl ToAccountMetas for ResetAmmCache {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.amm_cache,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.system_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for ResetAmmCache {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for ResetAmmCache {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct LpPoolSwap {
+        pub state: Pubkey,
+        pub lp_pool: Pubkey,
+        pub constituent_target_base: Pubkey,
+        pub constituent_correlations: Pubkey,
+        pub constituent_in_token_account: Pubkey,
+        pub constituent_out_token_account: Pubkey,
+        pub user_in_token_account: Pubkey,
+        pub user_out_token_account: Pubkey,
+        pub in_constituent: Pubkey,
+        pub out_constituent: Pubkey,
+        pub in_market_mint: Pubkey,
+        pub out_market_mint: Pubkey,
+        pub authority: Pubkey,
+        pub token_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for LpPoolSwap {
+        const DISCRIMINATOR: &[u8] = &[165, 82, 230, 177, 164, 234, 111, 249];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for LpPoolSwap {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for LpPoolSwap {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for LpPoolSwap {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for LpPoolSwap {}
+    #[automatically_derived]
+    impl ToAccountMetas for LpPoolSwap {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_target_base,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_correlations,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_in_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_out_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_in_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_out_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.in_constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.out_constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.in_market_mint,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.out_market_mint,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for LpPoolSwap {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for LpPoolSwap {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct ViewLpPoolSwapFees {
+        pub drift_signer: Pubkey,
+        pub state: Pubkey,
+        pub lp_pool: Pubkey,
+        pub constituent_target_base: Pubkey,
+        pub constituent_correlations: Pubkey,
+        pub constituent_in_token_account: Pubkey,
+        pub constituent_out_token_account: Pubkey,
+        pub in_constituent: Pubkey,
+        pub out_constituent: Pubkey,
+        pub authority: Pubkey,
+        pub token_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ViewLpPoolSwapFees {
+        const DISCRIMINATOR: &[u8] = &[20, 81, 39, 150, 16, 20, 141, 80];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for ViewLpPoolSwapFees {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ViewLpPoolSwapFees {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for ViewLpPoolSwapFees {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ViewLpPoolSwapFees {}
+    #[automatically_derived]
+    impl ToAccountMetas for ViewLpPoolSwapFees {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.drift_signer,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_target_base,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_correlations,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_in_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_out_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.in_constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.out_constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for ViewLpPoolSwapFees {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for ViewLpPoolSwapFees {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct LpPoolAddLiquidity {
+        pub state: Pubkey,
+        pub lp_pool: Pubkey,
+        pub authority: Pubkey,
+        pub in_market_mint: Pubkey,
+        pub in_constituent: Pubkey,
+        pub user_in_token_account: Pubkey,
+        pub constituent_in_token_account: Pubkey,
+        pub user_lp_token_account: Pubkey,
+        pub lp_mint: Pubkey,
+        pub constituent_target_base: Pubkey,
+        pub lp_pool_token_vault: Pubkey,
+        pub token_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for LpPoolAddLiquidity {
+        const DISCRIMINATOR: &[u8] = &[200, 32, 82, 30, 175, 7, 52, 218];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for LpPoolAddLiquidity {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for LpPoolAddLiquidity {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for LpPoolAddLiquidity {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for LpPoolAddLiquidity {}
+    #[automatically_derived]
+    impl ToAccountMetas for LpPoolAddLiquidity {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.in_market_mint,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.in_constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_in_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_in_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_lp_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.lp_mint,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_target_base,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool_token_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for LpPoolAddLiquidity {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for LpPoolAddLiquidity {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct LpPoolRemoveLiquidity {
+        pub state: Pubkey,
+        pub drift_signer: Pubkey,
+        pub lp_pool: Pubkey,
+        pub authority: Pubkey,
+        pub out_market_mint: Pubkey,
+        pub out_constituent: Pubkey,
+        pub user_out_token_account: Pubkey,
+        pub constituent_out_token_account: Pubkey,
+        pub user_lp_token_account: Pubkey,
+        pub spot_market_token_account: Pubkey,
+        pub lp_mint: Pubkey,
+        pub constituent_target_base: Pubkey,
+        pub lp_pool_token_vault: Pubkey,
+        pub token_program: Pubkey,
+        pub amm_cache: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for LpPoolRemoveLiquidity {
+        const DISCRIMINATOR: &[u8] = &[157, 117, 172, 191, 245, 138, 120, 220];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for LpPoolRemoveLiquidity {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for LpPoolRemoveLiquidity {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for LpPoolRemoveLiquidity {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for LpPoolRemoveLiquidity {}
+    #[automatically_derived]
+    impl ToAccountMetas for LpPoolRemoveLiquidity {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.drift_signer,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.out_market_mint,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.out_constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_out_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_out_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_lp_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.lp_mint,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_target_base,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool_token_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.amm_cache,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for LpPoolRemoveLiquidity {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for LpPoolRemoveLiquidity {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct ViewLpPoolAddLiquidityFees {
+        pub state: Pubkey,
+        pub lp_pool: Pubkey,
+        pub authority: Pubkey,
+        pub in_market_mint: Pubkey,
+        pub in_constituent: Pubkey,
+        pub lp_mint: Pubkey,
+        pub constituent_target_base: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ViewLpPoolAddLiquidityFees {
+        const DISCRIMINATOR: &[u8] = &[83, 133, 63, 253, 30, 141, 202, 236];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for ViewLpPoolAddLiquidityFees {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ViewLpPoolAddLiquidityFees {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for ViewLpPoolAddLiquidityFees {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ViewLpPoolAddLiquidityFees {}
+    #[automatically_derived]
+    impl ToAccountMetas for ViewLpPoolAddLiquidityFees {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.in_market_mint,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.in_constituent,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.lp_mint,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_target_base,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for ViewLpPoolAddLiquidityFees {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for ViewLpPoolAddLiquidityFees {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct ViewLpPoolRemoveLiquidityFees {
+        pub state: Pubkey,
+        pub lp_pool: Pubkey,
+        pub authority: Pubkey,
+        pub out_market_mint: Pubkey,
+        pub out_constituent: Pubkey,
+        pub lp_mint: Pubkey,
+        pub constituent_target_base: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ViewLpPoolRemoveLiquidityFees {
+        const DISCRIMINATOR: &[u8] = &[132, 58, 146, 10, 116, 249, 43, 228];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for ViewLpPoolRemoveLiquidityFees {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ViewLpPoolRemoveLiquidityFees {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for ViewLpPoolRemoveLiquidityFees {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ViewLpPoolRemoveLiquidityFees {}
+    #[automatically_derived]
+    impl ToAccountMetas for ViewLpPoolRemoveLiquidityFees {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.out_market_mint,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.out_constituent,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.lp_mint,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_target_base,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for ViewLpPoolRemoveLiquidityFees {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for ViewLpPoolRemoveLiquidityFees {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct BeginLpSwap {
+        pub state: Pubkey,
+        pub admin: Pubkey,
+        pub signer_out_token_account: Pubkey,
+        pub signer_in_token_account: Pubkey,
+        pub constituent_out_token_account: Pubkey,
+        pub constituent_in_token_account: Pubkey,
+        pub out_constituent: Pubkey,
+        pub in_constituent: Pubkey,
+        pub lp_pool: Pubkey,
+        pub instructions: Pubkey,
+        pub token_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for BeginLpSwap {
+        const DISCRIMINATOR: &[u8] = &[207, 36, 172, 111, 231, 111, 21, 105];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for BeginLpSwap {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for BeginLpSwap {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for BeginLpSwap {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for BeginLpSwap {}
+    #[automatically_derived]
+    impl ToAccountMetas for BeginLpSwap {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.signer_out_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.signer_in_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_out_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_in_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.out_constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.in_constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.instructions,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for BeginLpSwap {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for BeginLpSwap {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct EndLpSwap {
+        pub state: Pubkey,
+        pub admin: Pubkey,
+        pub signer_out_token_account: Pubkey,
+        pub signer_in_token_account: Pubkey,
+        pub constituent_out_token_account: Pubkey,
+        pub constituent_in_token_account: Pubkey,
+        pub out_constituent: Pubkey,
+        pub in_constituent: Pubkey,
+        pub lp_pool: Pubkey,
+        pub instructions: Pubkey,
+        pub token_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for EndLpSwap {
+        const DISCRIMINATOR: &[u8] = &[156, 184, 54, 52, 134, 149, 70, 205];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for EndLpSwap {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for EndLpSwap {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for EndLpSwap {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for EndLpSwap {}
+    #[automatically_derived]
+    impl ToAccountMetas for EndLpSwap {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.signer_out_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.signer_in_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_out_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_in_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.out_constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.in_constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.instructions,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for EndLpSwap {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for EndLpSwap {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateConstituentOracleInfo {
+        pub state: Pubkey,
+        pub keeper: Pubkey,
+        pub constituent: Pubkey,
+        pub spot_market: Pubkey,
+        pub oracle: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateConstituentOracleInfo {
+        const DISCRIMINATOR: &[u8] = &[109, 252, 246, 42, 220, 149, 18, 218];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateConstituentOracleInfo {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateConstituentOracleInfo {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateConstituentOracleInfo {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateConstituentOracleInfo {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateConstituentOracleInfo {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.keeper,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.oracle,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateConstituentOracleInfo {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateConstituentOracleInfo {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct DepositToProgramVault {
+        pub state: Pubkey,
+        pub admin: Pubkey,
+        pub constituent: Pubkey,
+        pub constituent_token_account: Pubkey,
+        pub spot_market: Pubkey,
+        pub spot_market_vault: Pubkey,
+        pub token_program: Pubkey,
+        pub mint: Pubkey,
+        pub oracle: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for DepositToProgramVault {
+        const DISCRIMINATOR: &[u8] = &[19, 146, 45, 108, 190, 253, 160, 105];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for DepositToProgramVault {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for DepositToProgramVault {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for DepositToProgramVault {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for DepositToProgramVault {}
+    #[automatically_derived]
+    impl ToAccountMetas for DepositToProgramVault {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.mint,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.oracle,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for DepositToProgramVault {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for DepositToProgramVault {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct WithdrawFromProgramVault {
+        pub state: Pubkey,
+        pub admin: Pubkey,
+        pub drift_signer: Pubkey,
+        pub constituent: Pubkey,
+        pub constituent_token_account: Pubkey,
+        pub spot_market: Pubkey,
+        pub spot_market_vault: Pubkey,
+        pub token_program: Pubkey,
+        pub mint: Pubkey,
+        pub oracle: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for WithdrawFromProgramVault {
+        const DISCRIMINATOR: &[u8] = &[75, 243, 206, 250, 71, 130, 49, 13];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for WithdrawFromProgramVault {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for WithdrawFromProgramVault {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for WithdrawFromProgramVault {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for WithdrawFromProgramVault {}
+    #[automatically_derived]
+    impl ToAccountMetas for WithdrawFromProgramVault {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.drift_signer,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.mint,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.oracle,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for WithdrawFromProgramVault {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for WithdrawFromProgramVault {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct SettlePerpToLpPool {
+        pub state: Pubkey,
+        pub lp_pool: Pubkey,
+        pub keeper: Pubkey,
+        pub amm_cache: Pubkey,
+        pub quote_market: Pubkey,
+        pub constituent: Pubkey,
+        pub constituent_quote_token_account: Pubkey,
+        pub quote_token_vault: Pubkey,
+        pub token_program: Pubkey,
+        pub drift_signer: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for SettlePerpToLpPool {
+        const DISCRIMINATOR: &[u8] = &[254, 36, 139, 22, 58, 222, 46, 142];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for SettlePerpToLpPool {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for SettlePerpToLpPool {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for SettlePerpToLpPool {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for SettlePerpToLpPool {}
+    #[automatically_derived]
+    impl ToAccountMetas for SettlePerpToLpPool {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.lp_pool,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.keeper,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.amm_cache,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.quote_market,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.constituent_quote_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.quote_token_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.drift_signer,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for SettlePerpToLpPool {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for SettlePerpToLpPool {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
 }
 pub mod errors {
     #![doc = r" IDL error types"]
@@ -22711,6 +27082,44 @@ pub mod errors {
         CannotRevokeBuilderWithOpenOrders,
         #[msg("Unable to load builder account")]
         UnableToLoadRevenueShareAccount,
+        #[msg("Invalid Constituent")]
+        InvalidConstituent,
+        #[msg("Invalid Amm Constituent Mapping argument")]
+        InvalidAmmConstituentMappingArgument,
+        #[msg("Constituent not found")]
+        ConstituentNotFound,
+        #[msg("Constituent could not load")]
+        ConstituentCouldNotLoad,
+        #[msg("Constituent wrong mutability")]
+        ConstituentWrongMutability,
+        #[msg("Wrong number of constituents passed to instruction")]
+        WrongNumberOfConstituents,
+        #[msg("Insufficient constituent token balance")]
+        InsufficientConstituentTokenBalance,
+        #[msg("Amm Cache data too stale")]
+        AMMCacheStale,
+        #[msg("LP Pool AUM not updated recently")]
+        LpPoolAumDelayed,
+        #[msg("Constituent oracle is stale")]
+        ConstituentOracleStale,
+        #[msg("LP Invariant failed")]
+        LpInvariantFailed,
+        #[msg("Invalid constituent derivative weights")]
+        InvalidConstituentDerivativeWeights,
+        #[msg("Max DLP AUM Breached")]
+        MaxDlpAumBreached,
+        #[msg("Settle Lp Pool Disabled")]
+        SettleLpPoolDisabled,
+        #[msg("Mint/Redeem Lp Pool Disabled")]
+        MintRedeemLpPoolDisabled,
+        #[msg("Settlement amount exceeded")]
+        LpPoolSettleInvariantBreached,
+        #[msg("Invalid constituent operation")]
+        InvalidConstituentOperation,
+        #[msg("Unauthorized for operation")]
+        Unauthorized,
+        #[msg("Invalid Lp Pool Id for Operation")]
+        InvalidLpPoolId,
     }
 }
 pub mod events {

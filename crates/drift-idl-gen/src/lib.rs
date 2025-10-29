@@ -249,9 +249,22 @@ fn generate_idl_types(idl: &Idl) -> String {
                 let struct_fields = fields.iter().map(|field| {
                     let field_name =
                         Ident::new(&to_snake_case(&field.name), proc_macro2::Span::call_site());
-                    let field_type: syn::Type =
+                    let mut field_type: syn::Type =
                         syn::parse_str(&field.field_type.to_rust_type()).unwrap();
+
+                    let mut serde_decorator = TokenStream::default();
+                    // workaround for padding types preventing outertype from deriving 'Default'
+                    if field_name.to_string().starts_with("padding") {
+                        if let ArgType::Array { array: (_t, len) } = &field.field_type {
+                            field_type = syn::parse_str(&format!("Padding<{len}>")).unwrap();
+                            serde_decorator = quote! {
+                                #[serde(skip)]
+                            };
+                        }
+                    }
+
                     quote! {
+                        #serde_decorator
                         pub #field_name: #field_type,
                     }
                 });
@@ -291,7 +304,7 @@ fn generate_idl_types(idl: &Idl) -> String {
                 let mut field_type: Type =
                     syn::parse_str(&field.field_type.to_rust_type()).unwrap();
                 // workaround for padding types preventing outertype from deriving 'Default'
-                if field_name == "padding" {
+                if field_name.to_string().starts_with("padding") {
                     if let ArgType::Array { array: (_t, len) } = &field.field_type {
                         field_type = syn::parse_str(&format!("Padding<{len}>")).unwrap();
                         serde_decorator = quote! {
