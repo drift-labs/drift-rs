@@ -682,6 +682,7 @@ mod tests {
                     auction_duration: Some(50),
                     auction_start_price: Some(2102419643),
                     auction_end_price: Some(2081603607),
+                    isolated_position_deposit: None,
                 },
                 taker_pubkey: solana_sdk::pubkey!("4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"),
                 slot: 369631527,
