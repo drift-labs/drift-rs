@@ -5,7 +5,8 @@ use crate::{
     accounts::User,
     dlob::{DLOBNotifier, DLOB},
     grpc::AccountUpdate,
-    Wallet,
+    types::MarketId,
+    DriftClient, Wallet,
 };
 
 /// Convenience builder for constructing and managing an event driven [`DLOB`] instance.
@@ -59,7 +60,7 @@ impl<'a> DLOBBuilder<'a> {
         Self { dlob, notifier }
     }
 
-    /// Initialize a new DLOBBuilder instance from list of User accounts
+    /// Initialize a new DLOBBuilder instance from some iterable list of User accounts
     ///
     /// ## Params
     ///
@@ -105,17 +106,32 @@ impl<'a> DLOBBuilder<'a> {
         }
     }
 
+    /// Load an individual user account to the DLOB
     pub fn load_user(&self, pubkey: Pubkey, user: &User, slot: u64) {
         self.notifier.user_update(pubkey, None, user, slot);
     }
 
     /// Returns a handler suitable for use in grpc_subscribe's on_slot
     ///
-    /// This will notify the DLOB of slot/price updates for the given markets and send the slot to slot_tx.
-    pub fn slot_update_handler(&self) -> impl Fn(u64) + Send + Sync + 'static {
+    /// This will notify the DLOB of slot/price updates for the given markets.
+    pub fn slot_update_handler(
+        &self,
+        drift: DriftClient,
+        markets: Vec<MarketId>,
+    ) -> impl Fn(u64) + Send + Sync + 'static {
         let notifier = self.notifier.clone();
         move |new_slot| {
-            notifier.slot_update(new_slot);
+            for market in markets.iter() {
+                let oracle_price_data = drift
+                    .try_get_mmoracle_for_perp_market(market.index(), new_slot)
+                    .expect("got oracle price");
+
+                notifier.slot_and_oracle_update(
+                    *market,
+                    new_slot,
+                    oracle_price_data.price.unsigned_abs(),
+                );
+            }
         }
     }
 }

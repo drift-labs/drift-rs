@@ -84,10 +84,7 @@ impl MarketState {
         }
     }
 
-    /// Update a single spot market atomically
-    ///
-    /// This loads the current state, creates a new one with the updated market,
-    /// and atomically replaces it. Uses copy-on-write for efficiency.
+    /// Update a single spot market
     pub fn set_spot_market(&self, market: SpotMarket) {
         let current = self.load();
         let mut new_data = (*current).clone();
@@ -95,7 +92,7 @@ impl MarketState {
         self.store(Arc::new(new_data));
     }
 
-    /// Update a single perp market atomically
+    /// Update a single perp market
     pub fn set_perp_market(&self, market: PerpMarket) {
         let current = self.load();
         let mut new_data = (*current).clone();
@@ -103,7 +100,7 @@ impl MarketState {
         self.store(Arc::new(new_data));
     }
 
-    /// Update spot oracle price atomically
+    /// Update spot oracle price
     pub fn set_spot_oracle_price(&self, market_index: u16, price: OraclePriceData) {
         let current = self.load();
         let mut new_data = (*current).clone();
@@ -111,7 +108,7 @@ impl MarketState {
         self.store(Arc::new(new_data));
     }
 
-    /// Update perp oracle price atomically
+    /// Update perp oracle price
     pub fn set_perp_oracle_price(&self, market_index: u16, price: OraclePriceData) {
         let current = self.load();
         let mut new_data = (*current).clone();
@@ -119,6 +116,15 @@ impl MarketState {
         self.store(Arc::new(new_data));
     }
 
+    pub fn get_perp_oracle_price(&self, market_index: u16) -> Option<OraclePriceData> {
+        let current = self.load();
+        current.perp_oracle_prices.get(&market_index).copied()
+    }
+
+    pub fn get_spot_oracle_price(&self, market_index: u16) -> Option<OraclePriceData> {
+        let current = self.load();
+        current.spot_oracle_prices.get(&market_index).copied()
+    }
     /// Batch update multiple markets atomically
     ///
     /// This is more efficient than multiple individual updates as it only
