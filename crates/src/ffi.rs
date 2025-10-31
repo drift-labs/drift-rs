@@ -1075,8 +1075,9 @@ mod tests {
         drift_idl::{
             accounts::{PerpMarket, SpotMarket, User},
             types::{
-                ContractType, MarginRequirementType, OracleSource, Order, OrderParams, OrderType,
-                PerpPosition, SpotBalanceType, SpotPosition,
+                ContractType, MarginRequirementType, OracleSource, Order, OrderParams,
+                OrderTriggerCondition, OrderType, PerpPosition, PostOnlyParam, SpotBalanceType,
+                SpotPosition,
             },
         },
         ffi::{
@@ -1409,6 +1410,207 @@ mod tests {
         assert!(result.is_ok());
         let maintenance_margin_ratio = result.unwrap();
         assert_eq!(maintenance_margin_ratio, 1_234); // 5%
+    }
+
+    #[test]
+    fn ffi_order_params_update_perp_auction_params_populates_fields() {
+        let market_index = 3u16;
+        // PerpMarket with non-zero AMM fields to exercise FFI struct layout
+        let perp_market = PerpMarket {
+            market_index,
+            status: MarketStatus::Active,
+            contract_tier: ContractTier::A,
+            amm: AMM {
+                order_step_size: 2_000,
+                order_tick_size: 1_000,
+                base_asset_reserve: 10_000u128.into(),
+                quote_asset_reserve: 20_000u128.into(),
+                sqrt_k: 100u128.into(),
+                peg_multiplier: 1_000_000u128.into(),
+                terminal_quote_asset_reserve: 19_000u128.into(),
+                concentration_coef: 5u128.into(),
+                max_open_interest: 1_000_000u128.into(),
+                mm_oracle_price: 1_234_567,
+                mm_oracle_slot: 9_999,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        // Start with empty auction params and let program fill them
+        let mut params = OrderParams {
+            order_type: OrderType::Limit,
+            market_type: MarketType::Perp,
+            direction: PositionDirection::Short,
+            user_order_id: 7,
+            base_asset_amount: 50_000,
+            price: 200_000,
+            market_index,
+            reduce_only: false,
+            post_only: PostOnlyParam::None,
+            bit_flags: 0,
+            max_ts: None,
+            trigger_price: None,
+            trigger_condition: OrderTriggerCondition::Below,
+            oracle_price_offset: None,
+            auction_duration: None,
+            auction_start_price: None,
+            auction_end_price: None,
+        };
+
+        // Call through FFI
+        let oracle_price = 199_500i64;
+
+        // Debug: Check AMM fields before FFI call
+        eprintln!("Before FFI call - AMM fields:");
+        eprintln!("  mm_oracle_price: {}", perp_market.amm.mm_oracle_price);
+        eprintln!("  order_step_size: {}", perp_market.amm.order_step_size);
+        eprintln!("  order_tick_size: {}", perp_market.amm.order_tick_size);
+        eprintln!(
+            "  base_asset_reserve: {:?}",
+            perp_market.amm.base_asset_reserve.as_u128()
+        );
+        eprintln!(
+            "  quote_asset_reserve: {:?}",
+            perp_market.amm.quote_asset_reserve.as_u128()
+        );
+
+        params.update_perp_auction_params(&perp_market, oracle_price, true);
+
+        // Debug: Check if auction params were populated
+        eprintln!("After FFI call - auction params:");
+        eprintln!("  auction_duration: {:?}", params.auction_duration);
+        eprintln!("  auction_start_price: {:?}", params.auction_start_price);
+        eprintln!("  auction_end_price: {:?}", params.auction_end_price);
+
+        // Expect auction params to be populated and non-zero
+        assert!(params.auction_duration.is_some());
+        assert!(params.auction_start_price.is_some());
+        assert!(params.auction_end_price.is_some());
+
+        let dur = params.auction_duration.unwrap();
+        let start = params.auction_start_price.unwrap();
+        let end = params.auction_end_price.unwrap();
+        assert!(dur > 0);
+        assert!(start != 0);
+        assert!(end != 0);
+    }
+
+    #[test]
+    fn ffi_order_params_update_perp_auction_params_reads_amm_fields() {
+        let market_index = 4u16;
+
+        let perp_market_a = PerpMarket {
+            market_index,
+            status: MarketStatus::Active,
+            contract_tier: ContractTier::A,
+            amm: AMM {
+                order_step_size: 1_000,
+                order_tick_size: 1_000,
+                base_asset_reserve: 50_000u128.into(),
+                quote_asset_reserve: 80_000u128.into(),
+                sqrt_k: 200u128.into(),
+                peg_multiplier: 1_100_000u128.into(),
+                terminal_quote_asset_reserve: 79_000u128.into(),
+                concentration_coef: 7u128.into(),
+                max_open_interest: 2_000_000u128.into(),
+                mm_oracle_price: 2_222_222,
+                mm_oracle_slot: 10_001,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let perp_market_b = PerpMarket {
+            market_index,
+            status: MarketStatus::Active,
+            contract_tier: ContractTier::A,
+            amm: AMM {
+                order_step_size: 8_000, // different
+                order_tick_size: 4_000, // different
+                base_asset_reserve: 60_000u128.into(),
+                quote_asset_reserve: 90_000u128.into(),
+                sqrt_k: 250u128.into(),
+                peg_multiplier: 900_000u128.into(),
+                terminal_quote_asset_reserve: 88_000u128.into(),
+                concentration_coef: 9u128.into(),
+                max_open_interest: 3_000_000u128.into(),
+                mm_oracle_price: 3_333_333,
+                mm_oracle_slot: 10_005,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let base_params = || OrderParams {
+            order_type: OrderType::Limit,
+            market_type: MarketType::Perp,
+            direction: PositionDirection::Short,
+            user_order_id: 8,
+            base_asset_amount: 50_000,
+            price: 200_000,
+            market_index,
+            reduce_only: false,
+            post_only: PostOnlyParam::None,
+            bit_flags: 0,
+            max_ts: None,
+            trigger_price: None,
+            trigger_condition: OrderTriggerCondition::Below,
+            oracle_price_offset: None,
+            auction_duration: None,
+            auction_start_price: None,
+            auction_end_price: None,
+        };
+
+        let oracle_price = 199_500i64;
+
+        // Debug: Check AMM fields before FFI calls
+        eprintln!("Before FFI calls - AMM fields:");
+        eprintln!(
+            "  Market A - mm_oracle_price: {}, order_step_size: {}",
+            perp_market_a.amm.mm_oracle_price, perp_market_a.amm.order_step_size
+        );
+        eprintln!(
+            "  Market B - mm_oracle_price: {}, order_step_size: {}",
+            perp_market_b.amm.mm_oracle_price, perp_market_b.amm.order_step_size
+        );
+
+        let mut a = base_params();
+        a.update_perp_auction_params(&perp_market_a, oracle_price, false);
+
+        let mut b = base_params();
+        b.update_perp_auction_params(&perp_market_b, oracle_price, false);
+
+        // Debug: Check results
+        eprintln!("After FFI calls:");
+        eprintln!(
+            "  Market A - auction_duration: {:?}, auction_start_price: {:?}",
+            a.auction_duration, a.auction_start_price
+        );
+        eprintln!(
+            "  Market B - auction_duration: {:?}, auction_start_price: {:?}",
+            b.auction_duration, b.auction_start_price
+        );
+
+        // If AMM fields are read correctly across FFI, results should differ
+        assert!(a.auction_duration.is_some() && b.auction_duration.is_some());
+        assert!(a.auction_start_price.is_some() && b.auction_start_price.is_some());
+        assert!(a.auction_end_price.is_some() && b.auction_end_price.is_some());
+
+        let a_tuple = (
+            a.auction_duration.unwrap(),
+            a.auction_start_price.unwrap(),
+            a.auction_end_price.unwrap(),
+        );
+        let b_tuple = (
+            b.auction_duration.unwrap(),
+            b.auction_start_price.unwrap(),
+            b.auction_end_price.unwrap(),
+        );
+        assert_ne!(
+            a_tuple, b_tuple,
+            "auction params should reflect differing AMM fields"
+        );
     }
 
     #[test]

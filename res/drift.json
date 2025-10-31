@@ -1,5 +1,5 @@
 {
-  "version": "2.145.0",
+  "version": "2.145.1",
   "name": "drift",
   "instructions": [
     {
@@ -4424,6 +4424,37 @@
     },
     {
       "name": "initializeAmmCache",
+      "accounts": [
+        {
+          "name": "admin",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "state",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "ammCache",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "rent",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "resizeAmmCache",
       "accounts": [
         {
           "name": "admin",
@@ -15115,6 +15146,9 @@
           },
           {
             "name": "SafeMMOracle"
+          },
+          {
+            "name": "Margin"
           }
         ]
       }

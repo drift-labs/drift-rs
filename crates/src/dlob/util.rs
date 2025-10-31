@@ -116,27 +116,18 @@ mod tests {
             base_asset_amount: 1000,
             base_asset_amount_filled: 0,
             quote_asset_amount_filled: 0,
-            trigger_price: 0,
-            auction_start_price: 0,
-            auction_end_price: 0,
-            max_ts: 0,
-            oracle_price_offset: 0,
             order_id: id,
             market_index: 0,
             status,
             order_type: OrderType::Limit,
             market_type: MarketType::Perp,
-            user_order_id: 0,
             existing_position_direction: PositionDirection::Long,
             direction: PositionDirection::Long,
             reduce_only: false,
             post_only: false,
             immediate_or_cancel: false,
             trigger_condition: crate::types::OrderTriggerCondition::Above,
-            auction_duration: 0,
-            posted_slot_tail: 0,
-            bit_flags: 0,
-            padding: [0; 1],
+            ..Default::default()
         }
     }
 
