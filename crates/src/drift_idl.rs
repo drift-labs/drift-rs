@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.145.0";
+pub const IDL_VERSION: &str = "2.145.1";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -1136,6 +1136,14 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for InitializeAmmCache {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct ResizeAmmCache {}
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ResizeAmmCache {
+        const DISCRIMINATOR: &[u8] = &[140, 88, 45, 223, 167, 191, 227, 33];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ResizeAmmCache {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdateInitialAmmCacheInfo {}
     #[automatically_derived]
@@ -4081,6 +4089,7 @@ pub mod types {
         ExchangeOracle,
         MMOracle,
         SafeMMOracle,
+        Margin,
     }
     #[derive(
         AnchorSerialize,
@@ -15613,6 +15622,88 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for InitializeAmmCache {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct ResizeAmmCache {
+        pub admin: Pubkey,
+        pub state: Pubkey,
+        pub amm_cache: Pubkey,
+        pub rent: Pubkey,
+        pub system_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for ResizeAmmCache {
+        const DISCRIMINATOR: &[u8] = &[188, 179, 83, 254, 29, 44, 151, 54];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for ResizeAmmCache {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for ResizeAmmCache {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for ResizeAmmCache {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for ResizeAmmCache {}
+    #[automatically_derived]
+    impl ToAccountMetas for ResizeAmmCache {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.admin,
+                    is_signer: true,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.amm_cache,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.rent,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.system_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for ResizeAmmCache {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for ResizeAmmCache {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
