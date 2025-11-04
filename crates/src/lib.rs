@@ -1742,6 +1742,20 @@ pub struct TransactionBuilder<'a> {
     legacy: bool,
 }
 
+/// Jupiter swap instructions prepared for insertion into a transaction
+pub struct JupiterSwapInstructions {
+    /// Account creation instructions (if needed)
+    pub account_creation_instructions: Vec<Instruction>,
+    /// The amount being swapped in (for begin wrapper)
+    pub in_amount: u64,
+    /// The main Jupiter swap instruction
+    pub swap_instruction: Instruction,
+    /// Optional cleanup instruction (e.g., SOL unwrap)
+    pub cleanup_instruction: Option<Instruction>,
+    /// Lookup tables for the transaction
+    pub luts: Vec<AddressLookupTableAccount>,
+}
+
 impl<'a> TransactionBuilder<'a> {
     /// Initialize a new `TransactionBuilder` for default signer
     ///
@@ -2639,6 +2653,89 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
+    /// Helper function that creates token account creation instructions
+    fn create_token_account_instructions(
+        authority: &Pubkey,
+        token_account: &Pubkey,
+        mint: &Pubkey,
+        token_program: &Pubkey,
+    ) -> Instruction {
+        Instruction {
+            program_id: ASSOCIATED_TOKEN_PROGRAM_ID,
+            accounts: vec![
+                AccountMeta::new(*authority, true), // payer
+                AccountMeta::new(*token_account, false),
+                AccountMeta::new_readonly(*authority, false), // wallet
+                AccountMeta::new_readonly(*mint, false),
+                AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
+                AccountMeta::new_readonly(*token_program, false),
+            ],
+            data: vec![1], // idempotent mode
+        }
+    }
+
+    /// Prepares Jupiter swap instructions for insertion into a transaction
+    ///
+    /// This function handles common Jupiter-specific logic and returns a struct containing
+    /// all the instructions that need to be inserted between begin and end wrapper instructions.
+    ///
+    /// # Arguments
+    /// * `jupiter_swap_info` - Jupiter swap route and instructions
+    /// * `in_market` - Spot market of the input token
+    /// * `out_market` - Spot market of the output token
+    /// * `in_token_account` - Input token account pubkey
+    /// * `out_token_account` - Output token account pubkey
+    pub fn build_jupiter_swap_ixs(
+        authority: &Pubkey,
+        jupiter_swap_info: JupiterSwapInfo,
+        in_market: &SpotMarket,
+        out_market: &SpotMarket,
+        in_token_account: &Pubkey,
+        out_token_account: &Pubkey,
+    ) -> JupiterSwapInstructions {
+        let jupiter_swap_ixs = jupiter_swap_info.ixs;
+
+        // initialize token accounts
+        let account_creation_instructions = if !jupiter_swap_ixs.setup_instructions.is_empty() {
+            // jupiter swap ixs imply account creation is required
+            // provide our own creation ixs
+            vec![
+                Self::create_token_account_instructions(
+                    authority,
+                    in_token_account,
+                    &in_market.mint,
+                    &in_market.token_program(),
+                ),
+                Self::create_token_account_instructions(
+                    authority,
+                    out_token_account,
+                    &out_market.mint,
+                    &out_market.token_program(),
+                ),
+            ]
+        } else {
+            Vec::new()
+        };
+
+        // TODO: support jito bundle
+        if !jupiter_swap_ixs.other_instructions.is_empty() {
+            panic!("jupiter swap unsupported ix: Jito tip");
+        }
+
+        // support SOL unwrap ixs, ignore account delete/reclaim ixs
+        let cleanup_instruction = jupiter_swap_ixs.cleanup_instruction.filter(|ix| {
+            ix.program_id != TOKEN_PROGRAM_ID && ix.program_id != TOKEN_2022_PROGRAM_ID
+        });
+
+        JupiterSwapInstructions {
+            account_creation_instructions,
+            in_amount: jupiter_swap_info.quote.in_amount,
+            swap_instruction: jupiter_swap_ixs.swap_instruction,
+            cleanup_instruction,
+            luts: jupiter_swap_info.luts,
+        }
+    }
+
     /// Add a Jupiter token swap to the tx
     ///
     /// # Arguments
@@ -2659,66 +2756,34 @@ impl<'a> TransactionBuilder<'a> {
         limit_price: Option<u64>,
         reduce_only: Option<SwapReduceOnly>,
     ) -> Self {
-        let jupiter_swap_ixs = jupiter_swap_info.ixs;
-
-        // initialize token accounts
-        if !jupiter_swap_ixs.setup_instructions.is_empty() {
-            // jupiter swap ixs imply account creation is required
-            // provide our own creation ixs
-            // new_self.ixs.extend(jupiter_swap_ixs.setup_instructions);
-            let create_in_account_ix = Instruction {
-                program_id: ASSOCIATED_TOKEN_PROGRAM_ID,
-                accounts: vec![
-                    AccountMeta::new(self.authority, true), // payer
-                    AccountMeta::new(*in_token_account, false),
-                    AccountMeta::new_readonly(self.authority, false), // wallet
-                    AccountMeta::new_readonly(in_market.mint, false),
-                    AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
-                    AccountMeta::new_readonly(in_market.token_program(), false),
-                ],
-                data: vec![1], // idempotent mode
-            };
-            let create_out_account_ix = Instruction {
-                program_id: ASSOCIATED_TOKEN_PROGRAM_ID,
-                accounts: vec![
-                    AccountMeta::new(self.authority, true), // payer
-                    AccountMeta::new(*out_token_account, false),
-                    AccountMeta::new_readonly(self.authority, false), // wallet
-                    AccountMeta::new_readonly(out_market.mint, false),
-                    AccountMeta::new_readonly(SYSTEM_PROGRAM_ID, false),
-                    AccountMeta::new_readonly(out_market.token_program(), false),
-                ],
-                data: vec![1], // idempotent mode
-            };
-            self.ixs
-                .extend_from_slice(&[create_in_account_ix, create_out_account_ix]);
-        }
-
-        let mut new_self = self.begin_swap(
-            jupiter_swap_info.quote.in_amount,
+        let JupiterSwapInstructions {
+            account_creation_instructions,
+            in_amount,
+            swap_instruction,
+            cleanup_instruction,
+            luts,
+        } = Self::build_jupiter_swap_ixs(
+            &self.authority,
+            jupiter_swap_info,
             in_market,
             out_market,
             in_token_account,
             out_token_account,
         );
+        self.ixs.extend(account_creation_instructions);
 
-        // TODO: support jito bundle
-        if !jupiter_swap_ixs.other_instructions.is_empty() {
-            panic!("jupiter swap unsupported ix: Jito tip");
+        self = self.begin_swap(
+            in_amount,
+            in_market,
+            out_market,
+            in_token_account,
+            out_token_account,
+        );
+        self.ixs.push(swap_instruction);
+        if let Some(cleanup_ix) = cleanup_instruction {
+            self.ixs.push(cleanup_ix);
         }
-
-        new_self.ixs.push(jupiter_swap_ixs.swap_instruction);
-
-        // support SOL unwrap ixs, ignore account delete/reclaim ixs
-        if let Some(unwrap_ix) = jupiter_swap_ixs.cleanup_instruction {
-            if unwrap_ix.program_id != TOKEN_PROGRAM_ID
-                && unwrap_ix.program_id != TOKEN_2022_PROGRAM_ID
-            {
-                new_self.ixs.push(unwrap_ix);
-            }
-        }
-
-        new_self = new_self.end_swap(
+        self = self.end_swap(
             in_market,
             out_market,
             in_token_account,
@@ -2726,9 +2791,65 @@ impl<'a> TransactionBuilder<'a> {
             limit_price,
             reduce_only,
         );
+        self.lookup_tables(&luts)
+    }
 
-        // Add the jup tx LUTs
-        new_self.lookup_tables(&jupiter_swap_info.luts)
+    /// Add a Jupiter token swap to the tx for liquidation
+    ///
+    /// This wraps the Jupiter swap with `liquidate_spot_with_swap_begin` and `liquidate_spot_with_swap_end`
+    ///
+    /// # Arguments
+    /// * `jupiter_swap_info` - Jupiter swap route and instructions
+    /// * `in_market` - Spot market of the input token (liability market)
+    /// * `out_market` - Spot market of the output token (asset market)
+    /// * `in_token_account` - Input token account pubkey (for account creation if needed)
+    /// * `out_token_account` - Output token account pubkey (for account creation if needed)
+    /// * `asset_market_index` - Market index of the asset (collateral)
+    /// * `liability_market_index` - Market index of the liability (borrow)
+    /// * `user_account` - The user account being liquidated
+    pub fn jupiter_swap_liquidate(
+        mut self,
+        jupiter_swap_info: JupiterSwapInfo,
+        in_market: &SpotMarket,
+        out_market: &SpotMarket,
+        in_token_account: &Pubkey,
+        out_token_account: &Pubkey,
+        asset_market_index: u16,
+        liability_market_index: u16,
+        user_account: &User,
+    ) -> Self {
+        let JupiterSwapInstructions {
+            account_creation_instructions,
+            in_amount,
+            swap_instruction,
+            cleanup_instruction,
+            luts,
+        } = Self::build_jupiter_swap_ixs(
+            &self.authority,
+            jupiter_swap_info,
+            in_market,
+            out_market,
+            in_token_account,
+            out_token_account,
+        );
+        self.ixs.extend(account_creation_instructions);
+        self = self.liquidate_spot_with_swap_begin(
+            asset_market_index,
+            liability_market_index,
+            in_amount,
+            user_account,
+        );
+        self.ixs.push(swap_instruction);
+        if let Some(cleanup_ix) = cleanup_instruction {
+            self.ixs.push(cleanup_ix);
+        }
+        self = self.liquidate_spot_with_swap_end(
+            asset_market_index,
+            liability_market_index,
+            user_account,
+        );
+
+        self.lookup_tables(&luts)
     }
 
     /// Settle perp PnL for some user account and market
