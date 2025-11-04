@@ -49,9 +49,9 @@ impl JupiterSwapApi for DriftClient {
     /// * `user_authority` - The public key of the user's wallet that will execute the swap
     /// * `amount` - The amount of input tokens to swap, in native units (smallest denomination)
     /// * `swap_mode` - The type of swap to perform (e.g. ExactIn, ExactOut)
+    /// * `slippage_bps` - Maximum allowed slippage in basis points (1 bp = 0.01%)
     /// * `in_market` - The market index of the token to swap from
     /// * `out_market` - The market index of the token to swap to
-    /// * `slippage_bps` - Maximum allowed slippage in basis points (1 bp = 0.01%)
     /// * `only_direct_routes` - If Some(true), only consider direct swap routes between the tokens
     /// * `excluded_dexes` - Optional comma-separated string of DEX names to exclude from routing
     /// * `transaction_config` - Optional configuration for the swap transaction
