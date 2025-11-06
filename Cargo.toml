@@ -21,6 +21,7 @@ path = "crates/src/lib.rs"
 rpc_tests = []
 # make more variables public - use with caution
 unsafe_pub = []
+titan = ["titan-swap-api-client"] 
 
 [dependencies]
 abi_stable = { version = "0.11", default-features = false }
@@ -53,8 +54,8 @@ tokio-stream = "0.1.17"
 tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
 yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc", branch = "master" }
 yellowstone-grpc-proto = { git = "https://github.com/rpcpool/yellowstone-grpc", branch = "master" }
-
 drift-pubsub-client = { version = "0.1.1", path = "crates/pubsub-client" }
+titan-swap-api-client = { git = "https://github.com/0xahzam/titan-swap-api-client.git", optional = true }
 
 [dev-dependencies]
 bytes = "1"

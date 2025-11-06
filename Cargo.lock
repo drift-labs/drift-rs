@@ -1410,6 +1410,7 @@ dependencies = [
  "solana-transaction-status",
  "spl-associated-token-account",
  "thiserror 1.0.69",
+ "titan-swap-api-client",
  "tokio",
  "tokio-stream",
  "tokio-tungstenite",
@@ -3394,6 +3395,28 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "rmp"
+version = "0.8.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "228ed7c16fa39782c3b3468e974aec2795e9089153cd08ee2e9aefb3613334c4"
+dependencies = [
+ "byteorder",
+ "num-traits",
+ "paste",
+]
+
+[[package]]
+name = "rmp-serde"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52e599a477cf9840e92f2cde9a7189e67b42c57532749bf90aea6ec10facd4db"
+dependencies = [
+ "byteorder",
+ "rmp",
+ "serde",
 ]
 
 [[package]]
@@ -6073,6 +6096,20 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
+name = "titan-swap-api-client"
+version = "0.1.0"
+source = "git+https://github.com/0xahzam/titan-swap-api-client.git#501c142deaf4045876a4d299154e82eb64c575c9"
+dependencies = [
+ "anyhow",
+ "reqwest",
+ "rmp-serde",
+ "serde",
+ "solana-sdk",
+ "thiserror 2.0.16",
+ "tokio",
+]
 
 [[package]]
 name = "tokio"
