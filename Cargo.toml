@@ -25,7 +25,7 @@ unsafe_pub = []
 [dependencies]
 abi_stable = { version = "0.11", default-features = false }
 ahash = "0.8.12"
-anchor-lang = { version = "0.31", features = ["derive"] }
+anchor-lang = { version = "0.32.1", features = ["derive"] }
 arrayvec = "0.7.6"
 base64 = "0.22"
 bytemuck = "1.17"
@@ -37,29 +37,29 @@ fxhash = "0.2.1"
 hex = "0.4"
 jupiter-swap-api-client = { git = "https://github.com/jup-ag/jupiter-swap-api-client", package = "jupiter-swap-api-client" }
 log = "0.4"
-pythnet-sdk = "2.3.1"
+pythnet-sdk = "2"
 regex = "1.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-solana-account-decoder-client-types = "2.3"
-solana-rpc-client = "2.3"
-solana-rpc-client-api = "2.3"
-solana-sdk = "2.3"
-solana-transaction-status = "2.3"
+solana-account-decoder-client-types = "2"
+solana-rpc-client = "2"
+solana-rpc-client-api = "2"
+solana-sdk = "2"
+solana-transaction-status = "2"
 spl-associated-token-account = "7.0"
 thiserror = "1"
-tokio = { version = "1.42", features = ["full"] }
+tokio = { version = "1.48", features = ["full"] }
 tokio-stream = "0.1.17"
-tokio-tungstenite = { version = "0.26", features = ["native-tls"] }
-yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc", branch = "master" }
-yellowstone-grpc-proto = { git = "https://github.com/rpcpool/yellowstone-grpc", branch = "master" }
+tokio-tungstenite = { version = "0.28", features = ["native-tls"] }
+yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc", rev = "660797" }
+yellowstone-grpc-proto = { git = "https://github.com/rpcpool/yellowstone-grpc", rev = "660797" }
 
 drift-pubsub-client = { version = "0.1.1", path = "crates/pubsub-client" }
 
 [dev-dependencies]
 bytes = "1"
 hex-literal = "0.4"
-solana-account-decoder = "2.3"
+solana-account-decoder = "2"
 toml = "0.8"
 
 [build-dependencies]
