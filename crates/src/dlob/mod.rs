@@ -1254,10 +1254,11 @@ impl L3Book {
     ///
     /// # Returns
     /// Returns an iterator over the bids
-    pub fn bids(&self, oracle_price: u64) -> impl Iterator<Item = &L3Order> {
+    pub fn bids(&self, oracle_price: Option<u64>) -> impl Iterator<Item = &L3Order> {
         let mut bids_iter = self.bids.iter().peekable();
         let mut floating_bids_iter = self.floating_bids.iter().peekable();
-        let oracle_price_diff = oracle_price as i64 - self.oracle_price as i64;
+        let oracle_price_diff =
+            (oracle_price.unwrap_or_default() as i64).saturating_sub(self.oracle_price as i64);
 
         std::iter::from_fn(
             move || match (bids_iter.peek(), floating_bids_iter.peek()) {
@@ -1284,7 +1285,11 @@ impl L3Book {
     ///
     /// # Returns
     /// Returns an iterator over the highest-priced bids
-    pub fn top_bids(&self, count: usize, oracle_price: u64) -> impl Iterator<Item = &L3Order> {
+    pub fn top_bids(
+        &self,
+        count: usize,
+        oracle_price: Option<u64>,
+    ) -> impl Iterator<Item = &L3Order> {
         self.bids(oracle_price).take(count)
     }
 
@@ -1295,10 +1300,11 @@ impl L3Book {
     ///
     /// # Returns
     /// Returns an iterator over the asks
-    pub fn asks(&self, oracle_price: u64) -> impl Iterator<Item = &L3Order> {
+    pub fn asks(&self, oracle_price: Option<u64>) -> impl Iterator<Item = &L3Order> {
         let mut asks_iter = self.asks.iter().peekable();
         let mut floating_asks_iter = self.floating_asks.iter().peekable();
-        let oracle_price_diff = oracle_price as i64 - self.oracle_price as i64;
+        let oracle_price_diff =
+            (oracle_price.unwrap_or_default() as i64).saturating_sub(self.oracle_price as i64);
 
         std::iter::from_fn(
             move || match (asks_iter.peek(), floating_asks_iter.peek()) {
@@ -1326,7 +1332,11 @@ impl L3Book {
     ///
     /// # Returns
     /// Returns an iterator over the lowest-priced asks
-    pub fn top_asks(&self, count: usize, oracle_price: u64) -> impl Iterator<Item = &L3Order> {
+    pub fn top_asks(
+        &self,
+        count: usize,
+        oracle_price: Option<u64>,
+    ) -> impl Iterator<Item = &L3Order> {
         self.asks(oracle_price).take(count)
     }
 
