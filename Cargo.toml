@@ -35,7 +35,6 @@ env_logger = "0.11"
 futures-util = "0.3"
 fxhash = "0.2.1"
 hex = "0.4"
-# switch back when mainline update to solana v3 crates
 jupiter-swap-api-client = { git = "https://github.com/jup-ag/jupiter-swap-api-client", package = "jupiter-swap-api-client" }
 log = "0.4"
 pythnet-sdk = "2"
