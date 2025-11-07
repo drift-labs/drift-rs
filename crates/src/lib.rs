@@ -2890,8 +2890,6 @@ impl<'a> TransactionBuilder<'a> {
     ) -> TitanSwapInstructions {
         let swap_response = titan_swap_info.ixs;
 
-        // Titan does not give separate setup instructions like Jupiter.
-        // If any token accounts are missing, we proactively create them.
         let account_creation_instructions = vec![
             Self::create_token_account_instructions(
                 authority,
@@ -2907,10 +2905,18 @@ impl<'a> TransactionBuilder<'a> {
             ),
         ];
 
+        let swap_instructions: Vec<Instruction> = swap_response
+            .instructions
+            .into_iter()
+            .filter(|ix| {
+                ix.program_id != TOKEN_PROGRAM_ID && ix.program_id != TOKEN_2022_PROGRAM_ID
+            })
+            .collect();
+
         TitanSwapInstructions {
             account_creation_instructions,
             in_amount: titan_swap_info.quote.in_amount,
-            swap_instructions: swap_response.instructions,
+            swap_instructions,
             luts: titan_swap_info.luts,
         }
     }
