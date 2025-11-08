@@ -761,7 +761,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "115e54d64eb62cdebad391c19efc9dce4981c690c85a33a12199d99bb9546fee"
 dependencies = [
  "borsh-derive 0.10.4",
- "hashbrown 0.13.2",
+ "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -6100,7 +6100,7 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "titan-swap-api-client"
 version = "0.1.0"
-source = "git+https://github.com/0xahzam/titan-swap-api-client.git#501c142deaf4045876a4d299154e82eb64c575c9"
+source = "git+https://github.com/0xahzam/titan-swap-api-client.git#3b677af83d1bf2681e50c9a30204b236a1b96f65"
 dependencies = [
  "anyhow",
  "reqwest",

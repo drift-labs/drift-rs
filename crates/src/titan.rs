@@ -1,12 +1,11 @@
 #![cfg(feature = "titan")]
 //! Titan SDK helpers
+use solana_sdk::{message::AddressLookupTableAccount, pubkey::Pubkey};
 pub use titan_swap_api_client::{
-    quote::{QuoteRequest, QuoteResponse, SwapMode},
+    quote::{Provider, QuoteRequest, QuoteResponse, SwapMode},
     swap::SwapResponse,
     TitanClient,
 };
-
-use solana_sdk::{message::AddressLookupTableAccount, pubkey::Pubkey};
 
 use crate::{
     types::{SdkError, SdkResult},
@@ -28,12 +27,14 @@ pub trait TitanSwapApi {
         &self,
         user_authority: &Pubkey,
         amount: u64,
+        max_accounts: Option<usize>,
         swap_mode: SwapMode,
         slippage_bps: u16,
         in_market: u16,
         out_market: u16,
         only_direct_routes: Option<bool>,
         excluded_dexes: Option<String>,
+        providers: Option<Provider>,
     ) -> impl std::future::Future<Output = SdkResult<TitanSwapInfo>> + Send;
 }
 
@@ -62,12 +63,14 @@ impl TitanSwapApi for DriftClient {
         &self,
         user_authority: &Pubkey,
         amount: u64,
+        max_accounts: Option<usize>,
         swap_mode: SwapMode,
         slippage_bps: u16,
         in_market: u16,
         out_market: u16,
         only_direct_routes: Option<bool>,
         excluded_dexes: Option<String>,
+        providers: Option<Provider>,
     ) -> SdkResult<TitanSwapInfo> {
         let in_market = self.try_get_spot_market_account(in_market)?;
         let out_market = self.try_get_spot_market_account(out_market)?;
@@ -84,13 +87,13 @@ impl TitanSwapApi for DriftClient {
             output_mint: out_market.mint,
             amount,
             user_pubkey: *user_authority,
+            max_accounts,
             swap_mode: Some(swap_mode),
             slippage_bps,
             only_direct_routes,
             excluded_dexes,
-            max_accounts: None,
-            size_constraints: None,
-            accounts_limit_writable: None,
+            providers,
+            ..Default::default()
         };
 
         // GET /quote
