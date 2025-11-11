@@ -7,6 +7,8 @@ use std::{
     time::Duration,
 };
 
+#[cfg(feature = "titan")]
+use crate::titan::TitanSwapInfo;
 use crate::{
     account_map::AccountMap,
     blockhash_subscriber::BlockhashSubscriber,
@@ -64,6 +66,7 @@ pub mod async_utils;
 pub mod ffi;
 pub mod jupiter;
 pub mod market_state;
+pub mod titan;
 pub use market_state::MarketState;
 pub mod math;
 pub mod memcmp;
@@ -1756,6 +1759,19 @@ pub struct JupiterSwapInstructions {
     pub luts: Vec<AddressLookupTableAccount>,
 }
 
+#[cfg(feature = "titan")]
+/// Titan swap instructions prepared for insertion into a transaction
+pub struct TitanSwapInstructions {
+    /// Account creation instructions (if needed)
+    pub account_creation_instructions: Vec<Instruction>,
+    /// The amount being swapped in (for begin wrapper)
+    pub in_amount: u64,
+    /// All Titan swap instructions
+    pub swap_instructions: Vec<Instruction>,
+    /// Lookup tables for the transaction
+    pub luts: Vec<AddressLookupTableAccount>,
+}
+
 impl<'a> TransactionBuilder<'a> {
     /// Initialize a new `TransactionBuilder` for default signer
     ///
@@ -2849,6 +2865,116 @@ impl<'a> TransactionBuilder<'a> {
             user_account,
         );
 
+        self.lookup_tables(&luts)
+    }
+
+    #[cfg(feature = "titan")]
+    /// Prepares Titan swap instructions for insertion into a transaction
+    ///
+    /// This function handles common Titan-specific logic and returns a struct containing
+    /// all the instructions that need to be inserted between begin and end wrapper instructions.
+    ///
+    /// # Arguments
+    /// * `titan_swap_info` - Titan swap route and instructions
+    /// * `in_market` - Spot market of the input token
+    /// * `out_market` - Spot market of the output token
+    /// * `in_token_account` - Input token account pubkey
+    /// * `out_token_account` - Output token account pubkey
+    pub fn build_titan_swap_ixs(
+        authority: &Pubkey,
+        titan_swap_info: TitanSwapInfo,
+        in_market: &SpotMarket,
+        out_market: &SpotMarket,
+        in_token_account: &Pubkey,
+        out_token_account: &Pubkey,
+    ) -> TitanSwapInstructions {
+        let swap_response = titan_swap_info.ixs;
+
+        let account_creation_instructions = vec![
+            Self::create_token_account_instructions(
+                authority,
+                in_token_account,
+                &in_market.mint,
+                &in_market.token_program(),
+            ),
+            Self::create_token_account_instructions(
+                authority,
+                out_token_account,
+                &out_market.mint,
+                &out_market.token_program(),
+            ),
+        ];
+
+        let swap_instructions: Vec<Instruction> = swap_response
+            .instructions
+            .into_iter()
+            .filter(|ix| {
+                ix.program_id != TOKEN_PROGRAM_ID
+                    && ix.program_id != TOKEN_2022_PROGRAM_ID
+                    && ix.program_id != ASSOCIATED_TOKEN_PROGRAM_ID
+            })
+            .collect();
+
+        TitanSwapInstructions {
+            account_creation_instructions,
+            in_amount: titan_swap_info.quote.in_amount,
+            swap_instructions,
+            luts: titan_swap_info.luts,
+        }
+    }
+
+    #[cfg(feature = "titan")]
+    /// Add a Titan token swap to the tx
+    ///
+    /// # Arguments
+    /// * `titan_swap_info` - Titan swap route and instructions
+    /// * `in_market` - Spot market of the input token
+    /// * `out_market` - Spot market of the output token
+    /// * `in_token_account` - Input token account pubkey
+    /// * `out_token_account` - Output token account pubkey
+    /// * `limit_price` - Set a limit price
+    /// * `reduce_only` - Set a reduce only order
+    pub fn titan_swap(
+        mut self,
+        titan_swap_info: TitanSwapInfo,
+        in_market: &SpotMarket,
+        out_market: &SpotMarket,
+        in_token_account: &Pubkey,
+        out_token_account: &Pubkey,
+        limit_price: Option<u64>,
+        reduce_only: Option<SwapReduceOnly>,
+    ) -> Self {
+        let TitanSwapInstructions {
+            account_creation_instructions,
+            in_amount,
+            swap_instructions,
+            luts,
+        } = Self::build_titan_swap_ixs(
+            &self.authority,
+            titan_swap_info,
+            in_market,
+            out_market,
+            in_token_account,
+            out_token_account,
+        );
+        self.ixs.extend(account_creation_instructions);
+
+        self = self.begin_swap(
+            in_amount,
+            in_market,
+            out_market,
+            in_token_account,
+            out_token_account,
+        );
+        self.ixs.extend(swap_instructions);
+        self = self.end_swap(
+            in_market,
+            out_market,
+            in_token_account,
+            out_token_account,
+            limit_price,
+            reduce_only,
+        );
         self.lookup_tables(&luts)
     }
 

@@ -21,6 +21,7 @@ path = "crates/src/lib.rs"
 rpc_tests = []
 # make more variables public - use with caution
 unsafe_pub = []
+titan = ["titan-swap-api-client"] 
 
 [dependencies]
 abi_stable = { version = "0.11", default-features = false }
@@ -44,7 +45,7 @@ serde_json = "1"
 solana-account-decoder-client-types = "2"
 solana-rpc-client = "2"
 solana-rpc-client-api = "2"
-solana-sdk = "2"
+solana-sdk = "2" 
 solana-transaction-status = "2"
 spl-associated-token-account = "7.0"
 thiserror = "1"
@@ -53,8 +54,8 @@ tokio-stream = "0.1.17"
 tokio-tungstenite = { version = "0.28", features = ["native-tls"] }
 yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc", rev = "660797" }
 yellowstone-grpc-proto = { git = "https://github.com/rpcpool/yellowstone-grpc", rev = "660797" }
-
 drift-pubsub-client = { version = "0.1.1", path = "crates/pubsub-client" }
+titan-swap-api-client = { git = "https://github.com/0xahzam/titan-swap-api-client.git", optional = true }
 
 [dev-dependencies]
 bytes = "1"
