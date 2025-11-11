@@ -2978,6 +2978,61 @@ impl<'a> TransactionBuilder<'a> {
         self.lookup_tables(&luts)
     }
 
+    #[cfg(feature = "titan")]
+    /// Add a Titan token swap to the tx for liquidation
+    ///
+    /// This wraps the Titan swap with `liquidate_spot_with_swap_begin` and `liquidate_spot_with_swap_end`
+    ///
+    /// # Arguments
+    /// * `titan_swap_info` - Titan swap route and instructions
+    /// * `in_market` - Spot market of the input token (liability market)
+    /// * `out_market` - Spot market of the output token (asset market)
+    /// * `in_token_account` - Input token account pubkey (for account creation if needed)
+    /// * `out_token_account` - Output token account pubkey (for account creation if needed)
+    /// * `asset_market_index` - Market index of the asset (collateral)
+    /// * `liability_market_index` - Market index of the liability (borrow)
+    /// * `user_account` - The user account being liquidated
+    pub fn titan_swap_liquidate(
+        mut self,
+        jupiter_swap_info: TitanSwapInfo,
+        in_market: &SpotMarket,
+        out_market: &SpotMarket,
+        in_token_account: &Pubkey,
+        out_token_account: &Pubkey,
+        asset_market_index: u16,
+        liability_market_index: u16,
+        user_account: &User,
+    ) -> Self {
+        let TitanSwapInstructions {
+            account_creation_instructions,
+            in_amount,
+            swap_instructions,
+            luts,
+        } = Self::build_titan_swap_ixs(
+            &self.authority,
+            jupiter_swap_info,
+            in_market,
+            out_market,
+            in_token_account,
+            out_token_account,
+        );
+        self.ixs.extend(account_creation_instructions);
+        self = self.liquidate_spot_with_swap_begin(
+            asset_market_index,
+            liability_market_index,
+            in_amount,
+            user_account,
+        );
+        self.ixs.extend(swap_instructions);
+        self = self.liquidate_spot_with_swap_end(
+            asset_market_index,
+            liability_market_index,
+            user_account,
+        );
+
+        self.lookup_tables(&luts)
+    }
+
     /// Settle perp PnL for some user account and market
     ///
     /// * `market_index` market to settle position for

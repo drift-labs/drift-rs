@@ -6100,7 +6100,7 @@ dependencies = [
  "rmp-serde",
  "serde",
  "solana-sdk",
- "thiserror 2.0.16",
+ "thiserror 2.0.17",
  "tokio",
 ]
 
