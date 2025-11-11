@@ -2554,12 +2554,14 @@ fn l3book_vamm_orders_sorted_correctly() {
     vamm_order1.auction_duration = 5; // Will complete before we query
     vamm_order1.auction_start_price = 0;
     vamm_order1.auction_end_price = 0;
+    vamm_order1.max_ts = i64::MAX; // Don't expire - will become vamm order
     dlob.insert_order(&user, vamm_order1);
 
     let mut vamm_order2 = create_test_order(4, OrderType::Market, Direction::Long, 0, 12, slot);
     vamm_order2.auction_duration = 5; // Will complete before we query
     vamm_order2.auction_start_price = 0;
     vamm_order2.auction_end_price = 0;
+    // vamm_order2.max_ts = 30 (default from create_test_order) - will expire and be removed
     dlob.insert_order(&user, vamm_order2);
 
     // Insert another limit order at a price lower than vamm_price
@@ -2581,26 +2583,29 @@ fn l3book_vamm_orders_sorted_correctly() {
     // Since vamm_price (1100) > 1050, vamm orders should come before limit orders at 1050
     let bids: Vec<_> = l3book.bids(Some(oracle_price), vamm_price).collect();
 
-    // Should have all 5 orders: 2 vamm orders + 3 limit orders
-    assert_eq!(bids.len(), 5);
+    // Should have 4 orders: 1 vamm order (order2 expired) + 3 limit orders
+    assert_eq!(bids.len(), 4);
 
     // VAMM orders should appear first (at vamm_price 1100), then limit orders
     // Since vamm_price (1100) > all limit prices, vamm orders come first
     // Then limit orders sorted by price: 1050, 1000, 950
     let prices: Vec<u64> = bids.iter().map(|o| o.price).collect();
 
-    // First two should be vamm orders (price 0, but treated as vamm_price 1100)
-    // They should be followed by limit orders: 1050, 1000, 950
-    assert_eq!(prices[0], 0); // VAMM order 1
-    assert_eq!(prices[1], 0); // VAMM order 2
-    assert_eq!(prices[2], 1050); // Limit order 1
-    assert_eq!(prices[3], 1000); // Limit order 2
-    assert_eq!(prices[4], 950); // Limit order 3
+    // First should be vamm order (price 0, but treated as vamm_price 1100)
+    // Order 4 expired, so only order 3 should be present
+    // Then limit orders: 1050, 1000, 950
+    assert_eq!(prices[0], 0); // VAMM order 1 (order 3)
+    assert_eq!(prices[1], 1050); // Limit order 1
+    assert_eq!(prices[2], 1000); // Limit order 2
+    assert_eq!(prices[3], 950); // Limit order 3
 
-    // Verify vamm orders are present
-    let vamm_order_ids: Vec<u32> = bids.iter().take(2).map(|o| o.order_id).collect();
-    assert!(vamm_order_ids.contains(&3));
-    assert!(vamm_order_ids.contains(&4));
+    // Verify vamm order is present (order 3), and order 4 is not (expired)
+    let order_ids: Vec<u32> = bids.iter().map(|o| o.order_id).collect();
+    assert!(order_ids.contains(&3), "Vamm order 3 should be present");
+    assert!(
+        !order_ids.contains(&4),
+        "Vamm order 4 should have expired and been removed"
+    );
 
     // Test asks with vamm orders
     let mut ask1 = create_test_order(6, OrderType::Limit, Direction::Short, 950, 5, slot);
@@ -2616,16 +2621,22 @@ fn l3book_vamm_orders_sorted_correctly() {
     vamm_ask1.auction_duration = 5;
     vamm_ask1.auction_start_price = 0;
     vamm_ask1.auction_end_price = 0;
+    vamm_ask1.max_ts = i64::MAX; // Don't expire - will become vamm order
     dlob.insert_order(&user, vamm_ask1);
 
     let mut vamm_ask2 = create_test_order(9, OrderType::Market, Direction::Short, 0, 12, slot);
     vamm_ask2.auction_duration = 5;
     vamm_ask2.auction_start_price = 0;
     vamm_ask2.auction_end_price = 0;
+    // vamm_ask2.max_ts = 30 (default from create_test_order) - will expire and be removed
     dlob.insert_order(&user, vamm_ask2);
 
     let vamm_ask_price = 850; // VAMM ask price lower than limit asks
 
+    // Update slot again to expire the ask order
+    if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
+        book.update_slot(query_slot);
+    }
     // Update L3 view again
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
         book.update_l3_view(oracle_price, &dlob.metadata);
@@ -2636,23 +2647,29 @@ fn l3book_vamm_orders_sorted_correctly() {
     // Since vamm_ask_price (850) < 900, vamm orders should come before limit orders at 900
     let asks: Vec<_> = l3book.asks(Some(oracle_price), vamm_ask_price).collect();
 
-    // Should have all 4 orders: 2 vamm orders + 2 limit orders
-    assert_eq!(asks.len(), 4);
+    // Should have 3 orders: 1 vamm order (ask2 expired) + 2 limit orders
+    assert_eq!(asks.len(), 3);
 
     // VAMM orders should appear first (at vamm_ask_price 850), then limit orders
     // Since vamm_ask_price (850) < all limit prices, vamm orders come first
     // Then limit orders sorted by price: 900, 950
     let ask_prices: Vec<u64> = asks.iter().map(|o| o.price).collect();
 
-    // First two should be vamm orders (price 0, but treated as vamm_ask_price 850)
-    // They should be followed by limit orders: 900, 950
-    assert_eq!(ask_prices[0], 0); // VAMM order 1
-    assert_eq!(ask_prices[1], 0); // VAMM order 2
-    assert_eq!(ask_prices[2], 900); // Limit order 2
-    assert_eq!(ask_prices[3], 950); // Limit order 1
+    // First should be vamm order (price 0, but treated as vamm_ask_price 850)
+    // Order 9 expired, so only order 8 should be present
+    // Then limit orders: 900, 950
+    assert_eq!(ask_prices[0], 0); // VAMM order 1 (order 8)
+    assert_eq!(ask_prices[1], 900); // Limit order 2
+    assert_eq!(ask_prices[2], 950); // Limit order 1
 
-    // Verify vamm ask orders are present
-    let vamm_ask_order_ids: Vec<u32> = asks.iter().take(2).map(|o| o.order_id).collect();
-    assert!(vamm_ask_order_ids.contains(&8));
-    assert!(vamm_ask_order_ids.contains(&9));
+    // Verify vamm ask order is present (order 8), and order 9 is not (expired)
+    let ask_order_ids: Vec<u32> = asks.iter().map(|o| o.order_id).collect();
+    assert!(
+        ask_order_ids.contains(&8),
+        "Vamm ask order 8 should be present"
+    );
+    assert!(
+        !ask_order_ids.contains(&9),
+        "Vamm ask order 9 should have expired and been removed"
+    );
 }
