@@ -1766,7 +1766,7 @@ fn dlob_get_maker_bids_l3() {
 
     // Test get_maker_bids_l3 - filter for maker orders (Limit or FloatingLimit)
     let maker_bids: Vec<_> = l3book
-        .bids(oracle_price)
+        .bids(Some(oracle_price))
         .filter(|o| matches!(o.kind, OrderKind::Limit | OrderKind::FloatingLimit))
         .collect();
 
@@ -1844,7 +1844,7 @@ fn dlob_get_maker_asks_l3() {
 
     // Test get_maker_asks_l3 - filter for maker orders (Limit or FloatingLimit)
     let maker_asks: Vec<_> = l3book
-        .asks(oracle_price)
+        .asks(Some(oracle_price))
         .filter(|o| matches!(o.kind, OrderKind::Limit | OrderKind::FloatingLimit))
         .collect();
 
@@ -1917,7 +1917,7 @@ fn dlob_get_taker_bids_l3() {
 
     // Test get_taker_bids_l3 - filter for taker orders (Market, Oracle, TriggerMarket, TriggerLimit)
     let taker_bids: Vec<_> = l3book
-        .bids(oracle_price)
+        .bids(Some(oracle_price))
         .filter(|o| {
             matches!(
                 o.kind,
@@ -1979,7 +1979,7 @@ fn dlob_get_taker_asks_l3() {
 
     // Test get_taker_asks_l3 - filter for taker orders (Market, Oracle, TriggerMarket, TriggerLimit)
     let taker_asks: Vec<_> = l3book
-        .asks(oracle_price)
+        .asks(Some(oracle_price))
         .filter(|o| {
             matches!(
                 o.kind,
@@ -2076,15 +2076,15 @@ fn dlob_l3_functions_mixed_order_types() {
 
     // Test all L3 functions - filter by order kind
     let maker_bids: Vec<_> = l3book
-        .bids(oracle_price)
+        .bids(Some(oracle_price))
         .filter(|o| matches!(o.kind, OrderKind::Limit | OrderKind::FloatingLimit))
         .collect();
     let maker_asks: Vec<_> = l3book
-        .asks(oracle_price)
+        .asks(Some(oracle_price))
         .filter(|o| matches!(o.kind, OrderKind::Limit | OrderKind::FloatingLimit))
         .collect();
     let taker_bids: Vec<_> = l3book
-        .bids(oracle_price)
+        .bids(Some(oracle_price))
         .filter(|o| {
             matches!(
                 o.kind,
@@ -2096,7 +2096,7 @@ fn dlob_l3_functions_mixed_order_types() {
         })
         .collect();
     let taker_asks: Vec<_> = l3book
-        .asks(oracle_price)
+        .asks(Some(oracle_price))
         .filter(|o| {
             matches!(
                 o.kind,
@@ -2172,7 +2172,7 @@ fn l3book_bids_query_with_fixed_and_floating_orders() {
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
     // Query bids - should merge fixed and floating, sorted descending
-    let bids: Vec<_> = l3book.bids(oracle_price).collect();
+    let bids: Vec<_> = l3book.bids(Some(oracle_price)).collect();
 
     // Should have 4 orders
     assert_eq!(bids.len(), 4);
@@ -2233,7 +2233,7 @@ fn l3book_asks_query_with_fixed_and_floating_orders() {
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
     // Query asks - should merge fixed and floating, sorted ascending (lowest first)
-    let asks: Vec<_> = l3book.asks(oracle_price).collect();
+    let asks: Vec<_> = l3book.asks(Some(oracle_price)).collect();
 
     // Should have 4 orders
     assert_eq!(asks.len(), 4);
@@ -2285,14 +2285,14 @@ fn l3book_bids_with_oracle_price_change() {
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
     // At initial oracle (1000), floating order should be at 1100 (same as fixed)
-    let bids_at_initial: Vec<_> = l3book.bids(initial_oracle).collect();
+    let bids_at_initial: Vec<_> = l3book.bids(Some(initial_oracle)).collect();
     assert_eq!(bids_at_initial.len(), 2);
     // Both stored at 1100, order may vary when prices are equal
 
     // At higher oracle (1100), floating order's adjusted price should be higher than fixed
     // (floating adjusts: stored 1100 + (1100 - 1000) = 1200 vs fixed 1100)
     let higher_oracle = 1100;
-    let bids_at_higher: Vec<_> = l3book.bids(higher_oracle).collect();
+    let bids_at_higher: Vec<_> = l3book.bids(Some(higher_oracle)).collect();
     assert_eq!(bids_at_higher.len(), 2);
     // Floating order (order_id 2) should come first due to higher adjusted price
     assert_eq!(bids_at_higher[0].order_id, 2);
@@ -2301,7 +2301,7 @@ fn l3book_bids_with_oracle_price_change() {
     // At lower oracle (900), floating order's adjusted price should be lower than fixed
     // (floating adjusts: stored 1100 + (900 - 1000) = 1000 vs fixed 1100)
     let lower_oracle = 900;
-    let bids_at_lower: Vec<_> = l3book.bids(lower_oracle).collect();
+    let bids_at_lower: Vec<_> = l3book.bids(Some(lower_oracle)).collect();
     assert_eq!(bids_at_lower.len(), 2);
     // Fixed order (order_id 1) should come first, floating (order_id 2) second
     assert_eq!(bids_at_lower[0].order_id, 1);
@@ -2342,7 +2342,7 @@ fn l3book_asks_with_oracle_price_change() {
     // At higher oracle (1100), floating order's adjusted price should be higher than fixed
     // (floating adjusts: stored 900 + (1100 - 1000) = 1000 vs fixed 900)
     let higher_oracle = 1100;
-    let asks_at_higher: Vec<_> = l3book.asks(higher_oracle).collect();
+    let asks_at_higher: Vec<_> = l3book.asks(Some(higher_oracle)).collect();
     assert_eq!(asks_at_higher.len(), 2);
     // Fixed order (order_id 1) should come first, floating (order_id 2) second
     assert_eq!(asks_at_higher[0].order_id, 1);
@@ -2351,7 +2351,7 @@ fn l3book_asks_with_oracle_price_change() {
     // At lower oracle (900), floating order's adjusted price should be lower than fixed
     // (floating adjusts: stored 900 + (900 - 1000) = 800 vs fixed 900)
     let lower_oracle = 900;
-    let asks_at_lower: Vec<_> = l3book.asks(lower_oracle).collect();
+    let asks_at_lower: Vec<_> = l3book.asks(Some(lower_oracle)).collect();
     assert_eq!(asks_at_lower.len(), 2);
     // Floating order (order_id 2) should come first due to lower adjusted price
     assert_eq!(asks_at_lower[0].order_id, 2);
@@ -2407,22 +2407,22 @@ fn l3book_top_bids_and_top_asks() {
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
     // Test top_bids - should return highest priced bids first
-    let top_3_bids: Vec<_> = l3book.top_bids(3, oracle_price).collect();
+    let top_3_bids: Vec<_> = l3book.top_bids(3, Some(oracle_price)).collect();
     assert_eq!(top_3_bids.len(), 3);
     let top_bid_prices: Vec<u64> = top_3_bids.iter().map(|o| o.price).collect();
     assert_eq!(top_bid_prices, vec![1200, 1150, 1100]);
 
     // Test top_asks - should return lowest priced asks first
-    let top_3_asks: Vec<_> = l3book.top_asks(3, oracle_price).collect();
+    let top_3_asks: Vec<_> = l3book.top_asks(3, Some(oracle_price)).collect();
     assert_eq!(top_3_asks.len(), 3);
     let top_ask_prices: Vec<u64> = top_3_asks.iter().map(|o| o.price).collect();
     assert_eq!(top_ask_prices, vec![800, 850, 900]);
 
     // Test requesting more than available
-    let top_10_bids: Vec<_> = l3book.top_bids(10, oracle_price).collect();
+    let top_10_bids: Vec<_> = l3book.top_bids(10, Some(oracle_price)).collect();
     assert_eq!(top_10_bids.len(), 5); // Only 5 bids exist
 
-    let top_10_asks: Vec<_> = l3book.top_asks(10, oracle_price).collect();
+    let top_10_asks: Vec<_> = l3book.top_asks(10, Some(oracle_price)).collect();
     assert_eq!(top_10_asks.len(), 5); // Only 5 asks exist
 }
 
@@ -2445,16 +2445,16 @@ fn l3book_empty_orderbook() {
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
     // All queries should return empty iterators
-    let bids: Vec<_> = l3book.bids(oracle_price).collect();
+    let bids: Vec<_> = l3book.bids(Some(oracle_price)).collect();
     assert_eq!(bids.len(), 0);
 
-    let asks: Vec<_> = l3book.asks(oracle_price).collect();
+    let asks: Vec<_> = l3book.asks(Some(oracle_price)).collect();
     assert_eq!(asks.len(), 0);
 
-    let top_bids: Vec<_> = l3book.top_bids(5, oracle_price).collect();
+    let top_bids: Vec<_> = l3book.top_bids(5, Some(oracle_price)).collect();
     assert_eq!(top_bids.len(), 0);
 
-    let top_asks: Vec<_> = l3book.top_asks(5, oracle_price).collect();
+    let top_asks: Vec<_> = l3book.top_asks(5, Some(oracle_price)).collect();
     assert_eq!(top_asks.len(), 0);
 }
 
@@ -2500,7 +2500,7 @@ fn l3book_bids_includes_all_order_types() {
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
     // Query all bids - should include all order types
-    let all_bids: Vec<_> = l3book.bids(oracle_price).collect();
+    let all_bids: Vec<_> = l3book.bids(Some(oracle_price)).collect();
 
     // Should have at least the limit orders
     assert!(all_bids.len() >= 2);
