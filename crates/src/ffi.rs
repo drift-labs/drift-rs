@@ -102,6 +102,13 @@ extern "C" {
         oracle_guard_rails: &ValidityGuardRails,
     ) -> FfiResult<MMOraclePriceData>;
     #[allow(improper_ctypes)]
+    pub fn perp_market_get_fallback_price(
+        market: &accounts::PerpMarket,
+        taker_direction: PositionDirection,
+        oracle_price: i64,
+        seconds_til_expiry: i64,
+    ) -> FfiResult<u64>;
+    #[allow(improper_ctypes)]
     pub fn perp_position_get_unrealized_pnl(
         position: &types::PerpPosition,
         oracle_price: i64,
@@ -634,6 +641,17 @@ impl accounts::SpotMarket {
 }
 
 impl accounts::PerpMarket {
+    /// Return VAMM fallback price
+    pub fn fallback_price(
+        &self,
+        taker_direction: PositionDirection,
+        oracle_price: i64,
+        seconds_til_expiry: i64,
+    ) -> SdkResult<u64> {
+        to_sdk_result(unsafe {
+            perp_market_get_fallback_price(self, taker_direction, oracle_price, seconds_til_expiry)
+        })
+    }
     pub fn get_mm_oracle_price_data(
         &self,
         oracle_price_data: OraclePriceData,
@@ -1377,6 +1395,53 @@ mod tests {
         assert!(result.is_ok(), "Should succeed for valid input");
         let mm_oracle_data = result.unwrap();
         assert!(mm_oracle_data.safe_oracle_price_data.price > 0);
+    }
+
+    #[test]
+    fn ffi_perp_market_fallback_price() {
+        let perp_market = PerpMarket {
+            market_index: 1,
+            contract_tier: ContractTier::A,
+            amm: AMM {
+                base_asset_reserve: 10_000u128.into(),
+                quote_asset_reserve: 20_000u128.into(),
+                sqrt_k: 100u128.into(),
+                peg_multiplier: 1_000_000u128.into(),
+                terminal_quote_asset_reserve: 19_000u128.into(),
+                concentration_coef: 5u128.into(),
+                long_spread: 100,  // 1% spread
+                short_spread: 100, // 1% spread
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let oracle_price = 1_000_000i64; // $10.00 with PRICE_PRECISION
+        let seconds_til_expiry = 3600i64; // 1 hour
+
+        // Test fallback price for Long direction (buying)
+        let result_long =
+            perp_market.fallback_price(PositionDirection::Long, oracle_price, seconds_til_expiry);
+        assert!(result_long.is_ok(), "Should succeed for Long direction");
+        let fallback_price_long = result_long.unwrap();
+        assert!(fallback_price_long > 0, "Fallback price should be positive");
+
+        // Test fallback price for Short direction (selling)
+        let result_short =
+            perp_market.fallback_price(PositionDirection::Short, oracle_price, seconds_til_expiry);
+        assert!(result_short.is_ok(), "Should succeed for Short direction");
+        let fallback_price_short = result_short.unwrap();
+        assert!(
+            fallback_price_short > 0,
+            "Fallback price should be positive"
+        );
+
+        // For Long (buying), fallback price should typically be higher than oracle (ask price)
+        // For Short (selling), fallback price should typically be lower than oracle (bid price)
+        // Note: This depends on AMM state, but generally holds true
+        assert!(
+            fallback_price_long >= fallback_price_short,
+            "Long fallback price should be >= Short fallback price"
+        );
     }
 
     #[test]
