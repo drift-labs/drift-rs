@@ -1399,23 +1399,38 @@ mod tests {
 
     #[test]
     fn ffi_perp_market_fallback_price() {
+        use crate::math::constants::{AMM_RESERVE_PRECISION, PEG_PRECISION};
+
+        // Use properly scaled AMM values
+        let default_reserves = 100 * AMM_RESERVE_PRECISION;
         let perp_market = PerpMarket {
             market_index: 1,
             contract_tier: ContractTier::A,
             amm: AMM {
-                base_asset_reserve: 10_000u128.into(),
-                quote_asset_reserve: 20_000u128.into(),
-                sqrt_k: 100u128.into(),
-                peg_multiplier: 1_000_000u128.into(),
-                terminal_quote_asset_reserve: 19_000u128.into(),
+                max_fill_reserve_fraction: 1,
+                base_asset_reserve: default_reserves.into(),
+                quote_asset_reserve: default_reserves.into(),
+                sqrt_k: default_reserves.into(),
+                peg_multiplier: PEG_PRECISION.into(),
+                terminal_quote_asset_reserve: default_reserves.into(),
                 concentration_coef: 5u128.into(),
                 long_spread: 100,  // 1% spread
                 short_spread: 100, // 1% spread
+                max_base_asset_reserve: (u64::MAX as u128).into(),
+                min_base_asset_reserve: 0u128.into(),
+                order_step_size: 1,
+                order_tick_size: 1,
+                max_spread: 1000,
+                historical_oracle_data: HistoricalOracleData {
+                    last_oracle_price: crate::math::constants::PRICE_PRECISION_I64,
+                    ..Default::default()
+                },
+                last_oracle_valid: true,
                 ..Default::default()
             },
             ..Default::default()
         };
-        let oracle_price = 1_000_000i64; // $10.00 with PRICE_PRECISION
+        let oracle_price = 10_000_000i64; // $10.00 with PRICE_PRECISION
         let seconds_til_expiry = 3600i64; // 1 hour
 
         // Test fallback price for Long direction (buying)
