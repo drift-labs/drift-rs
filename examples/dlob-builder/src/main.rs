@@ -129,13 +129,19 @@ async fn get_l3_orderbook(
         user: order.user.to_string(),
     };
 
+    let perp_market = state
+        .drift
+        .try_get_perp_market_account(params.market_index)
+        .unwrap();
+    let vamm_ask = perp_market.ask_price(None);
+    let vamm_bid = perp_market.bid_price(None);
     let max_orders = params.max_orders.unwrap_or(usize::MAX);
     let bids: Vec<L3OrderResponse> = l3_book
-        .top_bids(max_orders, oracle_price)
+        .top_bids(max_orders, Some(oracle_price), vamm_bid)
         .map(convert_order)
         .collect();
     let asks: Vec<L3OrderResponse> = l3_book
-        .top_asks(max_orders, oracle_price)
+        .top_asks(max_orders, Some(oracle_price), vamm_ask)
         .map(convert_order)
         .collect();
 

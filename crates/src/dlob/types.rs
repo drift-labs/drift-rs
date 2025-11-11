@@ -152,7 +152,7 @@ pub enum DLOBEvent {
 
 /// Order with dynamic price calculation
 pub(crate) trait DynamicPrice {
-    fn get_price(&self, slot: u64, oracle_price: u64, tick_size: u64) -> u64;
+    fn get_price(&self, slot: u64, oracle_price: u64, tick_size: u64) -> Option<u64>;
     fn size(&self) -> u64;
 }
 
@@ -170,6 +170,10 @@ impl OrderKey for MarketOrder {
 }
 
 impl MarketOrder {
+    /// Check if this order has expired
+    pub fn is_expired(&self, now: u64) -> bool {
+        self.max_ts < now
+    }
     /// Check if this auction order has completed
     pub fn is_auction_complete(&self, current_slot: u64) -> bool {
         current_slot.saturating_sub(self.slot) > self.duration as u64
@@ -197,6 +201,10 @@ impl OrderKey for OracleOrder {
 }
 
 impl OracleOrder {
+    /// Check if this order has expired
+    pub fn is_expired(&self, now: u64) -> bool {
+        self.max_ts < now
+    }
     /// Check if this auction order has completed
     pub fn is_auction_complete(&self, current_slot: u64) -> bool {
         (self.slot + self.duration as u64) <= current_slot
@@ -396,13 +404,25 @@ impl DynamicPrice for MarketOrder {
     fn size(&self) -> u64 {
         self.size
     }
-    fn get_price(&self, slot: u64, _oracle_price: u64, tick_size: u64) -> u64 {
+    /// Returns the price of the market order at `slot`
+    ///
+    /// A value of None indicates the order will use the fallback/vamm price
+    fn get_price(&self, slot: u64, _oracle_price: u64, tick_size: u64) -> Option<u64> {
         let slots_elapsed = slot.saturating_sub(self.slot) as i64;
         let delta_denominator = self.duration as i64;
         let delta_numerator = slots_elapsed.min(delta_denominator);
 
+        // limit price after auction end
+        if slots_elapsed > self.duration as i64 {
+            return if self.price > 0 {
+                Some(self.price)
+            } else {
+                None
+            };
+        }
+
         if delta_denominator == 0 {
-            return self.end_price as u64;
+            return Some(self.end_price as u64);
         }
 
         let price = if self.direction == Direction::Long {
@@ -416,7 +436,7 @@ impl DynamicPrice for MarketOrder {
         };
 
         let price = price.max(tick_size as i64);
-        standardize_price(price as u64, tick_size, self.direction)
+        Some(standardize_price(price as u64, tick_size, self.direction))
     }
 }
 
@@ -443,15 +463,26 @@ impl DynamicPrice for OracleOrder {
     fn size(&self) -> u64 {
         self.size
     }
-    fn get_price(&self, slot: u64, oracle_price: u64, tick_size: u64) -> u64 {
+    /// Returns price of oracle auction at given `slot`
+    ///
+    /// A value of None indicates the order will use the fallback/vamm price
+    fn get_price(&self, slot: u64, oracle_price: u64, tick_size: u64) -> Option<u64> {
         let slots_elapsed = slot.saturating_sub(self.slot) as i64;
+        // limit price after auction end
+        if slots_elapsed > self.duration as i64 {
+            return if self.oracle_price_offset > 0 {
+                Some((oracle_price as i64 + self.oracle_price_offset as i64) as u64)
+            } else {
+                None
+            };
+        }
         let delta_denominator = self.duration as i64;
         let delta_numerator = slots_elapsed.min(delta_denominator);
 
         if delta_denominator == 0 {
             let price = ((oracle_price as i64 + self.end_price_offset) as u64).max(tick_size);
 
-            return standardize_price(price, tick_size, self.direction);
+            return Some(standardize_price(price, tick_size, self.direction));
         }
 
         let price_offset = if self.direction == Direction::Long {
@@ -472,7 +503,7 @@ impl DynamicPrice for OracleOrder {
 
         let price = ((oracle_price as i64 + price_offset) as u64).max(tick_size);
 
-        standardize_price(price, tick_size, self.direction)
+        Some(standardize_price(price, tick_size, self.direction))
     }
 }
 
@@ -673,7 +704,7 @@ impl L3Order {
     pub(crate) const RO_FLAG: u8 = 0b1000_0000;
     /// When set indicates order direction is long
     pub(crate) const IS_LONG: u8 = 0b0100_0000;
-    /// when set and order kind is trigger, this bit indicates 'trigger above'
+    /// When set and order kind is trigger, this bit indicates 'trigger above'
     /// conversely, 'trigger below' when unset
     pub(crate) const IS_TRIGGER_ABOVE: u8 = 0b0010_0000;
     /// True if this is a long order, false otherwise
