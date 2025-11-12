@@ -810,11 +810,9 @@ impl DLOB {
         market_type: MarketType,
         slot: u64,
         oracle_price: u64,
-        trigger_price: u64,
         perp_market: Option<&PerpMarket>,
         depth: Option<usize>,
     ) -> CrossesAndTopMakers {
-        let market = MarketId::new(market_index, market_type);
         let book = self.get_l3_snapshot(market_index, market_type);
         let mut all_crosses = Vec::with_capacity(16);
 
@@ -822,19 +820,15 @@ impl DLOB {
         let vamm_ask = perp_market.map(|m| m.ask_price(None));
         log::trace!(target: TARGET, "VAMM market={} bid={vamm_bid:?} ask={vamm_ask:?}", market_index);
 
-        let asks: Vec<L3Order> = book
+        let (taker_asks, resting_asks): (Vec<L3Order>, Vec<L3Order>) = book
             .top_asks(depth.unwrap_or(64), Some(oracle_price), perp_market)
-            .cloned()
-            .collect();
-        let (mut taker_asks, mut resting_asks): (Vec<L3Order>, Vec<L3Order>) =
-            asks.into_iter().partition(|x| x.is_taker());
+            .map(|x| x.clone())
+            .partition(|x| x.is_taker());
 
-        let bids: Vec<L3Order> = book
+        let (taker_bids, resting_bids): (Vec<L3Order>, Vec<L3Order>) = book
             .top_bids(depth.unwrap_or(64), Some(oracle_price), perp_market)
-            .cloned()
-            .collect();
-        let (mut taker_bids, mut resting_bids): (Vec<L3Order>, Vec<L3Order>) =
-            bids.into_iter().partition(|x| x.is_taker());
+            .map(|x| x.clone())
+            .partition(|x| x.is_taker());
 
         let mut vamm_taker_ask = None;
         let mut vamm_taker_bid = None;
@@ -915,8 +909,8 @@ impl DLOB {
     /// * `current_slot` - The current slot number, used for time-sensitive order logic.
     /// * `oracle_price` - The current oracle price, used for price calculations and trigger conditions.
     /// * `taker_order` - The taker order for which to find matching maker orders. Contains price, size, direction, and market info.
-    /// * `perp_market` - An optional perp market to consider as a crossing point. If `Some`, will check if the taker order crosses this price.
-    /// * `depth` - An optional depth to consider for the resting orders. If `Some`, will check for crosses at the top of the book.
+    /// * `perp_market` - PerpMarket struct provides vamm price, fallback price, and trigger price
+    /// * `depth` - Optional order depth to consider for matches. default: 20
     ///
     /// ## Panics
     ///
@@ -933,15 +927,14 @@ impl DLOB {
         perp_market: Option<&PerpMarket>,
         depth: Option<usize>,
     ) -> MakerCrosses {
-        let market = MarketId::new(taker_order.market_index, taker_order.market_type);
-        let (book_slot, mut resting_orders, vamm_price) = match taker_order.direction {
+        let (resting_orders, vamm_price) = match taker_order.direction {
             Direction::Long => {
                 let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
                 let orders: Vec<L3Order> = book
                     .top_asks(depth.unwrap_or(20), Some(oracle_price), perp_market)
                     .cloned()
                     .collect();
-                (book.slot, orders, perp_market.map(|p| p.ask_price(None)))
+                (orders, perp_market.map(|p| p.ask_price(None)))
             }
             Direction::Short => {
                 let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
@@ -949,7 +942,7 @@ impl DLOB {
                     .top_bids(depth.unwrap_or(20), Some(oracle_price), perp_market)
                     .cloned()
                     .collect();
-                (book.slot, orders, perp_market.map(|p| p.bid_price(None)))
+                (orders, perp_market.map(|p| p.bid_price(None)))
             }
         };
 
