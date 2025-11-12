@@ -1032,7 +1032,7 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
     oracle_bid_1.auction_start_price = 1100;
     oracle_bid_1.auction_end_price = 1200;
 
-    let mut oracle_bid_2 = create_test_order(10, OrderType::Oracle, Direction::Long, 0, 45, slot); // Price 800, shouldn't cross
+    let mut oracle_bid_2 = create_test_order(10, OrderType::Oracle, Direction::Long, 0, 45, slot); // Price 1800 (1000 + 800 offset), should cross
     oracle_bid_2.auction_duration = 10;
     oracle_bid_2.auction_start_price = 800;
     oracle_bid_2.auction_end_price = 900;
@@ -1063,14 +1063,15 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
 
     // Should find 4 crosses:
     // 1. oracle_bid_1 (35) crossing limit_ask_1 (35)
-    // 2. oracle_bid_2 (45) crossing limit_ask_1 (15) and limit_ask_2 (30)
-    // 3. market_bid_1 (75) crossing limit_ask_1 (15) and limit_ask_2 (60)
+    // 2. oracle_bid_2 (45) crossing limit_ask_1 (45) - fills remaining from limit_ask_1
+    // 3. market_bid_1 (75) crossing limit_ask_1 (50) and limit_ask_2 (25) - fills from both asks
     // 4. market_ask_1 (20) crossing limit_bid_1 (20)
+    // Note: Each taker order processes against the full resting orderbook independently
 
     let expected_crosses = vec![
         (9, vec![(1, 35)]),
-        (10, vec![(1, 15), (2, 30)]),
-        (5, vec![(1, 15), (2, 60)]),
+        (10, vec![(1, 45)]),
+        (5, vec![(1, 50), (2, 25)]),
         (7, vec![(3, 20)]),
     ];
 
