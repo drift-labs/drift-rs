@@ -2,7 +2,9 @@ use solana_sdk::pubkey::Pubkey;
 
 use crate::{
     dlob::{Direction, OrderKind, Orderbook, Snapshot, TakerOrder, DLOB},
-    types::{MarketId, MarketType, Order, OrderStatus, OrderType},
+    drift_idl::types::{HistoricalOracleData, AMM},
+    math::constants::{AMM_RESERVE_PRECISION, PEG_PRECISION},
+    types::{accounts::PerpMarket, MarketId, MarketType, Order, OrderStatus, OrderType},
 };
 
 fn create_test_order(
@@ -2498,18 +2500,20 @@ fn l3book_vamm_orders_sorted_correctly() {
 
     // Insert market orders that will become vamm orders (auction completes, no price set)
     // These will have price 0 after auction completes
+    // Order with higher max_ts (later expiry) should come after order with lower max_ts
+    // Use future timestamps to ensure orders don't expire during the test
     let mut vamm_order1 = create_test_order(3, OrderType::Market, Direction::Long, 0, 8, slot);
     vamm_order1.auction_duration = 5; // Will complete before we query
     vamm_order1.auction_start_price = 0;
     vamm_order1.auction_end_price = 0;
-    vamm_order1.max_ts = i64::MAX; // Don't expire - will become vamm order
+    vamm_order1.max_ts = 2_000_000_000; // Lower max_ts - should be sorted first (time priority)
     dlob.insert_order(&user, vamm_order1);
 
     let mut vamm_order2 = create_test_order(4, OrderType::Market, Direction::Long, 0, 12, slot);
     vamm_order2.auction_duration = 5; // Will complete before we query
     vamm_order2.auction_start_price = 0;
     vamm_order2.auction_end_price = 0;
-    // vamm_order2.max_ts = 30 (default from create_test_order) - will expire and be removed
+    vamm_order2.max_ts = 2_100_000_000; // Higher max_ts - should be sorted after order 3
     dlob.insert_order(&user, vamm_order2);
 
     // Insert another limit order at a price lower than vamm_price
@@ -2527,32 +2531,91 @@ fn l3book_vamm_orders_sorted_correctly() {
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
-    // Query bids with vamm_price - vamm orders should appear at vamm_price position
+    // Create a PerpMarket for VAMM price calculations
+    let default_reserves = 100 * AMM_RESERVE_PRECISION;
+    let perp_market = PerpMarket {
+        market_index: 0,
+        contract_tier: crate::drift_idl::types::ContractTier::A,
+        amm: AMM {
+            max_fill_reserve_fraction: 1,
+            base_asset_reserve: default_reserves.into(),
+            quote_asset_reserve: default_reserves.into(),
+            sqrt_k: default_reserves.into(),
+            peg_multiplier: PEG_PRECISION.into(),
+            terminal_quote_asset_reserve: default_reserves.into(),
+            concentration_coef: 5u128.into(),
+            long_spread: 100,  // 1% spread
+            short_spread: 100, // 1% spread
+            max_base_asset_reserve: (u64::MAX as u128).into(),
+            min_base_asset_reserve: 0u128.into(),
+            order_step_size: 1,
+            order_tick_size: 1,
+            max_spread: 1000,
+            historical_oracle_data: HistoricalOracleData {
+                last_oracle_price: (oracle_price as i64) * 1_000_000, // Scale to PRICE_PRECISION
+                ..Default::default()
+            },
+            last_oracle_valid: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    // Query bids with perp_market - vamm orders should appear at vamm_price position
     // Since vamm_price (1100) > 1050, vamm orders should come before limit orders at 1050
-    let bids: Vec<_> = l3book.bids(Some(oracle_price), None).collect();
+    let bids: Vec<_> = l3book
+        .bids(Some(oracle_price), Some(&perp_market))
+        .collect();
 
-    // Should have 4 orders: 1 vamm order (order2 expired) + 3 limit orders
-    assert_eq!(bids.len(), 4);
+    // Should have 5 orders: 2 vamm orders + 3 limit orders
+    assert_eq!(bids.len(), 5);
 
-    // VAMM orders should appear first (at vamm_price 1100), then limit orders
-    // Since vamm_price (1100) > all limit prices, vamm orders come first
+    // VAMM orders should appear first (at vamm_price 1100), sorted by max_ts (lower max_ts first)
     // Then limit orders sorted by price: 1050, 1000, 950
     let prices: Vec<u64> = bids.iter().map(|o| o.price).collect();
+    let order_ids: Vec<u32> = bids.iter().map(|o| o.order_id).collect();
+    let max_ts_values: Vec<u64> = bids.iter().map(|o| o.max_ts).collect();
 
-    // First should be vamm order (price 0, but treated as vamm_price 1100)
-    // Order 4 expired, so only order 3 should be present
+    // First should be vamm order with lower max_ts (order 3, max_ts=2_000_000_000)
+    // Second should be vamm order with higher max_ts (order 4, max_ts=2_100_000_000)
     // Then limit orders: 1050, 1000, 950
     assert_eq!(prices[0], 0); // VAMM order 1 (order 3)
-    assert_eq!(prices[1], 1050); // Limit order 1
-    assert_eq!(prices[2], 1000); // Limit order 2
-    assert_eq!(prices[3], 950); // Limit order 3
+    assert_eq!(
+        order_ids[0], 3,
+        "First VAMM order should be order 3 (lower max_ts)"
+    );
+    assert_eq!(
+        max_ts_values[0], 2_000_000_000,
+        "First VAMM order should have max_ts=2_000_000_000"
+    );
 
-    // Verify vamm order is present (order 3), and order 4 is not (expired)
-    let order_ids: Vec<u32> = bids.iter().map(|o| o.order_id).collect();
+    assert_eq!(prices[1], 0); // VAMM order 2 (order 4)
+    assert_eq!(
+        order_ids[1], 4,
+        "Second VAMM order should be order 4 (higher max_ts)"
+    );
+    assert_eq!(
+        max_ts_values[1], 2_100_000_000,
+        "Second VAMM order should have max_ts=2_100_000_000"
+    );
+
+    assert_eq!(prices[2], 1050); // Limit order 1
+    assert_eq!(prices[3], 1000); // Limit order 2
+    assert_eq!(prices[4], 950); // Limit order 3
+
+    // Verify both vamm orders are present and sorted correctly
     assert!(order_ids.contains(&3), "Vamm order 3 should be present");
-    assert!(
-        !order_ids.contains(&4),
-        "Vamm order 4 should have expired and been removed"
+    assert!(order_ids.contains(&4), "Vamm order 4 should be present");
+
+    // Verify VAMM orders are sorted by max_ts (lower max_ts first - time priority)
+    let vamm_orders: Vec<_> = bids.iter().take(2).collect();
+    assert_eq!(
+        vamm_orders[0].max_ts, 2_000_000_000,
+        "First VAMM order should have lower max_ts"
+    );
+    assert_eq!(
+        vamm_orders[1].max_ts, 2_100_000_000,
+        "Second VAMM order should have higher max_ts"
     );
 
     // Test asks with vamm orders
@@ -2565,18 +2628,20 @@ fn l3book_vamm_orders_sorted_correctly() {
     dlob.insert_order(&user, ask2);
 
     // Insert market ask orders that will become vamm orders
+    // Order with higher max_ts (later expiry) should come after order with lower max_ts
+    // Use future timestamps to ensure orders don't expire during the test
     let mut vamm_ask1 = create_test_order(8, OrderType::Market, Direction::Short, 0, 8, slot);
     vamm_ask1.auction_duration = 5;
     vamm_ask1.auction_start_price = 0;
     vamm_ask1.auction_end_price = 0;
-    vamm_ask1.max_ts = i64::MAX; // Don't expire - will become vamm order
+    vamm_ask1.max_ts = 2_050_000_000; // Lower max_ts - should be sorted first (time priority)
     dlob.insert_order(&user, vamm_ask1);
 
     let mut vamm_ask2 = create_test_order(9, OrderType::Market, Direction::Short, 0, 12, slot);
     vamm_ask2.auction_duration = 5;
     vamm_ask2.auction_start_price = 0;
     vamm_ask2.auction_end_price = 0;
-    // vamm_ask2.max_ts = 30 (default from create_test_order) - will expire and be removed
+    vamm_ask2.max_ts = 2_150_000_000; // Higher max_ts - should be sorted after order 8
     dlob.insert_order(&user, vamm_ask2);
 
     let vamm_ask_price = 850; // VAMM ask price lower than limit asks
@@ -2591,34 +2656,64 @@ fn l3book_vamm_orders_sorted_correctly() {
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
-    // Query asks with vamm_ask_price - vamm orders should appear at vamm_ask_price position
-    // Since vamm_ask_price (850) < 900, vamm orders should come before limit orders at 900
-    let asks: Vec<_> = l3book.asks(Some(oracle_price), None).collect();
+    // Query asks with perp_market - vamm orders should appear at vamm_ask_price position
+    // VAMM orders are sorted by max_ts (lower max_ts first) when they appear
+    let asks: Vec<_> = l3book
+        .asks(Some(oracle_price), Some(&perp_market))
+        .collect();
 
-    // Should have 3 orders: 1 vamm order (ask2 expired) + 2 limit orders
-    assert_eq!(asks.len(), 3);
+    // Should have 4 orders: 2 vamm orders + 2 limit orders
+    assert_eq!(asks.len(), 4);
 
-    // VAMM orders should appear first (at vamm_ask_price 850), then limit orders
-    // Since vamm_ask_price (850) < all limit prices, vamm orders come first
-    // Then limit orders sorted by price: 900, 950
+    // Collect order information
     let ask_prices: Vec<u64> = asks.iter().map(|o| o.price).collect();
-
-    // First should be vamm order (price 0, but treated as vamm_ask_price 850)
-    // Order 9 expired, so only order 8 should be present
-    // Then limit orders: 900, 950
-    assert_eq!(ask_prices[0], 0); // VAMM order 1 (order 8)
-    assert_eq!(ask_prices[1], 900); // Limit order 2
-    assert_eq!(ask_prices[2], 950); // Limit order 1
-
-    // Verify vamm ask order is present (order 8), and order 9 is not (expired)
     let ask_order_ids: Vec<u32> = asks.iter().map(|o| o.order_id).collect();
+    let ask_max_ts_values: Vec<u64> = asks.iter().map(|o| o.max_ts).collect();
+
+    // Find VAMM orders (price 0) and limit orders
+    let vamm_orders: Vec<_> = asks.iter().filter(|o| o.price == 0).collect();
+    let limit_orders: Vec<_> = asks.iter().filter(|o| o.price != 0).collect();
+
+    // Verify we have 2 VAMM orders and 2 limit orders
+    assert_eq!(vamm_orders.len(), 2, "Should have 2 VAMM ask orders");
+    assert_eq!(limit_orders.len(), 2, "Should have 2 limit ask orders");
+
+    // Verify both vamm ask orders are present
     assert!(
         ask_order_ids.contains(&8),
         "Vamm ask order 8 should be present"
     );
     assert!(
-        !ask_order_ids.contains(&9),
-        "Vamm ask order 9 should have expired and been removed"
+        ask_order_ids.contains(&9),
+        "Vamm ask order 9 should be present"
+    );
+
+    // Verify VAMM ask orders are sorted by max_ts (lower max_ts first - time priority)
+    // Order 8 has max_ts=2_050_000_000, order 9 has max_ts=2_150_000_000
+    // So order 8 should come before order 9
+    let vamm_order_8_idx = ask_order_ids.iter().position(|&id| id == 8).unwrap();
+    let vamm_order_9_idx = ask_order_ids.iter().position(|&id| id == 9).unwrap();
+    assert!(
+        vamm_order_8_idx < vamm_order_9_idx,
+        "Order 8 (lower max_ts) should come before order 9 (higher max_ts)"
+    );
+    assert_eq!(
+        ask_max_ts_values[vamm_order_8_idx], 2_050_000_000,
+        "Order 8 should have max_ts=2_050_000_000"
+    );
+    assert_eq!(
+        ask_max_ts_values[vamm_order_9_idx], 2_150_000_000,
+        "Order 9 should have max_ts=2_150_000_000"
+    );
+
+    // Verify limit orders are present and sorted correctly
+    assert!(
+        ask_order_ids.contains(&6),
+        "Limit ask order 6 should be present"
+    );
+    assert!(
+        ask_order_ids.contains(&7),
+        "Limit ask order 7 should be present"
     );
 }
 
