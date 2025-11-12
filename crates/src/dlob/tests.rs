@@ -2673,3 +2673,182 @@ fn l3book_vamm_orders_sorted_correctly() {
         "Vamm ask order 9 should have expired and been removed"
     );
 }
+
+#[test]
+fn dlob_l3_order_flags_correctness() {
+    let _ = env_logger::try_init();
+    let dlob = DLOB::default();
+    let user = Pubkey::new_unique();
+    let slot = 100;
+    let oracle_price = 1000;
+
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market: MarketId::perp(0),
+        market_tick_size: 1,
+        ..Default::default()
+    });
+
+    // Test 1: Bid order without reduce_only, with post_only (should have IS_LONG and IS_POST_ONLY, not RO_FLAG)
+    let mut bid_order_1 = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 5, slot);
+    bid_order_1.post_only = true;
+    bid_order_1.reduce_only = false;
+    dlob.insert_order(&user, bid_order_1);
+
+    // Test 2: Bid order with reduce_only and post_only (should have IS_LONG, RO_FLAG, and IS_POST_ONLY)
+    let mut bid_order_2 = create_test_order(2, OrderType::Limit, Direction::Long, 1200, 3, slot);
+    bid_order_2.post_only = true;
+    bid_order_2.reduce_only = true;
+    dlob.insert_order(&user, bid_order_2);
+
+    // Test 3: Bid order without reduce_only, without post_only (should have IS_LONG only)
+    let mut bid_order_3 = create_test_order(5, OrderType::Limit, Direction::Long, 1300, 2, slot);
+    bid_order_3.post_only = false;
+    bid_order_3.reduce_only = false;
+    dlob.insert_order(&user, bid_order_3);
+
+    // Test 4: Ask order without reduce_only, with post_only (should have IS_POST_ONLY only)
+    let mut ask_order_1 = create_test_order(3, OrderType::Limit, Direction::Short, 900, 5, slot);
+    ask_order_1.post_only = true;
+    ask_order_1.reduce_only = false;
+    dlob.insert_order(&user, ask_order_1);
+
+    // Test 5: Ask order with reduce_only and post_only (should have RO_FLAG and IS_POST_ONLY)
+    let mut ask_order_2 = create_test_order(4, OrderType::Limit, Direction::Short, 800, 3, slot);
+    ask_order_2.post_only = true;
+    ask_order_2.reduce_only = true;
+    dlob.insert_order(&user, ask_order_2);
+
+    // Test 6: Ask order without reduce_only, without post_only (should have no flags)
+    let mut ask_order_3 = create_test_order(6, OrderType::Limit, Direction::Short, 700, 2, slot);
+    ask_order_3.post_only = false;
+    ask_order_3.reduce_only = false;
+    dlob.insert_order(&user, ask_order_3);
+
+    // Update slot and get L3 snapshot
+    if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
+        book.update_slot(slot);
+    }
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata);
+    }
+    let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
+
+    // Collect all orders
+    let bids: Vec<_> = l3book.bids(Some(oracle_price), None).collect();
+    let asks: Vec<_> = l3book.asks(Some(oracle_price), None).collect();
+
+    // Find orders by order_id
+    let bid_1 = bids.iter().find(|o| o.order_id == 1).unwrap();
+    let bid_2 = bids.iter().find(|o| o.order_id == 2).unwrap();
+    let bid_3 = bids.iter().find(|o| o.order_id == 5).unwrap();
+    let ask_1 = asks.iter().find(|o| o.order_id == 3).unwrap();
+    let ask_2 = asks.iter().find(|o| o.order_id == 4).unwrap();
+    let ask_3 = asks.iter().find(|o| o.order_id == 6).unwrap();
+
+    // Verify bid_1: should have IS_LONG and IS_POST_ONLY, not RO_FLAG
+    assert!(bid_1.is_long(), "Bid order 1 should have IS_LONG flag set");
+    assert!(
+        !bid_1.is_reduce_only(),
+        "Bid order 1 should not have RO_FLAG set"
+    );
+    assert!(
+        bid_1.is_post_only(),
+        "Bid order 1 should have IS_POST_ONLY flag set"
+    );
+
+    // Verify bid_2: should have IS_LONG, RO_FLAG, and IS_POST_ONLY
+    assert!(bid_2.is_long(), "Bid order 2 should have IS_LONG flag set");
+    assert!(
+        bid_2.is_reduce_only(),
+        "Bid order 2 should have RO_FLAG set"
+    );
+    assert!(
+        bid_2.is_post_only(),
+        "Bid order 2 should have IS_POST_ONLY flag set"
+    );
+
+    // Verify bid_3: should have IS_LONG only (no post_only, no reduce_only)
+    assert!(bid_3.is_long(), "Bid order 3 should have IS_LONG flag set");
+    assert!(
+        !bid_3.is_reduce_only(),
+        "Bid order 3 should not have RO_FLAG set"
+    );
+    assert!(
+        !bid_3.is_post_only(),
+        "Bid order 3 should not have IS_POST_ONLY flag set"
+    );
+
+    // Verify ask_1: should have IS_POST_ONLY only
+    assert!(
+        !ask_1.is_long(),
+        "Ask order 1 should not have IS_LONG flag set"
+    );
+    assert!(
+        !ask_1.is_reduce_only(),
+        "Ask order 1 should not have RO_FLAG set"
+    );
+    assert!(
+        ask_1.is_post_only(),
+        "Ask order 1 should have IS_POST_ONLY flag set"
+    );
+
+    // Verify ask_2: should have RO_FLAG and IS_POST_ONLY, not IS_LONG
+    assert!(
+        !ask_2.is_long(),
+        "Ask order 2 should not have IS_LONG flag set"
+    );
+    assert!(
+        ask_2.is_reduce_only(),
+        "Ask order 2 should have RO_FLAG set"
+    );
+    assert!(
+        ask_2.is_post_only(),
+        "Ask order 2 should have IS_POST_ONLY flag set"
+    );
+
+    // Verify ask_3: should have no flags
+    assert!(
+        !ask_3.is_long(),
+        "Ask order 3 should not have IS_LONG flag set"
+    );
+    assert!(
+        !ask_3.is_reduce_only(),
+        "Ask order 3 should not have RO_FLAG set"
+    );
+    assert!(
+        !ask_3.is_post_only(),
+        "Ask order 3 should not have IS_POST_ONLY flag set"
+    );
+
+    // Verify flag values match expected bit patterns
+    use crate::dlob::types::L3Order;
+    assert_eq!(
+        bid_1.flags,
+        L3Order::IS_LONG | L3Order::IS_POST_ONLY,
+        "Bid order 1 flags should be IS_LONG | IS_POST_ONLY (0b0000_1010)"
+    );
+    assert_eq!(
+        bid_2.flags,
+        L3Order::IS_LONG | L3Order::RO_FLAG | L3Order::IS_POST_ONLY,
+        "Bid order 2 flags should be IS_LONG | RO_FLAG | IS_POST_ONLY (0b0000_1011)"
+    );
+    assert_eq!(
+        bid_3.flags,
+        L3Order::IS_LONG,
+        "Bid order 3 flags should be IS_LONG only (0b0000_0010)"
+    );
+    assert_eq!(
+        ask_1.flags,
+        L3Order::IS_POST_ONLY,
+        "Ask order 1 flags should be IS_POST_ONLY only (0b0000_1000)"
+    );
+    assert_eq!(
+        ask_2.flags,
+        L3Order::RO_FLAG | L3Order::IS_POST_ONLY,
+        "Ask order 2 flags should be RO_FLAG | IS_POST_ONLY (0b0000_1001)"
+    );
+    assert_eq!(
+        ask_3.flags, 0,
+        "Ask order 3 flags should be 0 (no flags set)"
+    );
+}

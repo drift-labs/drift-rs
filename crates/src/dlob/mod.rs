@@ -252,236 +252,6 @@ impl Orderbook {
             keep
         });
     }
-
-    fn get_limit_bids(&self, oracle_price: u64) -> Vec<LimitOrderView> {
-        let mut result = Vec::with_capacity(
-            self.resting_limit_orders.bids.len() + self.floating_limit_orders.bids.len(),
-        );
-        let buffer_s = 4;
-        let now_unix_s = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-            + buffer_s;
-        result.extend(
-            self.resting_limit_orders
-                .bids
-                .values()
-                .filter(|o| !o.is_expired(now_unix_s))
-                .map(|o| LimitOrderView {
-                    id: o.id,
-                    price: o.get_price(),
-                    size: o.size,
-                    post_only: o.post_only,
-                    slot: o.slot,
-                }),
-        );
-        result.extend(
-            self.floating_limit_orders
-                .bids
-                .values()
-                .filter(|o| !o.is_expired(now_unix_s))
-                .map(|o| LimitOrderView {
-                    id: o.id,
-                    price: o.get_price(oracle_price, self.market_tick_size),
-                    size: o.size,
-                    slot: o.slot,
-                    post_only: o.post_only,
-                }),
-        );
-
-        // Sort by price in descending order (best bid first)
-        result.sort_by(|a, b| b.price.cmp(&a.price));
-        result
-    }
-
-    fn get_limit_asks(&self, oracle_price: u64) -> Vec<LimitOrderView> {
-        let mut result = Vec::with_capacity(
-            self.resting_limit_orders.asks.len() + self.floating_limit_orders.asks.len(),
-        );
-        let buffer_s = 4;
-        let now_unix_s = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-            + buffer_s;
-        result.extend(
-            self.resting_limit_orders
-                .asks
-                .values()
-                .filter(|o| !o.is_expired(now_unix_s))
-                .map(|o| LimitOrderView {
-                    id: o.id,
-                    price: o.get_price(),
-                    size: o.size,
-                    slot: o.slot,
-                    post_only: o.post_only,
-                }),
-        );
-        result.extend(
-            self.floating_limit_orders
-                .asks
-                .values()
-                .filter(|o| !o.is_expired(now_unix_s))
-                .map(|o| LimitOrderView {
-                    id: o.id,
-                    price: o.get_price(oracle_price, self.market_tick_size),
-                    size: o.size,
-                    slot: o.slot,
-                    post_only: o.post_only,
-                }),
-        );
-
-        // Sort by price in ascending order (best ask first)
-        result.sort_by(|a, b| a.price.cmp(&b.price));
-        result
-    }
-
-    fn get_taker_asks(
-        &self,
-        min_slot: u64,
-        oracle_price: u64,
-        trigger_price: u64,
-        perp_market: Option<&PerpMarket>,
-    ) -> Vec<(u64, u64, u64)> {
-        let mut result = Vec::with_capacity(
-            self.market_orders.asks.len()
-                + self.oracle_orders.asks.len()
-                + self.trigger_orders.asks.len(),
-        );
-        let slot = min_slot.max(self.last_modified_slot);
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-        result.extend(self.market_orders.asks.values().map(|o| {
-            (
-                o.id,
-                o.get_price(slot, oracle_price, self.market_tick_size)
-                    .or_else(|| {
-                        perp_market.map(|p| {
-                            p.fallback_price(
-                                Direction::Long,
-                                oracle_price as i64,
-                                o.max_ts.saturating_sub(now) as i64,
-                            )
-                            .unwrap()
-                        })
-                    })
-                    .unwrap(),
-                o.size,
-            )
-        }));
-        result.extend(self.oracle_orders.asks.values().map(|o| {
-            (
-                o.id,
-                o.get_price(slot, oracle_price, self.market_tick_size)
-                    .or_else(|| {
-                        perp_market.map(|p| {
-                            p.fallback_price(
-                                Direction::Long,
-                                oracle_price as i64,
-                                o.max_ts.saturating_sub(now) as i64,
-                            )
-                            .unwrap()
-                        })
-                    })
-                    .unwrap(),
-                o.size(),
-            )
-        }));
-        result.extend(self.trigger_orders.asks.values().filter_map(|o| {
-            // checking untriggered orders that will trigger at current oracle price
-            if o.will_trigger_at(trigger_price) {
-                o.get_price(slot, oracle_price, perp_market)
-                    .ok()
-                    .map(|p| (o.id, p, o.size))
-            } else {
-                None
-            }
-        }));
-
-        // Sort by price in ascending order (best ask first)
-        result.sort_by(|a, b| a.1.cmp(&b.1));
-        result
-    }
-
-    fn get_taker_bids(
-        &self,
-        min_slot: u64,
-        oracle_price: u64,
-        trigger_price: u64,
-        perp_market: Option<&PerpMarket>,
-    ) -> Vec<(u64, u64, u64)> {
-        let mut result = Vec::with_capacity(
-            self.market_orders.bids.len()
-                + self.oracle_orders.bids.len()
-                + self.trigger_orders.bids.len(),
-        );
-        let slot = min_slot.max(self.last_modified_slot);
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        result.extend(self.market_orders.bids.values().map(|o| {
-            (
-                o.id,
-                o.get_price(slot, oracle_price, self.market_tick_size)
-                    .or_else(|| {
-                        perp_market.map(|p| {
-                            p.fallback_price(
-                                Direction::Short,
-                                oracle_price as i64,
-                                o.max_ts.saturating_sub(now) as i64,
-                            )
-                            .unwrap()
-                        })
-                    })
-                    .unwrap(),
-                o.size,
-            )
-        }));
-        result.extend(self.oracle_orders.bids.values().map(|o| {
-            (
-                o.id,
-                o.get_price(slot, oracle_price, self.market_tick_size)
-                    .or_else(|| {
-                        perp_market.map(|p| {
-                            p.fallback_price(
-                                Direction::Short,
-                                oracle_price as i64,
-                                o.max_ts.saturating_sub(now) as i64,
-                            )
-                            .unwrap()
-                        })
-                    })
-                    .unwrap(),
-                o.size(),
-            )
-        }));
-
-        result.extend(
-            self.trigger_orders
-                .bids
-                .values()
-                // rely on trigger order sorting for early exit
-                .filter_map(|o| {
-                    // checking untriggered orders that will trigger at current oracle price
-                    if o.will_trigger_at(trigger_price) {
-                        o.get_price(slot, oracle_price, perp_market)
-                            .ok()
-                            .map(|p| (o.id, p, o.size))
-                    } else {
-                        None
-                    }
-                }),
-        );
-
-        // Sort by price in descending order (best bid first)
-        result.sort_by(|a, b| b.1.cmp(&a.1));
-        result
-    }
 }
 
 /// Channel for sending User order updates to DLOB instance
@@ -721,49 +491,38 @@ impl DLOB {
 
     pub fn find_crossing_region(
         &self,
-        slot: u64,
         oracle_price: u64,
         market_index: u16,
         market_type: MarketType,
+        perp_market: Option<&PerpMarket>,
     ) -> Option<CrossingRegion> {
-        let market_id = MarketId::new(market_index, market_type);
-        let book = self.markets.get(&market_id)?;
-        let bids = book.get_limit_bids(oracle_price);
-        let asks = book.get_limit_asks(oracle_price);
+        let book = self.get_l3_snapshot(market_index, market_type);
 
-        if bids.is_empty() || asks.is_empty() {
-            return None;
-        }
-        let best_bid = bids[0].price;
-        let best_ask = asks[0].price;
+        let mut bids = book.bids(Some(oracle_price), perp_market);
+        let mut asks = book.asks(Some(oracle_price), perp_market);
+
+        let best_bid = bids.next()?.price;
+        let best_ask = asks.next()?.price;
+
         if best_bid < best_ask {
             return None;
         }
 
-        let crossing_bids = bids
-            .iter()
-            .take_while(|b| b.price >= best_ask)
-            .filter_map(|b| {
-                self.metadata.get(&b.id).map(|m| CrossingOrder {
-                    order_view: b.clone(),
-                    metadata: *m.value(),
-                })
-            })
+        let crossing_bids: Vec<L3Order> = bids
+            .take_while(|b| b.price > best_ask)
+            .map(|x| x.clone())
+            .collect();
+        let crossing_asks: Vec<L3Order> = asks
+            .take_while(|a| a.price < best_bid)
+            .map(|x| x.clone())
             .collect();
 
-        let crossing_asks = asks
-            .iter()
-            .take_while(|a| a.price <= best_bid)
-            .filter_map(|a| {
-                self.metadata.get(&a.id).map(|m| CrossingOrder {
-                    order_view: a.clone(),
-                    metadata: *m.value(),
-                })
-            })
-            .collect();
+        if crossing_asks.is_empty() && crossing_bids.is_empty() {
+            return None;
+        }
 
         Some(CrossingRegion {
-            slot,
+            slot: book.slot,
             crossing_bids,
             crossing_asks,
         })
@@ -1020,24 +779,19 @@ impl DLOB {
     /// Helper to find a crossing pair of limit orders at the top of the book, if any.
     ///
     /// The crossing orders could from the same user account and so un-fillable
-    fn find_limit_cross(
-        &self,
-        bid: &LimitOrderView,
-        ask: &LimitOrderView,
-    ) -> Option<(OrderMetadata, OrderMetadata)> {
-        if bid.price < ask.price {
+    fn find_limit_cross(&self, bid: &L3Order, ask: &L3Order) -> Option<(L3Order, L3Order)> {
+        if bid.price < ask.price || bid.user == ask.user {
             return None;
         }
-        let bid_meta = self.metadata.get(&bid.id)?;
-        let ask_meta = self.metadata.get(&ask.id)?;
-        match (bid.post_only, ask.post_only) {
-            (true, false) => Some((*ask_meta.value(), *bid_meta.value())),
-            (false, true) => Some((*bid_meta.value(), *ask_meta.value())),
+        match (bid.is_post_only(), ask.is_post_only()) {
+            (true, false) => Some((ask.clone(), bid.clone())),
+            (false, true) => Some((bid.clone(), ask.clone())),
             (false, false) => {
-                if bid.slot < ask.slot {
-                    Some((*bid_meta.value(), *ask_meta.value()))
+                // TODO: use slot
+                if bid.max_ts < ask.max_ts {
+                    Some((bid.clone(), ask.clone()))
                 } else {
-                    Some((*ask_meta.value(), *bid_meta.value()))
+                    Some((ask.clone(), bid.clone()))
                 }
             }
             (true, true) => None,
@@ -1058,19 +812,30 @@ impl DLOB {
         oracle_price: u64,
         trigger_price: u64,
         perp_market: Option<&PerpMarket>,
+        depth: Option<usize>,
     ) -> CrossesAndTopMakers {
         let market = MarketId::new(market_index, market_type);
-        let book = self.markets.get(&market).expect("market lob exists");
+        let book = self.get_l3_snapshot(market_index, market_type);
         let mut all_crosses = Vec::with_capacity(16);
 
         let vamm_bid = perp_market.map(|m| m.bid_price(None));
         let vamm_ask = perp_market.map(|m| m.ask_price(None));
         log::trace!(target: TARGET, "VAMM market={} bid={vamm_bid:?} ask={vamm_ask:?}", market_index);
 
-        let taker_asks = book.get_taker_asks(slot, oracle_price, trigger_price, perp_market);
-        let taker_bids = book.get_taker_bids(slot, oracle_price, trigger_price, perp_market);
-        let mut resting_asks = book.get_limit_asks(oracle_price);
-        let mut resting_bids = book.get_limit_bids(oracle_price);
+        let asks: Vec<L3Order> = book
+            .top_asks(depth.unwrap_or(64), Some(oracle_price), perp_market)
+            .cloned()
+            .collect();
+        let (mut taker_asks, mut resting_asks): (Vec<L3Order>, Vec<L3Order>) =
+            asks.into_iter().partition(|x| x.is_taker());
+
+        let bids: Vec<L3Order> = book
+            .top_bids(depth.unwrap_or(64), Some(oracle_price), perp_market)
+            .cloned()
+            .collect();
+        let (mut taker_bids, mut resting_bids): (Vec<L3Order>, Vec<L3Order>) =
+            bids.into_iter().partition(|x| x.is_taker());
+
         let mut vamm_taker_ask = None;
         let mut vamm_taker_bid = None;
 
@@ -1079,87 +844,57 @@ impl DLOB {
             // check for crossing resting limit orders
             limit_crosses = self.find_limit_cross(best_bid, best_ask);
             // check for VAMM crossing resting limit orders
-            if vamm_bid.is_some_and(|v| v > best_ask.price && best_ask.post_only)
+            if vamm_bid.is_some_and(|v| v > best_ask.price && best_ask.is_post_only())
                 && perp_market.is_some_and(|m| best_ask.size > m.amm.min_order_size)
             {
-                vamm_taker_bid = self.metadata.get(&best_ask.id).map(|x| *x.value());
+                vamm_taker_bid = Some(best_ask.clone());
             }
-            if vamm_ask.is_some_and(|v| v < best_bid.price && best_bid.post_only)
+            if vamm_ask.is_some_and(|v| v < best_bid.price && best_bid.is_post_only())
                 && perp_market.is_some_and(|m| best_bid.size > m.amm.min_order_size)
             {
-                vamm_taker_ask = self.metadata.get(&best_bid.id).map(|x| *x.value());
+                vamm_taker_ask = Some(best_bid.clone());
             }
         }
 
-        let mut taker_order = TakerOrder {
-            price: 0,
-            size: 0,
-            direction: Direction::Long,
-            market_index,
-            market_type,
-        };
-
-        let top_3_maker_bids: ArrayVec<Pubkey, 3> = resting_bids
-            .iter()
-            .take(3)
-            .filter_map(|o| self.metadata.get(&o.id).map(|m| m.user))
-            .collect();
+        let top_3_maker_bids: ArrayVec<Pubkey, 3> =
+            resting_bids.iter().take(3).map(|o| o.user).collect();
 
         // Check for crosses between auction bids and resting asks
-        for (oid, price, size) in taker_bids {
-            taker_order.price = price;
-            taker_order.size = size;
-            taker_order.direction = Direction::Long;
-
+        for taker_bid in taker_bids {
             let new_crosses = self.find_crosses_for_taker_order_inner(
                 slot,
-                book.last_modified_slot,
-                taker_order,
-                resting_asks.iter_mut().peekable(),
+                taker_bid.price,
+                taker_bid.size,
+                taker_bid.is_long(),
+                resting_asks.iter().peekable(),
                 vamm_ask,
             );
 
-            if let Some(metadata) = self.metadata.get(&oid) {
-                if !new_crosses.is_empty() {
-                    all_crosses.push((*metadata.value(), new_crosses));
-                } else {
-                    break;
-                }
+            if !new_crosses.is_empty() {
+                all_crosses.push((taker_bid, new_crosses));
             } else {
-                log::warn!(target: TARGET, "missing metadata for order: {oid}");
-                continue;
+                break;
             }
         }
 
-        let top_3_maker_asks: ArrayVec<Pubkey, 3> = resting_asks
-            .iter()
-            .take(3)
-            .filter_map(|o| self.metadata.get(&o.id).map(|m| m.user))
-            .collect();
+        let top_3_maker_asks: ArrayVec<Pubkey, 3> =
+            resting_asks.iter().take(3).map(|o| o.user).collect();
 
         // Check for crosses between auction asks and resting bids
-        for (oid, price, size) in taker_asks {
-            taker_order.price = price;
-            taker_order.size = size;
-            taker_order.direction = Direction::Short;
-
+        for taker_ask in taker_asks {
             let new_crosses = self.find_crosses_for_taker_order_inner(
                 slot,
-                book.last_modified_slot,
-                taker_order,
-                resting_bids.iter_mut().peekable(),
+                taker_ask.price,
+                taker_ask.size,
+                taker_ask.is_long(),
+                resting_bids.iter().peekable(),
                 vamm_bid,
             );
 
-            if let Some(metadata) = self.metadata.get(&oid) {
-                if !new_crosses.is_empty() {
-                    all_crosses.push((*metadata.value(), new_crosses));
-                } else {
-                    break;
-                }
+            if !new_crosses.is_empty() {
+                all_crosses.push((taker_ask, new_crosses));
             } else {
-                log::warn!(target: TARGET, "missing metadata for order: {oid}");
-                continue;
+                break;
             }
         }
 
@@ -1180,7 +915,8 @@ impl DLOB {
     /// * `current_slot` - The current slot number, used for time-sensitive order logic.
     /// * `oracle_price` - The current oracle price, used for price calculations and trigger conditions.
     /// * `taker_order` - The taker order for which to find matching maker orders. Contains price, size, direction, and market info.
-    /// * `vamm_price` - An optional price from the virtual AMM (vAMM) to consider as a crossing point. If `Some`, will check if the taker order crosses this price.
+    /// * `perp_market` - An optional perp market to consider as a crossing point. If `Some`, will check if the taker order crosses this price.
+    /// * `depth` - An optional depth to consider for the resting orders. If `Some`, will check for crosses at the top of the book.
     ///
     /// ## Panics
     ///
@@ -1194,25 +930,36 @@ impl DLOB {
         current_slot: u64,
         oracle_price: u64,
         taker_order: TakerOrder,
-        vamm_price: Option<u64>,
+        perp_market: Option<&PerpMarket>,
+        depth: Option<usize>,
     ) -> MakerCrosses {
         let market = MarketId::new(taker_order.market_index, taker_order.market_type);
-        let (book_slot, mut resting_orders) = match taker_order.direction {
+        let (book_slot, mut resting_orders, vamm_price) = match taker_order.direction {
             Direction::Long => {
-                let book = self.markets.get(&market).expect("market lob exists");
-                (book.last_modified_slot, book.get_limit_asks(oracle_price))
+                let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
+                let orders: Vec<L3Order> = book
+                    .top_asks(depth.unwrap_or(20), Some(oracle_price), perp_market)
+                    .cloned()
+                    .collect();
+                (book.slot, orders, perp_market.map(|p| p.ask_price(None)))
             }
             Direction::Short => {
-                let book = self.markets.get(&market).expect("market lob exists");
-                (book.last_modified_slot, book.get_limit_bids(oracle_price))
+                let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
+                let orders: Vec<L3Order> = book
+                    .top_bids(depth.unwrap_or(20), Some(oracle_price), perp_market)
+                    .cloned()
+                    .collect();
+                (book.slot, orders, perp_market.map(|p| p.bid_price(None)))
             }
         };
 
+        let is_long = taker_order.direction == PositionDirection::Long;
         self.find_crosses_for_taker_order_inner(
             current_slot,
-            book_slot,
-            taker_order,
-            resting_orders.iter_mut().peekable(),
+            taker_order.price,
+            taker_order.size,
+            is_long,
+            resting_orders.iter().peekable(),
             vamm_price,
         )
     }
@@ -1221,66 +968,57 @@ impl DLOB {
     fn find_crosses_for_taker_order_inner<'a>(
         &self,
         current_slot: u64,
-        resting_order_slot: u64,
-        taker_order: TakerOrder,
-        mut resting_limit_orders: Peekable<impl Iterator<Item = &'a mut LimitOrderView>>,
+        taker_price: u64,
+        taker_size: u64,
+        is_long: bool,
+        mut resting_limit_orders: Peekable<impl Iterator<Item = &'a L3Order>>,
         vamm_price: Option<u64>,
     ) -> MakerCrosses {
-        let mut candidates = ArrayVec::<(OrderMetadata, u64, u64), 16>::new();
-        let mut remaining_size = taker_order.size;
+        let mut candidates = ArrayVec::<(L3Order, u64), 16>::new();
+        let mut remaining_size = taker_size;
 
-        let price_crosses = match taker_order.direction {
-            Direction::Long => |taker_price: u64, maker_price: u64| taker_price >= maker_price,
-            Direction::Short => |taker_price: u64, maker_price: u64| taker_price <= maker_price,
+        let price_crosses = if is_long {
+            |taker_price: u64, maker_price: u64| taker_price >= maker_price
+        } else {
+            |taker_price: u64, maker_price: u64| taker_price <= maker_price
         };
 
-        while let Some(peeked) = resting_limit_orders.peek_mut() {
-            let LimitOrderView {
-                id: internal_order_id,
-                price: maker_price,
-                size: maker_size,
-                ..
-            } = peeked;
-            if !price_crosses(taker_order.price, *maker_price) {
+        while let Some(maker_order) = resting_limit_orders.peek() {
+            if !price_crosses(taker_price, maker_order.price) {
                 break;
             }
 
-            let fill_size = remaining_size.min(*maker_size);
+            let fill_size = remaining_size.min(maker_order.size);
 
-            if let Some(metadata) = self.metadata.get(internal_order_id) {
-                candidates.push((*metadata.value(), *maker_price, fill_size));
-                remaining_size -= fill_size;
+            candidates.push(((*maker_order).clone(), fill_size));
+            remaining_size -= fill_size;
 
-                if fill_size == *maker_size {
-                    // Fully consumed — advance the iterator
-                    resting_limit_orders.next();
-                } else {
-                    // Partially filled — decrement in-place, do NOT advance
-                    *maker_size -= fill_size;
-                }
-
-                if candidates.len() == candidates.capacity() {
-                    log::debug!(target: TARGET, "reached max number crosses");
-                    break;
-                }
-                if remaining_size == 0 {
-                    break;
-                }
-            } else {
-                log::warn!(
-                    target: TARGET,
-                    "metadata missing. order:{internal_order_id},check_slot:{current_slot},book_slot:{resting_order_slot}"
-                );
+            if fill_size == maker_order.size {
+                // Fully consumed — advance the iterator
                 resting_limit_orders.next();
+            } else {
+                // Partially filled, allow subsequent matches against this maker order
+                break;
+            }
+            if candidates.len() == candidates.capacity() {
+                log::debug!(target: TARGET, "reached max number crosses");
+                break;
+            }
+            if remaining_size == 0 {
+                break;
             }
         }
 
         MakerCrosses {
-            has_vamm_cross: vamm_price.is_some_and(|v| price_crosses(taker_order.price, v)),
+            has_vamm_cross: vamm_price.is_some_and(|v| price_crosses(taker_price, v)),
             orders: candidates,
             slot: current_slot,
             is_partial: remaining_size != 0,
-            taker_direction: taker_order.direction,
+            taker_direction: if is_long {
+                Direction::Long
+            } else {
+                Direction::Short
+            },
         }
     }
 }
@@ -1326,21 +1064,26 @@ impl L3Book {
     ///
     /// # Parameters
     /// - `oracle_price`: oracle price for floating order price calculations
-    /// - `vamm_price`: VAMM fallback price. The default limit price for oracle & market orders which have finished their
+    /// - `perp_market`: Used to calculate VAMM fallback price of market/oracle (taker) auctions. i.e finished their
     ///   auction period and did not specify a custom limit price
     ///
     /// # Returns
     /// Returns an iterator over the bids
-    pub fn bids(
+    pub fn bids<'b>(
         &self,
         oracle_price: Option<u64>,
-        vamm_price: u64,
-    ) -> impl Iterator<Item = &L3Order> {
+        perp_market: Option<&'b PerpMarket>,
+    ) -> impl Iterator<Item = &L3Order> + use<'_, 'b> {
         let mut bids_iter = self.bids.iter().peekable();
         let mut floating_iter = self.floating_bids.iter().peekable();
         let mut vamm_iter = self.vamm_bids.iter().peekable();
         let oracle_diff: i64 =
             (oracle_price.unwrap_or_default() as i64).saturating_sub(self.oracle_price as i64);
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         enum Src {
             Fixed,
@@ -1369,10 +1112,19 @@ impl L3Book {
                 }
             }
 
-            if v.is_some_and(|_| vamm_price > best_price) {
-                best_src = Some(Src::Vamm);
+            if let Some(x) = v {
+                if perp_market.is_some_and(|p| {
+                    p.fallback_price(
+                        Direction::Long,
+                        oracle_price.unwrap_or(self.oracle_price) as i64,
+                        x.max_ts.saturating_sub(now) as i64,
+                    )
+                    .unwrap_or_default()
+                        > best_price
+                }) {
+                    best_src = Some(Src::Vamm);
+                }
             }
-
             match best_src {
                 Some(Src::Fixed) => bids_iter.next(),
                 Some(Src::Floating) => floating_iter.next(),
@@ -1388,40 +1140,43 @@ impl L3Book {
     /// # Parameters
     /// - `count`: Maximum number of bids to return
     /// - `oracle_price`: Current oracle price for floating order price adjustments
-    /// - `vamm_price`: VAMM fallback price. The default limit price for oracle & market orders which have finished their
-    ///   auction period and did not specify a custom limit price
+    /// - `perp_market`: Used to calculate VAMM fallback price of market/oracle (taker) auctions. i.e finished their
     ///
     /// # Returns
     /// Returns an iterator over the highest-priced bids
-    pub fn top_bids(
+    pub fn top_bids<'b>(
         &self,
         count: usize,
         oracle_price: Option<u64>,
-        vamm_price: u64,
-    ) -> impl Iterator<Item = &L3Order> {
-        self.bids(oracle_price, vamm_price).take(count)
+        perp_market: Option<&'b PerpMarket>,
+    ) -> impl Iterator<Item = &L3Order> + use<'_, 'b> {
+        self.bids(oracle_price, perp_market).take(count)
     }
 
     /// Get all L3 asks
     ///
     /// # Parameters
     /// - `oracle_price`: oracle price for floating order price calculations
-    /// - `vamm_price`: VAMM fallback price. The default limit price for oracle & market orders which have finished their
+    /// - `perp_market`: Used to calculate VAMM fallback price of market/oracle (taker) auctions. i.e finished their
     ///   auction period and did not specify a custom limit price
     ///
     /// # Returns
     /// Returns an iterator over the asks
-    pub fn asks(
+    pub fn asks<'b>(
         &self,
         oracle_price: Option<u64>,
-        vamm_price: u64,
-    ) -> impl Iterator<Item = &L3Order> {
+        perp_market: Option<&'b PerpMarket>,
+    ) -> impl Iterator<Item = &L3Order> + use<'_, 'b> {
         let mut asks_iter = self.asks.iter().peekable();
         let mut floating_iter = self.floating_asks.iter().peekable();
         let mut vamm_iter = self.vamm_asks.iter().peekable();
 
         let oracle_diff: i64 =
             (oracle_price.unwrap_or_default() as i64).saturating_sub(self.oracle_price as i64);
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
 
         enum Src {
             Fixed,
@@ -1450,8 +1205,18 @@ impl L3Book {
                 }
             }
 
-            if v.is_some_and(|_| vamm_price < best_price) {
-                best_src = Some(Src::Vamm);
+            if let Some(x) = v {
+                if perp_market.is_some_and(|p| {
+                    p.fallback_price(
+                        Direction::Short,
+                        oracle_price.unwrap_or(self.oracle_price) as i64,
+                        x.max_ts.saturating_sub(now) as i64,
+                    )
+                    .unwrap_or_default()
+                        < best_price
+                }) {
+                    best_src = Some(Src::Vamm);
+                }
             }
 
             match best_src {
@@ -1470,18 +1235,18 @@ impl L3Book {
     /// # Parameters
     /// - `count`: Maximum number of asks to return
     /// - `oracle_price`: oracle price for floating order price adjustments
-    /// - `vamm_price`: VAMM fallback price. The default limit price for oracle & market orders which have finished their
+    /// - `perp_market`: Used to calculate VAMM fallback price of market/oracle (taker) auctions. i.e finished their
     ///   auction period and did not specify a custom limit price
     ///
     /// # Returns
     /// Returns an iterator over the lowest-priced asks
-    pub fn top_asks(
+    pub fn top_asks<'b>(
         &self,
         count: usize,
         oracle_price: Option<u64>,
-        vamm_price: u64,
-    ) -> impl Iterator<Item = &L3Order> {
-        self.asks(oracle_price, vamm_price).take(count)
+        perp_market: Option<&'b PerpMarket>,
+    ) -> impl Iterator<Item = &L3Order> + use<'_, 'b> {
+        self.asks(oracle_price, perp_market).take(count)
     }
 
     /// Populate an `L3Book` instance given an `Orderbook` and `metadata`
@@ -1497,32 +1262,53 @@ impl L3Book {
         self.oracle_price = oracle_price;
         let market_tick_size = orderbook.market_tick_size;
 
+        // Debug counters: track orders with missing metadata
+        let mut missing_metadata_count = 0u32;
+        let mut total_orders_count = 0u32;
+
         // Add resting limit orders
         for order in orderbook.resting_limit_orders.bids.values() {
+            total_orders_count += 1;
             if let Some(meta) = metadata.get(&order.id) {
                 self.bids.push(L3Order {
                     price: order.get_price(),
                     size: order.size,
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)) | L3Order::IS_LONG,
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
+                        | L3Order::IS_LONG
+                        | (if order.post_only {
+                            L3Order::IS_POST_ONLY
+                        } else {
+                            0
+                        }),
                     user: meta.user,
                     order_id: meta.order_id,
                     kind: meta.kind,
                     max_ts: order.max_ts,
                 });
+            } else {
+                missing_metadata_count += 1;
             }
         }
 
         for order in orderbook.resting_limit_orders.asks.values() {
+            total_orders_count += 1;
             if let Some(meta) = metadata.get(&order.id) {
                 self.asks.push(L3Order {
                     price: order.get_price(),
                     size: order.size,
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)),
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
+                        | (if order.post_only {
+                            L3Order::IS_POST_ONLY
+                        } else {
+                            0
+                        }),
                     user: meta.user,
                     order_id: meta.order_id,
                     kind: meta.kind,
                     max_ts: order.max_ts,
                 });
+            } else {
+                missing_metadata_count += 1;
             }
         }
 
@@ -1537,16 +1323,25 @@ impl L3Book {
             .values()
             .filter(|x| x.price <= oracle_price_with_buffer)
         {
+            total_orders_count += 1;
             if let Some(meta) = metadata.get(&order.id) {
                 self.bids.push(L3Order {
                     price: order.price,
                     size: order.size,
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)) | L3Order::IS_LONG,
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
+                        | L3Order::IS_LONG
+                        | if order.condition == OrderTriggerCondition::Above {
+                            L3Order::IS_TRIGGER_ABOVE
+                        } else {
+                            0
+                        },
                     user: meta.user,
                     order_id: meta.order_id,
                     kind: meta.kind,
                     max_ts: order.max_ts,
                 });
+            } else {
+                missing_metadata_count += 1;
             }
         }
 
@@ -1557,20 +1352,29 @@ impl L3Book {
             .values()
             .filter(|x| x.price >= oracle_price_with_buffer)
         {
+            total_orders_count += 1;
             if let Some(meta) = metadata.get(&order.id) {
                 self.asks.push(L3Order {
                     price: order.price,
                     size: order.size,
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)),
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
+                        | if order.condition == OrderTriggerCondition::Above {
+                            L3Order::IS_TRIGGER_ABOVE
+                        } else {
+                            0
+                        },
                     user: meta.user,
                     order_id: meta.order_id,
                     kind: meta.kind,
                     max_ts: order.max_ts,
                 });
+            } else {
+                missing_metadata_count += 1;
             }
         }
 
         for order in orderbook.market_orders.bids.values() {
+            total_orders_count += 1;
             if let Some(meta) = metadata.get(&order.id) {
                 let price = order
                     .get_price(self.slot, oracle_price, market_tick_size)
@@ -1589,10 +1393,13 @@ impl L3Book {
                 } else {
                     self.vamm_bids.push(order);
                 }
+            } else {
+                missing_metadata_count += 1;
             }
         }
 
         for order in orderbook.market_orders.asks.values() {
+            total_orders_count += 1;
             if let Some(meta) = metadata.get(&order.id) {
                 let price = order
                     .get_price(self.slot, oracle_price, market_tick_size)
@@ -1611,40 +1418,60 @@ impl L3Book {
                 } else {
                     self.vamm_asks.push(order);
                 }
+            } else {
+                missing_metadata_count += 1;
             }
         }
 
         // Add floating limit orders
         for order in orderbook.floating_limit_orders.bids.values() {
+            total_orders_count += 1;
             if let Some(meta) = metadata.get(&order.id) {
                 self.floating_bids.push(L3Order {
                     price: order.get_price(oracle_price, market_tick_size),
                     size: order.size,
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)) | L3Order::IS_LONG,
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
+                        | L3Order::IS_LONG
+                        | (if order.post_only {
+                            L3Order::IS_POST_ONLY
+                        } else {
+                            0
+                        }),
                     user: meta.user,
                     order_id: meta.order_id,
                     max_ts: order.max_ts,
                     kind: meta.kind,
                 });
+            } else {
+                missing_metadata_count += 1;
             }
         }
 
         for order in orderbook.floating_limit_orders.asks.values() {
+            total_orders_count += 1;
             if let Some(meta) = metadata.get(&order.id) {
                 self.floating_asks.push(L3Order {
                     price: order.get_price(oracle_price, market_tick_size),
                     size: order.size,
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)),
+                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
+                        | (if order.post_only {
+                            L3Order::IS_POST_ONLY
+                        } else {
+                            0
+                        }),
                     user: meta.user,
                     order_id: meta.order_id,
                     max_ts: order.max_ts,
                     kind: meta.kind,
                 });
+            } else {
+                missing_metadata_count += 1;
             }
         }
 
         // Add oracle orders as taker orders
         for order in orderbook.oracle_orders.bids.values() {
+            total_orders_count += 1;
             if let Some(meta) = metadata.get(&order.id) {
                 let price = order
                     .get_price(self.slot, oracle_price, market_tick_size)
@@ -1663,10 +1490,13 @@ impl L3Book {
                 } else {
                     self.vamm_bids.push(order);
                 }
+            } else {
+                missing_metadata_count += 1;
             }
         }
 
         for order in orderbook.oracle_orders.asks.values() {
+            total_orders_count += 1;
             if let Some(meta) = metadata.get(&order.id) {
                 let price = order
                     .get_price(self.slot, oracle_price, market_tick_size)
@@ -1685,13 +1515,30 @@ impl L3Book {
                 } else {
                     self.vamm_asks.push(order);
                 }
+            } else {
+                missing_metadata_count += 1;
             }
+        }
+
+        // Log warning if we found orders without metadata
+        if missing_metadata_count > 0 {
+            log::warn!(
+                target: TARGET,
+                "L3Book: Found {} orders without metadata out of {} total orders (market: {})",
+                missing_metadata_count,
+                total_orders_count,
+                orderbook.market.index()
+            );
         }
 
         // Sort bids in descending order (highest first)
         self.bids.sort_by(|a, b| b.price.cmp(&a.price));
         // Sort asks in ascending order (lowest first)
         self.asks.sort_by(|a, b| a.price.cmp(&b.price));
+        // sort by expiry time (smallest buffer from vamm price first)
+        self.vamm_bids.sort_by(|a, b| a.max_ts.cmp(&b.max_ts));
+        // sort by expiry time (smallest buffer from vamm price first)
+        self.vamm_asks.sort_by(|a, b| a.max_ts.cmp(&b.max_ts));
         // Sort bids in descending order (highest first)
         self.floating_bids.sort_by(|a, b| b.price.cmp(&a.price));
         // Sort asks in ascending order (lowest first)

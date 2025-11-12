@@ -23,6 +23,104 @@ type LimitOrderKey = (u64, u64, u64);
 type FloatingLimitOrderKey = (i32, u64, u64);
 type TriggerOrderKey = (u64, u64);
 
+/// Debugging statistics for DLOB
+#[derive(Debug, Clone)]
+pub struct DLOBDebugStats {
+    pub total_metadata: usize,
+    pub market_orders: usize,
+    pub oracle_orders: usize,
+    pub resting_limit_orders: usize,
+    pub floating_limit_orders: usize,
+    pub trigger_orders: usize,
+    pub orphaned_metadata: Vec<OrphanedMetadata>,
+    pub orders_without_metadata: Vec<u64>,
+}
+
+/// Metadata entry that exists without a corresponding order in any collection
+#[derive(Debug, Clone)]
+pub struct OrphanedMetadata {
+    pub order_id: u64,
+    pub metadata: OrderMetadata,
+}
+
+/// Location information for a specific order ID
+#[derive(Debug, Clone)]
+pub struct OrderLocation {
+    pub order_id: u64,
+    pub has_metadata: bool,
+    pub in_market_orders: bool,
+    pub in_oracle_orders: bool,
+    pub in_resting_limit_orders: bool,
+    pub in_floating_limit_orders: bool,
+    pub in_trigger_orders: bool,
+}
+
+impl std::fmt::Display for DLOBDebugStats {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "DLOB Debug Stats:")?;
+        writeln!(f, "  Total metadata entries: {}", self.total_metadata)?;
+        writeln!(f, "  Market orders: {}", self.market_orders)?;
+        writeln!(f, "  Oracle orders: {}", self.oracle_orders)?;
+        writeln!(f, "  Resting limit orders: {}", self.resting_limit_orders)?;
+        writeln!(f, "  Floating limit orders: {}", self.floating_limit_orders)?;
+        writeln!(f, "  Trigger orders: {}", self.trigger_orders)?;
+        writeln!(f, "  Orphaned metadata: {}", self.orphaned_metadata.len())?;
+        if !self.orphaned_metadata.is_empty() {
+            for orphan in &self.orphaned_metadata[..self.orphaned_metadata.len().min(10)] {
+                writeln!(
+                    f,
+                    "    - Order ID: {}, Kind: {:?}, User: {}",
+                    orphan.order_id, orphan.metadata.kind, orphan.metadata.user
+                )?;
+            }
+            if self.orphaned_metadata.len() > 10 {
+                writeln!(f, "    ... and {} more", self.orphaned_metadata.len() - 10)?;
+            }
+        }
+        writeln!(
+            f,
+            "  Orders without metadata: {}",
+            self.orders_without_metadata.len()
+        )?;
+        if !self.orders_without_metadata.is_empty() {
+            for order_id in
+                &self.orders_without_metadata[..self.orders_without_metadata.len().min(10)]
+            {
+                writeln!(f, "    - Order ID: {}", order_id)?;
+            }
+            if self.orders_without_metadata.len() > 10 {
+                writeln!(
+                    f,
+                    "    ... and {} more",
+                    self.orders_without_metadata.len() - 10
+                )?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for OrderLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Order Location for ID {}:", self.order_id)?;
+        writeln!(f, "  Has metadata: {}", self.has_metadata)?;
+        writeln!(f, "  In market_orders: {}", self.in_market_orders)?;
+        writeln!(f, "  In oracle_orders: {}", self.in_oracle_orders)?;
+        writeln!(
+            f,
+            "  In resting_limit_orders: {}",
+            self.in_resting_limit_orders
+        )?;
+        writeln!(
+            f,
+            "  In floating_limit_orders: {}",
+            self.in_floating_limit_orders
+        )?;
+        writeln!(f, "  In trigger_orders: {}", self.in_trigger_orders)?;
+        Ok(())
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy, PartialEq)]
 #[repr(u8)]
 pub enum OrderKind {
@@ -110,19 +208,19 @@ pub struct CrossesAndTopMakers {
     //  best maker accounts on bid side
     pub top_maker_bids: ArrayVec<Pubkey, 3>,
     // top of book limit cross, if any
-    pub limit_crosses: Option<(OrderMetadata, OrderMetadata)>,
-    pub vamm_taker_ask: Option<OrderMetadata>,
-    pub vamm_taker_bid: Option<OrderMetadata>,
+    pub limit_crosses: Option<(L3Order, L3Order)>,
+    pub vamm_taker_ask: Option<L3Order>,
+    pub vamm_taker_bid: Option<L3Order>,
     //  taker crosses and maker orders
-    pub crosses: Vec<(OrderMetadata, MakerCrosses)>,
+    pub crosses: Vec<(L3Order, MakerCrosses)>,
 }
 
 /// Best fills for a taker order
 /// Returns (candidates, is_partial)
 #[derive(Clone, Debug, Default)]
 pub struct MakerCrosses {
-    /// (metadata, maker_price, fill_size)
-    pub orders: ArrayVec<(OrderMetadata, u64, u64), 16>,
+    /// (maker order, fill_size)
+    pub orders: ArrayVec<(L3Order, u64), 16>,
     /// Slot crosses were found
     pub slot: u64,
     // true if crosses VAMM quote
@@ -171,8 +269,8 @@ impl OrderKey for MarketOrder {
 
 impl MarketOrder {
     /// Check if this order has expired
-    pub fn is_expired(&self, now: u64) -> bool {
-        self.max_ts < now
+    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
+        self.max_ts != 0 && self.max_ts < now_unix_seconds
     }
     /// Check if this auction order has completed
     pub fn is_auction_complete(&self, current_slot: u64) -> bool {
@@ -202,8 +300,8 @@ impl OrderKey for OracleOrder {
 
 impl OracleOrder {
     /// Check if this order has expired
-    pub fn is_expired(&self, now: u64) -> bool {
-        self.max_ts < now
+    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
+        self.max_ts != 0 && self.max_ts < now_unix_seconds
     }
     /// Check if this auction order has completed
     pub fn is_auction_complete(&self, current_slot: u64) -> bool {
@@ -531,7 +629,7 @@ impl LimitOrder {
         self.price
     }
     pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
-        self.max_ts > now_unix_seconds
+        self.max_ts != 0 && self.max_ts < now_unix_seconds
     }
 }
 
@@ -552,7 +650,7 @@ impl From<(u64, Order)> for LimitOrder {
 
 impl FloatingLimitOrder {
     pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
-        self.max_ts > now_unix_seconds
+        self.max_ts != 0 && self.max_ts < now_unix_seconds
     }
     pub fn get_price(&self, oracle_price: u64, tick_size: u64) -> u64 {
         (oracle_price as i64 + self.offset_price as i64).max(tick_size as i64) as u64
@@ -670,19 +768,13 @@ impl<T: Default + Clone> Drop for Snapshot<T> {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct CrossingOrder {
-    pub order_view: LimitOrderView,
-    pub metadata: OrderMetadata,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CrossingRegion {
     pub slot: u64,
-    pub crossing_bids: Vec<CrossingOrder>,
-    pub crossing_asks: Vec<CrossingOrder>,
+    pub crossing_bids: Vec<L3Order>,
+    pub crossing_asks: Vec<L3Order>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct L3Order {
     /// point in time limit price of the order at some slot & oracle price
     pub price: u64,
@@ -701,12 +793,14 @@ pub struct L3Order {
 
 impl L3Order {
     /// when set indicates order is reduce only
-    pub(crate) const RO_FLAG: u8 = 0b1000_0000;
+    pub(crate) const RO_FLAG: u8 = 0b0000_0001;
     /// When set indicates order direction is long
-    pub(crate) const IS_LONG: u8 = 0b0100_0000;
+    pub(crate) const IS_LONG: u8 = 0b0000_0010;
     /// When set and order kind is trigger, this bit indicates 'trigger above'
     /// conversely, 'trigger below' when unset
-    pub(crate) const IS_TRIGGER_ABOVE: u8 = 0b0010_0000;
+    pub(crate) const IS_TRIGGER_ABOVE: u8 = 0b0000_0100;
+    /// When set indicates limit order with post only flag set
+    pub(crate) const IS_POST_ONLY: u8 = 0b0000_1000;
     /// True if this is a long order, false otherwise
     pub fn is_long(&self) -> bool {
         self.flags & Self::IS_LONG > 0
@@ -715,8 +809,13 @@ impl L3Order {
     pub fn is_reduce_only(&self) -> bool {
         self.flags & Self::RO_FLAG > 0
     }
+    /// True if this is a trigger order with 'trigger above' condition
     pub fn is_trigger_above(&self) -> bool {
         self.flags & Self::IS_TRIGGER_ABOVE > 0
+    }
+    /// True if this is a limit order with 'post only' set
+    pub fn is_post_only(&self) -> bool {
+        self.flags & Self::IS_POST_ONLY > 0
     }
     /// Calculate the 'limit' price of an _untriggered_ perp trigger order
     ///
@@ -731,7 +830,7 @@ impl L3Order {
             self.kind,
             OrderKind::TriggerMarket | OrderKind::TriggerLimit
         ) {
-            let condition = if self.flags & Self::IS_TRIGGER_ABOVE > 0 {
+            let condition = if self.is_trigger_above() {
                 OrderTriggerCondition::Above
             } else {
                 OrderTriggerCondition::Below
