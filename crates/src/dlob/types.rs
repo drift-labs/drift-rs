@@ -23,6 +23,104 @@ type LimitOrderKey = (u64, u64, u64);
 type FloatingLimitOrderKey = (i32, u64, u64);
 type TriggerOrderKey = (u64, u64);
 
+/// Debugging statistics for DLOB
+#[derive(Debug, Clone)]
+pub struct DLOBDebugStats {
+    pub total_metadata: usize,
+    pub market_orders: usize,
+    pub oracle_orders: usize,
+    pub resting_limit_orders: usize,
+    pub floating_limit_orders: usize,
+    pub trigger_orders: usize,
+    pub orphaned_metadata: Vec<OrphanedMetadata>,
+    pub orders_without_metadata: Vec<u64>,
+}
+
+/// Metadata entry that exists without a corresponding order in any collection
+#[derive(Debug, Clone)]
+pub struct OrphanedMetadata {
+    pub order_id: u64,
+    pub metadata: OrderMetadata,
+}
+
+/// Location information for a specific order ID
+#[derive(Debug, Clone)]
+pub struct OrderLocation {
+    pub order_id: u64,
+    pub has_metadata: bool,
+    pub in_market_orders: bool,
+    pub in_oracle_orders: bool,
+    pub in_resting_limit_orders: bool,
+    pub in_floating_limit_orders: bool,
+    pub in_trigger_orders: bool,
+}
+
+impl std::fmt::Display for DLOBDebugStats {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "DLOB Debug Stats:")?;
+        writeln!(f, "  Total metadata entries: {}", self.total_metadata)?;
+        writeln!(f, "  Market orders: {}", self.market_orders)?;
+        writeln!(f, "  Oracle orders: {}", self.oracle_orders)?;
+        writeln!(f, "  Resting limit orders: {}", self.resting_limit_orders)?;
+        writeln!(f, "  Floating limit orders: {}", self.floating_limit_orders)?;
+        writeln!(f, "  Trigger orders: {}", self.trigger_orders)?;
+        writeln!(f, "  Orphaned metadata: {}", self.orphaned_metadata.len())?;
+        if !self.orphaned_metadata.is_empty() {
+            for orphan in &self.orphaned_metadata[..self.orphaned_metadata.len().min(10)] {
+                writeln!(
+                    f,
+                    "    - Order ID: {}, Kind: {:?}, User: {}",
+                    orphan.order_id, orphan.metadata.kind, orphan.metadata.user
+                )?;
+            }
+            if self.orphaned_metadata.len() > 10 {
+                writeln!(f, "    ... and {} more", self.orphaned_metadata.len() - 10)?;
+            }
+        }
+        writeln!(
+            f,
+            "  Orders without metadata: {}",
+            self.orders_without_metadata.len()
+        )?;
+        if !self.orders_without_metadata.is_empty() {
+            for order_id in
+                &self.orders_without_metadata[..self.orders_without_metadata.len().min(10)]
+            {
+                writeln!(f, "    - Order ID: {}", order_id)?;
+            }
+            if self.orders_without_metadata.len() > 10 {
+                writeln!(
+                    f,
+                    "    ... and {} more",
+                    self.orders_without_metadata.len() - 10
+                )?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for OrderLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Order Location for ID {}:", self.order_id)?;
+        writeln!(f, "  Has metadata: {}", self.has_metadata)?;
+        writeln!(f, "  In market_orders: {}", self.in_market_orders)?;
+        writeln!(f, "  In oracle_orders: {}", self.in_oracle_orders)?;
+        writeln!(
+            f,
+            "  In resting_limit_orders: {}",
+            self.in_resting_limit_orders
+        )?;
+        writeln!(
+            f,
+            "  In floating_limit_orders: {}",
+            self.in_floating_limit_orders
+        )?;
+        writeln!(f, "  In trigger_orders: {}", self.in_trigger_orders)?;
+        Ok(())
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy, PartialEq)]
 #[repr(u8)]
 pub enum OrderKind {
@@ -171,8 +269,8 @@ impl OrderKey for MarketOrder {
 
 impl MarketOrder {
     /// Check if this order has expired
-    pub fn is_expired(&self, now: u64) -> bool {
-        self.max_ts < now
+    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
+        self.max_ts != 0 && self.max_ts < now_unix_seconds
     }
     /// Check if this auction order has completed
     pub fn is_auction_complete(&self, current_slot: u64) -> bool {
@@ -202,8 +300,8 @@ impl OrderKey for OracleOrder {
 
 impl OracleOrder {
     /// Check if this order has expired
-    pub fn is_expired(&self, now: u64) -> bool {
-        self.max_ts < now
+    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
+        self.max_ts != 0 && self.max_ts < now_unix_seconds
     }
     /// Check if this auction order has completed
     pub fn is_auction_complete(&self, current_slot: u64) -> bool {
@@ -531,7 +629,7 @@ impl LimitOrder {
         self.price
     }
     pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
-        self.max_ts > now_unix_seconds
+        self.max_ts != 0 && self.max_ts < now_unix_seconds
     }
 }
 
@@ -552,7 +650,7 @@ impl From<(u64, Order)> for LimitOrder {
 
 impl FloatingLimitOrder {
     pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
-        self.max_ts > now_unix_seconds
+        self.max_ts != 0 && self.max_ts < now_unix_seconds
     }
     pub fn get_price(&self, oracle_price: u64, tick_size: u64) -> u64 {
         (oracle_price as i64 + self.offset_price as i64).max(tick_size as i64) as u64
