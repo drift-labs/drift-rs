@@ -534,6 +534,7 @@ impl DLOB {
         }
 
         self.with_orderbook_mut(&MarketId::new(new_order.market_index, new_order.market_type), |mut orderbook| {
+            let mut new_meta_kind: Option<OrderKind> = None;
             if let Some(metadata) = self.metadata.get(&order_id) {
                 log::trace!(target: TARGET, "update ({order_id}): {:?}", metadata.kind);
                 let mut updated = false;
@@ -555,10 +556,11 @@ impl DLOB {
 
                         if !updated {
                             log::trace!(target: TARGET, "update limit auction (resting): {order_id}");
-                            updated = orderbook.resting_limit_orders.update(order_id, new_order, old_order);
-                            let mut new_meta = metadata.clone();
-                            new_meta.kind = OrderKind::Limit;
-                            self.metadata.insert(order_id, new_meta);
+                            // Remove from market_orders and insert into resting_limit_orders
+                            orderbook.market_orders.remove(order_id, old_order);
+                            orderbook.resting_limit_orders.insert(order_id, new_order);
+                            updated = true;
+                            new_meta_kind = Some(OrderKind::Limit);
                         }
                     }
                     OrderKind::FloatingLimitAuction => {
@@ -571,10 +573,11 @@ impl DLOB {
 
                         if !updated {
                             log::trace!(target: TARGET, "update oracle limit (resting): {order_id}");
-                            updated = orderbook.floating_limit_orders.update(order_id, new_order, old_order);
-                            let mut new_meta = metadata.clone();
-                            new_meta.kind = OrderKind::FloatingLimit;
-                            self.metadata.insert(order_id, new_meta);
+                            // Remove from oracle_orders and insert into floating_limit_orders
+                            orderbook.oracle_orders.remove(order_id, old_order);
+                            orderbook.floating_limit_orders.insert(order_id, new_order);
+                            updated = true;
+                            new_meta_kind = Some(OrderKind::FloatingLimit);
                         }
                     }
                     OrderKind::Limit => {
@@ -600,9 +603,7 @@ impl DLOB {
                                     OrderKind::MarketTriggered
                                 };
                                 updated = true;
-                                let mut new_meta = metadata.clone();
-                                new_meta.kind = new_kind;
-                                self.metadata.insert(order_id, new_meta);
+                                new_meta_kind = Some(new_kind);
                             }
                         }
                     }
@@ -618,9 +619,7 @@ impl DLOB {
                                 orderbook.trigger_orders.remove(order_id, old_order);
                                 orderbook.market_orders.insert(order_id, new_order);
                                 updated = true;
-                                let mut new_meta = metadata.clone();
-                                new_meta.kind = OrderKind::LimitTriggered;
-                                self.metadata.insert(order_id, new_meta);
+                                new_meta_kind = Some(OrderKind::LimitTriggered);
                             }
                         }
                     }
@@ -629,6 +628,9 @@ impl DLOB {
                 if !updated {
                     log::warn!(target: TARGET, "update order failed: {order_id}, {metadata:?}, {old_order:?}, {new_order:?}");
                 }
+            }
+            if let Some(kind) = new_meta_kind {
+                self.metadata.insert(order_id, OrderMetadata::new(*user, kind, new_order.order_id, new_order.max_ts.unsigned_abs()));
             }
         });
     }

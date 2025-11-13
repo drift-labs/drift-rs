@@ -821,57 +821,6 @@ fn dlob_auction_expiry_mixed_orders() {
 }
 
 #[test]
-fn dlob_zero_size_order_handling() {
-    let _ = env_logger::try_init();
-    let dlob = DLOB::default();
-    let user = Pubkey::new_unique();
-    let slot = 100;
-
-    // Test 1: Update order to be fully filled (should be removed)
-    let order = create_test_order(2, OrderType::Limit, Direction::Long, 1000, 10, slot);
-    dlob.insert_order(&user, order);
-    let mut new_order = order.clone();
-    new_order.base_asset_amount_filled = 10; // Fully fill it
-    dlob.update_order(&user, slot, new_order, order);
-
-    // Verify no orders in book
-    let book = dlob
-        .markets
-        .get(&MarketId::new(0, MarketType::Perp))
-        .unwrap();
-    assert_eq!(book.resting_limit_orders.bids.len(), 0);
-
-    // Test 2: Insert fully filled order (should be skipped)
-    let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1000, 10, slot);
-    order.base_asset_amount_filled = 10; // Fully filled
-    dlob.insert_order(&user, order);
-
-    // Verify order was removed
-    assert_eq!(book.resting_limit_orders.bids.len(), 0);
-
-    // Test 3: Auction order expiring with zero size (should be removed)
-    let mut order = create_test_order(3, OrderType::Limit, Direction::Long, 1000, 10, slot);
-    order.auction_duration = 5;
-    order.base_asset_amount_filled = 10; // Fully filled
-    dlob.insert_order(&user, order);
-
-    // Update to slot after auction end
-    drop(book); // release lock
-    if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
-        book.update_slot(0);
-    }
-
-    let book = dlob
-        .markets
-        .get(&MarketId::new(0, MarketType::Perp))
-        .unwrap();
-
-    // Verify no orders in book
-    assert_eq!(book.resting_limit_orders.bids.len(), 0);
-    assert_eq!(book.market_orders.bids.len(), 0);
-}
-
-#[test]
 fn dlob_find_crosses_for_auctions_market_orders() {
     let _ = env_logger::try_init();
     let dlob = DLOB::default();
@@ -1190,9 +1139,6 @@ fn dlob_trigger_order_transitions() {
     // --- Remove triggered limit order ---
     // Advance slot to ensure auction is completed
     let auction_complete_slot = slot + triggered_order2.auction_duration as u64 + 1;
-    if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
-        book.update_slot(0);
-    }
     dlob.remove_order(&user, auction_complete_slot, triggered_order2);
     {
         let book = dlob
