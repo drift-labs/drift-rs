@@ -80,6 +80,141 @@ impl OrderMetadata {
     }
 }
 
+/// Reason for an order transition
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub enum TransitionReason {
+    /// Order was created/inserted
+    Created,
+    /// Order was updated
+    Updated,
+    /// Order was removed
+    Removed,
+    /// Auction completed, moving to resting
+    AuctionCompleted,
+    /// Order was triggered
+    Triggered,
+    /// Order expired
+    Expired,
+    /// Order transitioned during slot update
+    SlotUpdate,
+}
+
+/// A single transition event in an order's lifecycle
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct OrderTransition {
+    /// Slot when transition occurred
+    pub slot: u64,
+    /// Timestamp when transition occurred
+    pub timestamp: u64,
+    /// Previous order kind (None for creation)
+    pub from_kind: Option<OrderKind>,
+    /// New order kind (None for removal)
+    pub to_kind: Option<OrderKind>,
+    /// Reason for the transition
+    pub reason: TransitionReason,
+    /// Additional context (e.g., "auction completed", "not found in market_orders")
+    pub context: Option<String>,
+}
+
+/// Minimal log of order transitions for debugging stuck orders
+///
+/// Maintains a bounded history of transitions (last N transitions)
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct OrderTransitionLog {
+    /// Order ID this log belongs to
+    pub order_id: u64,
+    /// List of transitions (most recent first)
+    transitions: Vec<OrderTransition>,
+    /// Maximum number of transitions to keep
+    max_transitions: usize,
+}
+
+impl OrderTransitionLog {
+    /// Create a new transition log with default capacity (20 transitions)
+    pub fn new(order_id: u64) -> Self {
+        Self {
+            order_id,
+            transitions: Vec::with_capacity(20),
+            max_transitions: 20,
+        }
+    }
+
+    /// Add a transition to the log
+    pub fn add_transition(
+        &mut self,
+        slot: u64,
+        from_kind: Option<OrderKind>,
+        to_kind: Option<OrderKind>,
+        reason: TransitionReason,
+        context: Option<String>,
+    ) {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let transition = OrderTransition {
+            slot,
+            timestamp,
+            from_kind,
+            to_kind,
+            reason,
+            context,
+        };
+
+        // Insert at the beginning (most recent first)
+        self.transitions.insert(0, transition);
+
+        // Keep only the most recent transitions
+        if self.transitions.len() > self.max_transitions {
+            self.transitions.truncate(self.max_transitions);
+        }
+    }
+
+    /// Get all transitions (most recent first)
+    pub fn transitions(&self) -> &[OrderTransition] {
+        &self.transitions
+    }
+
+    /// Get the most recent transition
+    pub fn last_transition(&self) -> Option<&OrderTransition> {
+        self.transitions.first()
+    }
+
+    /// Get transitions as a formatted string for logging
+    /// Returns transitions in chronological order (oldest -> newest)
+    pub fn format_for_logging(&self) -> String {
+        if self.transitions.is_empty() {
+            return "no transitions".to_string();
+        }
+
+        let mut s = String::new();
+        // Iterate in reverse to show oldest -> newest (transitions are stored newest first)
+        let transitions_to_show: Vec<_> = self.transitions.iter().rev().take(10).collect();
+        for (i, trans) in transitions_to_show.iter().enumerate() {
+            if i > 0 {
+                s.push_str(" -> ");
+            }
+            let from = trans
+                .from_kind
+                .map(|k| format!("{:?}", k))
+                .unwrap_or_else(|| "None".to_string());
+            let to = trans
+                .to_kind
+                .map(|k| format!("{:?}", k))
+                .unwrap_or_else(|| "None".to_string());
+            s.push_str(&format!(
+                "[slot:{} {:?}: {} -> {}]",
+                trans.slot, trans.reason, from, to
+            ));
+            if let Some(ctx) = &trans.context {
+                s.push_str(&format!(" ({})", ctx));
+            }
+        }
+        s
+    }
+}
+
 /// Minimal taker order info
 #[derive(Copy, Clone, Debug)]
 pub struct TakerOrder {
@@ -207,7 +342,7 @@ impl OracleOrder {
     }
     /// Check if this auction order has completed
     pub fn is_auction_complete(&self, current_slot: u64) -> bool {
-        (self.slot + self.duration as u64) <= current_slot
+        current_slot.saturating_sub(self.slot) > self.duration as u64
     }
 
     /// Convert to FloatingLimitOrder when auction completes

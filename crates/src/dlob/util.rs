@@ -344,4 +344,178 @@ mod tests {
         assert_eq!(remove_count, 2, "Should have 2 Remove deltas");
         assert_eq!(create_count, 2, "Should have 2 Create deltas");
     }
+
+    #[test]
+    fn dlob_util_test_atomic_create_and_fill() {
+        let pubkey = Pubkey::new_unique();
+
+        // Test case: Order doesn't exist in old (default/empty order), but exists in new
+        // as a filled order (created and filled atomically). Should NOT emit Create+Remove.
+        let old = create_test_user(vec![]); // Empty user, all slots have default Order (order_id=0, status=Init)
+        let new = create_test_user(vec![create_test_order(1, OrderStatus::Filled)]); // Order created and filled atomically
+
+        let deltas = compare_user_orders(pubkey, &old, &new);
+
+        // Should emit NO deltas - the order was created and filled atomically, so it never
+        // existed in an open state that we need to track
+        assert_eq!(
+            deltas.len(),
+            0,
+            "Should not emit deltas for atomically created and filled orders"
+        );
+    }
+
+    #[test]
+    fn dlob_util_test_atomic_create_and_cancel() {
+        let pubkey = Pubkey::new_unique();
+
+        // Similar test but with Canceled status
+        let old = create_test_user(vec![]);
+        let new = create_test_user(vec![create_test_order(1, OrderStatus::Canceled)]);
+
+        let deltas = compare_user_orders(pubkey, &old, &new);
+
+        assert_eq!(
+            deltas.len(),
+            0,
+            "Should not emit deltas for atomically created and canceled orders"
+        );
+    }
+
+    #[test]
+    fn dlob_util_test_atomic_create_and_fill_with_existing_orders() {
+        let pubkey = Pubkey::new_unique();
+
+        // Test with other orders present to ensure the logic works in context
+        let old = create_test_user(vec![
+            create_test_order(1, OrderStatus::Open),
+            // Slot 1 is empty (default order)
+        ]);
+
+        let new = create_test_user(vec![
+            create_test_order(1, OrderStatus::Open),   // Unchanged
+            create_test_order(2, OrderStatus::Filled), // Created and filled atomically at slot 1
+        ]);
+
+        let deltas = compare_user_orders(pubkey, &old, &new);
+
+        // Should only have 0 deltas - order 1 is unchanged, order 2 was created and filled atomically
+        assert_eq!(
+            deltas.len(),
+            0,
+            "Should not emit deltas for atomically created and filled orders"
+        );
+    }
+
+    #[test]
+    fn dlob_util_test_filled_order_replacement() {
+        let pubkey = Pubkey::new_unique();
+
+        // Test case: Old order is filled (not open), new order is also filled (different order_id)
+        // This simulates: old filled order gets replaced by a new order that was created and filled atomically
+        // Should NOT emit Remove+Create since neither order was ever open in the DLOB
+        let old = create_test_user(vec![create_test_order(1, OrderStatus::Filled)]);
+        let new = create_test_user(vec![create_test_order(2, OrderStatus::Filled)]);
+
+        let deltas = compare_user_orders(pubkey, &old, &new);
+
+        // Should emit NO deltas - both orders are filled, so neither was ever open in the DLOB
+        assert_eq!(
+            deltas.len(),
+            0,
+            "Should not emit Remove+Create for replacement of filled orders"
+        );
+    }
+
+    #[test]
+    fn dlob_util_test_canceled_order_replacement() {
+        let pubkey = Pubkey::new_unique();
+
+        // Similar test but with Canceled status
+        let old = create_test_user(vec![create_test_order(1, OrderStatus::Canceled)]);
+        let new = create_test_user(vec![create_test_order(2, OrderStatus::Filled)]);
+
+        let deltas = compare_user_orders(pubkey, &old, &new);
+
+        assert_eq!(
+            deltas.len(),
+            0,
+            "Should not emit Remove+Create for replacement of canceled order with filled order"
+        );
+    }
+
+    #[test]
+    fn dlob_util_test_order_moves_between_slots() {
+        let pubkey = Pubkey::new_unique();
+
+        // Bug: If an order moves from one slot to another, the function incorrectly
+        // treats it as a removal and creation instead of recognizing the move.
+        //
+        // Scenario:
+        // - Old: [order_id=1 (open) at index 0, order_id=2 (open) at index 1]
+        // - New: [order_id=2 (open) at index 0, empty at index 1]
+        // - Order 1 was removed, order 2 moved from index 1 to index 0
+        //
+        // Expected behavior: Should recognize that order 2 moved, not that it was removed and recreated.
+        // Should emit: Remove order 1, and either Update order 2 (if we track moves) or no delta for order 2.
+        //
+        // Current buggy behavior: Will emit Remove order 1, Create order 2, Remove order 2
+        // This incorrectly treats the moved order as being removed and recreated.
+        let old = create_test_user(vec![
+            create_test_order(1, OrderStatus::Open), // at index 0
+            create_test_order(2, OrderStatus::Open), // at index 1
+        ]);
+
+        let new = create_test_user(vec![
+            create_test_order(2, OrderStatus::Open), // moved from index 1 to index 0
+                                                     // index 1 is now empty (default order)
+        ]);
+
+        let deltas = compare_user_orders(pubkey, &old, &new);
+
+        // The bug: This will incorrectly emit Remove order 1, Create order 2, Remove order 2
+        // Instead, it should only emit Remove order 1 (and possibly Update order 2 if we track position changes)
+        //
+        // The function should recognize that order 2 exists in both old and new (just at different indices),
+        // so it shouldn't emit Remove+Create for it.
+
+        // Check that we don't have duplicate Remove for order 2
+        let mut remove_order_2_count = 0;
+        let mut create_order_2_count = 0;
+        let mut remove_order_1_count = 0;
+
+        for delta in &deltas {
+            match delta {
+                OrderDelta::Remove { order, .. } => {
+                    if order.order_id == 2 {
+                        remove_order_2_count += 1;
+                    } else if order.order_id == 1 {
+                        remove_order_1_count += 1;
+                    }
+                }
+                OrderDelta::Create { order, .. } => {
+                    if order.order_id == 2 {
+                        create_order_2_count += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Order 1 should be removed (correct)
+        assert_eq!(remove_order_1_count, 1, "Order 1 should be removed");
+
+        // Order 2 should NOT be removed and recreated - it just moved!
+        // This assertion will fail with the current buggy implementation
+        assert_eq!(
+            remove_order_2_count, 0,
+            "BUG: Order 2 moved from index 1 to index 0, but function incorrectly treats it as removed. \
+             Order 2 exists in both old and new, just at different indices."
+        );
+        assert_eq!(
+            create_order_2_count, 0,
+            "BUG: Order 2 moved from index 1 to index 0, but function incorrectly treats it as created. \
+             Order 2 exists in both old and new, just at different indices."
+        );
+    }
 }
