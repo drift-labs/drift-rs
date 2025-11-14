@@ -38,7 +38,7 @@ impl AccountsListBuilder {
         client: &DriftClient,
         user: &User,
         force_markets: &[MarketId],
-    ) -> SdkResult<AccountsList> {
+    ) -> SdkResult<AccountsList<'_>> {
         let mut oracle_markets = HashMap::<Pubkey, MarketId>::with_capacity(16);
         let drift_state_account = client.try_get_account::<State>(state_account())?;
 
@@ -144,7 +144,7 @@ impl AccountsListBuilder {
         client: &DriftClient,
         user: &User,
         force_markets: &[MarketId],
-    ) -> SdkResult<AccountsList> {
+    ) -> SdkResult<AccountsList<'_>> {
         let mut oracle_markets = HashMap::<Pubkey, MarketId>::with_capacity(16);
         let drift_state_account = client.try_get_account::<State>(state_account())?;
 

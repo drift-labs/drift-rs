@@ -890,7 +890,7 @@ impl DriftClient {
         &self,
         account: &Pubkey,
         delegated: bool,
-    ) -> SdkResult<TransactionBuilder> {
+    ) -> SdkResult<TransactionBuilder<'_>> {
         let account_data = self.get_user_account(account).await?;
         Ok(TransactionBuilder::new(
             self.program_data(),

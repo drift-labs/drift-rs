@@ -52,7 +52,7 @@ impl EventRpcProvider for RpcClient {
     fn get_tx(
         &self,
         signature: Signature,
-    ) -> BoxFuture<SdkResult<EncodedTransactionWithStatusMeta>> {
+    ) -> BoxFuture<'_, SdkResult<EncodedTransactionWithStatusMeta>> {
         async move {
             let result = self
                 .get_transaction_with_config(
@@ -74,7 +74,7 @@ impl EventRpcProvider for RpcClient {
         account: Pubkey,
         after: Option<Signature>,
         limit: Option<usize>,
-    ) -> BoxFuture<SdkResult<Vec<String>>> {
+    ) -> BoxFuture<'_, SdkResult<Vec<String>>> {
         async move {
             let results = self
                 .get_signatures_for_address_with_config(
@@ -103,12 +103,12 @@ pub trait EventRpcProvider: Send + Sync + 'static {
         account: Pubkey,
         after: Option<Signature>,
         limit: Option<usize>,
-    ) -> BoxFuture<SdkResult<Vec<String>>>;
+    ) -> BoxFuture<'_, SdkResult<Vec<String>>>;
     /// Fetch tx with `signature`
     fn get_tx(
         &self,
         signature: Signature,
-    ) -> BoxFuture<SdkResult<EncodedTransactionWithStatusMeta>>;
+    ) -> BoxFuture<'_, SdkResult<EncodedTransactionWithStatusMeta>>;
 }
 
 /// Provides sub-account event streaming

@@ -17,7 +17,7 @@ pub mod retry_policy {
     /// Defines whether an async task should be retried or not
     pub trait TaskRetryPolicy: Send + Sync + 'static {
         /// called pre-retry, returns whether retry should proceed or not
-        fn check(&mut self, _attempts: u32) -> BoxFuture<bool>;
+        fn check(&mut self, _attempts: u32) -> BoxFuture<'_, bool>;
     }
     /// Create a new fail fast policy
     pub fn never() -> FailFast {
@@ -38,7 +38,7 @@ pub mod retry_policy {
     pub struct FailFast;
 
     impl TaskRetryPolicy for FailFast {
-        fn check(&mut self, _attempts: u32) -> BoxFuture<bool> {
+        fn check(&mut self, _attempts: u32) -> BoxFuture<'_, bool> {
             ready(false).boxed()
         }
     }
@@ -49,7 +49,7 @@ pub mod retry_policy {
     }
 
     impl TaskRetryPolicy for ExponentialBackoff {
-        fn check(&mut self, attempts: u32) -> BoxFuture<bool> {
+        fn check(&mut self, attempts: u32) -> BoxFuture<'_, bool> {
             async move {
                 if attempts > self.max_attempts {
                     false
@@ -68,7 +68,7 @@ pub mod retry_policy {
     }
 
     impl TaskRetryPolicy for InfiniteRetry {
-        fn check(&mut self, _attempts: u32) -> BoxFuture<bool> {
+        fn check(&mut self, _attempts: u32) -> BoxFuture<'_, bool> {
             async move {
                 tokio::time::sleep(Duration::from_secs(self.delay_s as u64)).await;
                 true
