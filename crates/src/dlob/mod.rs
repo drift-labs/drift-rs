@@ -385,7 +385,7 @@ impl DLOB {
                         for delta in deltas {
                             match delta {
                                 OrderDelta::Create { user, order } => {
-                                    self.insert_order(&user, order);
+                                    self.insert_order(&user, slot, order);
                                 }
                                 OrderDelta::Update {
                                     user,
@@ -525,7 +525,7 @@ impl DLOB {
 
     fn update_order(&self, user: &Pubkey, slot: u64, new_order: Order, old_order: Order) {
         let order_id = order_hash(user, new_order.order_id);
-        log::trace!(target: TARGET, "update order: {order_id}{},{:?}", old_order.order_id, new_order.order_type);
+        log::trace!(target: TARGET, "update order: {order_id},{},{:?} @ {slot}", old_order.order_id, new_order.order_type);
 
         if new_order.status != OrderStatus::Open {
             log::info!(target: TARGET, "update into remove: {order_id:?}");
@@ -626,7 +626,7 @@ impl DLOB {
                 }
 
                 if !updated {
-                    log::warn!(target: TARGET, "update order failed: {order_id}, {metadata:?}, {old_order:?}, {new_order:?}");
+                    log::warn!(target: TARGET, "update order failed: {order_id}, {:?}, {old_order:?}, {new_order:?}", metadata.value());
                 }
             }
             if let Some(kind) = new_meta_kind {
@@ -693,9 +693,9 @@ impl DLOB {
         });
     }
 
-    fn insert_order(&self, user: &Pubkey, order: Order) {
+    fn insert_order(&self, user: &Pubkey, slot: u64, order: Order) {
         let order_id = order_hash(user, order.order_id);
-        log::trace!(target: TARGET, "insert order: {order_id}");
+        log::trace!(target: TARGET, "insert order: {order_id} @ {slot}");
 
         if order.base_asset_amount <= order.base_asset_amount_filled {
             log::trace!(target: TARGET, "skipping fully filled order: {order:?}");
@@ -1302,6 +1302,7 @@ impl L3Book {
                 });
             } else {
                 missing_metadata_count += 1;
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1324,6 +1325,7 @@ impl L3Book {
                 });
             } else {
                 missing_metadata_count += 1;
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1357,6 +1359,7 @@ impl L3Book {
                 });
             } else {
                 missing_metadata_count += 1;
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1385,6 +1388,7 @@ impl L3Book {
                 });
             } else {
                 missing_metadata_count += 1;
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1410,6 +1414,7 @@ impl L3Book {
                 }
             } else {
                 missing_metadata_count += 1;
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1435,6 +1440,7 @@ impl L3Book {
                 }
             } else {
                 missing_metadata_count += 1;
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1459,6 +1465,7 @@ impl L3Book {
                 });
             } else {
                 missing_metadata_count += 1;
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1481,6 +1488,7 @@ impl L3Book {
                 });
             } else {
                 missing_metadata_count += 1;
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1507,6 +1515,7 @@ impl L3Book {
                 }
             } else {
                 missing_metadata_count += 1;
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1532,6 +1541,7 @@ impl L3Book {
                 }
             } else {
                 missing_metadata_count += 1;
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
