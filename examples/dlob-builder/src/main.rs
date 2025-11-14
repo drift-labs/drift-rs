@@ -133,15 +133,13 @@ async fn get_l3_orderbook(
         .drift
         .try_get_perp_market_account(params.market_index)
         .unwrap();
-    let vamm_ask = perp_market.ask_price(None);
-    let vamm_bid = perp_market.bid_price(None);
     let max_orders = params.max_orders.unwrap_or(usize::MAX);
     let bids: Vec<L3OrderResponse> = l3_book
-        .top_bids(max_orders, Some(oracle_price), vamm_bid)
+        .top_bids(max_orders, Some(oracle_price), Some(&perp_market))
         .map(convert_order)
         .collect();
     let asks: Vec<L3OrderResponse> = l3_book
-        .top_asks(max_orders, Some(oracle_price), vamm_ask)
+        .top_asks(max_orders, Some(oracle_price), Some(&perp_market))
         .map(convert_order)
         .collect();
 
@@ -192,14 +190,20 @@ async fn main() {
     let grpc_x_token = std::env::var("GRPC_X_TOKEN").expect("GRPC_X_TOKEN set");
 
     // let all_perp_markets = drift.get_all_perp_market_ids();
-    let perp_markets = vec![MarketId::perp(0), MarketId::perp(1), MarketId::perp(2)];
+    let perp_markets = vec![
+        MarketId::perp(0),
+        MarketId::perp(1),
+        MarketId::perp(2),
+        MarketId::perp(59),
+        MarketId::perp(79),
+    ];
 
     let res = drift
         .grpc_subscribe(
             grpc_url,
             grpc_x_token,
             GrpcSubscribeOpts::default()
-                .commitment(CommitmentLevel::Processed)
+                .commitment(CommitmentLevel::Confirmed)
                 .usermap_on()
                 .on_user_account(dlob_builder.account_update_handler(account_map))
                 .on_slot(dlob_builder.slot_update_handler(drift.clone(), perp_markets)),

@@ -80,6 +80,141 @@ impl OrderMetadata {
     }
 }
 
+/// Reason for an order transition
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub enum TransitionReason {
+    /// Order was created/inserted
+    Created,
+    /// Order was updated
+    Updated,
+    /// Order was removed
+    Removed,
+    /// Auction completed, moving to resting
+    AuctionCompleted,
+    /// Order was triggered
+    Triggered,
+    /// Order expired
+    Expired,
+    /// Order transitioned during slot update
+    SlotUpdate,
+}
+
+/// A single transition event in an order's lifecycle
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct OrderTransition {
+    /// Slot when transition occurred
+    pub slot: u64,
+    /// Timestamp when transition occurred
+    pub timestamp: u64,
+    /// Previous order kind (None for creation)
+    pub from_kind: Option<OrderKind>,
+    /// New order kind (None for removal)
+    pub to_kind: Option<OrderKind>,
+    /// Reason for the transition
+    pub reason: TransitionReason,
+    /// Additional context (e.g., "auction completed", "not found in market_orders")
+    pub context: Option<String>,
+}
+
+/// Minimal log of order transitions for debugging stuck orders
+///
+/// Maintains a bounded history of transitions (last N transitions)
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct OrderTransitionLog {
+    /// Order ID this log belongs to
+    pub order_id: u64,
+    /// List of transitions (most recent first)
+    transitions: Vec<OrderTransition>,
+    /// Maximum number of transitions to keep
+    max_transitions: usize,
+}
+
+impl OrderTransitionLog {
+    /// Create a new transition log with default capacity (20 transitions)
+    pub fn new(order_id: u64) -> Self {
+        Self {
+            order_id,
+            transitions: Vec::with_capacity(20),
+            max_transitions: 20,
+        }
+    }
+
+    /// Add a transition to the log
+    pub fn add_transition(
+        &mut self,
+        slot: u64,
+        from_kind: Option<OrderKind>,
+        to_kind: Option<OrderKind>,
+        reason: TransitionReason,
+        context: Option<String>,
+    ) {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let transition = OrderTransition {
+            slot,
+            timestamp,
+            from_kind,
+            to_kind,
+            reason,
+            context,
+        };
+
+        // Insert at the beginning (most recent first)
+        self.transitions.insert(0, transition);
+
+        // Keep only the most recent transitions
+        if self.transitions.len() > self.max_transitions {
+            self.transitions.truncate(self.max_transitions);
+        }
+    }
+
+    /// Get all transitions (most recent first)
+    pub fn transitions(&self) -> &[OrderTransition] {
+        &self.transitions
+    }
+
+    /// Get the most recent transition
+    pub fn last_transition(&self) -> Option<&OrderTransition> {
+        self.transitions.first()
+    }
+
+    /// Get transitions as a formatted string for logging
+    /// Returns transitions in chronological order (oldest -> newest)
+    pub fn format_for_logging(&self) -> String {
+        if self.transitions.is_empty() {
+            return "no transitions".to_string();
+        }
+
+        let mut s = String::new();
+        // Iterate in reverse to show oldest -> newest (transitions are stored newest first)
+        let transitions_to_show: Vec<_> = self.transitions.iter().rev().take(10).collect();
+        for (i, trans) in transitions_to_show.iter().enumerate() {
+            if i > 0 {
+                s.push_str(" -> ");
+            }
+            let from = trans
+                .from_kind
+                .map(|k| format!("{:?}", k))
+                .unwrap_or_else(|| "None".to_string());
+            let to = trans
+                .to_kind
+                .map(|k| format!("{:?}", k))
+                .unwrap_or_else(|| "None".to_string());
+            s.push_str(&format!(
+                "[slot:{} {:?}: {} -> {}]",
+                trans.slot, trans.reason, from, to
+            ));
+            if let Some(ctx) = &trans.context {
+                s.push_str(&format!(" ({})", ctx));
+            }
+        }
+        s
+    }
+}
+
 /// Minimal taker order info
 #[derive(Copy, Clone, Debug)]
 pub struct TakerOrder {
@@ -110,19 +245,19 @@ pub struct CrossesAndTopMakers {
     //  best maker accounts on bid side
     pub top_maker_bids: ArrayVec<Pubkey, 3>,
     // top of book limit cross, if any
-    pub limit_crosses: Option<(OrderMetadata, OrderMetadata)>,
-    pub vamm_taker_ask: Option<OrderMetadata>,
-    pub vamm_taker_bid: Option<OrderMetadata>,
+    pub limit_crosses: Option<(L3Order, L3Order)>,
+    pub vamm_taker_ask: Option<L3Order>,
+    pub vamm_taker_bid: Option<L3Order>,
     //  taker crosses and maker orders
-    pub crosses: Vec<(OrderMetadata, MakerCrosses)>,
+    pub crosses: Vec<(L3Order, MakerCrosses)>,
 }
 
 /// Best fills for a taker order
 /// Returns (candidates, is_partial)
 #[derive(Clone, Debug, Default)]
 pub struct MakerCrosses {
-    /// (metadata, maker_price, fill_size)
-    pub orders: ArrayVec<(OrderMetadata, u64, u64), 16>,
+    /// (maker order, fill_size)
+    pub orders: ArrayVec<(L3Order, u64), 16>,
     /// Slot crosses were found
     pub slot: u64,
     // true if crosses VAMM quote
@@ -171,12 +306,12 @@ impl OrderKey for MarketOrder {
 
 impl MarketOrder {
     /// Check if this order has expired
-    pub fn is_expired(&self, now: u64) -> bool {
-        self.max_ts < now
+    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
+        self.max_ts != 0 && self.max_ts < now_unix_seconds
     }
     /// Check if this auction order has completed
     pub fn is_auction_complete(&self, current_slot: u64) -> bool {
-        current_slot.saturating_sub(self.slot) > self.duration as u64
+        current_slot.saturating_sub(self.slot) >= self.duration as u64
     }
 
     /// Convert to LimitOrder when auction completes
@@ -202,12 +337,12 @@ impl OrderKey for OracleOrder {
 
 impl OracleOrder {
     /// Check if this order has expired
-    pub fn is_expired(&self, now: u64) -> bool {
-        self.max_ts < now
+    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
+        self.max_ts != 0 && self.max_ts < now_unix_seconds
     }
     /// Check if this auction order has completed
     pub fn is_auction_complete(&self, current_slot: u64) -> bool {
-        (self.slot + self.duration as u64) <= current_slot
+        current_slot.saturating_sub(self.slot) >= self.duration as u64
     }
 
     /// Convert to FloatingLimitOrder when auction completes
@@ -531,7 +666,7 @@ impl LimitOrder {
         self.price
     }
     pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
-        self.max_ts > now_unix_seconds
+        self.max_ts != 0 && self.max_ts < now_unix_seconds
     }
 }
 
@@ -552,7 +687,7 @@ impl From<(u64, Order)> for LimitOrder {
 
 impl FloatingLimitOrder {
     pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
-        self.max_ts > now_unix_seconds
+        self.max_ts != 0 && self.max_ts < now_unix_seconds
     }
     pub fn get_price(&self, oracle_price: u64, tick_size: u64) -> u64 {
         (oracle_price as i64 + self.offset_price as i64).max(tick_size as i64) as u64
@@ -670,19 +805,13 @@ impl<T: Default + Clone> Drop for Snapshot<T> {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
-pub struct CrossingOrder {
-    pub order_view: LimitOrderView,
-    pub metadata: OrderMetadata,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct CrossingRegion {
     pub slot: u64,
-    pub crossing_bids: Vec<CrossingOrder>,
-    pub crossing_asks: Vec<CrossingOrder>,
+    pub crossing_bids: Vec<L3Order>,
+    pub crossing_asks: Vec<L3Order>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 pub struct L3Order {
     /// point in time limit price of the order at some slot & oracle price
     pub price: u64,
@@ -701,12 +830,14 @@ pub struct L3Order {
 
 impl L3Order {
     /// when set indicates order is reduce only
-    pub(crate) const RO_FLAG: u8 = 0b1000_0000;
+    pub(crate) const RO_FLAG: u8 = 0b0000_0001;
     /// When set indicates order direction is long
-    pub(crate) const IS_LONG: u8 = 0b0100_0000;
+    pub(crate) const IS_LONG: u8 = 0b0000_0010;
     /// When set and order kind is trigger, this bit indicates 'trigger above'
     /// conversely, 'trigger below' when unset
-    pub(crate) const IS_TRIGGER_ABOVE: u8 = 0b0010_0000;
+    pub(crate) const IS_TRIGGER_ABOVE: u8 = 0b0000_0100;
+    /// When set indicates limit order with post only flag set
+    pub(crate) const IS_POST_ONLY: u8 = 0b0000_1000;
     /// True if this is a long order, false otherwise
     pub fn is_long(&self) -> bool {
         self.flags & Self::IS_LONG > 0
@@ -715,8 +846,13 @@ impl L3Order {
     pub fn is_reduce_only(&self) -> bool {
         self.flags & Self::RO_FLAG > 0
     }
+    /// True if this is a trigger order with 'trigger above' condition
     pub fn is_trigger_above(&self) -> bool {
         self.flags & Self::IS_TRIGGER_ABOVE > 0
+    }
+    /// True if this is a limit order with 'post only' set
+    pub fn is_post_only(&self) -> bool {
+        self.flags & Self::IS_POST_ONLY > 0
     }
     /// Calculate the 'limit' price of an _untriggered_ perp trigger order
     ///
@@ -731,7 +867,7 @@ impl L3Order {
             self.kind,
             OrderKind::TriggerMarket | OrderKind::TriggerLimit
         ) {
-            let condition = if self.flags & Self::IS_TRIGGER_ABOVE > 0 {
+            let condition = if self.is_trigger_above() {
                 OrderTriggerCondition::Above
             } else {
                 OrderTriggerCondition::Below

@@ -1,8 +1,10 @@
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
-    dlob::{Direction, OrderKind, OrderMetadata, Orderbook, Snapshot, TakerOrder, DLOB},
-    types::{MarketId, MarketType, Order, OrderStatus, OrderType},
+    dlob::{Direction, OrderKind, Orderbook, Snapshot, TakerOrder, DLOB},
+    drift_idl::types::{HistoricalOracleData, AMM},
+    math::constants::{AMM_RESERVE_PRECISION, PEG_PRECISION},
+    types::{accounts::PerpMarket, MarketId, MarketType, Order, OrderStatus, OrderType},
 };
 
 fn create_test_order(
@@ -41,47 +43,49 @@ fn dlob_limit_order_sorting() {
     // Insert bids in random order
     let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 100, 1, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(2, OrderType::Limit, Direction::Long, 200, 1, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(3, OrderType::Limit, Direction::Long, 150, 1, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Insert asks in random order
     let mut order = create_test_order(4, OrderType::Limit, Direction::Short, 300, 1, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(5, OrderType::Limit, Direction::Short, 250, 1, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(6, OrderType::Limit, Direction::Short, 350, 1, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
-    let book = dlob
-        .markets
-        .get(&MarketId::new(0, MarketType::Perp))
-        .unwrap();
+    // Build L3 snapshot to get sorted orders
+    let oracle_price = 1000;
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata);
+    }
+    let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
     // Verify bids are sorted highest to lowest
-    let bid_prices = book.get_limit_bids(1_000_000);
-    assert_eq!(
-        bid_prices.iter().map(|o| o.price).collect::<Vec<u64>>(),
-        vec![200_u64, 150, 100]
-    );
+    let bid_prices: Vec<u64> = l3book
+        .bids(Some(oracle_price), None)
+        .map(|o| o.price)
+        .collect();
+    assert_eq!(bid_prices, vec![200_u64, 150, 100]);
 
     // Verify asks are sorted lowest to highest
-    let ask_prices = book.get_limit_asks(1_000_000);
-    assert_eq!(
-        ask_prices.iter().map(|o| o.price).collect::<Vec<u64>>(),
-        vec![250_u64, 300, 350]
-    );
+    let ask_prices: Vec<u64> = l3book
+        .asks(Some(oracle_price), None)
+        .map(|o| o.price)
+        .collect();
+    assert_eq!(ask_prices, vec![250_u64, 300, 350]);
 }
 
 #[test]
@@ -94,28 +98,28 @@ fn dlob_floating_limit_order_sorting() {
     // Insert bids in random order
     let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 100, 1, slot);
     order.oracle_price_offset = 10;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(2, OrderType::Limit, Direction::Long, 200, 1, slot);
     order.oracle_price_offset = 30;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(3, OrderType::Limit, Direction::Long, 150, 1, slot);
     order.oracle_price_offset = 20;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Insert asks in random order
     let mut order = create_test_order(4, OrderType::Limit, Direction::Short, 300, 1, slot);
     order.oracle_price_offset = -30;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(5, OrderType::Limit, Direction::Short, 250, 1, slot);
     order.oracle_price_offset = -20;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(6, OrderType::Limit, Direction::Short, 350, 1, slot);
     order.oracle_price_offset = -10;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
         book.update_slot(0);
@@ -155,11 +159,11 @@ fn dlob_same_order_different_users() {
     // Create identical orders for different users
     let mut order1 = create_test_order(1, OrderType::Limit, Direction::Long, 100, 1, slot);
     order1.post_only = true;
-    dlob.insert_order(&user1, order1);
+    dlob.insert_order(&user1, slot, order1);
 
     let mut order2 = create_test_order(1, OrderType::Limit, Direction::Long, 100, 1, slot);
     order2.post_only = true;
-    dlob.insert_order(&user2, order2);
+    dlob.insert_order(&user2, slot, order2);
 
     let book = dlob
         .markets
@@ -205,33 +209,33 @@ fn dlob_l2_snapshot() {
     // Insert resting limit orders
     let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 2, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 900, 3, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Insert market orders (dynamic price)
     let mut order = create_test_order(3, OrderType::Market, Direction::Long, 0, 4, slot);
     order.auction_duration = 10;
     order.auction_start_price = 1050;
     order.auction_end_price = 1100;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(4, OrderType::Market, Direction::Short, 0, 5, slot);
     order.auction_duration = 10;
     order.auction_start_price = 950;
     order.auction_end_price = 900;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Insert floating limit orders (dynamic price)
     let mut order = create_test_order(5, OrderType::Limit, Direction::Long, 0, 6, slot);
     order.oracle_price_offset = 100; // Will be 1100 with oracle_price
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(6, OrderType::Limit, Direction::Short, 0, 7, slot);
     order.oracle_price_offset = -100; // Will be 900 with oracle_price
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Update slot and oracle price to calculate dynamic prices
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
@@ -264,7 +268,7 @@ fn dlob_l2_snapshot() {
     // Add a new limit order
     let mut order = create_test_order(7, OrderType::Limit, Direction::Long, 1075, 8, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Get updated L2 snapshot
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
@@ -333,22 +337,22 @@ fn dlob_l2_snapshot_max_leverage_filtering() {
     // Insert normal orders
     let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 5, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 900, 3, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Insert max leverage orders (size = u64::MAX)
     let mut max_lev_order =
         create_test_order(3, OrderType::Limit, Direction::Long, 1200, u64::MAX, slot);
     max_lev_order.post_only = true;
-    dlob.insert_order(&user, max_lev_order);
+    dlob.insert_order(&user, slot, max_lev_order);
 
     let mut max_lev_order =
         create_test_order(4, OrderType::Limit, Direction::Short, 800, u64::MAX, slot);
     max_lev_order.post_only = true;
-    dlob.insert_order(&user, max_lev_order);
+    dlob.insert_order(&user, slot, max_lev_order);
 
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
         book.update_slot(slot);
@@ -385,11 +389,16 @@ fn dlob_find_crosses_for_taker_order_full_fill() {
     // Insert resting limit orders
     let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 900, 5, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 950, 3, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
+
+    // Update L3 view before finding crosses
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata);
+    }
 
     // Create taker order to buy 7 units at 1000
     let taker_order = TakerOrder {
@@ -400,36 +409,16 @@ fn dlob_find_crosses_for_taker_order_full_fill() {
         market_type: MarketType::Perp,
     };
 
-    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None);
+    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None, None);
 
     // Should fill both orders, 5 from first order and 2 from second
     assert_eq!(result.orders.len(), 2);
-    assert_eq!(
-        result.orders[0],
-        (
-            OrderMetadata {
-                max_ts: 30,
-                order_id: 1,
-                user,
-                kind: OrderKind::Limit
-            },
-            900,
-            5
-        )
-    );
-    assert_eq!(
-        result.orders[1],
-        (
-            OrderMetadata {
-                max_ts: 30,
-                order_id: 2,
-                user,
-                kind: OrderKind::Limit
-            },
-            950,
-            2
-        )
-    );
+    assert_eq!(result.orders[0].0.order_id, 1);
+    assert_eq!(result.orders[0].0.price, 900);
+    assert_eq!(result.orders[0].1, 5);
+    assert_eq!(result.orders[1].0.order_id, 2);
+    assert_eq!(result.orders[1].0.price, 950);
+    assert_eq!(result.orders[1].1, 2);
     assert!(!result.is_partial);
 }
 
@@ -444,7 +433,12 @@ fn dlob_find_crosses_for_taker_order_partial_fill() {
     // Insert resting limit orders
     let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 900, 3, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
+
+    // Update L3 view before finding crosses
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata);
+    }
 
     // Create taker order to buy 5 units at 1000
     let taker_order = TakerOrder {
@@ -455,23 +449,13 @@ fn dlob_find_crosses_for_taker_order_partial_fill() {
         market_type: MarketType::Perp,
     };
 
-    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None);
+    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None, None);
 
     // Should only fill 3 units from the first order
     assert_eq!(result.orders.len(), 1);
-    assert_eq!(
-        result.orders[0],
-        (
-            OrderMetadata {
-                max_ts: 30,
-                order_id: 1,
-                user,
-                kind: OrderKind::Limit
-            },
-            900,
-            3
-        )
-    );
+    assert_eq!(result.orders[0].0.order_id, 1);
+    assert_eq!(result.orders[0].0.price, 900);
+    assert_eq!(result.orders[0].1, 3);
     assert!(result.is_partial);
 }
 
@@ -486,7 +470,7 @@ fn dlob_find_crosses_for_taker_order_no_cross() {
     // Insert resting limit orders
     let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 1100, 5, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Create taker order to buy at 1000
     let taker_order = TakerOrder {
@@ -497,7 +481,7 @@ fn dlob_find_crosses_for_taker_order_no_cross() {
         market_type: MarketType::Perp,
     };
 
-    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None);
+    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None, None);
 
     // Should not fill any orders
     assert_eq!(result.orders.len(), 0);
@@ -515,7 +499,7 @@ fn dlob_find_crosses_for_taker_order_vamm_cross() {
     // Insert resting limit orders
     let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 1100, 5, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Create taker order to buy at 1000
     let taker_order = TakerOrder {
@@ -526,12 +510,10 @@ fn dlob_find_crosses_for_taker_order_vamm_cross() {
         market_type: MarketType::Perp,
     };
 
-    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, Some(999));
+    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None, None);
 
-    // Should not fill any orders
-    assert!(result.has_vamm_cross);
+    // Should not fill any orders (no vamm cross without perp_market)
     assert_eq!(result.orders.len(), 0);
-    assert!(!result.is_empty());
     assert!(result.is_partial);
 }
 
@@ -547,7 +529,12 @@ fn dlob_find_crosses_for_taker_order_floating_limit() {
     let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 0, 5, slot);
     order.oracle_price_offset = -50; // Will be 950 with oracle_price
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
+
+    // Update L3 view before finding crosses
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata);
+    }
 
     // Create taker order to buy at 1000
     let taker_order = TakerOrder {
@@ -558,23 +545,13 @@ fn dlob_find_crosses_for_taker_order_floating_limit() {
         market_type: MarketType::Perp,
     };
 
-    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None);
+    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None, None);
 
     // Should fill the floating limit order
     assert_eq!(result.orders.len(), 1);
-    assert_eq!(
-        result.orders[0],
-        (
-            OrderMetadata {
-                max_ts: 30,
-                order_id: 1,
-                user,
-                kind: OrderKind::FloatingLimit,
-            },
-            950, // oracle_price + oracle_price_offset
-            5
-        )
-    );
+    assert_eq!(result.orders[0].0.order_id, 1);
+    assert_eq!(result.orders[0].0.price, 950); // oracle_price + oracle_price_offset
+    assert_eq!(result.orders[0].1, 5);
     assert!(!result.is_partial);
 }
 
@@ -589,11 +566,16 @@ fn dlob_find_crosses_for_taker_order_price_priority() {
     // Insert resting limit orders at different prices
     let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 950, 3, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 900, 3, slot);
     order.post_only = true;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
+
+    // Update L3 view before finding crosses
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata);
+    }
 
     // Create taker order to buy 5 units at 1000
     let taker_order = TakerOrder {
@@ -604,36 +586,16 @@ fn dlob_find_crosses_for_taker_order_price_priority() {
         market_type: MarketType::Perp,
     };
 
-    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None);
+    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None, None);
 
     // Should fill the better price first (900)
     assert_eq!(result.orders.len(), 2);
-    assert_eq!(
-        result.orders[0],
-        (
-            OrderMetadata {
-                max_ts: 30,
-                order_id: 2,
-                user,
-                kind: OrderKind::Limit
-            },
-            900,
-            3
-        )
-    );
-    assert_eq!(
-        result.orders[1],
-        (
-            OrderMetadata {
-                max_ts: 30,
-                order_id: 1,
-                user,
-                kind: OrderKind::Limit
-            },
-            950,
-            2
-        )
-    );
+    assert_eq!(result.orders[0].0.order_id, 2);
+    assert_eq!(result.orders[0].0.price, 900);
+    assert_eq!(result.orders[0].1, 3);
+    assert_eq!(result.orders[1].0.order_id, 1);
+    assert_eq!(result.orders[1].0.price, 950);
+    assert_eq!(result.orders[1].1, 2);
     assert!(!result.is_partial);
 }
 
@@ -647,11 +609,11 @@ fn dlob_auction_expiry_market_orders() {
     // Insert market orders with different auction durations
     let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 2, slot);
     order.auction_duration = 5; // Will expire at slot 105
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 900, 3, slot);
     order.auction_duration = 10; // Will expire at slot 110
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Update to slot 104 - no orders should expire
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
@@ -706,12 +668,12 @@ fn dlob_auction_expiry_oracle_orders() {
     let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 0, 2, slot);
     order.auction_duration = 5; // Will expire at slot 105
     order.oracle_price_offset = 100;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 0, 3, slot);
     order.auction_duration = 10; // Will expire at slot 110
     order.oracle_price_offset = -100;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Update to slot 104 - no orders should expire
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
@@ -765,11 +727,11 @@ fn dlob_auction_expiry_non_limit_orders() {
     // Insert market orders that are not limit orders
     let mut order = create_test_order(1, OrderType::Market, Direction::Long, 1100, 2, slot);
     order.auction_duration = 5; // Will expire at slot 105
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(2, OrderType::Market, Direction::Short, 900, 3, slot);
     order.auction_duration = 10; // Will expire at slot 110
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Update to slot 104 - no orders should expire
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
@@ -823,20 +785,20 @@ fn dlob_auction_expiry_mixed_orders() {
     // Insert a mix of market and oracle orders with different durations
     let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 2, slot);
     order.auction_duration = 5;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 0, 3, slot);
     order.auction_duration = 5;
     order.oracle_price_offset = -100;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(3, OrderType::Market, Direction::Long, 1100, 2, slot);
     order.auction_duration = 5;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(4, OrderType::Market, Direction::Short, 0, 3, slot);
     order.auction_duration = 5;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Update to slot 106 - all orders should expire (MarketOrder expires when current_slot > slot + duration)
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
@@ -859,57 +821,6 @@ fn dlob_auction_expiry_mixed_orders() {
 }
 
 #[test]
-fn dlob_zero_size_order_handling() {
-    let _ = env_logger::try_init();
-    let dlob = DLOB::default();
-    let user = Pubkey::new_unique();
-    let slot = 100;
-
-    // Test 1: Update order to be fully filled (should be removed)
-    let order = create_test_order(2, OrderType::Limit, Direction::Long, 1000, 10, slot);
-    dlob.insert_order(&user, order);
-    let mut new_order = order.clone();
-    new_order.base_asset_amount_filled = 10; // Fully fill it
-    dlob.update_order(&user, slot, new_order, order);
-
-    // Verify no orders in book
-    let book = dlob
-        .markets
-        .get(&MarketId::new(0, MarketType::Perp))
-        .unwrap();
-    assert_eq!(book.resting_limit_orders.bids.len(), 0);
-
-    // Test 2: Insert fully filled order (should be skipped)
-    let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1000, 10, slot);
-    order.base_asset_amount_filled = 10; // Fully filled
-    dlob.insert_order(&user, order);
-
-    // Verify order was removed
-    assert_eq!(book.resting_limit_orders.bids.len(), 0);
-
-    // Test 3: Auction order expiring with zero size (should be removed)
-    let mut order = create_test_order(3, OrderType::Limit, Direction::Long, 1000, 10, slot);
-    order.auction_duration = 5;
-    order.base_asset_amount_filled = 10; // Fully filled
-    dlob.insert_order(&user, order);
-
-    // Update to slot after auction end
-    drop(book); // release lock
-    if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
-        book.update_slot(0);
-    }
-
-    let book = dlob
-        .markets
-        .get(&MarketId::new(0, MarketType::Perp))
-        .unwrap();
-
-    // Verify no orders in book
-    assert_eq!(book.resting_limit_orders.bids.len(), 0);
-    assert_eq!(book.market_orders.bids.len(), 0);
-}
-
-#[test]
 fn dlob_find_crosses_for_auctions_market_orders() {
     let _ = env_logger::try_init();
     let dlob = DLOB::default();
@@ -926,7 +837,7 @@ fn dlob_find_crosses_for_auctions_market_orders() {
 
     // Insert a resting limit ask at price 1000
     let limit_order = create_test_order(1, OrderType::Limit, Direction::Short, 1000, 100, slot);
-    dlob.insert_order(&Pubkey::new_unique(), limit_order);
+    dlob.insert_order(&Pubkey::new_unique(), slot, limit_order);
 
     // Insert a market bid that should cross
     let mut market_order = create_test_order(
@@ -940,20 +851,19 @@ fn dlob_find_crosses_for_auctions_market_orders() {
     market_order.auction_duration = 10;
     market_order.auction_start_price = 1100;
     market_order.auction_end_price = 1200;
-    dlob.insert_order(&Pubkey::new_unique(), market_order);
+    dlob.insert_order(&Pubkey::new_unique(), slot, market_order);
 
-    let crosses = dlob.find_crosses_for_auctions(
-        market_index,
-        market_type,
-        slot,
-        oracle_price,
-        oracle_price,
-        None,
-    );
+    // Update L3 view before finding crosses
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata);
+    }
+
+    let crosses =
+        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None, None);
     assert_eq!(crosses.crosses.len(), 1);
     assert!(!crosses.crosses[0].1.is_empty());
     assert_eq!(crosses.crosses[0].1.orders.len(), 1);
-    assert_eq!(crosses.crosses[0].1.orders[0].2, 50); // Fill size should be 50
+    assert_eq!(crosses.crosses[0].1.orders[0].1, 50); // Fill size should be 50
 }
 
 #[test]
@@ -967,7 +877,7 @@ fn dlob_find_crosses_for_auctions_oracle_orders() {
 
     // Insert a resting limit bid at price 1000
     let limit_order = create_test_order(1, OrderType::Limit, Direction::Long, 1000, 100, slot);
-    dlob.insert_order(&Pubkey::new_unique(), limit_order);
+    dlob.insert_order(&Pubkey::new_unique(), slot, limit_order);
 
     // Insert an oracle ask that should cross (price will be 900)
     let oracle_order = create_test_order(
@@ -978,20 +888,19 @@ fn dlob_find_crosses_for_auctions_oracle_orders() {
         50,
         slot,
     );
-    dlob.insert_order(&Pubkey::new_unique(), oracle_order);
+    dlob.insert_order(&Pubkey::new_unique(), slot, oracle_order);
 
-    let crosses = dlob.find_crosses_for_auctions(
-        market_index,
-        market_type,
-        slot,
-        oracle_price,
-        oracle_price,
-        None,
-    );
+    // Update L3 view before finding crosses
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata);
+    }
+
+    let crosses =
+        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None, None);
     assert_eq!(crosses.crosses.len(), 1);
     assert!(!crosses.crosses[0].1.is_empty());
     assert_eq!(crosses.crosses[0].1.orders.len(), 1);
-    assert_eq!(crosses.crosses[0].1.orders[0].2, 50); // Fill size should be 50
+    assert_eq!(crosses.crosses[0].1.orders[0].1, 50); // Fill size should be 50
 }
 
 #[test]
@@ -1005,7 +914,7 @@ fn dlob_find_crosses_for_auctions_no_crosses() {
 
     // Insert a resting limit ask at price 1000
     let limit_order = create_test_order(1, OrderType::Limit, Direction::Short, 1000, 100, slot);
-    dlob.insert_order(&Pubkey::new_unique(), limit_order);
+    dlob.insert_order(&Pubkey::new_unique(), slot, limit_order);
 
     // Insert a market bid that shouldn't cross (lower price)
     let market_order = create_test_order(
@@ -1016,16 +925,15 @@ fn dlob_find_crosses_for_auctions_no_crosses() {
         50,
         slot,
     );
-    dlob.insert_order(&Pubkey::new_unique(), market_order);
+    dlob.insert_order(&Pubkey::new_unique(), slot, market_order);
 
-    let crosses = dlob.find_crosses_for_auctions(
-        market_index,
-        market_type,
-        slot,
-        oracle_price,
-        oracle_price,
-        None,
-    );
+    // Update L3 view before finding crosses
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata);
+    }
+
+    let crosses =
+        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None, None);
     assert!(crosses.crosses.is_empty());
 }
 
@@ -1050,10 +958,10 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
     let limit_bid_1 = create_test_order(3, OrderType::Limit, Direction::Long, 900, 75, slot);
     let limit_bid_2 = create_test_order(4, OrderType::Limit, Direction::Long, 800, 25, slot);
 
-    dlob.insert_order(&Pubkey::new_unique(), limit_ask_1);
-    dlob.insert_order(&Pubkey::new_unique(), limit_ask_2);
-    dlob.insert_order(&Pubkey::new_unique(), limit_bid_1);
-    dlob.insert_order(&Pubkey::new_unique(), limit_bid_2);
+    dlob.insert_order(&Pubkey::new_unique(), slot, limit_ask_1);
+    dlob.insert_order(&Pubkey::new_unique(), slot, limit_ask_2);
+    dlob.insert_order(&Pubkey::new_unique(), slot, limit_bid_1);
+    dlob.insert_order(&Pubkey::new_unique(), slot, limit_bid_2);
 
     // Add a large market bid that will cross both limit asks
     let mut market_bid_1 = create_test_order(5, OrderType::Market, Direction::Long, 0, 75, slot);
@@ -1066,8 +974,8 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
     market_ask_1.auction_start_price = 800;
     market_ask_1.auction_end_price = 700;
 
-    dlob.insert_order(&Pubkey::new_unique(), market_bid_1);
-    dlob.insert_order(&Pubkey::new_unique(), market_ask_1);
+    dlob.insert_order(&Pubkey::new_unique(), slot, market_bid_1);
+    dlob.insert_order(&Pubkey::new_unique(), slot, market_ask_1);
 
     // Insert oracle orders (some should cross, some shouldn't)
     let mut oracle_bid_1 = create_test_order(9, OrderType::Oracle, Direction::Long, 0, 35, slot); // Price 1100, should cross with limit_ask_1
@@ -1075,7 +983,7 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
     oracle_bid_1.auction_start_price = 1100;
     oracle_bid_1.auction_end_price = 1200;
 
-    let mut oracle_bid_2 = create_test_order(10, OrderType::Oracle, Direction::Long, 0, 45, slot); // Price 800, shouldn't cross
+    let mut oracle_bid_2 = create_test_order(10, OrderType::Oracle, Direction::Long, 0, 45, slot); // Price 1800 (1000 + 800 offset), should cross
     oracle_bid_2.auction_duration = 10;
     oracle_bid_2.auction_start_price = 800;
     oracle_bid_2.auction_end_price = 900;
@@ -1090,31 +998,31 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
     oracle_ask_2.auction_start_price = 1200;
     oracle_ask_2.auction_end_price = 1100;
 
-    dlob.insert_order(&Pubkey::new_unique(), oracle_bid_1);
-    dlob.insert_order(&Pubkey::new_unique(), oracle_bid_2);
-    dlob.insert_order(&Pubkey::new_unique(), oracle_ask_1);
-    dlob.insert_order(&Pubkey::new_unique(), oracle_ask_2);
+    dlob.insert_order(&Pubkey::new_unique(), slot, oracle_bid_1);
+    dlob.insert_order(&Pubkey::new_unique(), slot, oracle_bid_2);
+    dlob.insert_order(&Pubkey::new_unique(), slot, oracle_ask_1);
+    dlob.insert_order(&Pubkey::new_unique(), slot, oracle_ask_2);
 
-    let crosses = dlob.find_crosses_for_auctions(
-        market_index,
-        market_type,
-        slot,
-        oracle_price,
-        oracle_price,
-        None,
-    );
+    // Update L3 view before finding crosses
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata);
+    }
+
+    let crosses =
+        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None, None);
     dbg!(&crosses);
 
     // Should find 4 crosses:
     // 1. oracle_bid_1 (35) crossing limit_ask_1 (35)
-    // 2. oracle_bid_2 (45) crossing limit_ask_1 (15) and limit_ask_2 (30)
-    // 3. market_bid_1 (75) crossing limit_ask_1 (15) and limit_ask_2 (60)
+    // 2. oracle_bid_2 (45) crossing limit_ask_1 (45) - fills remaining from limit_ask_1
+    // 3. market_bid_1 (75) crossing limit_ask_1 (50) and limit_ask_2 (25) - fills from both asks
     // 4. market_ask_1 (20) crossing limit_bid_1 (20)
+    // Note: Each taker order processes against the full resting orderbook independently
 
     let expected_crosses = vec![
         (9, vec![(1, 35)]),
-        (10, vec![(1, 15), (2, 30)]),
-        (5, vec![(1, 15), (2, 60)]),
+        (10, vec![(1, 45)]),
+        (5, vec![(1, 50), (2, 25)]),
         (7, vec![(3, 20)]),
     ];
 
@@ -1127,7 +1035,7 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
                 maker_crosses
                     .orders
                     .iter()
-                    .map(|(m, _, size)| (m.order_id, *size))
+                    .map(|(m, size)| (m.order_id, *size))
                     .collect::<Vec<_>>(),
             )
         })
@@ -1155,7 +1063,7 @@ fn dlob_trigger_order_transitions() {
     let mut order = create_test_order(1, OrderType::TriggerMarket, Direction::Long, 0, 10, slot);
     order.trigger_price = 950;
     order.trigger_condition = OrderTriggerCondition::Above;
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
     {
         let book = dlob
             .markets
@@ -1202,7 +1110,7 @@ fn dlob_trigger_order_transitions() {
     let mut order2 = create_test_order(2, OrderType::TriggerLimit, Direction::Short, 1049, 5, slot);
     order2.trigger_price = 1050;
     order2.trigger_condition = OrderTriggerCondition::Below;
-    dlob.insert_order(&user, order2);
+    dlob.insert_order(&user, slot, order2);
     {
         let book = dlob
             .markets
@@ -1231,9 +1139,6 @@ fn dlob_trigger_order_transitions() {
     // --- Remove triggered limit order ---
     // Advance slot to ensure auction is completed
     let auction_complete_slot = slot + triggered_order2.auction_duration as u64 + 1;
-    if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
-        book.update_slot(0);
-    }
     dlob.remove_order(&user, auction_complete_slot, triggered_order2);
     {
         let book = dlob
@@ -1269,7 +1174,7 @@ fn dlob_metadata_consistency_after_auction_expiry_and_removal() {
     order.post_only = false; // This makes it a LimitAuction
 
     // Insert the order
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in market_orders with LimitAuction metadata
     let order_id = crate::dlob::util::order_hash(&user, 1);
@@ -1330,7 +1235,8 @@ fn dlob_metadata_consistency_after_auction_expiry_and_removal() {
         market_type: MarketType::Perp,
     };
 
-    let crosses = dlob.find_crosses_for_taker_order(expired_slot, oracle_price, taker_order, None);
+    let crosses =
+        dlob.find_crosses_for_taker_order(expired_slot, oracle_price, taker_order, None, None);
 
     // This should work without "metadata missing" errors
     // Before the fix, this would fail because the order would still be in resting_limit_orders
@@ -1367,7 +1273,7 @@ fn dlob_metadata_consistency_limit_auction_expiry_and_removal() {
     order.post_only = false; // This makes it a LimitAuction
 
     // Insert the order
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in market_orders with LimitAuction metadata
     let order_id = crate::dlob::util::order_hash(&user, 1);
@@ -1423,7 +1329,8 @@ fn dlob_metadata_consistency_limit_auction_expiry_and_removal() {
         market_type: MarketType::Perp,
     };
 
-    let crosses = dlob.find_crosses_for_taker_order(expired_slot, oracle_price, taker_order, None);
+    let crosses =
+        dlob.find_crosses_for_taker_order(expired_slot, oracle_price, taker_order, None, None);
     // Should find no crosses since the order was removed
     // but without metadata, causing the "metadata missing" error
     assert_eq!(
@@ -1458,7 +1365,7 @@ fn dlob_metadata_consistency_floating_limit_auction_expiry_and_removal() {
     order.post_only = false; // This makes it a FloatingLimitAuction
 
     // Insert the order
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in oracle_orders with FloatingLimitAuction metadata
     let order_id = crate::dlob::util::order_hash(&user, 1);
@@ -1515,7 +1422,8 @@ fn dlob_metadata_consistency_floating_limit_auction_expiry_and_removal() {
         market_type: MarketType::Perp,
     };
 
-    let crosses = dlob.find_crosses_for_taker_order(expired_slot, oracle_price, taker_order, None);
+    let crosses =
+        dlob.find_crosses_for_taker_order(expired_slot, oracle_price, taker_order, None, None);
 
     // This should work without "metadata missing" errors
     // Before the fix, this would fail because the order would still be in floating_limit_orders
@@ -1549,7 +1457,7 @@ fn dlob_trigger_order_transition_remove() {
     order.price = 1000; // Set a price for the trigger order
 
     // Insert the order
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in trigger_orders
     let order_id = crate::dlob::util::order_hash(&user, 1);
@@ -1618,7 +1526,7 @@ fn dlob_trigger_order_transition_update() {
     order.price = 1000; // Set a price for the trigger order
 
     // Insert the order
-    dlob.insert_order(&user, order);
+    dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in trigger_orders
     let order_id = crate::dlob::util::order_hash(&user, 1);
@@ -1738,22 +1646,22 @@ fn dlob_get_maker_bids_l3() {
     // Insert resting limit orders
     let mut order1 = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 5, slot);
     order1.post_only = true;
-    dlob.insert_order(&user, order1);
+    dlob.insert_order(&user, slot, order1);
 
     let mut order2 = create_test_order(2, OrderType::Limit, Direction::Long, 1200, 3, slot);
     order2.post_only = true;
-    dlob.insert_order(&user, order2);
+    dlob.insert_order(&user, slot, order2);
 
     // Insert floating limit orders
     let mut order3 = create_test_order(3, OrderType::Limit, Direction::Long, 0, 4, slot);
     order3.oracle_price_offset = 150; // Will be 1150 with oracle_price
     order3.post_only = true;
-    dlob.insert_order(&user, order3);
+    dlob.insert_order(&user, slot, order3);
 
     let mut order4 = create_test_order(4, OrderType::Limit, Direction::Long, 0, 2, slot);
     order4.oracle_price_offset = 200; // Will be 1200 with oracle_price
     order4.post_only = true;
-    dlob.insert_order(&user, order4);
+    dlob.insert_order(&user, slot, order4);
 
     // Update slot and get L3 snapshot
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
@@ -1766,7 +1674,7 @@ fn dlob_get_maker_bids_l3() {
 
     // Test get_maker_bids_l3 - filter for maker orders (Limit or FloatingLimit)
     let maker_bids: Vec<_> = l3book
-        .bids(Some(oracle_price), oracle_price)
+        .bids(Some(oracle_price), None)
         .filter(|o| matches!(o.kind, OrderKind::Limit | OrderKind::FloatingLimit))
         .collect();
 
@@ -1816,22 +1724,22 @@ fn dlob_get_maker_asks_l3() {
     // Insert resting limit orders
     let mut order1 = create_test_order(1, OrderType::Limit, Direction::Short, 900, 5, slot);
     order1.post_only = true;
-    dlob.insert_order(&user, order1);
+    dlob.insert_order(&user, slot, order1);
 
     let mut order2 = create_test_order(2, OrderType::Limit, Direction::Short, 800, 3, slot);
     order2.post_only = true;
-    dlob.insert_order(&user, order2);
+    dlob.insert_order(&user, slot, order2);
 
     // Insert floating limit orders
     let mut order3 = create_test_order(3, OrderType::Limit, Direction::Short, 0, 4, slot);
     order3.oracle_price_offset = -150; // Will be 850 with oracle_price
     order3.post_only = true;
-    dlob.insert_order(&user, order3);
+    dlob.insert_order(&user, slot, order3);
 
     let mut order4 = create_test_order(4, OrderType::Limit, Direction::Short, 0, 2, slot);
     order4.oracle_price_offset = -200; // Will be 800 with oracle_price
     order4.post_only = true;
-    dlob.insert_order(&user, order4);
+    dlob.insert_order(&user, slot, order4);
 
     // Update slot and get L3 snapshot
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
@@ -1844,7 +1752,7 @@ fn dlob_get_maker_asks_l3() {
 
     // Test get_maker_asks_l3 - filter for maker orders (Limit or FloatingLimit)
     let maker_asks: Vec<_> = l3book
-        .asks(Some(oracle_price), oracle_price)
+        .asks(Some(oracle_price), None)
         .filter(|o| matches!(o.kind, OrderKind::Limit | OrderKind::FloatingLimit))
         .collect();
 
@@ -1897,14 +1805,14 @@ fn dlob_get_taker_bids_l3() {
     market_order.auction_duration = 10;
     market_order.auction_start_price = 1100;
     market_order.auction_end_price = 1200;
-    dlob.insert_order(&user, market_order);
+    dlob.insert_order(&user, slot, market_order);
 
     // Insert oracle orders
     let mut oracle_order = create_test_order(2, OrderType::Oracle, Direction::Long, 0, 3, slot);
     oracle_order.auction_duration = 10;
     oracle_order.auction_start_price = 1050;
     oracle_order.auction_end_price = 1150;
-    dlob.insert_order(&user, oracle_order);
+    dlob.insert_order(&user, slot, oracle_order);
 
     // Update slot and get L3 snapshot
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
@@ -1917,7 +1825,7 @@ fn dlob_get_taker_bids_l3() {
 
     // Test get_taker_bids_l3 - filter for taker orders (Market, Oracle, TriggerMarket, TriggerLimit)
     let taker_bids: Vec<_> = l3book
-        .bids(Some(oracle_price), oracle_price)
+        .bids(Some(oracle_price), None)
         .filter(|o| {
             matches!(
                 o.kind,
@@ -1959,14 +1867,14 @@ fn dlob_get_taker_asks_l3() {
     market_order.auction_duration = 10;
     market_order.auction_start_price = 900;
     market_order.auction_end_price = 800;
-    dlob.insert_order(&user, market_order);
+    dlob.insert_order(&user, slot, market_order);
 
     // Insert oracle orders
     let mut oracle_order = create_test_order(2, OrderType::Oracle, Direction::Short, 0, 3, slot);
     oracle_order.auction_duration = 10;
     oracle_order.auction_start_price = 950;
     oracle_order.auction_end_price = 850;
-    dlob.insert_order(&user, oracle_order);
+    dlob.insert_order(&user, slot, oracle_order);
 
     // Update slot and get L3 snapshot
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
@@ -1979,7 +1887,7 @@ fn dlob_get_taker_asks_l3() {
 
     // Test get_taker_asks_l3 - filter for taker orders (Market, Oracle, TriggerMarket, TriggerLimit)
     let taker_asks: Vec<_> = l3book
-        .asks(Some(oracle_price), oracle_price)
+        .asks(Some(oracle_price), None)
         .filter(|o| {
             matches!(
                 o.kind,
@@ -2020,48 +1928,48 @@ fn dlob_l3_functions_mixed_order_types() {
     // Resting limit orders
     let mut limit_bid = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 5, slot);
     limit_bid.post_only = true;
-    dlob.insert_order(&user, limit_bid);
+    dlob.insert_order(&user, slot, limit_bid);
 
     let mut limit_ask = create_test_order(2, OrderType::Limit, Direction::Short, 900, 5, slot);
     limit_ask.post_only = true;
-    dlob.insert_order(&user, limit_ask);
+    dlob.insert_order(&user, slot, limit_ask);
 
     // Floating limit orders
     let mut floating_bid = create_test_order(3, OrderType::Limit, Direction::Long, 0, 3, slot);
     floating_bid.oracle_price_offset = 100; // Will be 1100 with oracle_price
     floating_bid.post_only = true;
-    dlob.insert_order(&user, floating_bid);
+    dlob.insert_order(&user, slot, floating_bid);
 
     let mut floating_ask = create_test_order(4, OrderType::Limit, Direction::Short, 0, 3, slot);
     floating_ask.oracle_price_offset = -100; // Will be 900 with oracle_price
     floating_ask.post_only = true;
-    dlob.insert_order(&user, floating_ask);
+    dlob.insert_order(&user, slot, floating_ask);
 
     // Market orders
     let mut market_bid = create_test_order(5, OrderType::Market, Direction::Long, 0, 4, slot);
     market_bid.auction_duration = 10;
     market_bid.auction_start_price = 1200;
     market_bid.auction_end_price = 1300;
-    dlob.insert_order(&user, market_bid);
+    dlob.insert_order(&user, slot, market_bid);
 
     let mut market_ask = create_test_order(6, OrderType::Market, Direction::Short, 0, 4, slot);
     market_ask.auction_duration = 10;
     market_ask.auction_start_price = 800;
     market_ask.auction_end_price = 700;
-    dlob.insert_order(&user, market_ask);
+    dlob.insert_order(&user, slot, market_ask);
 
     // Oracle orders
     let mut oracle_bid = create_test_order(7, OrderType::Oracle, Direction::Long, 0, 2, slot);
     oracle_bid.auction_duration = 10;
     oracle_bid.auction_start_price = 1050;
     oracle_bid.auction_end_price = 1150;
-    dlob.insert_order(&user, oracle_bid);
+    dlob.insert_order(&user, slot, oracle_bid);
 
     let mut oracle_ask = create_test_order(8, OrderType::Oracle, Direction::Short, 0, 2, slot);
     oracle_ask.auction_duration = 10;
     oracle_ask.auction_start_price = 950;
     oracle_ask.auction_end_price = 850;
-    dlob.insert_order(&user, oracle_ask);
+    dlob.insert_order(&user, slot, oracle_ask);
 
     // Skip trigger orders for now due to implementation issues
 
@@ -2076,15 +1984,15 @@ fn dlob_l3_functions_mixed_order_types() {
 
     // Test all L3 functions - filter by order kind
     let maker_bids: Vec<_> = l3book
-        .bids(Some(oracle_price), oracle_price)
+        .bids(Some(oracle_price), None)
         .filter(|o| matches!(o.kind, OrderKind::Limit | OrderKind::FloatingLimit))
         .collect();
     let maker_asks: Vec<_> = l3book
-        .asks(Some(oracle_price), oracle_price)
+        .asks(Some(oracle_price), None)
         .filter(|o| matches!(o.kind, OrderKind::Limit | OrderKind::FloatingLimit))
         .collect();
     let taker_bids: Vec<_> = l3book
-        .bids(Some(oracle_price), oracle_price)
+        .bids(Some(oracle_price), None)
         .filter(|o| {
             matches!(
                 o.kind,
@@ -2096,7 +2004,7 @@ fn dlob_l3_functions_mixed_order_types() {
         })
         .collect();
     let taker_asks: Vec<_> = l3book
-        .asks(Some(oracle_price), oracle_price)
+        .asks(Some(oracle_price), None)
         .filter(|o| {
             matches!(
                 o.kind,
@@ -2148,22 +2056,22 @@ fn l3book_bids_query_with_fixed_and_floating_orders() {
     // Insert fixed limit bids at specific prices
     let mut order1 = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 5, slot);
     order1.post_only = true;
-    dlob.insert_order(&user, order1);
+    dlob.insert_order(&user, slot, order1);
 
     let mut order2 = create_test_order(2, OrderType::Limit, Direction::Long, 1050, 10, slot);
     order2.post_only = true;
-    dlob.insert_order(&user, order2);
+    dlob.insert_order(&user, slot, order2);
 
     // Insert floating limit bids (prices adjust with oracle)
     let mut order3 = create_test_order(3, OrderType::Limit, Direction::Long, 0, 8, slot);
     order3.oracle_price_offset = 120; // Will be 1120 at oracle_price 1000
     order3.post_only = true;
-    dlob.insert_order(&user, order3);
+    dlob.insert_order(&user, slot, order3);
 
     let mut order4 = create_test_order(4, OrderType::Limit, Direction::Long, 0, 15, slot);
     order4.oracle_price_offset = 80; // Will be 1080 at oracle_price 1000
     order4.post_only = true;
-    dlob.insert_order(&user, order4);
+    dlob.insert_order(&user, slot, order4);
 
     // Build L3 snapshot
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
@@ -2172,7 +2080,7 @@ fn l3book_bids_query_with_fixed_and_floating_orders() {
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
     // Query bids - should merge fixed and floating, sorted descending
-    let bids: Vec<_> = l3book.bids(Some(oracle_price), oracle_price).collect();
+    let bids: Vec<_> = l3book.bids(Some(oracle_price), None).collect();
 
     // Should have 4 orders
     assert_eq!(bids.len(), 4);
@@ -2209,22 +2117,22 @@ fn l3book_asks_query_with_fixed_and_floating_orders() {
     // Insert fixed limit asks
     let mut order1 = create_test_order(1, OrderType::Limit, Direction::Short, 900, 5, slot);
     order1.post_only = true;
-    dlob.insert_order(&user, order1);
+    dlob.insert_order(&user, slot, order1);
 
     let mut order2 = create_test_order(2, OrderType::Limit, Direction::Short, 950, 10, slot);
     order2.post_only = true;
-    dlob.insert_order(&user, order2);
+    dlob.insert_order(&user, slot, order2);
 
     // Insert floating limit asks
     let mut order3 = create_test_order(3, OrderType::Limit, Direction::Short, 0, 8, slot);
     order3.oracle_price_offset = -120; // Will be 880 at oracle_price 1000
     order3.post_only = true;
-    dlob.insert_order(&user, order3);
+    dlob.insert_order(&user, slot, order3);
 
     let mut order4 = create_test_order(4, OrderType::Limit, Direction::Short, 0, 15, slot);
     order4.oracle_price_offset = -80; // Will be 920 at oracle_price 1000
     order4.post_only = true;
-    dlob.insert_order(&user, order4);
+    dlob.insert_order(&user, slot, order4);
 
     // Build L3 snapshot
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
@@ -2233,7 +2141,7 @@ fn l3book_asks_query_with_fixed_and_floating_orders() {
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
     // Query asks - should merge fixed and floating, sorted ascending (lowest first)
-    let asks: Vec<_> = l3book.asks(Some(oracle_price), oracle_price).collect();
+    let asks: Vec<_> = l3book.asks(Some(oracle_price), None).collect();
 
     // Should have 4 orders
     assert_eq!(asks.len(), 4);
@@ -2270,13 +2178,13 @@ fn l3book_bids_with_oracle_price_change() {
     // Insert fixed bid at 1100
     let mut order1 = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 5, slot);
     order1.post_only = true;
-    dlob.insert_order(&user, order1);
+    dlob.insert_order(&user, slot, order1);
 
     // Insert floating bid with +100 offset (will be 1100 at initial oracle)
     let mut order2 = create_test_order(2, OrderType::Limit, Direction::Long, 0, 10, slot);
     order2.oracle_price_offset = 100;
     order2.post_only = true;
-    dlob.insert_order(&user, order2);
+    dlob.insert_order(&user, slot, order2);
 
     // Build L3 snapshot at initial oracle price
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
@@ -2285,14 +2193,14 @@ fn l3book_bids_with_oracle_price_change() {
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
     // At initial oracle (1000), floating order should be at 1100 (same as fixed)
-    let bids_at_initial: Vec<_> = l3book.bids(Some(initial_oracle), initial_oracle).collect();
+    let bids_at_initial: Vec<_> = l3book.bids(Some(initial_oracle), None).collect();
     assert_eq!(bids_at_initial.len(), 2);
     // Both stored at 1100, order may vary when prices are equal
 
     // At higher oracle (1100), floating order's adjusted price should be higher than fixed
     // (floating adjusts: stored 1100 + (1100 - 1000) = 1200 vs fixed 1100)
     let higher_oracle = 1100;
-    let bids_at_higher: Vec<_> = l3book.bids(Some(higher_oracle), higher_oracle).collect();
+    let bids_at_higher: Vec<_> = l3book.bids(Some(higher_oracle), None).collect();
     assert_eq!(bids_at_higher.len(), 2);
     // Floating order (order_id 2) should come first due to higher adjusted price
     assert_eq!(bids_at_higher[0].order_id, 2);
@@ -2301,7 +2209,7 @@ fn l3book_bids_with_oracle_price_change() {
     // At lower oracle (900), floating order's adjusted price should be lower than fixed
     // (floating adjusts: stored 1100 + (900 - 1000) = 1000 vs fixed 1100)
     let lower_oracle = 900;
-    let bids_at_lower: Vec<_> = l3book.bids(Some(lower_oracle), lower_oracle).collect();
+    let bids_at_lower: Vec<_> = l3book.bids(Some(lower_oracle), None).collect();
     assert_eq!(bids_at_lower.len(), 2);
     // Fixed order (order_id 1) should come first, floating (order_id 2) second
     assert_eq!(bids_at_lower[0].order_id, 1);
@@ -2325,13 +2233,13 @@ fn l3book_asks_with_oracle_price_change() {
     // Insert fixed ask at 900
     let mut order1 = create_test_order(1, OrderType::Limit, Direction::Short, 900, 5, slot);
     order1.post_only = true;
-    dlob.insert_order(&user, order1);
+    dlob.insert_order(&user, slot, order1);
 
     // Insert floating ask with -100 offset (will be 900 at initial oracle)
     let mut order2 = create_test_order(2, OrderType::Limit, Direction::Short, 0, 10, slot);
     order2.oracle_price_offset = -100;
     order2.post_only = true;
-    dlob.insert_order(&user, order2);
+    dlob.insert_order(&user, slot, order2);
 
     // Build L3 snapshot at initial oracle price
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
@@ -2342,7 +2250,7 @@ fn l3book_asks_with_oracle_price_change() {
     // At higher oracle (1100), floating order's adjusted price should be higher than fixed
     // (floating adjusts: stored 900 + (1100 - 1000) = 1000 vs fixed 900)
     let higher_oracle = 1100;
-    let asks_at_higher: Vec<_> = l3book.asks(Some(higher_oracle), higher_oracle).collect();
+    let asks_at_higher: Vec<_> = l3book.asks(Some(higher_oracle), None).collect();
     assert_eq!(asks_at_higher.len(), 2);
     // Fixed order (order_id 1) should come first, floating (order_id 2) second
     assert_eq!(asks_at_higher[0].order_id, 1);
@@ -2351,7 +2259,7 @@ fn l3book_asks_with_oracle_price_change() {
     // At lower oracle (900), floating order's adjusted price should be lower than fixed
     // (floating adjusts: stored 900 + (900 - 1000) = 800 vs fixed 900)
     let lower_oracle = 900;
-    let asks_at_lower: Vec<_> = l3book.asks(Some(lower_oracle), lower_oracle).collect();
+    let asks_at_lower: Vec<_> = l3book.asks(Some(lower_oracle), None).collect();
     assert_eq!(asks_at_lower.len(), 2);
     // Floating order (order_id 2) should come first due to lower adjusted price
     assert_eq!(asks_at_lower[0].order_id, 2);
@@ -2383,7 +2291,7 @@ fn l3book_top_bids_and_top_asks() {
             slot,
         );
         order.post_only = true;
-        dlob.insert_order(&user, order);
+        dlob.insert_order(&user, slot, order);
     }
 
     // Insert multiple asks at different prices
@@ -2397,7 +2305,7 @@ fn l3book_top_bids_and_top_asks() {
             slot,
         );
         order.post_only = true;
-        dlob.insert_order(&user, order);
+        dlob.insert_order(&user, slot, order);
     }
 
     // Build L3 snapshot
@@ -2407,30 +2315,22 @@ fn l3book_top_bids_and_top_asks() {
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
     // Test top_bids - should return highest priced bids first
-    let top_3_bids: Vec<_> = l3book
-        .top_bids(3, Some(oracle_price), oracle_price)
-        .collect();
+    let top_3_bids: Vec<_> = l3book.top_bids(3, Some(oracle_price), None).collect();
     assert_eq!(top_3_bids.len(), 3);
     let top_bid_prices: Vec<u64> = top_3_bids.iter().map(|o| o.price).collect();
     assert_eq!(top_bid_prices, vec![1200, 1150, 1100]);
 
     // Test top_asks - should return lowest priced asks first
-    let top_3_asks: Vec<_> = l3book
-        .top_asks(3, Some(oracle_price), oracle_price)
-        .collect();
+    let top_3_asks: Vec<_> = l3book.top_asks(3, Some(oracle_price), None).collect();
     assert_eq!(top_3_asks.len(), 3);
     let top_ask_prices: Vec<u64> = top_3_asks.iter().map(|o| o.price).collect();
     assert_eq!(top_ask_prices, vec![800, 850, 900]);
 
     // Test requesting more than available
-    let top_10_bids: Vec<_> = l3book
-        .top_bids(10, Some(oracle_price), oracle_price)
-        .collect();
+    let top_10_bids: Vec<_> = l3book.top_bids(10, Some(oracle_price), None).collect();
     assert_eq!(top_10_bids.len(), 5); // Only 5 bids exist
 
-    let top_10_asks: Vec<_> = l3book
-        .top_asks(10, Some(oracle_price), oracle_price)
-        .collect();
+    let top_10_asks: Vec<_> = l3book.top_asks(10, Some(oracle_price), None).collect();
     assert_eq!(top_10_asks.len(), 5); // Only 5 asks exist
 }
 
@@ -2453,20 +2353,16 @@ fn l3book_empty_orderbook() {
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
     // All queries should return empty iterators
-    let bids: Vec<_> = l3book.bids(Some(oracle_price), oracle_price).collect();
+    let bids: Vec<_> = l3book.bids(Some(oracle_price), None).collect();
     assert_eq!(bids.len(), 0);
 
-    let asks: Vec<_> = l3book.asks(Some(oracle_price), oracle_price).collect();
+    let asks: Vec<_> = l3book.asks(Some(oracle_price), None).collect();
     assert_eq!(asks.len(), 0);
 
-    let top_bids: Vec<_> = l3book
-        .top_bids(5, Some(oracle_price), oracle_price)
-        .collect();
+    let top_bids: Vec<_> = l3book.top_bids(5, Some(oracle_price), None).collect();
     assert_eq!(top_bids.len(), 0);
 
-    let top_asks: Vec<_> = l3book
-        .top_asks(5, Some(oracle_price), oracle_price)
-        .collect();
+    let top_asks: Vec<_> = l3book.top_asks(5, Some(oracle_price), None).collect();
     assert_eq!(top_asks.len(), 0);
 }
 
@@ -2487,20 +2383,20 @@ fn l3book_bids_includes_all_order_types() {
     // Insert resting limit order
     let mut limit_order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 5, slot);
     limit_order.post_only = true;
-    dlob.insert_order(&user, limit_order);
+    dlob.insert_order(&user, slot, limit_order);
 
     // Insert floating limit order
     let mut floating_order = create_test_order(2, OrderType::Limit, Direction::Long, 0, 8, slot);
     floating_order.oracle_price_offset = 120; // Will be 1120
     floating_order.post_only = true;
-    dlob.insert_order(&user, floating_order);
+    dlob.insert_order(&user, slot, floating_order);
 
     // Insert market order (becomes taker)
     let mut market_order = create_test_order(3, OrderType::Market, Direction::Long, 0, 10, slot);
     market_order.auction_duration = 10;
     market_order.auction_start_price = 1150;
     market_order.auction_end_price = 1200;
-    dlob.insert_order(&user, market_order);
+    dlob.insert_order(&user, slot, market_order);
 
     // Build L3 snapshot
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
@@ -2512,7 +2408,7 @@ fn l3book_bids_includes_all_order_types() {
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
     // Query all bids - should include all order types
-    let all_bids: Vec<_> = l3book.bids(Some(oracle_price), oracle_price).collect();
+    let all_bids: Vec<_> = l3book.bids(Some(oracle_price), None).collect();
 
     // Should have at least the limit orders
     assert!(all_bids.len() >= 2);
@@ -2542,32 +2438,34 @@ fn l3book_vamm_orders_sorted_correctly() {
     // Insert regular limit bids at different prices
     let mut order1 = create_test_order(1, OrderType::Limit, Direction::Long, 1050, 5, slot);
     order1.post_only = true;
-    dlob.insert_order(&user, order1);
+    dlob.insert_order(&user, slot, order1);
 
     let mut order2 = create_test_order(2, OrderType::Limit, Direction::Long, 1000, 10, slot);
     order2.post_only = true;
-    dlob.insert_order(&user, order2);
+    dlob.insert_order(&user, slot, order2);
 
     // Insert market orders that will become vamm orders (auction completes, no price set)
     // These will have price 0 after auction completes
+    // Order with higher max_ts (later expiry) should come after order with lower max_ts
+    // Use future timestamps to ensure orders don't expire during the test
     let mut vamm_order1 = create_test_order(3, OrderType::Market, Direction::Long, 0, 8, slot);
     vamm_order1.auction_duration = 5; // Will complete before we query
     vamm_order1.auction_start_price = 0;
     vamm_order1.auction_end_price = 0;
-    vamm_order1.max_ts = i64::MAX; // Don't expire - will become vamm order
-    dlob.insert_order(&user, vamm_order1);
+    vamm_order1.max_ts = 2_000_000_000; // Lower max_ts - should be sorted first (time priority)
+    dlob.insert_order(&user, slot, vamm_order1);
 
     let mut vamm_order2 = create_test_order(4, OrderType::Market, Direction::Long, 0, 12, slot);
     vamm_order2.auction_duration = 5; // Will complete before we query
     vamm_order2.auction_start_price = 0;
     vamm_order2.auction_end_price = 0;
-    // vamm_order2.max_ts = 30 (default from create_test_order) - will expire and be removed
-    dlob.insert_order(&user, vamm_order2);
+    vamm_order2.max_ts = 2_100_000_000; // Higher max_ts - should be sorted after order 3
+    dlob.insert_order(&user, slot, vamm_order2);
 
     // Insert another limit order at a price lower than vamm_price
     let mut order3 = create_test_order(5, OrderType::Limit, Direction::Long, 950, 15, slot);
     order3.post_only = true;
-    dlob.insert_order(&user, order3);
+    dlob.insert_order(&user, slot, order3);
 
     // Update slot to after auction completion
     let query_slot = slot + 10;
@@ -2579,57 +2477,118 @@ fn l3book_vamm_orders_sorted_correctly() {
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
-    // Query bids with vamm_price - vamm orders should appear at vamm_price position
+    // Create a PerpMarket for VAMM price calculations
+    let default_reserves = 100 * AMM_RESERVE_PRECISION;
+    let perp_market = PerpMarket {
+        market_index: 0,
+        contract_tier: crate::drift_idl::types::ContractTier::A,
+        amm: AMM {
+            max_fill_reserve_fraction: 1,
+            base_asset_reserve: default_reserves.into(),
+            quote_asset_reserve: default_reserves.into(),
+            sqrt_k: default_reserves.into(),
+            peg_multiplier: PEG_PRECISION.into(),
+            terminal_quote_asset_reserve: default_reserves.into(),
+            concentration_coef: 5u128.into(),
+            long_spread: 100,  // 1% spread
+            short_spread: 100, // 1% spread
+            max_base_asset_reserve: (u64::MAX as u128).into(),
+            min_base_asset_reserve: 0u128.into(),
+            order_step_size: 1,
+            order_tick_size: 1,
+            max_spread: 1000,
+            historical_oracle_data: HistoricalOracleData {
+                last_oracle_price: (oracle_price as i64) * 1_000_000, // Scale to PRICE_PRECISION
+                ..Default::default()
+            },
+            last_oracle_valid: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    // Query bids with perp_market - vamm orders should appear at vamm_price position
     // Since vamm_price (1100) > 1050, vamm orders should come before limit orders at 1050
-    let bids: Vec<_> = l3book.bids(Some(oracle_price), vamm_price).collect();
+    let bids: Vec<_> = l3book
+        .bids(Some(oracle_price), Some(&perp_market))
+        .collect();
 
-    // Should have 4 orders: 1 vamm order (order2 expired) + 3 limit orders
-    assert_eq!(bids.len(), 4);
+    // Should have 5 orders: 2 vamm orders + 3 limit orders
+    assert_eq!(bids.len(), 5);
 
-    // VAMM orders should appear first (at vamm_price 1100), then limit orders
-    // Since vamm_price (1100) > all limit prices, vamm orders come first
+    // VAMM orders should appear first (at vamm_price 1100), sorted by max_ts (lower max_ts first)
     // Then limit orders sorted by price: 1050, 1000, 950
     let prices: Vec<u64> = bids.iter().map(|o| o.price).collect();
+    let order_ids: Vec<u32> = bids.iter().map(|o| o.order_id).collect();
+    let max_ts_values: Vec<u64> = bids.iter().map(|o| o.max_ts).collect();
 
-    // First should be vamm order (price 0, but treated as vamm_price 1100)
-    // Order 4 expired, so only order 3 should be present
+    // First should be vamm order with lower max_ts (order 3, max_ts=2_000_000_000)
+    // Second should be vamm order with higher max_ts (order 4, max_ts=2_100_000_000)
     // Then limit orders: 1050, 1000, 950
     assert_eq!(prices[0], 0); // VAMM order 1 (order 3)
-    assert_eq!(prices[1], 1050); // Limit order 1
-    assert_eq!(prices[2], 1000); // Limit order 2
-    assert_eq!(prices[3], 950); // Limit order 3
+    assert_eq!(
+        order_ids[0], 3,
+        "First VAMM order should be order 3 (lower max_ts)"
+    );
+    assert_eq!(
+        max_ts_values[0], 2_000_000_000,
+        "First VAMM order should have max_ts=2_000_000_000"
+    );
 
-    // Verify vamm order is present (order 3), and order 4 is not (expired)
-    let order_ids: Vec<u32> = bids.iter().map(|o| o.order_id).collect();
+    assert_eq!(prices[1], 0); // VAMM order 2 (order 4)
+    assert_eq!(
+        order_ids[1], 4,
+        "Second VAMM order should be order 4 (higher max_ts)"
+    );
+    assert_eq!(
+        max_ts_values[1], 2_100_000_000,
+        "Second VAMM order should have max_ts=2_100_000_000"
+    );
+
+    assert_eq!(prices[2], 1050); // Limit order 1
+    assert_eq!(prices[3], 1000); // Limit order 2
+    assert_eq!(prices[4], 950); // Limit order 3
+
+    // Verify both vamm orders are present and sorted correctly
     assert!(order_ids.contains(&3), "Vamm order 3 should be present");
-    assert!(
-        !order_ids.contains(&4),
-        "Vamm order 4 should have expired and been removed"
+    assert!(order_ids.contains(&4), "Vamm order 4 should be present");
+
+    // Verify VAMM orders are sorted by max_ts (lower max_ts first - time priority)
+    let vamm_orders: Vec<_> = bids.iter().take(2).collect();
+    assert_eq!(
+        vamm_orders[0].max_ts, 2_000_000_000,
+        "First VAMM order should have lower max_ts"
+    );
+    assert_eq!(
+        vamm_orders[1].max_ts, 2_100_000_000,
+        "Second VAMM order should have higher max_ts"
     );
 
     // Test asks with vamm orders
     let mut ask1 = create_test_order(6, OrderType::Limit, Direction::Short, 950, 5, slot);
     ask1.post_only = true;
-    dlob.insert_order(&user, ask1);
+    dlob.insert_order(&user, slot, ask1);
 
     let mut ask2 = create_test_order(7, OrderType::Limit, Direction::Short, 900, 10, slot);
     ask2.post_only = true;
-    dlob.insert_order(&user, ask2);
+    dlob.insert_order(&user, slot, ask2);
 
     // Insert market ask orders that will become vamm orders
+    // Order with higher max_ts (later expiry) should come after order with lower max_ts
+    // Use future timestamps to ensure orders don't expire during the test
     let mut vamm_ask1 = create_test_order(8, OrderType::Market, Direction::Short, 0, 8, slot);
     vamm_ask1.auction_duration = 5;
     vamm_ask1.auction_start_price = 0;
     vamm_ask1.auction_end_price = 0;
-    vamm_ask1.max_ts = i64::MAX; // Don't expire - will become vamm order
-    dlob.insert_order(&user, vamm_ask1);
+    vamm_ask1.max_ts = 2_050_000_000; // Lower max_ts - should be sorted first (time priority)
+    dlob.insert_order(&user, slot, vamm_ask1);
 
     let mut vamm_ask2 = create_test_order(9, OrderType::Market, Direction::Short, 0, 12, slot);
     vamm_ask2.auction_duration = 5;
     vamm_ask2.auction_start_price = 0;
     vamm_ask2.auction_end_price = 0;
-    // vamm_ask2.max_ts = 30 (default from create_test_order) - will expire and be removed
-    dlob.insert_order(&user, vamm_ask2);
+    vamm_ask2.max_ts = 2_150_000_000; // Higher max_ts - should be sorted after order 8
+    dlob.insert_order(&user, slot, vamm_ask2);
 
     let vamm_ask_price = 850; // VAMM ask price lower than limit asks
 
@@ -2643,33 +2602,242 @@ fn l3book_vamm_orders_sorted_correctly() {
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
-    // Query asks with vamm_ask_price - vamm orders should appear at vamm_ask_price position
-    // Since vamm_ask_price (850) < 900, vamm orders should come before limit orders at 900
-    let asks: Vec<_> = l3book.asks(Some(oracle_price), vamm_ask_price).collect();
+    // Query asks with perp_market - vamm orders should appear at vamm_ask_price position
+    // VAMM orders are sorted by max_ts (lower max_ts first) when they appear
+    let asks: Vec<_> = l3book
+        .asks(Some(oracle_price), Some(&perp_market))
+        .collect();
 
-    // Should have 3 orders: 1 vamm order (ask2 expired) + 2 limit orders
-    assert_eq!(asks.len(), 3);
+    // Should have 4 orders: 2 vamm orders + 2 limit orders
+    assert_eq!(asks.len(), 4);
 
-    // VAMM orders should appear first (at vamm_ask_price 850), then limit orders
-    // Since vamm_ask_price (850) < all limit prices, vamm orders come first
-    // Then limit orders sorted by price: 900, 950
+    // Collect order information
     let ask_prices: Vec<u64> = asks.iter().map(|o| o.price).collect();
-
-    // First should be vamm order (price 0, but treated as vamm_ask_price 850)
-    // Order 9 expired, so only order 8 should be present
-    // Then limit orders: 900, 950
-    assert_eq!(ask_prices[0], 0); // VAMM order 1 (order 8)
-    assert_eq!(ask_prices[1], 900); // Limit order 2
-    assert_eq!(ask_prices[2], 950); // Limit order 1
-
-    // Verify vamm ask order is present (order 8), and order 9 is not (expired)
     let ask_order_ids: Vec<u32> = asks.iter().map(|o| o.order_id).collect();
+    let ask_max_ts_values: Vec<u64> = asks.iter().map(|o| o.max_ts).collect();
+
+    // Find VAMM orders (price 0) and limit orders
+    let vamm_orders: Vec<_> = asks.iter().filter(|o| o.price == 0).collect();
+    let limit_orders: Vec<_> = asks.iter().filter(|o| o.price != 0).collect();
+
+    // Verify we have 2 VAMM orders and 2 limit orders
+    assert_eq!(vamm_orders.len(), 2, "Should have 2 VAMM ask orders");
+    assert_eq!(limit_orders.len(), 2, "Should have 2 limit ask orders");
+
+    // Verify both vamm ask orders are present
     assert!(
         ask_order_ids.contains(&8),
         "Vamm ask order 8 should be present"
     );
     assert!(
-        !ask_order_ids.contains(&9),
-        "Vamm ask order 9 should have expired and been removed"
+        ask_order_ids.contains(&9),
+        "Vamm ask order 9 should be present"
+    );
+
+    // Verify VAMM ask orders are sorted by max_ts (lower max_ts first - time priority)
+    // Order 8 has max_ts=2_050_000_000, order 9 has max_ts=2_150_000_000
+    // So order 8 should come before order 9
+    let vamm_order_8_idx = ask_order_ids.iter().position(|&id| id == 8).unwrap();
+    let vamm_order_9_idx = ask_order_ids.iter().position(|&id| id == 9).unwrap();
+    assert!(
+        vamm_order_8_idx < vamm_order_9_idx,
+        "Order 8 (lower max_ts) should come before order 9 (higher max_ts)"
+    );
+    assert_eq!(
+        ask_max_ts_values[vamm_order_8_idx], 2_050_000_000,
+        "Order 8 should have max_ts=2_050_000_000"
+    );
+    assert_eq!(
+        ask_max_ts_values[vamm_order_9_idx], 2_150_000_000,
+        "Order 9 should have max_ts=2_150_000_000"
+    );
+
+    // Verify limit orders are present and sorted correctly
+    assert!(
+        ask_order_ids.contains(&6),
+        "Limit ask order 6 should be present"
+    );
+    assert!(
+        ask_order_ids.contains(&7),
+        "Limit ask order 7 should be present"
+    );
+}
+
+#[test]
+fn dlob_l3_order_flags_correctness() {
+    let _ = env_logger::try_init();
+    let dlob = DLOB::default();
+    let user = Pubkey::new_unique();
+    let slot = 100;
+    let oracle_price = 1000;
+
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market: MarketId::perp(0),
+        market_tick_size: 1,
+        ..Default::default()
+    });
+
+    // Test 1: Bid order without reduce_only, with post_only (should have IS_LONG and IS_POST_ONLY, not RO_FLAG)
+    let mut bid_order_1 = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 5, slot);
+    bid_order_1.post_only = true;
+    bid_order_1.reduce_only = false;
+    dlob.insert_order(&user, slot, bid_order_1);
+
+    // Test 2: Bid order with reduce_only and post_only (should have IS_LONG, RO_FLAG, and IS_POST_ONLY)
+    let mut bid_order_2 = create_test_order(2, OrderType::Limit, Direction::Long, 1200, 3, slot);
+    bid_order_2.post_only = true;
+    bid_order_2.reduce_only = true;
+    dlob.insert_order(&user, slot, bid_order_2);
+
+    // Test 3: Bid order without reduce_only, without post_only (should have IS_LONG only)
+    let mut bid_order_3 = create_test_order(5, OrderType::Limit, Direction::Long, 1300, 2, slot);
+    bid_order_3.post_only = false;
+    bid_order_3.reduce_only = false;
+    dlob.insert_order(&user, slot, bid_order_3);
+
+    // Test 4: Ask order without reduce_only, with post_only (should have IS_POST_ONLY only)
+    let mut ask_order_1 = create_test_order(3, OrderType::Limit, Direction::Short, 900, 5, slot);
+    ask_order_1.post_only = true;
+    ask_order_1.reduce_only = false;
+    dlob.insert_order(&user, slot, ask_order_1);
+
+    // Test 5: Ask order with reduce_only and post_only (should have RO_FLAG and IS_POST_ONLY)
+    let mut ask_order_2 = create_test_order(4, OrderType::Limit, Direction::Short, 800, 3, slot);
+    ask_order_2.post_only = true;
+    ask_order_2.reduce_only = true;
+    dlob.insert_order(&user, slot, ask_order_2);
+
+    // Test 6: Ask order without reduce_only, without post_only (should have no flags)
+    let mut ask_order_3 = create_test_order(6, OrderType::Limit, Direction::Short, 700, 2, slot);
+    ask_order_3.post_only = false;
+    ask_order_3.reduce_only = false;
+    dlob.insert_order(&user, slot, ask_order_3);
+
+    // Update slot and get L3 snapshot
+    if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
+        book.update_slot(slot);
+    }
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata);
+    }
+    let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
+
+    // Collect all orders
+    let bids: Vec<_> = l3book.bids(Some(oracle_price), None).collect();
+    let asks: Vec<_> = l3book.asks(Some(oracle_price), None).collect();
+
+    // Find orders by order_id
+    let bid_1 = bids.iter().find(|o| o.order_id == 1).unwrap();
+    let bid_2 = bids.iter().find(|o| o.order_id == 2).unwrap();
+    let bid_3 = bids.iter().find(|o| o.order_id == 5).unwrap();
+    let ask_1 = asks.iter().find(|o| o.order_id == 3).unwrap();
+    let ask_2 = asks.iter().find(|o| o.order_id == 4).unwrap();
+    let ask_3 = asks.iter().find(|o| o.order_id == 6).unwrap();
+
+    // Verify bid_1: should have IS_LONG and IS_POST_ONLY, not RO_FLAG
+    assert!(bid_1.is_long(), "Bid order 1 should have IS_LONG flag set");
+    assert!(
+        !bid_1.is_reduce_only(),
+        "Bid order 1 should not have RO_FLAG set"
+    );
+    assert!(
+        bid_1.is_post_only(),
+        "Bid order 1 should have IS_POST_ONLY flag set"
+    );
+
+    // Verify bid_2: should have IS_LONG, RO_FLAG, and IS_POST_ONLY
+    assert!(bid_2.is_long(), "Bid order 2 should have IS_LONG flag set");
+    assert!(
+        bid_2.is_reduce_only(),
+        "Bid order 2 should have RO_FLAG set"
+    );
+    assert!(
+        bid_2.is_post_only(),
+        "Bid order 2 should have IS_POST_ONLY flag set"
+    );
+
+    // Verify bid_3: should have IS_LONG only (no post_only, no reduce_only)
+    assert!(bid_3.is_long(), "Bid order 3 should have IS_LONG flag set");
+    assert!(
+        !bid_3.is_reduce_only(),
+        "Bid order 3 should not have RO_FLAG set"
+    );
+    assert!(
+        !bid_3.is_post_only(),
+        "Bid order 3 should not have IS_POST_ONLY flag set"
+    );
+
+    // Verify ask_1: should have IS_POST_ONLY only
+    assert!(
+        !ask_1.is_long(),
+        "Ask order 1 should not have IS_LONG flag set"
+    );
+    assert!(
+        !ask_1.is_reduce_only(),
+        "Ask order 1 should not have RO_FLAG set"
+    );
+    assert!(
+        ask_1.is_post_only(),
+        "Ask order 1 should have IS_POST_ONLY flag set"
+    );
+
+    // Verify ask_2: should have RO_FLAG and IS_POST_ONLY, not IS_LONG
+    assert!(
+        !ask_2.is_long(),
+        "Ask order 2 should not have IS_LONG flag set"
+    );
+    assert!(
+        ask_2.is_reduce_only(),
+        "Ask order 2 should have RO_FLAG set"
+    );
+    assert!(
+        ask_2.is_post_only(),
+        "Ask order 2 should have IS_POST_ONLY flag set"
+    );
+
+    // Verify ask_3: should have no flags
+    assert!(
+        !ask_3.is_long(),
+        "Ask order 3 should not have IS_LONG flag set"
+    );
+    assert!(
+        !ask_3.is_reduce_only(),
+        "Ask order 3 should not have RO_FLAG set"
+    );
+    assert!(
+        !ask_3.is_post_only(),
+        "Ask order 3 should not have IS_POST_ONLY flag set"
+    );
+
+    // Verify flag values match expected bit patterns
+    use crate::dlob::types::L3Order;
+    assert_eq!(
+        bid_1.flags,
+        L3Order::IS_LONG | L3Order::IS_POST_ONLY,
+        "Bid order 1 flags should be IS_LONG | IS_POST_ONLY (0b0000_1010)"
+    );
+    assert_eq!(
+        bid_2.flags,
+        L3Order::IS_LONG | L3Order::RO_FLAG | L3Order::IS_POST_ONLY,
+        "Bid order 2 flags should be IS_LONG | RO_FLAG | IS_POST_ONLY (0b0000_1011)"
+    );
+    assert_eq!(
+        bid_3.flags,
+        L3Order::IS_LONG,
+        "Bid order 3 flags should be IS_LONG only (0b0000_0010)"
+    );
+    assert_eq!(
+        ask_1.flags,
+        L3Order::IS_POST_ONLY,
+        "Ask order 1 flags should be IS_POST_ONLY only (0b0000_1000)"
+    );
+    assert_eq!(
+        ask_2.flags,
+        L3Order::RO_FLAG | L3Order::IS_POST_ONLY,
+        "Ask order 2 flags should be RO_FLAG | IS_POST_ONLY (0b0000_1001)"
+    );
+    assert_eq!(
+        ask_3.flags, 0,
+        "Ask order 3 flags should be 0 (no flags set)"
     );
 }

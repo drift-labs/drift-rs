@@ -344,4 +344,103 @@ mod tests {
         assert_eq!(remove_count, 2, "Should have 2 Remove deltas");
         assert_eq!(create_count, 2, "Should have 2 Create deltas");
     }
+
+    #[test]
+    fn dlob_util_test_atomic_create_and_fill() {
+        let pubkey = Pubkey::new_unique();
+
+        // Test case: Order doesn't exist in old (default/empty order), but exists in new
+        // as a filled order (created and filled atomically). Should NOT emit Create+Remove.
+        let old = create_test_user(vec![]); // Empty user, all slots have default Order (order_id=0, status=Init)
+        let new = create_test_user(vec![create_test_order(1, OrderStatus::Filled)]); // Order created and filled atomically
+
+        let deltas = compare_user_orders(pubkey, &old, &new);
+
+        // Should emit NO deltas - the order was created and filled atomically, so it never
+        // existed in an open state that we need to track
+        assert_eq!(
+            deltas.len(),
+            0,
+            "Should not emit deltas for atomically created and filled orders"
+        );
+    }
+
+    #[test]
+    fn dlob_util_test_atomic_create_and_cancel() {
+        let pubkey = Pubkey::new_unique();
+
+        // Similar test but with Canceled status
+        let old = create_test_user(vec![]);
+        let new = create_test_user(vec![create_test_order(1, OrderStatus::Canceled)]);
+
+        let deltas = compare_user_orders(pubkey, &old, &new);
+
+        assert_eq!(
+            deltas.len(),
+            0,
+            "Should not emit deltas for atomically created and canceled orders"
+        );
+    }
+
+    #[test]
+    fn dlob_util_test_atomic_create_and_fill_with_existing_orders() {
+        let pubkey = Pubkey::new_unique();
+
+        // Test with other orders present to ensure the logic works in context
+        let old = create_test_user(vec![
+            create_test_order(1, OrderStatus::Open),
+            // Slot 1 is empty (default order)
+        ]);
+
+        let new = create_test_user(vec![
+            create_test_order(1, OrderStatus::Open),   // Unchanged
+            create_test_order(2, OrderStatus::Filled), // Created and filled atomically at slot 1
+        ]);
+
+        let deltas = compare_user_orders(pubkey, &old, &new);
+
+        // Should only have 0 deltas - order 1 is unchanged, order 2 was created and filled atomically
+        assert_eq!(
+            deltas.len(),
+            0,
+            "Should not emit deltas for atomically created and filled orders"
+        );
+    }
+
+    #[test]
+    fn dlob_util_test_filled_order_replacement() {
+        let pubkey = Pubkey::new_unique();
+
+        // Test case: Old order is filled (not open), new order is also filled (different order_id)
+        // This simulates: old filled order gets replaced by a new order that was created and filled atomically
+        // Should NOT emit Remove+Create since neither order was ever open in the DLOB
+        let old = create_test_user(vec![create_test_order(1, OrderStatus::Filled)]);
+        let new = create_test_user(vec![create_test_order(2, OrderStatus::Filled)]);
+
+        let deltas = compare_user_orders(pubkey, &old, &new);
+
+        // Should emit NO deltas - both orders are filled, so neither was ever open in the DLOB
+        assert_eq!(
+            deltas.len(),
+            0,
+            "Should not emit Remove+Create for replacement of filled orders"
+        );
+    }
+
+    #[test]
+    fn dlob_util_test_canceled_order_replacement() {
+        let pubkey = Pubkey::new_unique();
+
+        // Similar test but with Canceled status
+        let old = create_test_user(vec![create_test_order(1, OrderStatus::Canceled)]);
+        let new = create_test_user(vec![create_test_order(2, OrderStatus::Filled)]);
+
+        let deltas = compare_user_orders(pubkey, &old, &new);
+
+        assert_eq!(
+            deltas.len(),
+            0,
+            "Should not emit Remove+Create for replacement of canceled order with filled order"
+        );
+    }
 }
