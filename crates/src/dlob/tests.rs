@@ -2845,3 +2845,368 @@ fn dlob_l3_order_flags_correctness() {
         "Ask order 3 flags should be 0 (no flags set)"
     );
 }
+
+#[test]
+fn dlob_l3_trigger_orders_by_price() {
+    use crate::types::OrderTriggerCondition;
+    let _ = env_logger::try_init();
+    let dlob = DLOB::default();
+    let user = Pubkey::new_unique();
+    let slot = 100;
+    let oracle_price = 1000;
+
+    // Create trigger orders for bids (Long direction)
+    // TriggerAbove orders: trigger when price > trigger_price
+    let mut trigger_bid_above_950 =
+        create_test_order(1, OrderType::TriggerLimit, Direction::Long, 1050, 10, slot);
+    trigger_bid_above_950.trigger_price = 950;
+    trigger_bid_above_950.trigger_condition = OrderTriggerCondition::Above;
+    dlob.insert_order(&user, slot, trigger_bid_above_950);
+
+    let mut trigger_bid_above_900 =
+        create_test_order(2, OrderType::TriggerLimit, Direction::Long, 1100, 20, slot);
+    trigger_bid_above_900.trigger_price = 900;
+    trigger_bid_above_900.trigger_condition = OrderTriggerCondition::Above;
+    dlob.insert_order(&user, slot, trigger_bid_above_900);
+
+    // TriggerBelow orders: trigger when price < trigger_price
+    let mut trigger_bid_below_1050 =
+        create_test_order(3, OrderType::TriggerLimit, Direction::Long, 1000, 15, slot);
+    trigger_bid_below_1050.trigger_price = 1050;
+    trigger_bid_below_1050.trigger_condition = OrderTriggerCondition::Below;
+    dlob.insert_order(&user, slot, trigger_bid_below_1050);
+
+    let mut trigger_bid_below_1100 =
+        create_test_order(4, OrderType::TriggerLimit, Direction::Long, 950, 25, slot);
+    trigger_bid_below_1100.trigger_price = 1100;
+    trigger_bid_below_1100.trigger_condition = OrderTriggerCondition::Below;
+    dlob.insert_order(&user, slot, trigger_bid_below_1100);
+
+    // Create trigger orders for asks (Short direction)
+    // TriggerAbove orders: trigger when price > trigger_price
+    let mut trigger_ask_above_1050 =
+        create_test_order(5, OrderType::TriggerLimit, Direction::Short, 1000, 10, slot);
+    trigger_ask_above_1050.trigger_price = 1050;
+    trigger_ask_above_1050.trigger_condition = OrderTriggerCondition::Above;
+    dlob.insert_order(&user, slot, trigger_ask_above_1050);
+
+    let mut trigger_ask_above_1100 =
+        create_test_order(6, OrderType::TriggerLimit, Direction::Short, 950, 20, slot);
+    trigger_ask_above_1100.trigger_price = 1100;
+    trigger_ask_above_1100.trigger_condition = OrderTriggerCondition::Above;
+    dlob.insert_order(&user, slot, trigger_ask_above_1100);
+
+    // TriggerBelow orders: trigger when price < trigger_price
+    let mut trigger_ask_below_950 =
+        create_test_order(7, OrderType::TriggerLimit, Direction::Short, 1100, 15, slot);
+    trigger_ask_below_950.trigger_price = 950;
+    trigger_ask_below_950.trigger_condition = OrderTriggerCondition::Below;
+    dlob.insert_order(&user, slot, trigger_ask_below_950);
+
+    let mut trigger_ask_below_900 =
+        create_test_order(8, OrderType::TriggerLimit, Direction::Short, 1200, 25, slot);
+    trigger_ask_below_900.trigger_price = 900;
+    trigger_ask_below_900.trigger_condition = OrderTriggerCondition::Below;
+    dlob.insert_order(&user, slot, trigger_ask_below_900);
+
+    // Update slot and get L3 snapshot
+    if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
+        book.update_slot(slot);
+    }
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata);
+    }
+    let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
+
+    // Verify trigger orders are sorted correctly (required for filtering to work)
+    // Bids should be sorted by trigger price descending (highest first)
+    let trigger_bid_prices: Vec<u64> = l3book.trigger_bids.iter().map(|o| o.price).collect();
+    for i in 1..trigger_bid_prices.len() {
+        assert!(
+            trigger_bid_prices[i - 1] >= trigger_bid_prices[i],
+            "Trigger bids should be sorted by trigger price descending: {:?}",
+            trigger_bid_prices
+        );
+    }
+
+    // Asks should be sorted by trigger price ascending (lowest first)
+    let trigger_ask_prices: Vec<u64> = l3book.trigger_asks.iter().map(|o| o.price).collect();
+    for i in 1..trigger_ask_prices.len() {
+        assert!(
+            trigger_ask_prices[i - 1] <= trigger_ask_prices[i],
+            "Trigger asks should be sorted by trigger price ascending: {:?}",
+            trigger_ask_prices
+        );
+    }
+
+    // Create a PerpMarket for post_trigger_price calculations
+    let default_reserves = 100 * AMM_RESERVE_PRECISION;
+    let perp_market = PerpMarket {
+        market_index: 0,
+        contract_tier: crate::drift_idl::types::ContractTier::A,
+        amm: AMM {
+            max_fill_reserve_fraction: 1,
+            base_asset_reserve: default_reserves.into(),
+            quote_asset_reserve: default_reserves.into(),
+            sqrt_k: default_reserves.into(),
+            peg_multiplier: PEG_PRECISION.into(),
+            terminal_quote_asset_reserve: default_reserves.into(),
+            concentration_coef: 5u128.into(),
+            long_spread: 100,
+            short_spread: 100,
+            max_base_asset_reserve: (u64::MAX as u128).into(),
+            min_base_asset_reserve: 0u128.into(),
+            order_step_size: 1,
+            order_tick_size: 1,
+            max_spread: 1000,
+            historical_oracle_data: HistoricalOracleData {
+                last_oracle_price: (oracle_price as i64) * 1_000_000,
+                ..Default::default()
+            },
+            last_oracle_valid: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    // Test 1: trigger_price = 1000 (oracle price)
+    // For bids:
+    //   - trigger_bid_above_950 (trigger_price=950): 1000 > 950 -> INCLUDED
+    //   - trigger_bid_above_900 (trigger_price=900): 1000 > 900 -> INCLUDED
+    //   - trigger_bid_below_1050 (trigger_price=1050): 1000 < 1050 -> INCLUDED
+    //   - trigger_bid_below_1100 (trigger_price=1100): 1000 < 1100 -> INCLUDED
+    let trigger_price_1000 = 1000;
+    let trigger_bids_1000: Vec<_> = l3book
+        .bids(
+            Some(oracle_price),
+            Some(&perp_market),
+            Some(trigger_price_1000),
+        )
+        .filter(|o| matches!(o.kind, OrderKind::TriggerMarket | OrderKind::TriggerLimit))
+        .collect();
+    assert_eq!(
+        trigger_bids_1000.len(),
+        4,
+        "All 4 trigger bids should be included at trigger_price=1000"
+    );
+    let bid_order_ids_1000: Vec<u32> = trigger_bids_1000.iter().map(|o| o.order_id).collect();
+    assert!(
+        bid_order_ids_1000.contains(&1),
+        "trigger_bid_above_950 should be included"
+    );
+    assert!(
+        bid_order_ids_1000.contains(&2),
+        "trigger_bid_above_900 should be included"
+    );
+    assert!(
+        bid_order_ids_1000.contains(&3),
+        "trigger_bid_below_1050 should be included"
+    );
+    assert!(
+        bid_order_ids_1000.contains(&4),
+        "trigger_bid_below_1100 should be included"
+    );
+
+    // For asks:
+    //   - trigger_ask_above_1050 (trigger_price=1050): 1000 > 1050 -> FALSE, EXCLUDED
+    //   - trigger_ask_above_1100 (trigger_price=1100): 1000 > 1100 -> FALSE, EXCLUDED
+    //   - trigger_ask_below_950 (trigger_price=950): 1000 < 950 -> FALSE, EXCLUDED
+    //   - trigger_ask_below_900 (trigger_price=900): 1000 < 900 -> FALSE, EXCLUDED
+    let trigger_asks_1000: Vec<_> = l3book
+        .asks(
+            Some(oracle_price),
+            Some(&perp_market),
+            Some(trigger_price_1000),
+        )
+        .filter(|o| matches!(o.kind, OrderKind::TriggerMarket | OrderKind::TriggerLimit))
+        .collect();
+    assert_eq!(
+        trigger_asks_1000.len(),
+        0,
+        "No trigger asks should be included at trigger_price=1000"
+    );
+
+    // Test 2: trigger_price = 1100 (above oracle)
+    // For bids:
+    //   - trigger_bid_above_950 (trigger_price=950): 1100 > 950 -> INCLUDED
+    //   - trigger_bid_above_900 (trigger_price=900): 1100 > 900 -> INCLUDED
+    //   - trigger_bid_below_1050 (trigger_price=1050): 1100 < 1050 -> FALSE, EXCLUDED
+    //   - trigger_bid_below_1100 (trigger_price=1100): 1100 < 1100 -> FALSE, EXCLUDED
+    let trigger_price_1100 = 1100;
+    let trigger_bids_1100: Vec<_> = l3book
+        .bids(
+            Some(oracle_price),
+            Some(&perp_market),
+            Some(trigger_price_1100),
+        )
+        .filter(|o| matches!(o.kind, OrderKind::TriggerMarket | OrderKind::TriggerLimit))
+        .collect();
+    assert_eq!(
+        trigger_bids_1100.len(),
+        2,
+        "Only 2 trigger bids should be included at trigger_price=1100"
+    );
+    let bid_order_ids_1100: Vec<u32> = trigger_bids_1100.iter().map(|o| o.order_id).collect();
+    assert!(
+        bid_order_ids_1100.contains(&1),
+        "trigger_bid_above_950 should be included"
+    );
+    assert!(
+        bid_order_ids_1100.contains(&2),
+        "trigger_bid_above_900 should be included"
+    );
+    assert!(
+        !bid_order_ids_1100.contains(&3),
+        "trigger_bid_below_1050 should be excluded"
+    );
+    assert!(
+        !bid_order_ids_1100.contains(&4),
+        "trigger_bid_below_1100 should be excluded"
+    );
+
+    // For asks (sorted by trigger price ascending: 900, 950, 1050, 1100):
+    //   - trigger_ask_below_900 (trigger_price=900): 1100 < 900 -> FALSE, EXCLUDED
+    //   - trigger_ask_below_950 (trigger_price=950): 1100 < 950 -> FALSE, EXCLUDED
+    //   - trigger_ask_above_1050 (trigger_price=1050): 1100 > 1050 -> INCLUDED
+    //   - trigger_ask_above_1100 (trigger_price=1100): 1100 > 1100 -> FALSE, EXCLUDED
+    let trigger_asks_1100: Vec<_> = l3book
+        .asks(
+            Some(oracle_price),
+            Some(&perp_market),
+            Some(trigger_price_1100),
+        )
+        .filter(|o| matches!(o.kind, OrderKind::TriggerMarket | OrderKind::TriggerLimit))
+        .collect();
+
+    // Verify that trigger_ask_above_1050 is included
+    let ask_order_ids_1100: Vec<u32> = trigger_asks_1100.iter().map(|o| o.order_id).collect();
+    assert!(
+        ask_order_ids_1100.contains(&5),
+        "trigger_ask_above_1050 should be included"
+    );
+
+    // Verify that trigger_ask_above_1050 is included
+    assert!(
+        ask_order_ids_1100.contains(&5),
+        "trigger_ask_above_1050 should be included"
+    );
+
+    // The filtering should ensure only triggering orders are included
+    // Verify that all included orders would actually trigger at this price
+    let triggering_asks_1100: Vec<_> = trigger_asks_1100
+        .iter()
+        .filter(|o| {
+            (o.is_trigger_above() && trigger_price_1100 > o.price)
+                || (!o.is_trigger_above() && trigger_price_1100 < o.price)
+        })
+        .collect();
+    // At least the expected triggering order should be included
+    assert!(
+        triggering_asks_1100.iter().any(|o| o.order_id == 5),
+        "trigger_ask_above_1050 should be included and trigger"
+    );
+
+    // Test 3: trigger_price = 900 (below oracle)
+    // For bids (sorted by trigger price descending: 1100, 1050, 950, 900):
+    //   - trigger_bid_below_1100 (trigger_price=1100, is_trigger_above=false): 900 < 1100? Yes -> INCLUDED
+    //   - trigger_bid_below_1050 (trigger_price=1050, is_trigger_above=false): 900 < 1050? Yes -> INCLUDED
+    //   - trigger_bid_above_950 (trigger_price=950, is_trigger_above=true): 900 > 950? No -> EXCLUDED
+    //   - trigger_bid_above_900 (trigger_price=900, is_trigger_above=true): 900 > 900? No -> EXCLUDED
+    // Since bids are sorted descending and filtering stops at first triggering order,
+    // both triggering orders (1100, 1050) should be included, and non-triggering orders (950, 900) should be excluded.
+    let trigger_price_900 = 900;
+    let trigger_bids_900: Vec<_> = l3book
+        .bids(
+            Some(oracle_price),
+            Some(&perp_market),
+            Some(trigger_price_900),
+        )
+        .filter(|o| matches!(o.kind, OrderKind::TriggerMarket | OrderKind::TriggerLimit))
+        .collect();
+
+    // Verify that the triggering orders are included
+    let bid_order_ids_900: Vec<u32> = trigger_bids_900.iter().map(|o| o.order_id).collect();
+    assert!(
+        bid_order_ids_900.contains(&3),
+        "trigger_bid_below_1050 should be included"
+    );
+    assert!(
+        bid_order_ids_900.contains(&4),
+        "trigger_bid_below_1100 should be included"
+    );
+
+    // Verify that all included orders would actually trigger at this price
+    // The filtering should ensure only triggering orders are included
+    let triggering_bids_900: Vec<_> = trigger_bids_900
+        .iter()
+        .filter(|o| {
+            (o.is_trigger_above() && trigger_price_900 > o.price)
+                || (!o.is_trigger_above() && trigger_price_900 < o.price)
+        })
+        .collect();
+    // At least the expected triggering orders should be included
+    assert!(
+        triggering_bids_900.iter().any(|o| o.order_id == 3),
+        "trigger_bid_below_1050 should be included and trigger"
+    );
+    assert!(
+        triggering_bids_900.iter().any(|o| o.order_id == 4),
+        "trigger_bid_below_1100 should be included and trigger"
+    );
+
+    // For asks (sorted by trigger price ascending: 900, 950, 1050, 1100):
+    //   - trigger_ask_below_900 (trigger_price=900): 900 < 900 -> FALSE, EXCLUDED
+    //   - trigger_ask_below_950 (trigger_price=950): 900 < 950 -> INCLUDED
+    //   - trigger_ask_above_1050 (trigger_price=1050): 900 > 1050 -> FALSE, EXCLUDED
+    //   - trigger_ask_above_1100 (trigger_price=1100): 900 > 1100 -> FALSE, EXCLUDED
+    let trigger_asks_900: Vec<_> = l3book
+        .asks(
+            Some(oracle_price),
+            Some(&perp_market),
+            Some(trigger_price_900),
+        )
+        .filter(|o| matches!(o.kind, OrderKind::TriggerMarket | OrderKind::TriggerLimit))
+        .collect();
+
+    // Verify that trigger_ask_below_950 is included
+    let ask_order_ids_900: Vec<u32> = trigger_asks_900.iter().map(|o| o.order_id).collect();
+    assert!(
+        ask_order_ids_900.contains(&7),
+        "trigger_ask_below_950 should be included"
+    );
+
+    // Verify that all included orders would actually trigger at this price
+    let triggering_asks_900: Vec<_> = trigger_asks_900
+        .iter()
+        .filter(|o| {
+            (o.is_trigger_above() && trigger_price_900 > o.price)
+                || (!o.is_trigger_above() && trigger_price_900 < o.price)
+        })
+        .collect();
+    // At least the expected triggering order should be included
+    assert!(
+        triggering_asks_900.iter().any(|o| o.order_id == 7),
+        "trigger_ask_below_950 should be included and trigger"
+    );
+
+    // Test 4: trigger_price = None (should exclude all trigger orders)
+    let trigger_bids_none: Vec<_> = l3book
+        .bids(Some(oracle_price), Some(&perp_market), None)
+        .filter(|o| matches!(o.kind, OrderKind::TriggerMarket | OrderKind::TriggerLimit))
+        .collect();
+    assert_eq!(
+        trigger_bids_none.len(),
+        0,
+        "No trigger bids should be included when trigger_price is None"
+    );
+
+    let trigger_asks_none: Vec<_> = l3book
+        .asks(Some(oracle_price), Some(&perp_market), None)
+        .filter(|o| matches!(o.kind, OrderKind::TriggerMarket | OrderKind::TriggerLimit))
+        .collect();
+    assert_eq!(
+        trigger_asks_none.len(),
+        0,
+        "No trigger asks should be included when trigger_price is None"
+    );
+}

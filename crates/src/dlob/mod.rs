@@ -1236,6 +1236,18 @@ impl L3Book {
             .unwrap()
             .as_secs();
 
+        // Skip non-triggering trigger orders
+        if let Some(trig_price) = trigger_price {
+            while let Some(x) = trigger_iter.peek() {
+                let would_trigger = (x.is_trigger_above() && trig_price > x.price)
+                    || (!x.is_trigger_above() && trig_price < x.price);
+                if would_trigger {
+                    break;
+                }
+                trigger_iter.next();
+            }
+        }
+
         let slot = self.slot;
         let oracle_price_for_vamm = oracle_price.unwrap_or(self.oracle_price) as i64;
 
@@ -1247,18 +1259,6 @@ impl L3Book {
         }
 
         let next_from = move || {
-            // Skip non-triggering trigger orders
-            if let Some(trig_price) = trigger_price {
-                while let Some(x) = trigger_iter.peek() {
-                    let would_trigger = (x.is_trigger_above() && trig_price > x.price)
-                        || (!x.is_trigger_above() && trig_price < x.price);
-                    if would_trigger {
-                        break;
-                    }
-                    trigger_iter.next();
-                }
-            }
-
             let a = asks_iter.peek();
             let f = floating_iter.peek();
             let v = vamm_iter.peek();
