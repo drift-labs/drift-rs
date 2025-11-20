@@ -493,8 +493,8 @@ impl DLOB {
     ) -> Option<CrossingRegion> {
         let book = self.get_l3_snapshot(market_index, market_type);
 
-        let mut bids = book.bids(Some(oracle_price), perp_market);
-        let mut asks = book.asks(Some(oracle_price), perp_market);
+        let mut bids = book.bids(Some(oracle_price), perp_market, None);
+        let mut asks = book.asks(Some(oracle_price), perp_market, None);
 
         let best_bid = bids.next()?.price;
         let best_ask = asks.next()?.price;
@@ -842,12 +842,12 @@ impl DLOB {
         log::trace!(target: TARGET, "VAMM market={} bid={vamm_bid:?} ask={vamm_ask:?}", market_index);
 
         let (taker_asks, resting_asks): (Vec<L3Order>, Vec<L3Order>) = book
-            .top_asks(depth.unwrap_or(64), Some(oracle_price), perp_market)
+            .top_asks(depth.unwrap_or(64), Some(oracle_price), perp_market, None)
             .map(|x| x.clone())
             .partition(|x| x.is_taker());
 
         let (taker_bids, resting_bids): (Vec<L3Order>, Vec<L3Order>) = book
-            .top_bids(depth.unwrap_or(64), Some(oracle_price), perp_market)
+            .top_bids(depth.unwrap_or(64), Some(oracle_price), perp_market, None)
             .map(|x| x.clone())
             .partition(|x| x.is_taker());
 
@@ -952,7 +952,7 @@ impl DLOB {
             Direction::Long => {
                 let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
                 let orders: Vec<L3Order> = book
-                    .top_asks(depth.unwrap_or(20), Some(oracle_price), perp_market)
+                    .top_asks(depth.unwrap_or(20), Some(oracle_price), perp_market, None)
                     .cloned()
                     .collect();
                 (orders, perp_market.map(|p| p.ask_price(None)))
@@ -960,7 +960,7 @@ impl DLOB {
             Direction::Short => {
                 let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
                 let orders: Vec<L3Order> = book
-                    .top_bids(depth.unwrap_or(20), Some(oracle_price), perp_market)
+                    .top_bids(depth.unwrap_or(20), Some(oracle_price), perp_market, None)
                     .cloned()
                     .collect();
                 (orders, perp_market.map(|p| p.bid_price(None)))
@@ -1049,29 +1049,31 @@ pub struct L3Book {
     floating_bids: Vec<L3Order>,
     /// taker only bids at VAMM price
     vamm_bids: Vec<L3Order>,
+    /// trigger orders (bids) - sorted by trigger price, post-trigger price calculated dynamically
+    trigger_bids: Vec<L3Order>,
     /// asks with fixed price
     asks: Vec<L3Order>,
     /// asks offset from oracle
     floating_asks: Vec<L3Order>,
     /// taker only asks at VAMM price
     vamm_asks: Vec<L3Order>,
+    /// trigger orders (asks) - sorted by trigger price, post-trigger price calculated dynamically
+    trigger_asks: Vec<L3Order>,
 }
 
 impl L3Book {
     /// Return iterator over list of trigger-able bids at given `trigger_price`
     pub fn trigger_bids(&self, trigger_price: u64) -> impl Iterator<Item = &L3Order> {
-        self.bids.iter().filter(move |x| {
-            matches!(x.kind, OrderKind::TriggerMarket | OrderKind::TriggerLimit)
-                && ((x.is_trigger_above() && trigger_price > x.price)
-                    || (!x.is_trigger_above() && trigger_price < x.price))
+        self.trigger_bids.iter().filter(move |x| {
+            (x.is_trigger_above() && trigger_price > x.price)
+                || (!x.is_trigger_above() && trigger_price < x.price)
         })
     }
     /// Return iterator over list of trigger-able asks at given `trigger_price`
     pub fn trigger_asks(&self, trigger_price: u64) -> impl Iterator<Item = &L3Order> {
-        self.asks.iter().filter(move |x| {
-            matches!(x.kind, OrderKind::TriggerMarket | OrderKind::TriggerLimit)
-                && ((x.is_trigger_above() && trigger_price > x.price)
-                    || (!x.is_trigger_above() && trigger_price < x.price))
+        self.trigger_asks.iter().filter(move |x| {
+            (x.is_trigger_above() && trigger_price > x.price)
+                || (!x.is_trigger_above() && trigger_price < x.price)
         })
     }
     /// Get all L3 bids
@@ -1080,6 +1082,8 @@ impl L3Book {
     /// - `oracle_price`: oracle price for floating order price calculations
     /// - `perp_market`: Used to calculate VAMM fallback price of market/oracle (taker) auctions.
     ///    use `None` if only interested in maker orders
+    /// - `trigger_price`: Optional trigger price for calculating post-trigger prices of trigger orders.
+    ///    If provided, trigger orders will be included and sorted by their post-trigger price.
     ///
     /// # Returns
     /// Returns an iterator over the bids
@@ -1087,10 +1091,12 @@ impl L3Book {
         &self,
         oracle_price: Option<u64>,
         perp_market: Option<&'b PerpMarket>,
+        trigger_price: Option<u64>,
     ) -> impl Iterator<Item = &L3Order> + use<'_, 'b> {
         let mut bids_iter = self.bids.iter().peekable();
         let mut floating_iter = self.floating_bids.iter().peekable();
         let mut vamm_iter = self.vamm_bids.iter().peekable();
+        let mut trigger_iter = self.trigger_bids.iter().peekable();
         let oracle_diff: i64 =
             (oracle_price.unwrap_or_default() as i64).saturating_sub(self.oracle_price as i64);
 
@@ -1099,15 +1105,32 @@ impl L3Book {
             .unwrap()
             .as_secs();
 
+        let slot = self.slot;
+        let oracle_price_for_vamm = oracle_price.unwrap_or(self.oracle_price) as i64;
+
+        // Skip non-triggering trigger orders
+        if let Some(trig_price) = trigger_price {
+            while let Some(x) = trigger_iter.peek() {
+                let would_trigger = (x.is_trigger_above() && trig_price > x.price)
+                    || (!x.is_trigger_above() && trig_price < x.price);
+                if would_trigger {
+                    break;
+                }
+                trigger_iter.next();
+            }
+        }
+
         enum Src {
             Fixed,
             Floating,
             Vamm,
+            Trigger,
         }
 
         let next_from = move || {
             let a = bids_iter.peek();
             let f = floating_iter.peek();
+            let t = trigger_iter.peek();
             let v = vamm_iter.peek();
 
             let mut best_price = u64::MIN;
@@ -1126,23 +1149,41 @@ impl L3Book {
                 }
             }
 
-            if let Some(x) = v {
-                if perp_market.is_some_and(|p| {
-                    p.fallback_price(
+            if let Some(market) = perp_market {
+                // include trigger orders at their post-trigger price
+                if let (Some(x), Some(trig_price)) = (t, trigger_price) {
+                    let would_trigger = (x.is_trigger_above() && trig_price > x.price)
+                        || (!x.is_trigger_above() && trig_price < x.price);
+                    if would_trigger {
+                        if let Some(post_trigger_price) =
+                            x.post_trigger_price(slot, trig_price, market)
+                        {
+                            if post_trigger_price > best_price {
+                                best_price = post_trigger_price;
+                                best_src = Some(Src::Trigger);
+                            }
+                        }
+                    }
+                }
+
+                if let Some(x) = v {
+                    if let Ok(vamm_price) = market.fallback_price(
                         Direction::Long,
-                        oracle_price.unwrap_or(self.oracle_price) as i64,
+                        oracle_price_for_vamm,
                         x.max_ts.saturating_sub(now) as i64,
-                    )
-                    .unwrap_or_default()
-                        > best_price
-                }) {
-                    best_src = Some(Src::Vamm);
+                    ) {
+                        if vamm_price > best_price {
+                            best_src = Some(Src::Vamm);
+                        }
+                    }
                 }
             }
+
             match best_src {
                 Some(Src::Fixed) => bids_iter.next(),
                 Some(Src::Floating) => floating_iter.next(),
                 Some(Src::Vamm) => vamm_iter.next(),
+                Some(Src::Trigger) => trigger_iter.next(),
                 None => None,
             }
         };
@@ -1156,6 +1197,7 @@ impl L3Book {
     /// - `oracle_price`: Current oracle price for floating order price adjustments
     /// - `perp_market`: Used to calculate VAMM fallback price of market/oracle (taker) auctions.
     ///    use `None` if only interested in maker orders
+    /// - `trigger_price`: Optional trigger price for calculating post-trigger prices of trigger orders.
     ///
     /// # Returns
     /// Returns an iterator over the highest-priced bids
@@ -1164,8 +1206,10 @@ impl L3Book {
         count: usize,
         oracle_price: Option<u64>,
         perp_market: Option<&'b PerpMarket>,
+        trigger_price: Option<u64>,
     ) -> impl Iterator<Item = &L3Order> + use<'_, 'b> {
-        self.bids(oracle_price, perp_market).take(count)
+        self.bids(oracle_price, perp_market, trigger_price)
+            .take(count)
     }
 
     /// Get all L3 asks
@@ -1174,6 +1218,8 @@ impl L3Book {
     /// - `oracle_price`: oracle price for floating order price calculations
     /// - `perp_market`: Used to calculate VAMM fallback price of market/oracle (taker) auctions. i.e finished their
     ///   auction period and did not specify a custom limit price
+    /// - `trigger_price`: Optional trigger price for calculating post-trigger prices of trigger orders.
+    ///    If provided, trigger orders will be included and sorted by their post-trigger price.
     ///
     /// # Returns
     /// Returns an iterator over the asks
@@ -1181,10 +1227,12 @@ impl L3Book {
         &self,
         oracle_price: Option<u64>,
         perp_market: Option<&'b PerpMarket>,
+        trigger_price: Option<u64>,
     ) -> impl Iterator<Item = &L3Order> + use<'_, 'b> {
         let mut asks_iter = self.asks.iter().peekable();
         let mut floating_iter = self.floating_asks.iter().peekable();
         let mut vamm_iter = self.vamm_asks.iter().peekable();
+        let mut trigger_iter = self.trigger_asks.iter().peekable();
 
         let oracle_diff: i64 =
             (oracle_price.unwrap_or_default() as i64).saturating_sub(self.oracle_price as i64);
@@ -1193,16 +1241,33 @@ impl L3Book {
             .unwrap()
             .as_secs();
 
+        // Skip non-triggering trigger orders
+        if let Some(trig_price) = trigger_price {
+            while let Some(x) = trigger_iter.peek() {
+                let would_trigger = (x.is_trigger_above() && trig_price > x.price)
+                    || (!x.is_trigger_above() && trig_price < x.price);
+                if would_trigger {
+                    break;
+                }
+                trigger_iter.next();
+            }
+        }
+
+        let slot = self.slot;
+        let oracle_price_for_vamm = oracle_price.unwrap_or(self.oracle_price) as i64;
+
         enum Src {
             Fixed,
             Floating,
             Vamm,
+            Trigger,
         }
 
         let next_from = move || {
             let a = asks_iter.peek();
             let f = floating_iter.peek();
             let v = vamm_iter.peek();
+            let t = trigger_iter.peek();
 
             let mut best_price = u64::MAX;
             let mut best_src = None;
@@ -1220,23 +1285,40 @@ impl L3Book {
                 }
             }
 
-            if let Some(x) = v {
-                if perp_market.is_some_and(|p| {
-                    p.fallback_price(
+            if let Some(market) = perp_market {
+                // include trigger orders at their post-trigger price
+                if let (Some(x), Some(trig_price)) = (t, trigger_price) {
+                    let would_trigger = (x.is_trigger_above() && trig_price > x.price)
+                        || (!x.is_trigger_above() && trig_price < x.price);
+                    if would_trigger {
+                        if let Some(post_trigger_price) =
+                            x.post_trigger_price(slot, trig_price, market)
+                        {
+                            if post_trigger_price < best_price {
+                                best_src = Some(Src::Trigger);
+                                best_price = post_trigger_price;
+                            }
+                        }
+                    }
+                }
+
+                if let Some(x) = v {
+                    if let Ok(vamm_price) = market.fallback_price(
                         Direction::Short,
-                        oracle_price.unwrap_or(self.oracle_price) as i64,
+                        oracle_price_for_vamm,
                         x.max_ts.saturating_sub(now) as i64,
-                    )
-                    .unwrap_or_default()
-                        < best_price
-                }) {
-                    best_src = Some(Src::Vamm);
+                    ) {
+                        if vamm_price < best_price {
+                            best_src = Some(Src::Vamm);
+                        }
+                    }
                 }
             }
 
             match best_src {
                 Some(Src::Fixed) => asks_iter.next(),
                 Some(Src::Floating) => floating_iter.next(),
+                Some(Src::Trigger) => trigger_iter.next(),
                 Some(Src::Vamm) => vamm_iter.next(),
                 None => None,
             }
@@ -1252,6 +1334,7 @@ impl L3Book {
     /// - `oracle_price`: oracle price for floating order price adjustments
     /// - `perp_market`: Used to calculate VAMM fallback price of market/oracle (taker) auctions. i.e finished their
     ///   auction period and did not specify a custom limit price
+    /// - `trigger_price`: Optional trigger price for calculating post-trigger prices of trigger orders.
     ///
     /// # Returns
     /// Returns an iterator over the lowest-priced asks
@@ -1260,8 +1343,10 @@ impl L3Book {
         count: usize,
         oracle_price: Option<u64>,
         perp_market: Option<&'b PerpMarket>,
+        trigger_price: Option<u64>,
     ) -> impl Iterator<Item = &L3Order> + use<'_, 'b> {
-        self.asks(oracle_price, perp_market).take(count)
+        self.asks(oracle_price, perp_market, trigger_price)
+            .take(count)
     }
 
     /// Populate an `L3Book` instance given an `Orderbook` and `metadata`
@@ -1272,6 +1357,8 @@ impl L3Book {
         self.floating_asks.clear();
         self.vamm_bids.clear();
         self.vamm_asks.clear();
+        self.trigger_bids.clear();
+        self.trigger_asks.clear();
 
         self.slot = orderbook.last_modified_slot;
         self.oracle_price = oracle_price;
@@ -1290,11 +1377,7 @@ impl L3Book {
                     size: order.size,
                     flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
                         | L3Order::IS_LONG
-                        | (if order.post_only {
-                            L3Order::IS_POST_ONLY
-                        } else {
-                            0
-                        }),
+                        | (L3Order::IS_POST_ONLY * (order.post_only as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
                     kind: meta.kind,
@@ -1313,11 +1396,7 @@ impl L3Book {
                     price: order.get_price(),
                     size: order.size,
                     flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
-                        | (if order.post_only {
-                            L3Order::IS_POST_ONLY
-                        } else {
-                            0
-                        }),
+                        | (L3Order::IS_POST_ONLY * (order.post_only as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
                     kind: meta.kind,
@@ -1331,27 +1410,20 @@ impl L3Book {
 
         // Add trigger orders
         //
-        // intentionally include some trigger orders with 20bps leniency around oracle
-        // this allows subsequent queries to the snapshot to yield these orders if in range
-        let oracle_price_with_buffer = oracle_price + (oracle_price / 20_000);
-        for order in orderbook
-            .trigger_orders
-            .bids
-            .values()
-            .filter(|x| x.price <= oracle_price_with_buffer)
-        {
+        // Store trigger orders separately - they will be sorted by post-trigger price
+        // dynamically when asks/bids() is called with a trigger_price parameter.
+        // We include all trigger orders here (not just those near oracle) since
+        // the trigger_price parameter in queries may differ from the oracle_price used here.
+        for order in orderbook.trigger_orders.bids.values() {
             total_orders_count += 1;
             if let Some(meta) = metadata.get(&order.id) {
-                self.bids.push(L3Order {
-                    price: order.price,
+                self.trigger_bids.push(L3Order {
+                    price: order.price, // This is the trigger price, not the post-trigger price
                     size: order.size,
                     flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
                         | L3Order::IS_LONG
-                        | if order.condition == OrderTriggerCondition::Above {
-                            L3Order::IS_TRIGGER_ABOVE
-                        } else {
-                            0
-                        },
+                        | (L3Order::IS_TRIGGER_ABOVE
+                            * ((order.condition == OrderTriggerCondition::Above) as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
                     kind: meta.kind,
@@ -1363,24 +1435,15 @@ impl L3Book {
             }
         }
 
-        let oracle_price_with_buffer = oracle_price - (oracle_price / 20_000);
-        for order in orderbook
-            .trigger_orders
-            .asks
-            .values()
-            .filter(|x| x.price >= oracle_price_with_buffer)
-        {
+        for order in orderbook.trigger_orders.asks.values() {
             total_orders_count += 1;
             if let Some(meta) = metadata.get(&order.id) {
-                self.asks.push(L3Order {
-                    price: order.price,
+                self.trigger_asks.push(L3Order {
+                    price: order.price, // This is the trigger price, not the post-trigger price
                     size: order.size,
                     flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
-                        | if order.condition == OrderTriggerCondition::Above {
-                            L3Order::IS_TRIGGER_ABOVE
-                        } else {
-                            0
-                        },
+                        | (L3Order::IS_TRIGGER_ABOVE
+                            * ((order.condition == OrderTriggerCondition::Above) as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
                     kind: meta.kind,
@@ -1453,11 +1516,7 @@ impl L3Book {
                     size: order.size,
                     flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
                         | L3Order::IS_LONG
-                        | (if order.post_only {
-                            L3Order::IS_POST_ONLY
-                        } else {
-                            0
-                        }),
+                        | (L3Order::IS_POST_ONLY * (order.post_only as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
                     max_ts: order.max_ts,
@@ -1476,11 +1535,7 @@ impl L3Book {
                     price: order.get_price(oracle_price, market_tick_size),
                     size: order.size,
                     flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
-                        | (if order.post_only {
-                            L3Order::IS_POST_ONLY
-                        } else {
-                            0
-                        }),
+                        | (L3Order::IS_POST_ONLY * (order.post_only as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
                     max_ts: order.max_ts,
