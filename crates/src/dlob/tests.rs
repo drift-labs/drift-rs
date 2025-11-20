@@ -1606,7 +1606,7 @@ fn snapshot_basic_functionality() {
 
     // Create initial data
     let initial_data = TestData::new(100, 0, 100);
-    let snapshot = Snapshot::new(initial_data.clone(), initial_data);
+    let snapshot = Snapshot::new(initial_data);
 
     // Test basic get
     let data = snapshot.read();

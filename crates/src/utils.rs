@@ -1,5 +1,10 @@
 //! SDK utility functions
 
+use std::sync::{
+    atomic::{AtomicPtr, Ordering},
+    Arc,
+};
+
 use anchor_lang::Discriminator;
 use base64::Engine;
 use bytemuck::{bytes_of, Pod, Zeroable};
@@ -390,6 +395,75 @@ pub mod test_utils {
             };
             let $name: crate::ffi::AccountWithKey = ($pubkey, acc).into();
         };
+    }
+}
+
+/// Double-buffered snapshot of T
+///
+/// Provides lock-free reads/write API
+pub struct Snapshot<T> {
+    // two buffers that always contain Arc<T>::into_raw pointers
+    a: AtomicPtr<T>,
+    b: AtomicPtr<T>,
+    // active pointer
+    active: AtomicPtr<T>,
+}
+
+impl<T: Clone + Default> Default for Snapshot<T> {
+    fn default() -> Self {
+        Self::new(Default::default())
+    }
+}
+
+impl<T: Clone> Snapshot<T> {
+    pub fn new(initial: T) -> Self {
+        let a = Arc::into_raw(Arc::new(initial.clone())) as *mut T;
+        let b = Arc::into_raw(Arc::new(initial)) as *mut T;
+
+        Self {
+            a: AtomicPtr::new(a),
+            b: AtomicPtr::new(b),
+            active: AtomicPtr::new(a),
+        }
+    }
+
+    pub fn read(&self) -> Arc<T> {
+        let ptr = self.active.load(Ordering::Acquire);
+        unsafe {
+            Arc::increment_strong_count(ptr);
+            Arc::from_raw(ptr)
+        }
+    }
+
+    pub fn write<F>(&self, update: F)
+    where
+        F: FnOnce(&mut T),
+    {
+        // determine inactive pointer
+        let active = self.active.load(Ordering::Acquire);
+        let inactive = if active == self.a.load(Ordering::Acquire) {
+            self.b.load(Ordering::Acquire)
+        } else {
+            self.a.load(Ordering::Acquire)
+        };
+
+        // mutate inactive buffer
+        unsafe {
+            let mut_ref = &mut *(inactive as *mut T);
+            update(mut_ref);
+        }
+
+        // publish
+        self.active.store(inactive, Ordering::Release);
+    }
+}
+
+impl<T> Drop for Snapshot<T> {
+    fn drop(&mut self) {
+        unsafe {
+            drop(Arc::from_raw(self.a.load(Ordering::Relaxed)));
+            drop(Arc::from_raw(self.b.load(Ordering::Relaxed)));
+        }
     }
 }
 

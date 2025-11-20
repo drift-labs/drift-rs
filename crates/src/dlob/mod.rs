@@ -23,6 +23,7 @@ use crate::{
         MarketId, MarketType, Order, OrderStatus, OrderTriggerCondition, OrderType,
         PositionDirection,
     },
+    utils::Snapshot,
 };
 
 pub mod builder;

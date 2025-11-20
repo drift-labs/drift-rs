@@ -1,7 +1,4 @@
-use std::{
-    fmt::Debug,
-    sync::{atomic::AtomicPtr, Arc},
-};
+use std::fmt::Debug;
 
 use arrayvec::ArrayVec;
 use solana_sdk::pubkey::Pubkey;
@@ -588,83 +585,6 @@ impl From<(u64, Order)> for TriggerOrder {
             kind: order.order_type,
             bit_flags: order.bit_flags,
             reduce_only: order.reduce_only,
-        }
-    }
-}
-
-/// Double-buffered snapshot of T
-///
-/// Provides lock-free reads/write API
-pub struct Snapshot<T: Default + Clone> {
-    a: AtomicPtr<T>,
-    b: AtomicPtr<T>,
-}
-
-impl<T: Default + Clone> Default for Snapshot<T> {
-    fn default() -> Self {
-        Self::new(T::default(), T::default())
-    }
-}
-
-impl<T: Default + Clone> Snapshot<T> {
-    /// Create a new double buffer from two initial values.
-    pub fn new(a: T, b: T) -> Self {
-        let a = Arc::into_raw(Arc::new(a)) as *mut T;
-        let b = Arc::into_raw(Arc::new(b)) as *mut T;
-        Self {
-            a: AtomicPtr::new(a),
-            b: AtomicPtr::new(b),
-        }
-    }
-
-    /// Read the snapshot
-    #[inline]
-    pub fn read(&self) -> Arc<T> {
-        unsafe {
-            let ptr = self.a.load(std::sync::atomic::Ordering::Acquire);
-            Arc::increment_strong_count(ptr);
-            Arc::from_raw(ptr)
-        }
-    }
-
-    /// Write the snapshot
-    #[inline]
-    pub fn write<F>(&self, f: F)
-    where
-        F: FnOnce(&mut T),
-    {
-        let b_ptr = self.b.load(std::sync::atomic::Ordering::Relaxed);
-        let b = unsafe { Arc::from_raw(b_ptr as *const T) };
-        let mut b_mut = Arc::try_unwrap(b).unwrap_or_else(|arc| (*arc).clone());
-        f(&mut b_mut);
-        let new_b = Arc::into_raw(Arc::new(b_mut)) as *mut T;
-        self.b.store(new_b, std::sync::atomic::Ordering::Relaxed);
-        self.swap();
-    }
-
-    /// atomic swap of a/b pointers.
-    #[inline]
-    fn swap(&self) {
-        let a_ptr = self.a.load(std::sync::atomic::Ordering::Acquire);
-        let b_ptr = self.b.load(std::sync::atomic::Ordering::Acquire);
-        self.a.store(b_ptr, std::sync::atomic::Ordering::Release);
-        self.b.store(a_ptr, std::sync::atomic::Ordering::Release);
-    }
-}
-
-impl<T: Default + Clone> Drop for Snapshot<T> {
-    fn drop(&mut self) {
-        unsafe {
-            let a_ptr = self.a.load(std::sync::atomic::Ordering::Relaxed);
-            let b_ptr = self.b.load(std::sync::atomic::Ordering::Relaxed);
-
-            // Only drop non-null pointers to avoid double-free
-            if !a_ptr.is_null() {
-                drop(Arc::from_raw(a_ptr));
-            }
-            if !b_ptr.is_null() {
-                drop(Arc::from_raw(b_ptr));
-            }
         }
     }
 }
