@@ -2939,6 +2939,82 @@ fn dlob_l3_trigger_orders_by_price() {
         );
     }
 
+    // Verify test includes orders with trigger_price below oracle for asks
+    // and trigger_price above oracle for bids
+    let ask_trigger_prices: Vec<u64> = l3book.trigger_asks.iter().map(|o| o.price).collect();
+    let bid_trigger_prices: Vec<u64> = l3book.trigger_bids.iter().map(|o| o.price).collect();
+
+    // Verify asks include orders with trigger_price below oracle (900, 950 < 1000)
+    let asks_below_oracle: Vec<u64> = ask_trigger_prices
+        .iter()
+        .filter(|&&p| p < oracle_price)
+        .copied()
+        .collect();
+    assert!(
+        !asks_below_oracle.is_empty(),
+        "Test should include asks with trigger_price below oracle_price. \
+         Oracle: {}, Ask trigger prices: {:?}, Below oracle: {:?}",
+        oracle_price,
+        ask_trigger_prices,
+        asks_below_oracle
+    );
+    assert!(
+        asks_below_oracle.contains(&900),
+        "Test should include ask with trigger_price=900 (below oracle)"
+    );
+    assert!(
+        asks_below_oracle.contains(&950),
+        "Test should include ask with trigger_price=950 (below oracle)"
+    );
+
+    // Verify bids include orders with trigger_price above oracle (1050, 1100 > 1000)
+    let bids_above_oracle: Vec<u64> = bid_trigger_prices
+        .iter()
+        .filter(|&&p| p > oracle_price)
+        .copied()
+        .collect();
+    assert!(
+        !bids_above_oracle.is_empty(),
+        "Test should include bids with trigger_price above oracle_price. \
+         Oracle: {}, Bid trigger prices: {:?}, Above oracle: {:?}",
+        oracle_price,
+        bid_trigger_prices,
+        bids_above_oracle
+    );
+    assert!(
+        bids_above_oracle.contains(&1050),
+        "Test should include bid with trigger_price=1050 (above oracle)"
+    );
+    assert!(
+        bids_above_oracle.contains(&1100),
+        "Test should include bid with trigger_price=1100 (above oracle)"
+    );
+
+    // Verify the structure: [<untriggerable orders below price>, <trigerable orders>, <untriggerable orders above price>]
+    // For asks: sorted ascending, so structure is [below oracle, at/above oracle]
+    // For bids: sorted descending, so structure is [above oracle, at/below oracle]
+    let asks_below_count = asks_below_oracle.len();
+    let asks_above_or_equal_count = ask_trigger_prices.len() - asks_below_count;
+    assert!(
+        asks_below_count > 0 && asks_above_or_equal_count > 0,
+        "Ask trigger orders should have structure [below oracle, at/above oracle]. \
+         Below: {}, At/Above: {}, Total: {:?}",
+        asks_below_count,
+        asks_above_or_equal_count,
+        ask_trigger_prices
+    );
+
+    let bids_above_count = bids_above_oracle.len();
+    let bids_below_or_equal_count = bid_trigger_prices.len() - bids_above_count;
+    assert!(
+        bids_above_count > 0 && bids_below_or_equal_count > 0,
+        "Bid trigger orders should have structure [above oracle, at/below oracle]. \
+         Above: {}, At/Below: {}, Total: {:?}",
+        bids_above_count,
+        bids_below_or_equal_count,
+        bid_trigger_prices
+    );
+
     // Create a PerpMarket for post_trigger_price calculations
     let default_reserves = 100 * AMM_RESERVE_PRECISION;
     let perp_market = PerpMarket {

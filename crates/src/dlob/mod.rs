@@ -1150,13 +1150,18 @@ impl L3Book {
             }
 
             if let Some(market) = perp_market {
-                // include trigger orders at their triggered price
+                // include trigger orders at their post-trigger price
                 if let (Some(x), Some(trig_price)) = (t, trigger_price) {
-                    if let Some(post_trigger_price) = x.post_trigger_price(slot, trig_price, market)
-                    {
-                        if post_trigger_price > best_price {
-                            best_price = post_trigger_price;
-                            best_src = Some(Src::Trigger);
+                    let would_trigger = (x.is_trigger_above() && trig_price > x.price)
+                        || (!x.is_trigger_above() && trig_price < x.price);
+                    if would_trigger {
+                        if let Some(post_trigger_price) =
+                            x.post_trigger_price(slot, trig_price, market)
+                        {
+                            if post_trigger_price > best_price {
+                                best_price = post_trigger_price;
+                                best_src = Some(Src::Trigger);
+                            }
                         }
                     }
                 }
@@ -1281,13 +1286,18 @@ impl L3Book {
             }
 
             if let Some(market) = perp_market {
-                // include trigger orders at their triggered price
+                // include trigger orders at their post-trigger price
                 if let (Some(x), Some(trig_price)) = (t, trigger_price) {
-                    if let Some(post_trigger_price) = x.post_trigger_price(slot, trig_price, market)
-                    {
-                        if post_trigger_price < best_price {
-                            best_src = Some(Src::Trigger);
-                            best_price = post_trigger_price;
+                    let would_trigger = (x.is_trigger_above() && trig_price > x.price)
+                        || (!x.is_trigger_above() && trig_price < x.price);
+                    if would_trigger {
+                        if let Some(post_trigger_price) =
+                            x.post_trigger_price(slot, trig_price, market)
+                        {
+                            if post_trigger_price < best_price {
+                                best_src = Some(Src::Trigger);
+                                best_price = post_trigger_price;
+                            }
                         }
                     }
                 }
