@@ -176,7 +176,7 @@ impl MarketOrder {
     }
     /// Check if this auction order has completed
     pub fn is_auction_complete(&self, current_slot: u64) -> bool {
-        current_slot.saturating_sub(self.slot) >= self.duration as u64
+        current_slot.saturating_sub(self.slot) > self.duration as u64
     }
 
     /// Convert to LimitOrder when auction completes
@@ -207,7 +207,7 @@ impl OracleOrder {
     }
     /// Check if this auction order has completed
     pub fn is_auction_complete(&self, current_slot: u64) -> bool {
-        current_slot.saturating_sub(self.slot) >= self.duration as u64
+        current_slot.saturating_sub(self.slot) > self.duration as u64
     }
 
     /// Convert to FloatingLimitOrder when auction completes

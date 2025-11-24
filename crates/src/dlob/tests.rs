@@ -608,11 +608,11 @@ fn dlob_auction_expiry_market_orders() {
 
     // Insert market orders with different auction durations
     let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 2, slot);
-    order.auction_duration = 5; // Will expire at slot 105
+    order.auction_duration = 5; // Will expire at slot 106
     dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 900, 3, slot);
-    order.auction_duration = 10; // Will expire at slot 110
+    order.auction_duration = 10; // Will expire at slot 111
     dlob.insert_order(&user, slot, order);
 
     // Update to slot 104 - no orders should expire
@@ -666,18 +666,18 @@ fn dlob_auction_expiry_oracle_orders() {
 
     // Insert oracle orders with different auction durations
     let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 0, 2, slot);
-    order.auction_duration = 5; // Will expire at slot 105
+    order.auction_duration = 5; // Will expire at slot 106
     order.oracle_price_offset = 100;
     dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 0, 3, slot);
-    order.auction_duration = 10; // Will expire at slot 110
+    order.auction_duration = 10; // Will expire at slot 111
     order.oracle_price_offset = -100;
     dlob.insert_order(&user, slot, order);
 
-    // Update to slot 104 - no orders should expire
+    // Update to slot 105 - no orders should expire
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
-        book.update_slot(104);
+        book.update_slot(105);
     }
     let book = dlob
         .markets
@@ -688,9 +688,9 @@ fn dlob_auction_expiry_oracle_orders() {
     assert_eq!(book.floating_limit_orders.bids.len(), 0);
     assert_eq!(book.floating_limit_orders.asks.len(), 0);
     drop(book);
-    // Update to slot 105 - first order should expire
+    // Update to slot 106 - first order should expire
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
-        book.update_slot(105);
+        book.update_slot(106);
     }
     let book = dlob
         .markets
@@ -702,9 +702,9 @@ fn dlob_auction_expiry_oracle_orders() {
     assert_eq!(book.floating_limit_orders.asks.len(), 0);
     drop(book);
 
-    // Update to slot 110 - second order should expire
+    // Update to slot 111 - second order should expire
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
-        book.update_slot(110);
+        book.update_slot(111);
     }
     let book = dlob
         .markets
@@ -726,11 +726,11 @@ fn dlob_auction_expiry_non_limit_orders() {
 
     // Insert market orders that are not limit orders
     let mut order = create_test_order(1, OrderType::Market, Direction::Long, 1100, 2, slot);
-    order.auction_duration = 5; // Will expire at slot 105
+    order.auction_duration = 5; // Will expire at slot 106
     dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(2, OrderType::Market, Direction::Short, 900, 3, slot);
-    order.auction_duration = 10; // Will expire at slot 110
+    order.auction_duration = 10; // Will expire at slot 111
     dlob.insert_order(&user, slot, order);
 
     // Update to slot 104 - no orders should expire
@@ -1170,7 +1170,7 @@ fn dlob_metadata_consistency_after_auction_expiry_and_removal() {
     let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 0, order_size, slot);
     order.auction_start_price = 100_000;
     order.auction_end_price = 200_000;
-    order.auction_duration = 5; // Will expire at slot 105
+    order.auction_duration = 5; // Will expire at slot 106
     order.post_only = false; // This makes it a LimitAuction
 
     // Insert the order
@@ -1189,7 +1189,7 @@ fn dlob_metadata_consistency_after_auction_expiry_and_removal() {
         assert_eq!(book.resting_limit_orders.bids.len(), 0);
     } // Drop book reference
 
-    // Advance slot to expire the auction (slot 105 > slot + duration)
+    // Advance slot to expire the auction (slot 106 > slot + duration)
     let expired_slot = slot + 6; // slot 106
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
         book.update_slot(expired_slot);
@@ -1268,7 +1268,7 @@ fn dlob_metadata_consistency_limit_auction_expiry_and_removal() {
     let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 0, order_size, slot);
     order.auction_start_price = 100_000;
     order.auction_end_price = 200_000;
-    order.auction_duration = 5; // Will expire at slot 105
+    order.auction_duration = 5; // Will expire at slot 106
                                 // No oracle_price_offset - this makes it a regular limit order
     order.post_only = false; // This makes it a LimitAuction
 
@@ -1288,7 +1288,7 @@ fn dlob_metadata_consistency_limit_auction_expiry_and_removal() {
         assert_eq!(book.resting_limit_orders.asks.len(), 0);
     } // Drop book reference
 
-    // Advance slot to expire the auction (slot 105 > slot + duration)
+    // Advance slot to expire the auction (slot 106 > slot + duration)
     let expired_slot = slot + 6; // slot 106
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
         book.update_slot(expired_slot);
@@ -1360,7 +1360,7 @@ fn dlob_metadata_consistency_floating_limit_auction_expiry_and_removal() {
     let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 0, order_size, slot);
     order.auction_start_price = 100_000;
     order.auction_end_price = 200_000;
-    order.auction_duration = 5; // Will expire at slot 105
+    order.auction_duration = 5; // Will expire at slot 106
     order.oracle_price_offset = 1000; // This makes it a floating limit order
     order.post_only = false; // This makes it a FloatingLimitAuction
 
@@ -1380,7 +1380,7 @@ fn dlob_metadata_consistency_floating_limit_auction_expiry_and_removal() {
         assert_eq!(book.floating_limit_orders.asks.len(), 0);
     } // Drop book reference
 
-    // Advance slot to expire the auction (slot 105 > slot + duration)
+    // Advance slot to expire the auction (slot 106 > slot + duration)
     let expired_slot = slot + 6; // slot 106
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
         book.update_slot(expired_slot);

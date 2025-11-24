@@ -1781,37 +1781,45 @@ impl L2Book {
 
         // Process market orders as taker orders
         for order in orderbook.market_orders.bids.values() {
-            if let Some(price) = order.get_price(self.slot, oracle_price, market_tick_size) {
-                let size = self.bids.entry(price).or_insert(0);
-                *size = size.saturating_add(order.size);
-            } else {
-                self.vamm_bid_size += order.size;
+            if order.size > 0 {
+                if let Some(price) = order.get_price(self.slot, oracle_price, market_tick_size) {
+                    let size = self.bids.entry(price).or_insert(0);
+                    *size = size.saturating_add(order.size);
+                } else {
+                    self.vamm_bid_size += order.size;
+                }
             }
         }
         for order in orderbook.market_orders.asks.values() {
-            if let Some(price) = order.get_price(self.slot, oracle_price, market_tick_size) {
-                let size = self.asks.entry(price).or_insert(0);
-                *size = size.saturating_add(order.size);
-            } else {
-                self.vamm_ask_size += order.size;
+            if order.size > 0 {
+                if let Some(price) = order.get_price(self.slot, oracle_price, market_tick_size) {
+                    let size = self.asks.entry(price).or_insert(0);
+                    *size = size.saturating_add(order.size);
+                } else {
+                    self.vamm_ask_size += order.size;
+                }
             }
         }
 
         // Process oracle orders as taker orders
         for order in orderbook.oracle_orders.bids.values() {
-            if let Some(price) = order.get_price(self.slot, oracle_price, market_tick_size) {
-                let size = self.bids.entry(price).or_insert(0);
-                *size = size.saturating_add(order.size);
-            } else {
-                self.vamm_bid_size += order.size;
+            if order.size > 0 {
+                if let Some(price) = order.get_price(self.slot, oracle_price, market_tick_size) {
+                    let size = self.bids.entry(price).or_insert(0);
+                    *size = size.saturating_add(order.size);
+                } else {
+                    self.vamm_bid_size += order.size;
+                }
             }
         }
         for order in orderbook.oracle_orders.asks.values() {
-            if let Some(price) = order.get_price(self.slot, oracle_price, market_tick_size) {
-                let size = self.asks.entry(price).or_insert(0);
-                *size = size.saturating_add(order.size);
-            } else {
-                self.vamm_ask_size += order.size;
+            if order.size > 0 {
+                if let Some(price) = order.get_price(self.slot, oracle_price, market_tick_size) {
+                    let size = self.asks.entry(price).or_insert(0);
+                    *size = size.saturating_add(order.size);
+                } else {
+                    self.vamm_ask_size += order.size;
+                }
             }
         }
     }
