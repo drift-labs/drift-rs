@@ -59,6 +59,18 @@ pub enum SignedOrderType {
 }
 
 impl SignedOrderType {
+    pub fn delegated(order: SignedDelegateOrder) -> Self {
+        Self::Delegated {
+            inner: order,
+            raw: None,
+        }
+    }
+    pub fn authority(order: SignedOrder) -> Self {
+        Self::Authority {
+            inner: order,
+            raw: None,
+        }
+    }
     /// Returns true if this is a delegated signed msg order
     pub fn is_delegated(&self) -> bool {
         matches!(self, Self::Delegated { .. })

@@ -53,7 +53,7 @@ async fn main() {
         auction_duration: Some(20),
         ..Default::default()
     };
-    let swift_order = SignedOrderType::Authority(SignedMsgOrderParamsMessage {
+    let swift_order = SignedOrderType::authority(SignedMsgOrderParamsMessage {
         sub_account_id: 0,
         signed_msg_order_params: order_params,
         slot: latest_slot,
@@ -63,6 +63,7 @@ async fn main() {
         max_margin_ratio: None,
         builder_idx: None,
         builder_fee_tenth_bps: None,
+        isolated_position_deposit: None,
     });
     let signed_msg = hex::encode(swift_order.to_borsh());
     let signature = drift.wallet.sign_message(signed_msg.as_bytes()).unwrap();
