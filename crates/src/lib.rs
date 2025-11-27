@@ -2463,9 +2463,9 @@ impl<'a> TransactionBuilder<'a> {
                 state: *state_account(),
                 authority: self.authority,
                 user: signed_order_info.taker_subaccount(),
-                user_stats: Wallet::derive_stats_account(&taker_account.authority),
+                user_stats: Wallet::derive_stats_account(&signed_order_info.taker_authority),
                 signed_msg_user_orders: Wallet::derive_swift_order_account(
-                    &taker_account.authority,
+                    &signed_order_info.taker_authority,
                 ),
                 ix_sysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
             },
@@ -2476,7 +2476,7 @@ impl<'a> TransactionBuilder<'a> {
             self.force_markets.writeable.iter(),
         );
 
-        if signed_order_info.order_params().high_leverage_mode()
+        if order_params.high_leverage_mode()
             || taker_account
                 .margin_mode
                 .is_high_leverage_mode(MarginRequirementType::Maintenance)
@@ -2486,7 +2486,7 @@ impl<'a> TransactionBuilder<'a> {
 
         if signed_order_info.has_builder() {
             accounts.push(AccountMeta::new(
-                derive_revenue_share_escrow(&taker_account.authority),
+                derive_revenue_share_escrow(&signed_order_info.taker_authority),
                 false,
             ));
         }

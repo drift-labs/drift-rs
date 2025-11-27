@@ -267,6 +267,47 @@ impl SignedOrderInfo {
         }
     }
 
+    /// Build authority `SignedOrderInfo`
+    pub fn authority(
+        taker_authority: Pubkey,
+        signed_order: SignedOrder,
+        signature: Signature,
+    ) -> Self {
+        Self {
+            uuid: core::str::from_utf8(&signed_order.uuid)
+                .unwrap()
+                .to_string(),
+            ts: unix_now_ms(),
+            order: SignedOrderType::authority(signed_order),
+            signature,
+            signer: taker_authority,
+            taker_authority,
+            will_sanitize: false,
+            pre_deposit: None,
+        }
+    }
+
+    /// Build delegated `SignedOrderInfo`
+    pub fn delegated(
+        taker_authority: Pubkey,
+        signing_authority: Pubkey,
+        delegated_order: SignedDelegateOrder,
+        signature: Signature,
+    ) -> Self {
+        Self {
+            uuid: core::str::from_utf8(&delegated_order.uuid)
+                .unwrap()
+                .to_string(),
+            ts: unix_now_ms(),
+            order: SignedOrderType::delegated(delegated_order),
+            signature,
+            signer: signing_authority,
+            taker_authority,
+            will_sanitize: false,
+            pre_deposit: None,
+        }
+    }
+
     pub fn has_builder(&self) -> bool {
         match self.order {
             SignedOrderType::Authority { ref inner, .. } => {

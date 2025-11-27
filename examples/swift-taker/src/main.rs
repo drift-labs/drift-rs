@@ -2,9 +2,9 @@
 use argh::FromArgs;
 use base64::Engine;
 use drift_rs::{
-    swift_order_subscriber::SignedOrderType,
+    swift_order_subscriber::{SignedOrderInfo, SignedOrderType},
     types::{MarketType, OrderParams, OrderType, PositionDirection, SignedMsgOrderParamsMessage},
-    Context, DriftClient, RpcClient, Wallet,
+    Context, DriftClient, RpcClient, TransactionBuilder, Wallet,
 };
 use nanoid::nanoid;
 use reqwest::header;
@@ -53,7 +53,7 @@ async fn main() {
         auction_duration: Some(20),
         ..Default::default()
     };
-    let swift_order = SignedOrderType::authority(SignedMsgOrderParamsMessage {
+    let signed_order_params = SignedMsgOrderParamsMessage {
         sub_account_id: 0,
         signed_msg_order_params: order_params,
         slot: latest_slot,
@@ -64,8 +64,9 @@ async fn main() {
         builder_idx: None,
         builder_fee_tenth_bps: None,
         isolated_position_deposit: None,
-    });
-    let signed_msg = hex::encode(swift_order.to_borsh());
+    };
+    let swift_order_type = SignedOrderType::authority(signed_order_params);
+    let signed_msg = hex::encode(swift_order_type.to_borsh());
     let signature = drift.wallet.sign_message(signed_msg.as_bytes()).unwrap();
 
     let swift_order_request = serde_json::json!({
@@ -74,12 +75,20 @@ async fn main() {
         "taker_pubkey": wallet.default_sub_account().to_string(),
         "signature": base64::prelude::BASE64_STANDARD.encode(signature.as_ref()),
     });
-
     dbg!(&swift_order_request.to_string());
 
     if args.deposit_trade {
+        let signed_order_info =
+            SignedOrderInfo::authority(*drift.wallet.authority(), signed_order_params, signature);
         // SOL deposit, 0 = usdc, 1 = sol
-        swift_deposit_trade(&drift, 100_000_000, 1, swift_order_request).await;
+        swift_deposit_trade(
+            &drift,
+            100_000_000,
+            0,
+            swift_order_request,
+            signed_order_info,
+        )
+        .await;
     } else {
         swift_place_order(&drift, swift_order_request).await;
     }
@@ -110,15 +119,39 @@ async fn swift_deposit_trade(
     deposit_amount: u64,
     deposit_market_index: u16,
     swift_order_request: serde_json::Value,
+    signed_order_info: SignedOrderInfo,
 ) {
     println!("sending swift depositTrade order: {swift_order_request:?}, deposit amount: {deposit_amount}, market: {deposit_market_index}");
-    let tx_builder = drift
-        .init_tx(&drift.wallet().default_sub_account(), false)
+    let taker_subaccount = drift.wallet().default_sub_account();
+    let taker_account_data = drift
+        .get_user_account(&taker_subaccount)
         .await
+        .expect("user account exists");
+
+    let spot_market_config = drift
+        .program_data()
+        .spot_market_config_by_index(deposit_market_index)
         .unwrap();
-    let unsigned_tx = tx_builder
-        .deposit(deposit_amount, deposit_market_index, None, None)
-        .build();
+    let create_ata_ix =
+        spl_associated_token_account::instruction::create_associated_token_account_idempotent(
+            drift.wallet().authority(),
+            drift.wallet().authority(),
+            &spot_market_config.mint,
+            &spot_market_config.token_program(),
+        );
+
+    let unsigned_tx = TransactionBuilder::new(
+        drift.program_data(),
+        taker_subaccount,
+        std::borrow::Cow::Borrowed(&taker_account_data),
+        false,
+    )
+    // .add_ix(additional_setup_ixs)
+    .add_ix(create_ata_ix)
+    .deposit(deposit_amount, deposit_market_index, None, None)
+    .place_swift_order(&signed_order_info, &taker_account_data)
+    // .add_ix(additional_clean_up_ixs)
+    .build();
     let signed_tx = drift
         .wallet()
         .sign_tx(
