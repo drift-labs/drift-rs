@@ -2,6 +2,7 @@
 //! FFI shims
 //! Defines wrapper types for ergonomic access to drift-program logic
 //!
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use abi_stable::std_types::ROption;
@@ -22,8 +23,8 @@ use crate::{
         standardize_price_i64,
     },
     types::{
-        accounts::HighLeverageModeConfig, ContractTier, OrderParams, OrderType, PositionDirection,
-        ProtectedMakerParams, RevenueShareOrder, SdkError, ValidityGuardRails,
+        accounts::HighLeverageModeConfig, ContractTier, OrderParams, OrderType, PerpPriceOverrides,
+        PositionDirection, ProtectedMakerParams, RevenueShareOrder, SdkError, ValidityGuardRails,
     },
     SdkResult,
 };
@@ -263,6 +264,27 @@ impl MarketState {
                 &state,
                 margin_type,
                 margin_buffer.unwrap_or(0),
+            )
+        };
+
+        to_sdk_result(result)
+    }
+    /// Calculate margin requirement with perp price overrides
+    pub fn calculate_simplified_margin_requirement_with_overrides(
+        &self,
+        user: &accounts::User,
+        margin_type: MarginRequirementType,
+        margin_buffer: Option<u32>,
+        perp_pyth_price_overrides: Option<&PerpPriceOverrides>,
+    ) -> crate::SdkResult<SimplifiedMarginCalculation> {
+        let state = self.load();
+        let result = unsafe {
+            margin_calculate_simplified_margin_requirement_with_overrides(
+                user,
+                &state,
+                margin_type,
+                margin_buffer.unwrap_or(0),
+                perp_pyth_price_overrides,
             )
         };
 
@@ -2556,6 +2578,15 @@ extern "C" {
         market_state: &crate::market_state::MarketStateData,
         margin_type: MarginRequirementType,
         margin_buffer: u32,
+    ) -> FfiResult<SimplifiedMarginCalculation>;
+
+    #[allow(improper_ctypes)]
+    pub fn margin_calculate_simplified_margin_requirement_with_overrides(
+        user: &accounts::User,
+        market_state: &crate::market_state::MarketStateData,
+        margin_type: MarginRequirementType,
+        margin_buffer: u32,
+        perp_pyth_price_overrides: Option<&PerpPriceOverrides>,
     ) -> FfiResult<SimplifiedMarginCalculation>;
 
     // Cached Margin Calculation FFI declarations
