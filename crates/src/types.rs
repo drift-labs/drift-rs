@@ -1,6 +1,7 @@
 use std::{
     cell::{BorrowError, BorrowMutError},
     cmp::Ordering,
+    collections::HashMap,
     fmt::Display,
     str::FromStr,
 };
@@ -810,3 +811,6 @@ impl accounts::State {
         (self.feature_bit_flags & Self::BUILDER_REFERRAL_FLAG) != 0
     }
 }
+
+/// Oracle price overrides for perp markets (market index -> price)
+pub type PerpPriceOverrides = HashMap<u16, u64>;
