@@ -21,6 +21,7 @@ pub struct MarketStateData {
     pub perp_markets: HashMap<u16, PerpMarket, FxBuildHasher>,
     pub spot_oracle_prices: HashMap<u16, OraclePriceData, FxBuildHasher>,
     pub perp_oracle_prices: HashMap<u16, OraclePriceData, FxBuildHasher>,
+    pub perp_pyth_prices: HashMap<u16, i64, FxBuildHasher>, // Override with pyth price
 }
 
 impl MarketStateData {
@@ -38,6 +39,10 @@ impl MarketStateData {
 
     pub fn set_perp_oracle_price(&mut self, market_index: u16, price: OraclePriceData) {
         self.perp_oracle_prices.insert(market_index, price);
+    }
+
+    pub fn set_perp_pyth_price(&mut self, market_index: u16, price_data: i64) {
+        self.perp_pyth_prices.insert(market_index, price_data);
     }
 }
 
@@ -116,6 +121,14 @@ impl MarketState {
         self.store(Arc::new(new_data));
     }
 
+    /// Update perp pyth price
+    pub fn set_perp_pyth_price(&self, market_index: u16, price: i64) {
+        let current = self.load();
+        let mut new_data = (*current).clone();
+        new_data.set_perp_pyth_price(market_index, price);
+        self.store(Arc::new(new_data));
+    }
+
     pub fn get_perp_oracle_price(&self, market_index: u16) -> Option<OraclePriceData> {
         let current = self.load();
         current.perp_oracle_prices.get(&market_index).copied()
@@ -124,6 +137,20 @@ impl MarketState {
     pub fn get_spot_oracle_price(&self, market_index: u16) -> Option<OraclePriceData> {
         let current = self.load();
         current.spot_oracle_prices.get(&market_index).copied()
+    }
+
+    pub fn get_perp_pyth_price(&self, market_index: u16) -> Option<OraclePriceData> {
+        let current = self.load();
+        current
+            .perp_pyth_prices
+            .get(&market_index)
+            .map(|&price| OraclePriceData {
+                price,
+                confidence: 0,
+                delay: 0,
+                has_sufficient_number_of_data_points: true,
+                sequence_id: None,
+            })
     }
     /// Batch update multiple markets atomically
     ///
