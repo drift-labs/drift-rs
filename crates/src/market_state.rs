@@ -21,6 +21,9 @@ pub struct MarketStateData {
     pub perp_markets: HashMap<u16, PerpMarket, FxBuildHasher>,
     pub spot_oracle_prices: HashMap<u16, OraclePriceData, FxBuildHasher>,
     pub perp_oracle_prices: HashMap<u16, OraclePriceData, FxBuildHasher>,
+    pub spot_pyth_prices: HashMap<u16, i64, FxBuildHasher>, // Override spot with pyth price
+    pub perp_pyth_prices: HashMap<u16, i64, FxBuildHasher>, // Override perp with pyth price
+    pub pyth_oracle_diff_threshold_bps: u64, // Min bps diff to prefer pyth price over oracle. Defaults to 0 (always use pyth when set).
 }
 
 impl MarketStateData {
@@ -39,6 +42,14 @@ impl MarketStateData {
     pub fn set_perp_oracle_price(&mut self, market_index: u16, price: OraclePriceData) {
         self.perp_oracle_prices.insert(market_index, price);
     }
+
+    pub fn set_spot_pyth_price(&mut self, market_index: u16, price_data: i64) {
+        self.spot_pyth_prices.insert(market_index, price_data);
+    }
+
+    pub fn set_perp_pyth_price(&mut self, market_index: u16, price_data: i64) {
+        self.perp_pyth_prices.insert(market_index, price_data);
+    }
 }
 
 /// Optimized storage for drift markets and oracles
@@ -47,9 +58,9 @@ pub struct MarketState {
 }
 
 impl MarketState {
-    /// Create a new lock-free market state
-    pub fn new() -> Self {
-        let initial_state = Box::into_raw(Box::new(Arc::new(MarketStateData::default())));
+    /// Create a lock-free market state with initial data
+    pub fn new(data: MarketStateData) -> Self {
+        let initial_state = Box::into_raw(Box::new(Arc::new(data)));
         Self {
             state: AtomicPtr::new(initial_state),
         }
@@ -116,6 +127,22 @@ impl MarketState {
         self.store(Arc::new(new_data));
     }
 
+    /// Update spot pyth price
+    pub fn set_spot_pyth_price(&self, market_index: u16, price: i64) {
+        let current = self.load();
+        let mut new_data = (*current).clone();
+        new_data.set_spot_pyth_price(market_index, price);
+        self.store(Arc::new(new_data));
+    }
+
+    /// Update perp pyth price
+    pub fn set_perp_pyth_price(&self, market_index: u16, price: i64) {
+        let current = self.load();
+        let mut new_data = (*current).clone();
+        new_data.set_perp_pyth_price(market_index, price);
+        self.store(Arc::new(new_data));
+    }
+
     pub fn get_perp_oracle_price(&self, market_index: u16) -> Option<OraclePriceData> {
         let current = self.load();
         current.perp_oracle_prices.get(&market_index).copied()
@@ -124,6 +151,34 @@ impl MarketState {
     pub fn get_spot_oracle_price(&self, market_index: u16) -> Option<OraclePriceData> {
         let current = self.load();
         current.spot_oracle_prices.get(&market_index).copied()
+    }
+
+    pub fn get_spot_pyth_price(&self, market_index: u16) -> Option<OraclePriceData> {
+        let current = self.load();
+        current
+            .spot_pyth_prices
+            .get(&market_index)
+            .map(|&price| OraclePriceData {
+                price,
+                confidence: 0,
+                delay: 0,
+                has_sufficient_number_of_data_points: true,
+                sequence_id: None,
+            })
+    }
+
+    pub fn get_perp_pyth_price(&self, market_index: u16) -> Option<OraclePriceData> {
+        let current = self.load();
+        current
+            .perp_pyth_prices
+            .get(&market_index)
+            .map(|&price| OraclePriceData {
+                price,
+                confidence: 0,
+                delay: 0,
+                has_sufficient_number_of_data_points: true,
+                sequence_id: None,
+            })
     }
     /// Batch update multiple markets atomically
     ///
@@ -142,7 +197,7 @@ impl MarketState {
 
 impl Default for MarketState {
     fn default() -> Self {
-        Self::new()
+        Self::new(MarketStateData::default())
     }
 }
 
