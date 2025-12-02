@@ -23,6 +23,7 @@ pub struct MarketStateData {
     pub perp_oracle_prices: HashMap<u16, OraclePriceData, FxBuildHasher>,
     pub spot_pyth_prices: HashMap<u16, i64, FxBuildHasher>, // Override spot with pyth price
     pub perp_pyth_prices: HashMap<u16, i64, FxBuildHasher>, // Override perp with pyth price
+    pub pyth_oracle_diff_threshold_bps: u64, // Min bps diff to prefer pyth price over oracle. Defaults to 0 (always use pyth when set).
 }
 
 impl MarketStateData {
@@ -57,9 +58,9 @@ pub struct MarketState {
 }
 
 impl MarketState {
-    /// Create a new lock-free market state
-    pub fn new() -> Self {
-        let initial_state = Box::into_raw(Box::new(Arc::new(MarketStateData::default())));
+    /// Create a lock-free market state with initial data
+    pub fn new(data: MarketStateData) -> Self {
+        let initial_state = Box::into_raw(Box::new(Arc::new(data)));
         Self {
             state: AtomicPtr::new(initial_state),
         }
@@ -196,7 +197,7 @@ impl MarketState {
 
 impl Default for MarketState {
     fn default() -> Self {
-        Self::new()
+        Self::new(MarketStateData::default())
     }
 }
 
