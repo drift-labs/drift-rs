@@ -175,7 +175,12 @@ impl DriftClient {
 
         Ok(Self {
             backend: Box::leak(Box::new(
-                DriftClientBackend::new_with_explicit_ws_url(context, Arc::new(rpc_client), ws_pubsub_url).await?
+                DriftClientBackend::new_with_explicit_ws_url(
+                    context,
+                    Arc::new(rpc_client),
+                    ws_pubsub_url,
+                )
+                .await?,
             )),
             context,
             wallet: wallet.into(),
