@@ -260,7 +260,7 @@ impl MarketState {
         let result = unsafe {
             margin_calculate_simplified_margin_requirement(
                 user,
-                &state,
+                state.as_ref(),
                 margin_type,
                 margin_buffer.unwrap_or(0),
             )
@@ -871,6 +871,8 @@ impl IncrementalMarginCalculation {
 
 pub mod abi_types {
     //! cross-boundary FFI types
+    use std::collections::BTreeMap;
+
     use abi_stable::std_types::RResult;
     use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 
@@ -932,24 +934,45 @@ pub mod abi_types {
     }
 
     #[repr(C, align(16))]
-    #[derive(Copy, Clone, Debug, PartialEq)]
+    #[derive(Clone, Debug, PartialEq)]
     pub struct MarginCalculation {
         pub total_collateral: i128,
         pub margin_requirement: u128,
-        pub all_oracles_valid: bool,
         pub with_perp_isolated_liability: bool,
         pub with_spot_isolated_liability: bool,
         pub total_spot_asset_value: i128,
         pub total_spot_liability_value: u128,
         pub total_perp_liability_value: u128,
         pub total_perp_pnl: i128,
-        pub open_orders_margin_requirement: u128,
+        pub isolated_margin_calculations: BTreeMap<u16, IsolatedMarginCalculation>,
     }
 
     impl MarginCalculation {
         pub fn get_free_collateral(&self) -> u128 {
             (self.total_collateral - self.margin_requirement as i128) // safe cast, margin requirement >= 0
                 .max(0) as u128
+        }
+    }
+
+    #[repr(C, align(16))]
+    #[derive(Clone, Copy, Debug, Default, PartialEq)]
+    pub struct IsolatedMarginCalculation {
+        pub margin_requirement: u128,
+        pub total_collateral: i128,
+        pub total_collateral_buffer: i128,
+        pub margin_requirement_plus_buffer: u128,
+    }
+
+    impl IsolatedMarginCalculation {
+        pub fn meets_margin_requirement(&self) -> bool {
+            self.total_collateral >= self.margin_requirement as i128
+        }
+
+        pub fn meets_margin_requirement_with_buffer(&self) -> bool {
+            (self
+                .total_collateral
+                .saturating_add(self.total_collateral_buffer))
+                >= self.margin_requirement_plus_buffer as i128
         }
     }
 

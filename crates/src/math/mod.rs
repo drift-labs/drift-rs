@@ -35,9 +35,7 @@ impl MarginContext {
     pub fn standard(margin_type: MarginRequirementType) -> Self {
         Self {
             margin_type,
-            mode: MarginCalculationMode::Standard {
-                track_open_orders_fraction: false,
-            },
+            mode: MarginCalculationMode::Standard,
             strict: false,
             margin_buffer: 0,
             fuel_bonus_numerator: 0,
@@ -72,20 +70,6 @@ impl MarginContext {
     pub fn fuel_spot_deltas(mut self, deltas: [(u16, i128); 2]) -> Self {
         self.fuel_spot_deltas = deltas;
         self
-    }
-
-    pub fn track_open_orders_fraction(mut self) -> Result<Self, ErrorCode> {
-        match self.mode {
-            MarginCalculationMode::Standard {
-                track_open_orders_fraction: ref mut track,
-            } => {
-                *track = true;
-            }
-            _ => {
-                return Err(ErrorCode::InvalidMarginCalculation);
-            }
-        }
-        Ok(self)
     }
 
     pub fn liquidation(margin_buffer: u32) -> Self {

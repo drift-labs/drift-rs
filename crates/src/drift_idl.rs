@@ -12,7 +12,7 @@ use anchor_lang::{
 };
 use serde::{Deserialize, Serialize};
 use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
-pub const IDL_VERSION: &str = "2.146.0";
+pub const IDL_VERSION: &str = "2.150.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
     use solana_sdk::instruction::AccountMeta;
@@ -180,6 +180,42 @@ pub mod instructions {
     }
     #[automatically_derived]
     impl anchor_lang::InstructionData for TransferPerpPosition {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct DepositIntoIsolatedPerpPosition {
+        pub spot_market_index: u16,
+        pub perp_market_index: u16,
+        pub amount: u64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for DepositIntoIsolatedPerpPosition {
+        const DISCRIMINATOR: &[u8] = &[101, 48, 255, 153, 127, 121, 170, 26];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for DepositIntoIsolatedPerpPosition {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct TransferIsolatedPerpPositionDeposit {
+        pub spot_market_index: u16,
+        pub perp_market_index: u16,
+        pub amount: i64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for TransferIsolatedPerpPositionDeposit {
+        const DISCRIMINATOR: &[u8] = &[201, 131, 242, 228, 85, 226, 70, 237];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for TransferIsolatedPerpPositionDeposit {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct WithdrawFromIsolatedPerpPosition {
+        pub spot_market_index: u16,
+        pub perp_market_index: u16,
+        pub amount: u64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for WithdrawFromIsolatedPerpPosition {
+        const DISCRIMINATOR: &[u8] = &[37, 92, 178, 149, 140, 76, 159, 135];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for WithdrawFromIsolatedPerpPosition {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct PlacePerpOrder {
         pub params: OrderParams,
@@ -582,15 +618,15 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateUserStatsReferrerStatus {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
-    pub struct AdminDisableUpdatePerpBidAskTwap {
-        pub disable: bool,
+    pub struct AdminUpdateUserStatsPausedOperations {
+        pub paused_operations: u8,
     }
     #[automatically_derived]
-    impl anchor_lang::Discriminator for AdminDisableUpdatePerpBidAskTwap {
-        const DISCRIMINATOR: &[u8] = &[17, 164, 82, 45, 183, 86, 191, 199];
+    impl anchor_lang::Discriminator for AdminUpdateUserStatsPausedOperations {
+        const DISCRIMINATOR: &[u8] = &[183, 104, 63, 150, 240, 199, 3, 10];
     }
     #[automatically_derived]
-    impl anchor_lang::InstructionData for AdminDisableUpdatePerpBidAskTwap {}
+    impl anchor_lang::InstructionData for AdminUpdateUserStatsPausedOperations {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct SettlePnl {
         pub market_index: u16,
@@ -3741,14 +3777,14 @@ pub mod types {
         pub open_asks: i64,
         pub settled_pnl: i64,
         pub lp_shares: u64,
-        pub last_base_asset_amount_per_lp: i64,
+        pub isolated_position_scaled_balance: u64,
         pub last_quote_asset_amount_per_lp: i64,
         #[serde(skip)]
         pub padding: Padding<2>,
         pub max_margin_ratio: u16,
         pub market_index: u16,
         pub open_orders: u8,
-        pub per_lp_base: i8,
+        pub position_flag: u8,
     }
     #[repr(C)]
     #[derive(
@@ -4189,6 +4225,22 @@ pub mod types {
         Debug,
         PartialEq,
     )]
+    pub enum LiquidationBitFlag {
+        #[default]
+        IsolatedPosition,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
     pub enum SettlePnlExplanation {
         #[default]
         None,
@@ -4294,13 +4346,13 @@ pub mod types {
         Deserialize,
         Copy,
         Clone,
+        Default,
         Debug,
         PartialEq,
     )]
     pub enum MarginCalculationMode {
-        Standard {
-            track_open_orders_fraction: bool,
-        },
+        #[default]
+        Standard,
         Liquidation {
             market_to_track_margin_requirement: Option<MarketIdentifier>,
         },
@@ -4427,6 +4479,7 @@ pub mod types {
         SettlePnlWithPosition,
         Liquidation,
         AmmImmediateFill,
+        SettleRevPool,
     }
     #[derive(
         AnchorSerialize,
@@ -4894,6 +4947,24 @@ pub mod types {
         Debug,
         PartialEq,
     )]
+    pub enum PositionFlag {
+        #[default]
+        IsolatedPosition,
+        BeingLiquidated,
+        Bankrupt,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
     pub enum ReferrerStatus {
         #[default]
         IsReferrer,
@@ -4933,6 +5004,24 @@ pub mod types {
     pub enum FuelOverflowStatus {
         #[default]
         Exists,
+    }
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub enum UserStatsPausedOperations {
+        #[default]
+        UpdateBidAskTwap,
+        AmmAtomicFill,
+        AmmAtomicRiskIncreasingFill,
     }
     #[derive(
         AnchorSerialize,
@@ -5495,7 +5584,7 @@ pub mod accounts {
         pub total_mint_redeem_fees_paid: i128,
         pub last_aum_slot: u64,
         pub max_settle_quote_amount: u64,
-        pub padding0: u64,
+        pub padding_: u64,
         pub mint_redeem_id: u64,
         pub settle_id: u64,
         pub min_mint_fee: i64,
@@ -6559,8 +6648,7 @@ pub mod accounts {
         pub number_of_sub_accounts_created: u16,
         pub referrer_status: u8,
         pub disable_update_perp_bid_ask_twap: bool,
-        #[serde(skip)]
-        pub padding1: Padding<1>,
+        pub paused_operations: u8,
         pub fuel_overflow_status: u8,
         pub fuel_insurance: u32,
         pub fuel_deposits: u32,
@@ -8022,6 +8110,282 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for TransferPerpPosition {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct DepositIntoIsolatedPerpPosition {
+        pub state: Pubkey,
+        pub user: Pubkey,
+        pub user_stats: Pubkey,
+        pub authority: Pubkey,
+        pub spot_market_vault: Pubkey,
+        pub user_token_account: Pubkey,
+        pub token_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for DepositIntoIsolatedPerpPosition {
+        const DISCRIMINATOR: &[u8] = &[108, 205, 47, 139, 165, 254, 27, 11];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for DepositIntoIsolatedPerpPosition {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for DepositIntoIsolatedPerpPosition {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for DepositIntoIsolatedPerpPosition {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for DepositIntoIsolatedPerpPosition {}
+    #[automatically_derived]
+    impl ToAccountMetas for DepositIntoIsolatedPerpPosition {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.user,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for DepositIntoIsolatedPerpPosition {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for DepositIntoIsolatedPerpPosition {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct TransferIsolatedPerpPositionDeposit {
+        pub user: Pubkey,
+        pub user_stats: Pubkey,
+        pub authority: Pubkey,
+        pub state: Pubkey,
+        pub spot_market_vault: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for TransferIsolatedPerpPositionDeposit {
+        const DISCRIMINATOR: &[u8] = &[38, 235, 131, 14, 86, 151, 180, 224];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for TransferIsolatedPerpPositionDeposit {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for TransferIsolatedPerpPositionDeposit {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for TransferIsolatedPerpPositionDeposit {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for TransferIsolatedPerpPositionDeposit {}
+    #[automatically_derived]
+    impl ToAccountMetas for TransferIsolatedPerpPositionDeposit {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.user,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market_vault,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for TransferIsolatedPerpPositionDeposit {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for TransferIsolatedPerpPositionDeposit {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct WithdrawFromIsolatedPerpPosition {
+        pub state: Pubkey,
+        pub user: Pubkey,
+        pub user_stats: Pubkey,
+        pub authority: Pubkey,
+        pub spot_market_vault: Pubkey,
+        pub drift_signer: Pubkey,
+        pub user_token_account: Pubkey,
+        pub token_program: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for WithdrawFromIsolatedPerpPosition {
+        const DISCRIMINATOR: &[u8] = &[2, 49, 145, 85, 64, 125, 228, 215];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for WithdrawFromIsolatedPerpPosition {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for WithdrawFromIsolatedPerpPosition {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for WithdrawFromIsolatedPerpPosition {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for WithdrawFromIsolatedPerpPosition {}
+    #[automatically_derived]
+    impl ToAccountMetas for WithdrawFromIsolatedPerpPosition {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.user,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market_vault,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.drift_signer,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.user_token_account,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.token_program,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for WithdrawFromIsolatedPerpPosition {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for WithdrawFromIsolatedPerpPosition {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -11027,25 +11391,25 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
-    pub struct AdminDisableUpdatePerpBidAskTwap {
+    pub struct AdminUpdateUserStatsPausedOperations {
         pub admin: Pubkey,
         pub state: Pubkey,
         pub user_stats: Pubkey,
     }
     #[automatically_derived]
-    impl anchor_lang::Discriminator for AdminDisableUpdatePerpBidAskTwap {
-        const DISCRIMINATOR: &[u8] = &[253, 223, 202, 93, 246, 209, 209, 26];
+    impl anchor_lang::Discriminator for AdminUpdateUserStatsPausedOperations {
+        const DISCRIMINATOR: &[u8] = &[242, 167, 124, 94, 175, 250, 155, 27];
     }
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Pod for AdminDisableUpdatePerpBidAskTwap {}
+    unsafe impl anchor_lang::__private::bytemuck::Pod for AdminUpdateUserStatsPausedOperations {}
     #[automatically_derived]
-    unsafe impl anchor_lang::__private::bytemuck::Zeroable for AdminDisableUpdatePerpBidAskTwap {}
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for AdminUpdateUserStatsPausedOperations {}
     #[automatically_derived]
-    impl anchor_lang::ZeroCopy for AdminDisableUpdatePerpBidAskTwap {}
+    impl anchor_lang::ZeroCopy for AdminUpdateUserStatsPausedOperations {}
     #[automatically_derived]
-    impl anchor_lang::InstructionData for AdminDisableUpdatePerpBidAskTwap {}
+    impl anchor_lang::InstructionData for AdminUpdateUserStatsPausedOperations {}
     #[automatically_derived]
-    impl ToAccountMetas for AdminDisableUpdatePerpBidAskTwap {
+    impl ToAccountMetas for AdminUpdateUserStatsPausedOperations {
         fn to_account_metas(&self) -> Vec<AccountMeta> {
             vec![
                 AccountMeta {
@@ -11067,7 +11431,7 @@ pub mod accounts {
         }
     }
     #[automatically_derived]
-    impl anchor_lang::AccountSerialize for AdminDisableUpdatePerpBidAskTwap {
+    impl anchor_lang::AccountSerialize for AdminUpdateUserStatsPausedOperations {
         fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
             if writer.write_all(Self::DISCRIMINATOR).is_err() {
                 return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
@@ -11079,7 +11443,7 @@ pub mod accounts {
         }
     }
     #[automatically_derived]
-    impl anchor_lang::AccountDeserialize for AdminDisableUpdatePerpBidAskTwap {
+    impl anchor_lang::AccountDeserialize for AdminUpdateUserStatsPausedOperations {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -26218,8 +26582,8 @@ pub mod errors {
         SpotMarketInsufficientDeposits,
         #[msg("UserMustSettleTheirOwnPositiveUnsettledPNL")]
         UserMustSettleTheirOwnPositiveUnsettledPNL,
-        #[msg("CantUpdatePoolBalanceType")]
-        CantUpdatePoolBalanceType,
+        #[msg("CantUpdateSpotBalanceType")]
+        CantUpdateSpotBalanceType,
         #[msg("InsufficientCollateralForSettlingPNL")]
         InsufficientCollateralForSettlingPNL,
         #[msg("AMMNotUpdatedInSameSlot")]
@@ -26720,6 +27084,8 @@ pub mod errors {
         InvalidLpPoolId,
         #[msg("MarketIndexNotFoundAmmCache")]
         MarketIndexNotFoundAmmCache,
+        #[msg("Invalid Isolated Perp Market")]
+        InvalidIsolatedPerpMarket,
     }
 }
 pub mod events {
@@ -26754,6 +27120,8 @@ pub mod events {
         pub total_withdraws_after: u64,
         pub explanation: DepositExplanation,
         pub transfer_user: Option<Pubkey>,
+        pub signer: Option<Pubkey>,
+        pub user_token_amount_after: i128,
     }
     #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
@@ -26911,6 +27279,7 @@ pub mod events {
         pub liquidate_perp_pnl_for_deposit: LiquidatePerpPnlForDepositRecord,
         pub perp_bankruptcy: PerpBankruptcyRecord,
         pub spot_bankruptcy: SpotBankruptcyRecord,
+        pub bit_flags: u8,
     }
     #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
