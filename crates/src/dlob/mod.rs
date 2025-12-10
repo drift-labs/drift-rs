@@ -39,6 +39,7 @@ const TARGET: &str = "dlob";
 
 type Direction = PositionDirection;
 type MetadataMap = DashMap<u64, OrderMetadata, FxBuildHasher>;
+type OrderEventMap = DashMap<u64, Vec<OrderEvent>, FxBuildHasher>;
 
 /// Collection of orders
 #[derive(Debug)]
@@ -160,9 +161,14 @@ impl Orderbook {
     }
 
     /// Update the L3 snapshot
-    pub fn update_l3_view(&self, oracle_price: u64, metadata: &MetadataMap) {
+    pub fn update_l3_view(
+        &self,
+        oracle_price: u64,
+        metadata: &MetadataMap,
+        order_events: &OrderEventMap,
+    ) {
         self.l3_snapshot.write(|b| {
-            b.load_orderbook(&self, oracle_price, metadata);
+            b.load_orderbook(&self, oracle_price, metadata, order_events);
         });
     }
 
@@ -333,6 +339,8 @@ pub struct DLOB {
     markets: DashMap<MarketId, Orderbook, FxBuildHasher>,
     /// Map from DLOB internal order ID to order metadata
     metadata: MetadataMap,
+    /// Map from DLOB internal order ID to event history
+    order_events: OrderEventMap,
     /// static drift program data e.g market tick sizes
     program_data: &'static ProgramData,
     /// last slot update
@@ -348,6 +356,7 @@ impl Default for DLOB {
         Self {
             markets: DashMap::default(),
             metadata: DashMap::default(),
+            order_events: DashMap::default(),
             program_data: Box::leak(Box::new(ProgramData::uninitialized())),
             last_modified_slot: Default::default(),
             enable_l2_snapshot: AtomicBool::new(false),
@@ -454,7 +463,7 @@ impl DLOB {
                 .enable_l3_snapshot
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
-                book.update_l3_view(oracle_price, &self.metadata);
+                book.update_l3_view(oracle_price, &self.metadata, &self.order_events);
             }
         });
 
@@ -523,9 +532,87 @@ impl DLOB {
         })
     }
 
+    /// Record an event for an order
+    fn record_order_event(&self, order_id: u64, event: OrderEvent) {
+        self.order_events
+            .entry(order_id)
+            .or_insert_with(Vec::new)
+            .push(event);
+    }
+
+    /// Log all events for a missing order (helper function for use in load_orderbook)
+    fn log_missing_order_events_helper(order_id: u64, order_events: &OrderEventMap) {
+        if let Some(events) = order_events.get(&order_id) {
+            log::warn!(
+                target: TARGET,
+                "=== MISSING ORDER EVENT LOG: order_id={} ({} events) ===",
+                order_id,
+                events.len()
+            );
+            for (idx, event) in events.iter().enumerate() {
+                match &event.event_type {
+                    OrderEventType::Insert => {
+                        log::warn!(
+                            target: TARGET,
+                            "  [{}] INSERT @ slot={}, user={}, order_id={}, order={:?}",
+                            idx + 1,
+                            event.slot,
+                            event.user,
+                            event.order_id,
+                            event.order
+                        );
+                    }
+                    OrderEventType::Update => {
+                        log::warn!(
+                            target: TARGET,
+                            "  [{}] UPDATE @ slot={}, user={}, order_id={}, old_order={:?}, new_order={:?}",
+                            idx + 1,
+                            event.slot,
+                            event.user,
+                            event.order_id,
+                            event.old_order,
+                            event.order
+                        );
+                    }
+                    OrderEventType::Remove => {
+                        log::warn!(
+                            target: TARGET,
+                            "  [{}] REMOVE @ slot={}, user={}, order_id={}, order={:?}",
+                            idx + 1,
+                            event.slot,
+                            event.user,
+                            event.order_id,
+                            event.order
+                        );
+                    }
+                }
+            }
+            log::warn!(target: TARGET, "=== END MISSING ORDER EVENT LOG ===");
+        } else {
+            log::warn!(
+                target: TARGET,
+                "Missing order {} has no event history",
+                order_id
+            );
+        }
+    }
+
     fn update_order(&self, user: &Pubkey, slot: u64, new_order: Order, old_order: Order) {
         let order_id = order_hash(user, new_order.order_id);
         log::trace!(target: TARGET, "update order: {order_id},{},{:?} @ {slot}", old_order.order_id, new_order.order_type);
+
+        // Record update event
+        self.record_order_event(
+            order_id,
+            OrderEvent {
+                event_type: OrderEventType::Update,
+                slot,
+                order: Some(new_order),
+                old_order: Some(old_order),
+                user: *user,
+                order_id,
+            },
+        );
 
         if new_order.status != OrderStatus::Open {
             log::info!(target: TARGET, "update into remove: {order_id:?}");
@@ -638,6 +725,19 @@ impl DLOB {
     fn remove_order(&self, user: &Pubkey, slot: u64, order: Order) {
         let order_id = order_hash(user, order.order_id);
 
+        // Record remove event
+        self.record_order_event(
+            order_id,
+            OrderEvent {
+                event_type: OrderEventType::Remove,
+                slot,
+                order: Some(order),
+                old_order: None,
+                user: *user,
+                order_id,
+            },
+        );
+
         self.with_orderbook_mut(&MarketId::new(order.market_index, order.market_type), |mut orderbook| {
             if let Some((_, metadata)) = self.metadata.remove(&order_id) {
                 let mut order_removed;
@@ -701,6 +801,19 @@ impl DLOB {
             log::trace!(target: TARGET, "skipping fully filled order: {order:?}");
             return;
         }
+
+        // Record insert event
+        self.record_order_event(
+            order_id,
+            OrderEvent {
+                event_type: OrderEventType::Insert,
+                slot,
+                order: Some(order),
+                old_order: None,
+                user: *user,
+                order_id,
+            },
+        );
 
         self.with_orderbook_mut(
             &MarketId::new(order.market_index, order.market_type),
@@ -1350,7 +1463,13 @@ impl L3Book {
     }
 
     /// Populate an `L3Book` instance given an `Orderbook` and `metadata`
-    fn load_orderbook(&mut self, orderbook: &Orderbook, oracle_price: u64, metadata: &MetadataMap) {
+    fn load_orderbook(
+        &mut self,
+        orderbook: &Orderbook,
+        oracle_price: u64,
+        metadata: &MetadataMap,
+        order_events: &OrderEventMap,
+    ) {
         self.bids.clear();
         self.asks.clear();
         self.floating_bids.clear();
@@ -1386,6 +1505,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1405,6 +1526,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1432,6 +1555,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1452,6 +1577,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1478,6 +1605,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1504,6 +1633,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1525,6 +1656,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1544,6 +1677,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1571,6 +1706,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1597,6 +1734,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
