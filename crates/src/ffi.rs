@@ -880,8 +880,6 @@ impl IncrementalMarginCalculation {
 
 pub mod abi_types {
     //! cross-boundary FFI types
-    use std::collections::BTreeMap;
-
     use abi_stable::std_types::RResult;
     use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 
@@ -942,7 +940,7 @@ pub mod abi_types {
         StandardCustom(MarginRequirementType),
     }
 
-    #[repr(C, align(16))]
+    #[repr(C)]
     #[derive(Clone, Debug, PartialEq)]
     pub struct MarginCalculation {
         pub total_collateral: i128,
@@ -953,7 +951,7 @@ pub mod abi_types {
         pub total_spot_liability_value: u128,
         pub total_perp_liability_value: u128,
         pub total_perp_pnl: i128,
-        pub isolated_margin_calculations: BTreeMap<u16, IsolatedMarginCalculation>,
+        isolated_margin_calculations: [IsolatedMarginCalculation; 8],
     }
 
     impl MarginCalculation {
@@ -961,11 +959,22 @@ pub mod abi_types {
             (self.total_collateral - self.margin_requirement as i128) // safe cast, margin requirement >= 0
                 .max(0) as u128
         }
+        /// Returns the isolated position margin info for `market_index`, if it exsits
+        pub fn isolated_position_margin_info(
+            &self,
+            market_index: u16,
+        ) -> Option<&IsolatedMarginCalculation> {
+            self.isolated_margin_calculations.iter().find(|x| {
+                x.market_index == market_index
+                    && (x.total_collateral != 0 || x.margin_requirement != 0)
+            })
+        }
     }
 
-    #[repr(C, align(16))]
+    #[repr(C)]
     #[derive(Clone, Copy, Debug, Default, PartialEq)]
     pub struct IsolatedMarginCalculation {
+        pub market_index: u16,
         pub margin_requirement: u128,
         pub total_collateral: i128,
         pub total_collateral_buffer: i128,
@@ -982,6 +991,17 @@ pub mod abi_types {
                 .total_collateral
                 .saturating_add(self.total_collateral_buffer))
                 >= self.margin_requirement_plus_buffer as i128
+        }
+
+        pub fn get_total_collateral_plus_buffer(&self) -> i128 {
+            self.total_collateral
+                .saturating_add(self.total_collateral_buffer)
+        }
+
+        pub fn margin_shortage(&self) -> u128 {
+            (self.margin_requirement_plus_buffer as i128)
+                .saturating_sub(self.get_total_collateral_plus_buffer())
+                .max(0) as u128
         }
     }
 
@@ -2714,9 +2734,7 @@ mod tests {
         );
 
         // Verify the specific market index is in the isolated calculations
-        let isolated_calc = margin_calc
-            .isolated_margin_calculations
-            .get(&btc_perp_index);
+        let isolated_calc = margin_calc.isolated_position_margin_info(btc_perp_index);
 
         assert!(
             isolated_calc.is_some(),
@@ -2773,8 +2791,7 @@ mod tests {
 
         // Initial margin requirement should typically be higher than maintenance
         let isolated_calc_initial = margin_calc_initial
-            .isolated_margin_calculations
-            .get(&btc_perp_index)
+            .isolated_position_margin_info(btc_perp_index)
             .expect("Should have isolated margin calculation");
 
         assert!(
