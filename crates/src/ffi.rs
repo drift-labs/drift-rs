@@ -959,6 +959,18 @@ pub mod abi_types {
             (self.total_collateral - self.margin_requirement as i128) // safe cast, margin requirement >= 0
                 .max(0) as u128
         }
+        /// true if user has at least 1 isolated margin position
+        pub fn has_isolated_position(&self) -> bool {
+            self.isolated_margin_calculations
+                .iter()
+                .any(|x| x.total_collateral != 0 || x.margin_requirement != 0)
+        }
+        /// Iterate all isolated positions margin info
+        pub fn iter_isolated_positions(&self) -> impl Iterator<Item = &IsolatedMarginCalculation> {
+            self.isolated_margin_calculations
+                .iter()
+                .filter(|x| x.total_collateral != 0 || x.margin_requirement != 0)
+        }
         /// Returns the isolated position margin info for `market_index`, if it exsits
         pub fn isolated_position_margin_info(
             &self,
