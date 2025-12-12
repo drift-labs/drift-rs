@@ -173,6 +173,13 @@ pub struct SignedOrderInfo {
 }
 
 impl SignedOrderInfo {
+    /// Slot number when user signed the order
+    pub fn slot(&self) -> Slot {
+        match self.order {
+            SignedOrderType::Authority { inner, .. } => inner.slot,
+            SignedOrderType::Delegated { inner, .. } => inner.slot,
+        }
+    }
     /// The order's UUID (stringified)
     pub fn order_uuid_str(&self) -> &str {
         self.uuid.as_ref()
