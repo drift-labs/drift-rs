@@ -994,20 +994,21 @@ pub mod abi_types {
     }
 
     impl IsolatedMarginCalculation {
-        pub fn meets_margin_requirement(&self) -> bool {
-            self.total_collateral >= self.margin_requirement as i128
-        }
-
-        pub fn meets_margin_requirement_with_buffer(&self) -> bool {
-            (self
-                .total_collateral
-                .saturating_add(self.total_collateral_buffer))
-                >= self.margin_requirement_plus_buffer as i128
+        pub fn is_empty(&self) -> bool {
+            self.margin_requirement == 0 && self.total_collateral == 0
         }
 
         pub fn get_total_collateral_plus_buffer(&self) -> i128 {
             self.total_collateral
                 .saturating_add(self.total_collateral_buffer)
+        }
+
+        pub fn meets_margin_requirement(&self) -> bool {
+            self.total_collateral >= self.margin_requirement as i128
+        }
+
+        pub fn meets_margin_requirement_with_buffer(&self) -> bool {
+            self.get_total_collateral_plus_buffer() >= self.margin_requirement_plus_buffer as i128
         }
 
         pub fn margin_shortage(&self) -> u128 {
@@ -1049,6 +1050,81 @@ pub mod abi_types {
         pub total_collateral_buffer: i128,
         pub margin_requirement: u128,
         pub margin_requirement_plus_buffer: u128,
+        pub isolated_margin_calculations: [IsolatedMarginCalculation; 8],
+        pub with_perp_isolated_liability: bool,
+        pub with_spot_isolated_liability: bool,
+    }
+
+    impl SimplifiedMarginCalculation {
+        pub fn free_collateral(&self) -> i128 {
+            self.total_collateral - self.margin_requirement as i128
+        }
+
+        pub fn get_total_collateral_plus_buffer(&self) -> i128 {
+            self.total_collateral
+                .saturating_add(self.total_collateral_buffer)
+        }
+
+        pub fn free_collateral_with_buffer(&self) -> i128 {
+            self.get_total_collateral_plus_buffer() - self.margin_requirement_plus_buffer as i128
+        }
+
+        pub fn meets_cross_margin_requirement(&self) -> bool {
+            self.total_collateral >= self.margin_requirement as i128
+        }
+
+        pub fn meets_cross_margin_requirement_with_buffer(&self) -> bool {
+            self.get_total_collateral_plus_buffer() >= self.margin_requirement_plus_buffer as i128
+        }
+
+        pub fn meets_margin_requirement(&self) -> bool {
+            if !self.meets_cross_margin_requirement() {
+                return false;
+            }
+            for calc in &self.isolated_margin_calculations {
+                if !calc.is_empty() && !calc.meets_margin_requirement() {
+                    return false;
+                }
+            }
+            true
+        }
+
+        pub fn meets_margin_requirement_with_buffer(&self) -> bool {
+            if !self.meets_cross_margin_requirement_with_buffer() {
+                return false;
+            }
+            for calc in &self.isolated_margin_calculations {
+                if !calc.is_empty() && !calc.meets_margin_requirement_with_buffer() {
+                    return false;
+                }
+            }
+            true
+        }
+
+        pub fn has_isolated_margin_calculation(&self, market_index: u16) -> bool {
+            self.isolated_margin_calculations
+                .iter()
+                .any(|c| c.market_index == market_index && !c.is_empty())
+        }
+
+        pub fn get_isolated_margin_calculation(
+            &self,
+            market_index: u16,
+        ) -> Option<&IsolatedMarginCalculation> {
+            self.isolated_margin_calculations
+                .iter()
+                .find(|c| c.market_index == market_index && !c.is_empty())
+        }
+
+        pub fn get_isolated_free_collateral(&self, market_index: u16) -> Option<i128> {
+            self.get_isolated_margin_calculation(market_index)
+                .map(|c| c.total_collateral - c.margin_requirement as i128)
+        }
+
+        pub fn meets_isolated_margin_requirement(&self, market_index: u16) -> Option<bool> {
+            self.get_isolated_margin_calculation(market_index)
+                .map(|c| c.meets_margin_requirement())
+        }
     }
 
     /// FFI-compatible incremental margin calculation
