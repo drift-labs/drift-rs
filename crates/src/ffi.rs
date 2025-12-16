@@ -64,6 +64,8 @@ extern "C" {
     #[allow(improper_ctypes)]
     pub fn order_is_resting_limit_order(order: &types::Order, slot: Slot) -> FfiResult<bool>;
     #[allow(improper_ctypes)]
+    pub fn order_triggered(order: &types::Order) -> bool;
+    #[allow(improper_ctypes)]
     pub fn order_get_limit_price(
         order: &types::Order,
         valid_oracle_price: Option<i64>,
@@ -594,6 +596,9 @@ impl types::Order {
     }
     pub fn is_resting_limit_order(&self, slot: Slot) -> SdkResult<bool> {
         to_sdk_result(unsafe { order_is_resting_limit_order(self, slot) })
+    }
+    pub fn triggered(&self) -> bool {
+        unsafe { order_triggered(self) }
     }
     pub fn get_limit_price(
         &self,
