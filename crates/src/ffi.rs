@@ -951,7 +951,7 @@ pub mod abi_types {
         pub total_spot_liability_value: u128,
         pub total_perp_liability_value: u128,
         pub total_perp_pnl: i128,
-        isolated_margin_calculations: [IsolatedMarginCalculation; 8],
+        pub isolated_margin_calculations: [IsolatedMarginCalculation; 8],
     }
 
     impl MarginCalculation {
@@ -2688,7 +2688,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn ffi_test_calculate_margin_requirement_with_isolated_position() {
         // Test that isolated positions are properly handled in margin calculations
         // A PerpPosition is isolated when isolated_position_scaled_balance is non-zero
@@ -2704,7 +2703,7 @@ mod tests {
             base_asset_amount: 100 * BASE_PRECISION_I64 as i64, // Non-zero base asset amount
             quote_asset_amount: -5_000 * QUOTE_PRECISION as i64,
             isolated_position_scaled_balance: (10_000 * SPOT_BALANCE_PRECISION) as u64, // Non-zero isolated balance
-            position_flag: PositionFlag::IsolatedPosition as u8,
+            position_flag: 1u8,
             ..Default::default()
         };
 
