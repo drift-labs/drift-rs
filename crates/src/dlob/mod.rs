@@ -471,26 +471,62 @@ impl DLOB {
             .store(slot, std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// Get an L2 book of current orders
+    /// Get an L2 book of current orders at the current slot
     ///
-    /// It is valid at the current slot
+    /// # Panics
+    /// If orderbook doesn't exist. Use `get_l2_snapshot_safe` to handle missing orderbooks
     pub fn get_l2_snapshot(&self, market_index: u16, market_type: MarketType) -> Arc<L2Book> {
         let book = self
             .markets
             .get(&MarketId::new(market_index, market_type))
-            .expect("orderbook exists for market");
+            .expect(&format!(
+                "orderbook missing for market {}, {:?}",
+                market_index, market_type
+            ));
         book.l2_snapshot.read()
     }
 
-    /// Get an L3 book of current orders
+    /// Get an L2 book of current orders at the current slot
     ///
-    /// It is valid at the current slot
+    /// Returns `None` if orderbook doesn't exist for this market
+    pub fn get_l2_snapshot_safe(
+        &self,
+        market_index: u16,
+        market_type: MarketType,
+    ) -> Option<Arc<L2Book>> {
+        let book = self
+            .markets
+            .get(&MarketId::new(market_index, market_type))?;
+        Some(book.l2_snapshot.read())
+    }
+
+    /// Get an L3 book of current orders at the current slot
+    ///
+    /// # Panics
+    /// If orderbook doesn't exist. Use `get_l3_snapshot_safe` to handle missing orderbooks
     pub fn get_l3_snapshot(&self, market_index: u16, market_type: MarketType) -> Arc<L3Book> {
         let book = self
             .markets
             .get(&MarketId::new(market_index, market_type))
-            .expect("orderbook exists for market");
+            .expect(&format!(
+                "orderbook missing for market {}, {:?}",
+                market_index, market_type
+            ));
         book.l3_snapshot.read()
+    }
+
+    /// Get an L3 book of current orders at the current slot
+    ///
+    /// Returns `None` if orderbook doesn't exist for this market
+    pub fn get_l3_snapshot_safe(
+        &self,
+        market_index: u16,
+        market_type: MarketType,
+    ) -> Option<Arc<L3Book>> {
+        let book = self
+            .markets
+            .get(&MarketId::new(market_index, market_type))?;
+        Some(book.l3_snapshot.read())
     }
 
     pub fn find_crossing_region(
