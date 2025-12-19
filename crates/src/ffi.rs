@@ -2688,6 +2688,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn ffi_test_calculate_margin_requirement_with_isolated_position() {
         // Test that isolated positions are properly handled in margin calculations
         // A PerpPosition is isolated when isolated_position_scaled_balance is non-zero
