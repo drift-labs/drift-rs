@@ -1136,10 +1136,12 @@ impl DriftClientBackend {
             .iter()
             .zip(lut_accounts.iter())
             .map(|(pubkey, account_data)| {
-                utils::deserialize_alt(*pubkey, account_data.as_ref().unwrap())
-                    .expect("LUT decodes")
+                let data = account_data
+                    .as_ref()
+                    .ok_or_else(|| SdkError::Generic(format!("LUT account missing: {}", pubkey)))?;
+                utils::deserialize_alt(*pubkey, data).map_err(|_| SdkError::Deserializing)
             })
-            .collect();
+            .collect::<SdkResult<Vec<_>>>()?;
 
         let mut all_oracles = Vec::<(MarketId, Pubkey, OracleSource)>::with_capacity(
             perp_market_map.len() + spot_market_map.len(),
