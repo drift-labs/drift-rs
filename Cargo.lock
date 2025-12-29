@@ -2338,7 +2338,7 @@ dependencies = [
 [[package]]
 name = "jupiter-swap-api-client"
 version = "0.2.0"
-source = "git+https://github.com/drift-labs/jupiter-swap-api-client?branch=patch%2F2025-12-28#3b11090b839a3cd7e935846ba924b2b5a9a49568"
+source = "git+https://github.com/drift-labs/jupiter-swap-api-client?branch=patch%2F2025-12-28#6b07ee58ff4c3c5e4f0b9b35d13d9d37e4069202"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
