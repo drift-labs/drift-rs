@@ -8,6 +8,7 @@ use std::{
         Arc,
     },
     time::{SystemTime, UNIX_EPOCH},
+    u64,
 };
 
 use arrayvec::ArrayVec;
@@ -20,8 +21,8 @@ use crate::{
     dlob::util::order_hash,
     types::{
         accounts::{PerpMarket, User},
-        MarketId, MarketType, Order, OrderStatus, OrderTriggerCondition, OrderType,
-        PositionDirection,
+        MarketId, MarketPrecision, MarketType, Order, OrderStatus, OrderTriggerCondition,
+        OrderType, PositionDirection,
     },
 };
 
@@ -986,8 +987,15 @@ impl DLOB {
         let book = self.get_l3_snapshot(market_index, market_type);
         let mut all_crosses = Vec::with_capacity(16);
 
-        let vamm_bid = perp_market.map(|m| m.bid_price(None));
-        let vamm_ask = perp_market.map(|m| m.ask_price(None));
+        let (vamm_bid, vamm_ask, vamm_min_order) = if let Some(m) = perp_market {
+            (
+                Some(m.bid_price(None)),
+                Some(m.ask_price(None)),
+                m.amm.min_order_size,
+            )
+        } else {
+            (None, None, u64::MAX)
+        };
         log::trace!(target: TARGET, "VAMM market={} bid={vamm_bid:?} ask={vamm_ask:?}", market_index);
 
         let (taker_asks, resting_asks): (Vec<L3Order>, Vec<L3Order>) = book
@@ -1008,13 +1016,13 @@ impl DLOB {
             // check for crossing resting limit orders
             limit_crosses = self.find_limit_cross(best_bid, best_ask);
             // check for VAMM crossing resting limit orders
-            if vamm_bid.is_some_and(|v| v > best_ask.price && best_ask.is_post_only())
-                && perp_market.is_some_and(|m| best_ask.size > m.amm.min_order_size)
+            if best_ask.size > vamm_min_order
+                && vamm_bid.is_some_and(|v| v > best_ask.price && best_ask.is_post_only())
             {
                 vamm_taker_bid = Some(best_ask.clone());
             }
-            if vamm_ask.is_some_and(|v| v < best_bid.price && best_bid.is_post_only())
-                && perp_market.is_some_and(|m| best_bid.size > m.amm.min_order_size)
+            if best_bid.size > vamm_min_order
+                && vamm_ask.is_some_and(|v| v < best_bid.price && best_bid.is_post_only())
             {
                 vamm_taker_ask = Some(best_bid.clone());
             }
@@ -1029,9 +1037,11 @@ impl DLOB {
                 slot,
                 taker_bid.price,
                 taker_bid.size,
-                taker_bid.is_long(),
+                true,
                 resting_asks.iter().peekable(),
-                vamm_ask,
+                |taker_price: u64, taker_size: u64| {
+                    taker_size > vamm_min_order && vamm_ask.is_some_and(|v| taker_price > v)
+                },
             );
 
             if !new_crosses.is_empty() {
@@ -1050,9 +1060,11 @@ impl DLOB {
                 slot,
                 taker_ask.price,
                 taker_ask.size,
-                taker_ask.is_long(),
+                false,
                 resting_bids.iter().peekable(),
-                vamm_bid,
+                |taker_price: u64, taker_size: u64| {
+                    taker_size > vamm_min_order && vamm_bid.is_some_and(|v| taker_price < v)
+                },
             );
 
             if !new_crosses.is_empty() {
@@ -1097,14 +1109,20 @@ impl DLOB {
         perp_market: Option<&PerpMarket>,
         depth: Option<usize>,
     ) -> MakerCrosses {
-        let (resting_orders, vamm_price) = match taker_order.direction {
+        let (resting_orders, vamm_price, vamm_min_order) = match taker_order.direction {
             Direction::Long => {
                 let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
                 let orders: Vec<L3Order> = book
                     .top_asks(depth.unwrap_or(20), Some(oracle_price), perp_market, None)
                     .cloned()
                     .collect();
-                (orders, perp_market.map(|p| p.ask_price(None)))
+                (
+                    orders,
+                    perp_market.map(|p| p.ask_price(None)).unwrap_or(u64::MAX),
+                    perp_market
+                        .map(|p| p.amm.min_order_size)
+                        .unwrap_or(u64::MAX),
+                )
             }
             Direction::Short => {
                 let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
@@ -1112,7 +1130,13 @@ impl DLOB {
                     .top_bids(depth.unwrap_or(20), Some(oracle_price), perp_market, None)
                     .cloned()
                     .collect();
-                (orders, perp_market.map(|p| p.bid_price(None)))
+                (
+                    orders,
+                    perp_market.map(|p| p.bid_price(None)).unwrap_or(u64::MIN),
+                    perp_market
+                        .map(|p| p.amm.min_order_size)
+                        .unwrap_or(u64::MAX),
+                )
             }
         };
 
@@ -1123,7 +1147,11 @@ impl DLOB {
             taker_order.size,
             is_long,
             resting_orders.iter().peekable(),
-            vamm_price,
+            |taker_price: u64, taker_size: u64| {
+                taker_size > vamm_min_order
+                    && ((taker_price > vamm_price && is_long)
+                        || (!is_long && taker_price < vamm_price))
+            },
         )
     }
 
@@ -1135,7 +1163,7 @@ impl DLOB {
         taker_size: u64,
         is_long: bool,
         mut resting_limit_orders: Peekable<impl Iterator<Item = &'a L3Order>>,
-        vamm_price: Option<u64>,
+        has_vamm_cross: impl Fn(u64, u64) -> bool,
     ) -> MakerCrosses {
         let mut candidates = ArrayVec::<(L3Order, u64), 16>::new();
         let mut remaining_size = taker_size;
@@ -1173,7 +1201,7 @@ impl DLOB {
         }
 
         MakerCrosses {
-            has_vamm_cross: vamm_price.is_some_and(|v| price_crosses(taker_price, v)),
+            has_vamm_cross: has_vamm_cross(taker_price, taker_size),
             orders: candidates,
             slot: current_slot,
             is_partial: remaining_size != 0,
