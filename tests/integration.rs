@@ -6,7 +6,9 @@ use drift_rs::{
     event_subscriber::RpcClient,
     grpc::grpc_subscriber::AccountFilter,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
-    types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam, SettlePnlMode},
+    types::{
+        accounts::User, Context, MarketId, NewOrder, OrderParams, PostOnlyParam, SettlePnlMode,
+    },
     utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
     DriftClient, GrpcSubscribeOpts, Pubkey, TransactionBuilder, Wallet,
 };
@@ -330,6 +332,11 @@ async fn settle_pnl_txs() {
         .init_tx(&wallet.default_sub_account(), false)
         .await
         .unwrap()
+        .place_orders(vec![NewOrder::limit(doge_perp)
+            .amount(1 * BASE_PRECISION_I64)
+            .price(1000 * PRICE_PRECISION_U64)
+            .post_only(PostOnlyParam::None)
+            .build()])
         .settle_pnl(doge_perp.index(), None, None)
         .build();
 
@@ -343,6 +350,18 @@ async fn settle_pnl_txs() {
         .await
         .unwrap()
         .with_priority_fee(1, Some(2 * 200_000))
+        .place_orders(vec![
+            NewOrder::limit(doge_perp)
+                .amount(1 * BASE_PRECISION_I64)
+                .price(1000 * PRICE_PRECISION_U64)
+                .post_only(PostOnlyParam::None)
+                .build(),
+            NewOrder::limit(sol_perp)
+                .amount(-1 * BASE_PRECISION_I64)
+                .price(10 * PRICE_PRECISION_U64)
+                .post_only(PostOnlyParam::None)
+                .build(),
+        ])
         .settle_pnl_multi(
             &[sol_perp.index(), doge_perp.index()],
             SettlePnlMode::MustSettle,
@@ -350,6 +369,36 @@ async fn settle_pnl_txs() {
             None,
         )
         .build();
+
+    let result = client.simulate_tx(tx).await;
+    dbg!(&result);
+    assert!(result.is_ok_and(|x| x.err.is_none()));
+}
+
+#[tokio::test]
+async fn initialize_user_subaccount_0() {
+    let _ = env_logger::try_init();
+    let wallet: Wallet = test_keypair().into();
+    let client = DriftClient::new(
+        Context::MainNet,
+        RpcClient::new(mainnet_endpoint()),
+        wallet.clone(),
+    )
+    .await
+    .expect("connects");
+
+    let mut user = User::default();
+    user.authority = *wallet.authority();
+    user.sub_account_id = 0;
+
+    let tx = TransactionBuilder::new(
+        client.program_data(),
+        wallet.default_sub_account(),
+        std::borrow::Cow::Owned(user),
+        false,
+    )
+    .initialize_user_account(0, None, None)
+    .build();
 
     let result = client.simulate_tx(tx).await;
     dbg!(&result);

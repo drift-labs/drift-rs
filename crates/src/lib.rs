@@ -3449,36 +3449,38 @@ impl<'a> TransactionBuilder<'a> {
         name: Option<String>,
         referrer: Option<Pubkey>,
     ) -> Self {
-        let mut accounts = build_accounts(
-            self.program_data,
-            types::accounts::InitializeUser {
-                state: *state_account(),
-                authority: self.authority,
-                user: Wallet::derive_user_account(&self.authority, sub_account_id),
-                user_stats: Wallet::derive_stats_account(&self.owner()),
-                payer: self.authority,
-                rent: SYSVAR_RENT_PUBKEY,
-                system_program: SYSTEM_PROGRAM_ID,
-            },
-            std::iter::empty(),
-            std::iter::empty(),
-            std::iter::empty(),
-        );
+        if sub_account_id == 0 {
+            let ix = Instruction {
+                program_id: constants::PROGRAM_ID,
+                accounts: types::accounts::InitializeUserStats {
+                    state: *state_account(),
+                    authority: self.authority,
+                    user_stats: Wallet::derive_stats_account(&self.owner()),
+                    payer: self.authority,
+                    rent: SYSVAR_RENT_PUBKEY,
+                    system_program: SYSTEM_PROGRAM_ID,
+                }
+                .to_account_metas(),
+                data: InstructionData::data(&drift_idl::instructions::InitializeUserStats {}),
+            };
+            self.ixs.push(ix);
+        }
 
+        let mut accounts = types::accounts::InitializeUser {
+            state: *state_account(),
+            authority: self.authority,
+            user: Wallet::derive_user_account(&self.authority, sub_account_id),
+            user_stats: Wallet::derive_stats_account(&self.owner()),
+            payer: self.authority,
+            rent: SYSVAR_RENT_PUBKEY,
+            system_program: SYSTEM_PROGRAM_ID,
+        }
+        .to_account_metas();
         if let Some(referrer) = referrer {
             accounts.extend_from_slice(&[
                 AccountMeta::new(Wallet::derive_user_account(&referrer, 0), false),
                 AccountMeta::new(Wallet::derive_stats_account(&referrer), false),
             ]);
-        }
-
-        if sub_account_id == 0 {
-            let ix = Instruction {
-                program_id: constants::PROGRAM_ID,
-                accounts: accounts.clone(),
-                data: InstructionData::data(&drift_idl::instructions::InitializeUserStats {}),
-            };
-            self.ixs.push(ix);
         }
 
         let name = name.unwrap_or_else(|| {
