@@ -3490,13 +3490,14 @@ impl<'a> TransactionBuilder<'a> {
                 format!("Subaccount {}", sub_account_id + 1)
             }
         });
+        let name_padded = format!("{:<32}", name);
 
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
             data: InstructionData::data(&drift_idl::instructions::InitializeUser {
                 sub_account_id,
-                name: name.as_bytes()[..32].try_into().unwrap(),
+                name: name_padded.as_bytes()[..32].try_into().unwrap(),
             }),
         };
 
