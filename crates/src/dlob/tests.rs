@@ -496,25 +496,126 @@ fn dlob_find_crosses_for_taker_order_vamm_cross() {
     let slot = 100;
     let oracle_price = 1000;
 
+    // Create a PerpMarket with min_order_size = 10
+    // Set reserves so that reserve_price matches oracle_price
+    // reserve_price = (quote_asset_reserve * peg_multiplier) / base_asset_reserve
+    // For reserve_price = oracle_price * PRICE_PRECISION = 1000 * 1_000_000 = 1_000_000_000
+    // With peg_multiplier = 1_000_000, we need: quote_asset_reserve / base_asset_reserve = 1000
+    let base_reserves = 100 * AMM_RESERVE_PRECISION;
+    let quote_reserves = base_reserves * 1000; // Makes reserve_price = 1000 * PRICE_PRECISION
+    let perp_market = PerpMarket {
+        market_index: 0,
+        contract_tier: crate::drift_idl::types::ContractTier::A,
+        amm: AMM {
+            max_fill_reserve_fraction: 1,
+            base_asset_reserve: base_reserves.into(),
+            quote_asset_reserve: quote_reserves.into(),
+            sqrt_k: (base_reserves * quote_reserves).into(),
+            peg_multiplier: PEG_PRECISION.into(),
+            terminal_quote_asset_reserve: quote_reserves.into(),
+            concentration_coef: 5u128.into(),
+            long_spread: 100,  // 0.01% spread (100 / 1_000_000)
+            short_spread: 100, // 0.01% spread
+            max_base_asset_reserve: (u64::MAX as u128).into(),
+            min_base_asset_reserve: 0u128.into(),
+            order_step_size: 1,
+            order_tick_size: 1,
+            max_spread: 1000,
+            min_order_size: 10, // Set min_order_size to 10
+            historical_oracle_data: HistoricalOracleData {
+                last_oracle_price: (oracle_price as i64) * 1_000_000, // Scale to PRICE_PRECISION
+                ..Default::default()
+            },
+            last_oracle_valid: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
     // Insert resting limit orders
     let mut order = create_test_order(1, OrderType::Limit, Direction::Short, 1100, 5, slot);
     order.post_only = true;
     dlob.insert_order(&user, slot, order);
 
-    // Create taker order to buy at 1000
+    // Test 1: Taker order with size > min_order_size that crosses vamm
+    // Get the actual VAMM ask price and ensure taker price is higher
+    // Both prices should be in the same units for comparison
+    let vamm_ask_price = perp_market.ask_price(None);
+    // Use a price that's definitely higher than VAMM ask price
+    // Add a large buffer to account for any unit differences
+    let taker_price = vamm_ask_price.saturating_add(1_000_000_000).max(10_000_000);
     let taker_order = TakerOrder {
-        price: 1000,
-        size: 5,
+        price: taker_price,
+        size: 15, // Larger than min_order_size (10)
         direction: Direction::Long,
         market_index: 0,
         market_type: MarketType::Perp,
     };
 
-    let result = dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None, None);
+    let result = dlob.find_crosses_for_taker_order(
+        slot,
+        oracle_price,
+        taker_order,
+        Some(&perp_market),
+        None,
+    );
 
-    // Should not fill any orders (no vamm cross without perp_market)
-    assert_eq!(result.orders.len(), 0);
+    // Should have vamm cross since size (15) > min_order_size (10) and price crosses
+    assert_eq!(result.orders.len(), 0); // No limit order crosses
+    assert!(result.has_vamm_cross);
     assert!(result.is_partial);
+
+    // Test 2: Taker order with size <= min_order_size - should NOT have vamm cross
+    let taker_order_small = TakerOrder {
+        price: 1_000_000, // Still crosses vamm price
+        size: 5,          // Smaller than min_order_size (10)
+        direction: Direction::Long,
+        market_index: 0,
+        market_type: MarketType::Perp,
+    };
+
+    let result_small = dlob.find_crosses_for_taker_order(
+        slot,
+        oracle_price,
+        taker_order_small,
+        Some(&perp_market),
+        None,
+    );
+
+    // Should NOT have vamm cross since size (5) <= min_order_size (10)
+    assert_eq!(result_small.orders.len(), 0);
+    assert!(!result_small.has_vamm_cross);
+    assert!(result_small.is_partial);
+
+    // Test 3: Taker order with size == min_order_size - should NOT have vamm cross (strict > check)
+    let taker_order_equal = TakerOrder {
+        price: 1_000_000,
+        size: 10, // Equal to min_order_size (10)
+        direction: Direction::Long,
+        market_index: 0,
+        market_type: MarketType::Perp,
+    };
+
+    let result_equal = dlob.find_crosses_for_taker_order(
+        slot,
+        oracle_price,
+        taker_order_equal,
+        Some(&perp_market),
+        None,
+    );
+
+    // Should NOT have vamm cross since size (10) is not > min_order_size (10)
+    assert_eq!(result_equal.orders.len(), 0);
+    assert!(!result_equal.has_vamm_cross);
+    assert!(result_equal.is_partial);
+
+    // Test 4: Without perp_market, should not have vamm cross
+    let result_no_market =
+        dlob.find_crosses_for_taker_order(slot, oracle_price, taker_order, None, None);
+
+    assert_eq!(result_no_market.orders.len(), 0);
+    assert!(!result_no_market.has_vamm_cross);
+    assert!(result_no_market.is_partial);
 }
 
 #[test]
@@ -1049,6 +1150,127 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
             expected
         );
     }
+}
+
+#[test]
+fn dlob_find_crosses_for_auctions_vamm_min_order_size() {
+    let _ = env_logger::try_init();
+    let dlob = DLOB::default();
+    let market_index = 0;
+    let market_type = MarketType::Perp;
+    let slot = 100;
+    let oracle_price = 1000;
+
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market: MarketId::perp(0),
+        market_tick_size: 5,
+        ..Default::default()
+    });
+
+    // Create a PerpMarket with min_order_size = 20
+    // Set reserves so that reserve_price matches oracle_price
+    let base_reserves = 100 * AMM_RESERVE_PRECISION;
+    let quote_reserves = base_reserves * 1000; // Makes reserve_price = 1000 * PRICE_PRECISION
+    let perp_market = PerpMarket {
+        market_index: 0,
+        contract_tier: crate::drift_idl::types::ContractTier::A,
+        amm: AMM {
+            max_fill_reserve_fraction: 1,
+            base_asset_reserve: base_reserves.into(),
+            quote_asset_reserve: quote_reserves.into(),
+            sqrt_k: (base_reserves * quote_reserves).into(),
+            peg_multiplier: PEG_PRECISION.into(),
+            terminal_quote_asset_reserve: quote_reserves.into(),
+            concentration_coef: 5u128.into(),
+            long_spread: 100,  // 0.01% spread (100 / 1_000_000)
+            short_spread: 100, // 0.01% spread
+            max_base_asset_reserve: (u64::MAX as u128).into(),
+            min_base_asset_reserve: 0u128.into(),
+            order_step_size: 1,
+            order_tick_size: 1,
+            max_spread: 1000,
+            min_order_size: 20, // Set min_order_size to 20
+            historical_oracle_data: HistoricalOracleData {
+                last_oracle_price: (oracle_price as i64) * 1_000_000, // Scale to PRICE_PRECISION
+                ..Default::default()
+            },
+            last_oracle_valid: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    // Get the actual VAMM ask price and use prices that are definitely higher
+    let vamm_ask_price = perp_market.ask_price(None);
+    let taker_price = vamm_ask_price.saturating_add(1_000_000_000).max(10_000_000);
+    let taker_price_i64 = taker_price.min(i64::MAX as u64) as i64;
+
+    // Insert a resting limit ask at price 1000
+    let limit_ask = create_test_order(1, OrderType::Limit, Direction::Short, 1000, 100, slot);
+    dlob.insert_order(&Pubkey::new_unique(), slot, limit_ask);
+
+    // Insert a market bid with size > min_order_size that should cross vamm
+    let mut market_bid_large = create_test_order(
+        2,
+        OrderType::Market,
+        Direction::Long,
+        taker_price_i64, // Much higher than vamm ask price
+        25,              // Larger than min_order_size (20)
+        slot,
+    );
+    market_bid_large.auction_duration = 10;
+    market_bid_large.auction_start_price = taker_price_i64;
+    market_bid_large.auction_end_price = taker_price_i64;
+    dlob.insert_order(&Pubkey::new_unique(), slot, market_bid_large);
+
+    // Insert a market bid with size <= min_order_size - should NOT cross vamm
+    let mut market_bid_small = create_test_order(
+        3,
+        OrderType::Market,
+        Direction::Long,
+        taker_price_i64, // Still crosses vamm price
+        15,              // Smaller than min_order_size (20)
+        slot,
+    );
+    market_bid_small.auction_duration = 10;
+    market_bid_small.auction_start_price = taker_price_i64;
+    market_bid_small.auction_end_price = taker_price_i64;
+    dlob.insert_order(&Pubkey::new_unique(), slot, market_bid_small);
+
+    // Update L3 view before finding crosses
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+    }
+
+    let crosses = dlob.find_crosses_for_auctions(
+        market_index,
+        market_type,
+        slot,
+        oracle_price,
+        Some(&perp_market),
+        None,
+    );
+
+    // Should find 2 crosses (both cross limit orders)
+    assert_eq!(crosses.crosses.len(), 2);
+
+    // Find the cross for order 2 (large size)
+    let cross_large = crosses
+        .crosses
+        .iter()
+        .find(|(meta, _)| meta.order_id == 2)
+        .unwrap();
+    // Should have vamm cross since size (25) > min_order_size (20)
+    assert!(cross_large.1.has_vamm_cross);
+
+    // Find the cross for order 3 (small size)
+    let cross_small = crosses
+        .crosses
+        .iter()
+        .find(|(meta, _)| meta.order_id == 3)
+        .unwrap();
+    // Should NOT have vamm cross since size (15) <= min_order_size (20)
+    assert!(!cross_small.1.has_vamm_cross);
 }
 
 #[test]
