@@ -130,6 +130,13 @@ struct OrderNotification<'a> {
     deposit: Option<&'a str>,
 }
 
+/// Error notification from Websocket
+#[derive(Clone, Debug, Deserialize)]
+struct ErrorNotification<'a> {
+    channel: &'a str,
+    error: &'a str,
+}
+
 #[derive(Deserialize)]
 struct Heartbeat {
     #[serde(deserialize_with = "deser_int_str", rename = "message")]
@@ -494,7 +501,11 @@ pub async fn subscribe_swift_orders(
                                     continue;
                                 }
                             }
-                            log::error!(target: LOG_TARGET, "{text}. invalid json: {err:?}");
+                            if let Ok(msg) = serde_json::from_str::<ErrorNotification>(text) {
+                                log::error!(target: LOG_TARGET, "{msg:?}");
+                                continue;
+                            }
+                            log::error!(target: LOG_TARGET, "{text}. invalid json response: {err:?}");
                             break;
                         }
                     }
