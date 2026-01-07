@@ -21,8 +21,8 @@ use crate::{
     dlob::util::order_hash,
     types::{
         accounts::{PerpMarket, User},
-        MarketId, MarketPrecision, MarketType, Order, OrderStatus, OrderTriggerCondition,
-        OrderType, PositionDirection,
+        MarketId, MarketType, Order, OrderStatus, OrderTriggerCondition, OrderType,
+        PositionDirection,
     },
 };
 
@@ -558,7 +558,7 @@ impl DLOB {
             .map(|x| x.clone())
             .collect();
 
-        if crossing_asks.is_empty() && crossing_bids.is_empty() {
+        if crossing_asks.is_empty() || crossing_bids.is_empty() {
             return None;
         }
 
@@ -635,7 +635,7 @@ impl DLOB {
     }
 
     fn update_order(&self, user: &Pubkey, slot: u64, new_order: Order, old_order: Order) {
-        let order_id = order_hash(user, new_order.order_id);
+        let order_id = order_hash(user, new_order.order_id, new_order.market_index);
         log::trace!(target: TARGET, "update order: {order_id},{},{:?} @ {slot}", old_order.order_id, new_order.order_type);
 
         // Record update event
@@ -760,7 +760,7 @@ impl DLOB {
     }
 
     fn remove_order(&self, user: &Pubkey, slot: u64, order: Order) {
-        let order_id = order_hash(user, order.order_id);
+        let order_id = order_hash(user, order.order_id, order.market_index);
 
         // Record remove event
         self.record_order_event(
@@ -831,7 +831,7 @@ impl DLOB {
     }
 
     fn insert_order(&self, user: &Pubkey, slot: u64, order: Order) {
-        let order_id = order_hash(user, order.order_id);
+        let order_id = order_hash(user, order.order_id, order.market_index);
         log::trace!(target: TARGET, "insert order: {order_id} @ {slot}");
 
         if order.base_asset_amount <= order.base_asset_amount_filled {
