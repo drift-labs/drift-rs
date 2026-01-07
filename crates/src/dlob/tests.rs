@@ -1399,7 +1399,8 @@ fn dlob_metadata_consistency_after_auction_expiry_and_removal() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in market_orders with LimitAuction metadata
-    let order_id = crate::dlob::util::order_hash(&user, 1);
+    let order_id =
+        crate::dlob::util::order_hash(&user, 1, order.market_index, order.posted_slot_tail);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::LimitAuction);
@@ -1498,7 +1499,8 @@ fn dlob_metadata_consistency_limit_auction_expiry_and_removal() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in market_orders with LimitAuction metadata
-    let order_id = crate::dlob::util::order_hash(&user, 1);
+    let order_id =
+        crate::dlob::util::order_hash(&user, 1, order.market_index, order.posted_slot_tail);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::LimitAuction);
@@ -1590,7 +1592,8 @@ fn dlob_metadata_consistency_floating_limit_auction_expiry_and_removal() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in oracle_orders with FloatingLimitAuction metadata
-    let order_id = crate::dlob::util::order_hash(&user, 1);
+    let order_id =
+        crate::dlob::util::order_hash(&user, 1, order.market_index, order.posted_slot_tail);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::FloatingLimitAuction);
@@ -1682,7 +1685,8 @@ fn dlob_trigger_order_transition_remove() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in trigger_orders
-    let order_id = crate::dlob::util::order_hash(&user, 1);
+    let order_id =
+        crate::dlob::util::order_hash(&user, 1, order.market_index, order.posted_slot_tail);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::TriggerMarket);
@@ -1751,7 +1755,8 @@ fn dlob_trigger_order_transition_update() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in trigger_orders
-    let order_id = crate::dlob::util::order_hash(&user, 1);
+    let order_id =
+        crate::dlob::util::order_hash(&user, 1, order.market_index, order.posted_slot_tail);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::TriggerMarket);

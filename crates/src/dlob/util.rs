@@ -23,10 +23,12 @@ pub enum OrderDelta {
 }
 
 /// Helper function to generate unique order Id hash for internal DLOB use
-pub fn order_hash(user: &Pubkey, order_id: u32) -> u64 {
+pub fn order_hash(user: &Pubkey, order_id: u32, market_index: u16, posted_slot_tail: u8) -> u64 {
     let mut hasher = AHasher::default();
     user.hash(&mut hasher);
     order_id.hash(&mut hasher);
+    market_index.hash(&mut hasher);
+    posted_slot_tail.hash(&mut hasher);
     hasher.finish()
 }
 
