@@ -3031,6 +3031,7 @@ impl<'a> TransactionBuilder<'a> {
                 ix.program_id != TOKEN_PROGRAM_ID
                     && ix.program_id != TOKEN_2022_PROGRAM_ID
                     && ix.program_id != ASSOCIATED_TOKEN_PROGRAM_ID
+                    && ix.program_id != DEFAULT_PUBKEY
             })
             .collect();
 
