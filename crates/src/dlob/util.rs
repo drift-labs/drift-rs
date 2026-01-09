@@ -23,84 +23,29 @@ pub enum OrderDelta {
 }
 
 /// Helper function to generate unique order Id hash for internal DLOB use
-pub fn order_hash(user: &Pubkey, order_id: u32, market_index: u16, posted_slot_tail: u8) -> u64 {
+pub fn order_hash(user: &Pubkey, order_id: u32, market_index: u16) -> u64 {
     let mut hasher = AHasher::default();
     user.hash(&mut hasher);
     order_id.hash(&mut hasher);
     market_index.hash(&mut hasher);
-    posted_slot_tail.hash(&mut hasher);
     hasher.finish()
 }
 
 pub fn compare_user_orders(pubkey: Pubkey, old: &User, new: &User) -> Vec<OrderDelta> {
     let mut deltas = Vec::<OrderDelta>::with_capacity(16);
-    // relies on the layout of orders and transitions made by the program
-    // 1) orders transition from to open to closed/filled,
-    // 2) not open orders can be replaced with new orders
-    // 3) orders that remain open were possibly updated
-    // 4) use order_id to determine if we're looking at the same order or different orders
-    for (old_order, new_order) in old.orders.iter().zip(new.orders.iter()) {
-        // Check if we're looking at the same order (same order_id) or different orders
-        if old_order.order_id == new_order.order_id {
-            // Same order - check for updates or status changes
-            match (old_order.status, new_order.status) {
-                (OrderStatus::Open, OrderStatus::Open) => {
-                    // Same order, both open - check if it was updated
-                    if new_order != old_order {
-                        deltas.push(OrderDelta::Update {
-                            user: pubkey,
-                            new_order: *new_order,
-                            old_order: *old_order,
-                        });
-                    }
-                }
-                (OrderStatus::Open, _) => {
-                    // Same order, was open now filled/cancelled - remove it
-                    deltas.push(OrderDelta::Remove {
-                        user: pubkey,
-                        order: *old_order, // Use old_order since it was the one that was removed
-                    });
-                }
-                (_, OrderStatus::Open) => {
-                    // invalid transition e.g. out of order update
-                }
-                _ => {
-                    // Same order, both not open - no change needed
-                }
-            }
-        } else {
-            // Different orders - this means one was replaced by another
-            match (old_order.status, new_order.status) {
-                (OrderStatus::Open, OrderStatus::Open) => {
-                    // Old order was open, new order is open - remove old, create new
-                    deltas.push(OrderDelta::Remove {
-                        user: pubkey,
-                        order: *old_order,
-                    });
-                    deltas.push(OrderDelta::Create {
-                        user: pubkey,
-                        order: *new_order,
-                    });
-                }
-                (OrderStatus::Open, _) => {
-                    // Old order was open, new order is not open - remove old
-                    deltas.push(OrderDelta::Remove {
-                        user: pubkey,
-                        order: *old_order,
-                    });
-                }
-                (_, OrderStatus::Open) => {
-                    // Old order was not open, new order is open - create new
-                    deltas.push(OrderDelta::Create {
-                        user: pubkey,
-                        order: *new_order,
-                    });
-                }
-                _ => {
-                    // Both orders not open - no change needed
-                }
-            }
-        }
+
+    for order in old.orders.iter().filter(|o| o.status == OrderStatus::Open) {
+        deltas.push(OrderDelta::Remove {
+            order: *order,
+            user: pubkey,
+        });
+    }
+
+    for order in new.orders.iter().filter(|o| o.status == OrderStatus::Open) {
+        deltas.push(OrderDelta::Create {
+            order: *order,
+            user: pubkey,
+        });
     }
 
     deltas
@@ -210,35 +155,6 @@ mod tests {
     }
 
     #[test]
-    fn dlob_util_test_update_order() {
-        let pubkey = Pubkey::new_unique();
-        let old_order = create_test_order(1, OrderStatus::Open);
-        let mut new_order = create_test_order(1, OrderStatus::Open);
-        new_order.price = 200; // Change the price
-
-        let old = create_test_user(vec![old_order]);
-        let new = create_test_user(vec![new_order]);
-
-        let deltas = compare_user_orders(pubkey, &old, &new);
-        assert_eq!(deltas.len(), 1);
-
-        match &deltas[0] {
-            OrderDelta::Update {
-                user,
-                new_order,
-                old_order,
-            } => {
-                assert_eq!(*user, pubkey);
-                assert_eq!(new_order.order_id, 1);
-                assert_eq!(new_order.price, 200);
-                assert_eq!(old_order.order_id, 1);
-                assert_eq!(old_order.price, 100);
-            }
-            _ => panic!("Expected Update delta"),
-        }
-    }
-
-    #[test]
     fn dlob_util_test_multiple_operations() {
         let pubkey = Pubkey::new_unique();
         let old = create_test_user(vec![
@@ -252,7 +168,7 @@ mod tests {
         let new = create_test_user(vec![new_order, create_test_order(3, OrderStatus::Open)]);
 
         let deltas = compare_user_orders(pubkey, &old, &new);
-        assert_eq!(deltas.len(), 3);
+        assert_eq!(deltas.len(), 4);
     }
 
     // Helper function to assert order replacement deltas
@@ -305,49 +221,6 @@ mod tests {
     }
 
     #[test]
-    fn dlob_util_test_multiple_order_replacements() {
-        let pubkey = Pubkey::new_unique();
-
-        // Test multiple simultaneous replacements
-        let old = create_test_user(vec![
-            create_test_order(1, OrderStatus::Open),
-            create_test_order(2, OrderStatus::Open),
-            create_test_order(3, OrderStatus::Open),
-        ]);
-
-        let new = create_test_user(vec![
-            create_test_order(4, OrderStatus::Open), // replaced order 1
-            create_test_order(2, OrderStatus::Open), // unchanged
-            create_test_order(5, OrderStatus::Open), // replaced order 3
-        ]);
-
-        let deltas = compare_user_orders(pubkey, &old, &new);
-
-        // Should have 2 Remove and 2 Create deltas
-        assert_eq!(deltas.len(), 4);
-
-        let mut remove_count = 0;
-        let mut create_count = 0;
-
-        for delta in &deltas {
-            match delta {
-                OrderDelta::Remove { order, .. } => {
-                    assert!(order.order_id == 1 || order.order_id == 3);
-                    remove_count += 1;
-                }
-                OrderDelta::Create { order, .. } => {
-                    assert!(order.order_id == 4 || order.order_id == 5);
-                    create_count += 1;
-                }
-                _ => panic!("Unexpected delta type: {:?}", delta),
-            }
-        }
-
-        assert_eq!(remove_count, 2, "Should have 2 Remove deltas");
-        assert_eq!(create_count, 2, "Should have 2 Create deltas");
-    }
-
-    #[test]
     fn dlob_util_test_atomic_create_and_fill() {
         let pubkey = Pubkey::new_unique();
 
@@ -381,31 +254,6 @@ mod tests {
             deltas.len(),
             0,
             "Should not emit deltas for atomically created and canceled orders"
-        );
-    }
-
-    #[test]
-    fn dlob_util_test_atomic_create_and_fill_with_existing_orders() {
-        let pubkey = Pubkey::new_unique();
-
-        // Test with other orders present to ensure the logic works in context
-        let old = create_test_user(vec![
-            create_test_order(1, OrderStatus::Open),
-            // Slot 1 is empty (default order)
-        ]);
-
-        let new = create_test_user(vec![
-            create_test_order(1, OrderStatus::Open),   // Unchanged
-            create_test_order(2, OrderStatus::Filled), // Created and filled atomically at slot 1
-        ]);
-
-        let deltas = compare_user_orders(pubkey, &old, &new);
-
-        // Should only have 0 deltas - order 1 is unchanged, order 2 was created and filled atomically
-        assert_eq!(
-            deltas.len(),
-            0,
-            "Should not emit deltas for atomically created and filled orders"
         );
     }
 

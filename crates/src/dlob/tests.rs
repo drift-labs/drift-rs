@@ -1,7 +1,7 @@
 use solana_sdk::pubkey::Pubkey;
 
 use crate::{
-    dlob::{Direction, OrderKind, Orderbook, Snapshot, TakerOrder, DLOB},
+    dlob::{types::MarketOrder, Direction, OrderKind, Orderbook, Snapshot, TakerOrder, DLOB},
     drift_idl::types::{HistoricalOracleData, AMM},
     math::constants::{AMM_RESERVE_PRECISION, PEG_PRECISION},
     types::{accounts::PerpMarket, MarketId, MarketType, Order, OrderStatus, OrderType},
@@ -1399,8 +1399,7 @@ fn dlob_metadata_consistency_after_auction_expiry_and_removal() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in market_orders with LimitAuction metadata
-    let order_id =
-        crate::dlob::util::order_hash(&user, 1, order.market_index, order.posted_slot_tail);
+    let order_id = crate::dlob::util::order_hash(&user, 1, order.market_index);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::LimitAuction);
@@ -1499,8 +1498,7 @@ fn dlob_metadata_consistency_limit_auction_expiry_and_removal() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in market_orders with LimitAuction metadata
-    let order_id =
-        crate::dlob::util::order_hash(&user, 1, order.market_index, order.posted_slot_tail);
+    let order_id = crate::dlob::util::order_hash(&user, 1, order.market_index);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::LimitAuction);
@@ -1592,8 +1590,7 @@ fn dlob_metadata_consistency_floating_limit_auction_expiry_and_removal() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in oracle_orders with FloatingLimitAuction metadata
-    let order_id =
-        crate::dlob::util::order_hash(&user, 1, order.market_index, order.posted_slot_tail);
+    let order_id = crate::dlob::util::order_hash(&user, 1, order.market_index);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::FloatingLimitAuction);
@@ -1685,8 +1682,7 @@ fn dlob_trigger_order_transition_remove() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in trigger_orders
-    let order_id =
-        crate::dlob::util::order_hash(&user, 1, order.market_index, order.posted_slot_tail);
+    let order_id = crate::dlob::util::order_hash(&user, 1, order.market_index);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::TriggerMarket);
@@ -1755,8 +1751,7 @@ fn dlob_trigger_order_transition_update() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in trigger_orders
-    let order_id =
-        crate::dlob::util::order_hash(&user, 1, order.market_index, order.posted_slot_tail);
+    let order_id = crate::dlob::util::order_hash(&user, 1, order.market_index);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::TriggerMarket);
@@ -3512,4 +3507,70 @@ fn dlob_l3_trigger_orders_by_price() {
         0,
         "No trigger asks should be included when trigger_price is None"
     );
+}
+
+use crate::dlob::types::DynamicPrice;
+#[test]
+fn market_order_get_price_same_start_end_price() {
+    // Test that when auction_start_price == auction_end_price, get_price always returns end_price
+    let auction_price = 123456_000_000i64;
+    let duration = 10u8;
+    let tick_size = 1u64;
+    let start_slot = 100u64;
+    let oracle_price = 1000u64;
+
+    // Test for both Long and Short directions
+    for direction in [Direction::Long, Direction::Short] {
+        let order = MarketOrder {
+            id: 1,
+            size: 100,
+            start_price: auction_price,
+            end_price: auction_price,
+            price: 0, // No limit price after auction
+            duration,
+            slot: start_slot,
+            max_ts: 0,
+            is_limit: false,
+            direction,
+            reduce_only: false,
+        };
+
+        // Test at start of auction (slot = start_slot)
+        let price_at_start = order.get_price(start_slot, oracle_price, tick_size);
+        assert_eq!(
+            price_at_start,
+            Some(auction_price as u64),
+            "Price at start should equal end_price for {:?}",
+            direction
+        );
+
+        // Test during auction (slot = start_slot + 5)
+        let price_during = order.get_price(start_slot + 5, oracle_price, tick_size);
+        assert_eq!(
+            price_during,
+            Some(auction_price as u64),
+            "Price during auction should equal end_price for {:?}",
+            direction
+        );
+
+        // Test at end of auction (slot = start_slot + duration)
+        let price_at_end = order.get_price(start_slot + duration as u64, oracle_price, tick_size);
+        assert_eq!(
+            price_at_end,
+            Some(auction_price as u64),
+            "Price at end should equal end_price for {:?}",
+            direction
+        );
+
+        // Test after auction (slot = start_slot + duration + 1)
+        let price_after =
+            order.get_price(start_slot + duration as u64 + 1, oracle_price, tick_size);
+        // After auction, if price is 0, it returns None, otherwise returns price
+        // Since we set price = 0, it should return None
+        assert_eq!(
+            price_after, None,
+            "Price after auction should be None when price=0 for {:?}",
+            direction
+        );
+    }
 }

@@ -539,11 +539,11 @@ impl DLOB {
     ) -> Option<CrossingRegion> {
         let book = self.get_l3_snapshot(market_index, market_type);
 
-        let mut bids = book.bids(Some(oracle_price), perp_market, None);
-        let mut asks = book.asks(Some(oracle_price), perp_market, None);
+        let mut bids = book.bids(Some(oracle_price), perp_market, None).peekable();
+        let mut asks = book.asks(Some(oracle_price), perp_market, None).peekable();
 
-        let best_bid = bids.next()?.price;
-        let best_ask = asks.next()?.price;
+        let best_bid = bids.peek()?.price;
+        let best_ask = asks.peek()?.price;
 
         if best_bid < best_ask {
             return None;
@@ -635,12 +635,7 @@ impl DLOB {
     }
 
     fn update_order(&self, user: &Pubkey, slot: u64, new_order: Order, old_order: Order) {
-        let order_id = order_hash(
-            user,
-            new_order.order_id,
-            new_order.market_index,
-            new_order.posted_slot_tail,
-        );
+        let order_id = order_hash(user, new_order.order_id, new_order.market_index);
         log::trace!(target: TARGET, "update order: {order_id},{},{:?} @ {slot}", old_order.order_id, new_order.order_type);
 
         // Record update event
@@ -765,12 +760,7 @@ impl DLOB {
     }
 
     fn remove_order(&self, user: &Pubkey, slot: u64, order: Order) {
-        let order_id = order_hash(
-            user,
-            order.order_id,
-            order.market_index,
-            order.posted_slot_tail,
-        );
+        let order_id = order_hash(user, order.order_id, order.market_index);
 
         // Record remove event
         self.record_order_event(
@@ -841,12 +831,7 @@ impl DLOB {
     }
 
     fn insert_order(&self, user: &Pubkey, slot: u64, order: Order) {
-        let order_id = order_hash(
-            user,
-            order.order_id,
-            order.market_index,
-            order.posted_slot_tail,
-        );
+        let order_id = order_hash(user, order.order_id, order.market_index);
         log::trace!(target: TARGET, "insert order: {order_id} @ {slot}");
 
         if order.base_asset_amount <= order.base_asset_amount_filled {
