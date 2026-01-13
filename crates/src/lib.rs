@@ -3827,6 +3827,118 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
+    /// Liquidate a perp pnl using deposit for a given user.
+    ///
+    /// This method constructs a liquidation instruction for a perpetual market position's pnl.
+    /// The liquidator will be the subaccount associated with this `TransactionBuilder` (i.e., the builder's default subaccount).
+    ///
+    /// # Parameters
+    /// - `liquidatee`: The user account (liquidatee) whose position will be liquidated.
+    /// - `perp_market_index`: The index of the perp market to liquidate on.
+    /// - `spot_market_index`: The index of the spot market to be used as liability.
+    /// - `liquidator_max_pnl_transfer`: The maximum pnl amount the liquidator is willing to liquidate.
+    /// - `limit_price`: Optional limit price for the liquidation (if `None`, no limit is set).
+    ///
+    /// # Returns
+    /// Returns an updated `TransactionBuilder` with the liquidation instruction appended.
+    pub fn liquidate_perp_pnl_for_deposit(
+        mut self,
+        liquidatee: &User,
+        perp_market_index: u16,
+        spot_market_index: u16,
+        liquidator_max_pnl_transfer: u128,
+        limit_price: Option<u64>,
+    ) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::LiquidatePerpPnlForDeposit {
+                state: *state_account(),
+                authority: self.authority,
+                liquidator: self.sub_account,
+                liquidator_stats: Wallet::derive_stats_account(&self.owner()),
+                user: Wallet::derive_user_account(&liquidatee.authority, liquidatee.sub_account_id),
+                user_stats: Wallet::derive_stats_account(&liquidatee.authority),
+            },
+            [&self.account_data, liquidatee].into_iter(),
+            std::iter::empty(),
+            [
+                MarketId::perp(perp_market_index),
+                MarketId::spot(spot_market_index),
+            ]
+            .iter(),
+        );
+
+        let liquidate_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::LiquidatePerpPnlForDeposit {
+                perp_market_index,
+                spot_market_index,
+                liquidator_max_pnl_transfer,
+                limit_price,
+            }),
+        };
+
+        self.ixs.push(liquidate_ix);
+        self
+    }
+
+    /// Liquidate borrows using perp pnl for a given user.
+    ///
+    /// This method constructs a liquidation instruction for a borrow position's pnl.
+    /// The liquidator will be the subaccount associated with this `TransactionBuilder` (i.e., the builder's default subaccount).
+    ///
+    /// # Parameters
+    /// - `liquidatee`: The user account (liquidatee) whose position will be liquidated.
+    /// - `perp_market_index`: The index of the perp market to liquidate on.
+    /// - `spot_market_index`: The index of the spot market to be used as liability.
+    /// - `liquidator_max_liability_transfer`: The maximum transfer amount the liquidator is willing to liquidate.
+    /// - `limit_price`: Optional limit price for the liquidation (if `None`, no limit is set).
+    ///
+    /// # Returns
+    /// Returns an updated `TransactionBuilder` with the liquidation instruction appended.
+    pub fn liquidate_borrow_for_perp_pnl(
+        mut self,
+        liquidatee: &User,
+        perp_market_index: u16,
+        spot_market_index: u16,
+        liquidator_max_liability_transfer: u128,
+        limit_price: Option<u64>,
+    ) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::LiquidateBorrowForPerpPnl {
+                state: *state_account(),
+                authority: self.authority,
+                liquidator: self.sub_account,
+                liquidator_stats: Wallet::derive_stats_account(&self.owner()),
+                user: Wallet::derive_user_account(&liquidatee.authority, liquidatee.sub_account_id),
+                user_stats: Wallet::derive_stats_account(&liquidatee.authority),
+            },
+            std::iter::empty(),
+            [&self.account_data, liquidatee].into_iter(),
+            [
+                MarketId::perp(perp_market_index),
+                MarketId::spot(spot_market_index),
+            ]
+            .iter(),
+        );
+
+        let liquidate_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::LiquidateBorrowForPerpPnl {
+                perp_market_index,
+                spot_market_index,
+                liquidator_max_liability_transfer,
+                limit_price,
+            }),
+        };
+
+        self.ixs.push(liquidate_ix);
+        self
+    }
+
     /// Post a Pyth Lazer oracle update
     ///
     /// Appends an Ed25519 signature verify ix and Pyth Lazer oracle update ix to the transaction.
