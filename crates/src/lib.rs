@@ -3915,8 +3915,8 @@ impl<'a> TransactionBuilder<'a> {
                 user: Wallet::derive_user_account(&liquidatee.authority, liquidatee.sub_account_id),
                 user_stats: Wallet::derive_stats_account(&liquidatee.authority),
             },
-            std::iter::empty(),
             [&self.account_data, liquidatee].into_iter(),
+            std::iter::empty(),
             [
                 MarketId::perp(perp_market_index),
                 MarketId::spot(spot_market_index),
