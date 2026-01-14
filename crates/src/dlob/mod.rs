@@ -428,9 +428,7 @@ impl DLOB {
     pub fn spawn_notifier(&'static self) -> DLOBNotifier {
         let (tx, rx) = crossbeam::channel::bounded(2048);
         std::thread::spawn(move || {
-            env_logger::try_init();
             while let Ok(event) = rx.recv() {
-                let t0 = std::time::SystemTime::now();
                 match event {
                     DLOBEvent::SlotAndOracleUpdate {
                         market,
@@ -456,11 +454,6 @@ impl DLOB {
                         }
                     }
                 }
-                let elapsed = std::time::SystemTime::now()
-                    .duration_since(t0)
-                    .unwrap()
-                    .as_micros();
-                log::info!(target: TARGET, "processed {elapsed}mu");
             }
             log::error!(target: TARGET, "notifier thread finished");
         });
@@ -636,10 +629,12 @@ impl DLOB {
 
         self.with_orderbook_mut(&MarketId::new(order.market_index, order.market_type), |mut orderbook| {
             if let Some(metadata) = self.metadata.get(&order_id) {
+                let metadata_ref = metadata.clone();
+                drop(metadata);
                 let mut order_removed;
-                log::trace!(target: TARGET, "remove order: {order_id} @ status: {:?}, kind: {:?}/{:?}, slot: {slot}", order.status, metadata.kind, order.order_type);
+                log::trace!(target: TARGET, "remove order: {order_id} @ status: {:?}, kind: {:?}/{:?}, slot: {slot}", order.status, metadata_ref.kind, order.order_type);
 
-                match metadata.value().kind {
+                match metadata_ref.kind {
                     OrderKind::Market | OrderKind::MarketTriggered => {
                         order_removed = orderbook.market_orders.remove(order_id, order);
                     }
@@ -696,9 +691,9 @@ impl DLOB {
                     log::warn!(
                         target: TARGET,
                         "remove order failed: {order_id} not removed. kind: {:?}, user: {}, order_id: {}",
-                        metadata.value().kind,
-                        metadata.value().user,
-                        metadata.value().order_id,
+                        metadata_ref.kind,
+                        metadata_ref.user,
+                        metadata_ref.order_id,
                     );
                 }
             }
