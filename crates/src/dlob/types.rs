@@ -147,7 +147,11 @@ pub enum DLOBEvent {
         market: MarketId,
     },
     /// user order deltas
-    Deltas { deltas: Vec<OrderDelta>, slot: u64 },
+    Deltas {
+        pubkey: Pubkey,
+        deltas: Vec<OrderDelta>,
+        slot: u64,
+    },
 }
 
 /// Event type for tracking order lifecycle
@@ -184,7 +188,7 @@ pub(crate) trait OrderKey {
 impl OrderKey for MarketOrder {
     type Key = MarketOrderKey;
     fn key(&self) -> Self::Key {
-        (self.slot, self.id)
+        (self.start_price as u64, self.id)
     }
 }
 
@@ -195,7 +199,7 @@ impl MarketOrder {
     }
     /// Check if this auction order has completed
     pub fn is_auction_complete(&self, current_slot: u64) -> bool {
-        current_slot.saturating_sub(self.slot) > self.duration as u64
+        self.duration == 0 || current_slot.saturating_sub(self.slot) > self.duration as u64
     }
 
     /// Convert to LimitOrder when auction completes
@@ -226,7 +230,7 @@ impl OracleOrder {
     }
     /// Check if this auction order has completed
     pub fn is_auction_complete(&self, current_slot: u64) -> bool {
-        current_slot.saturating_sub(self.slot) > self.duration as u64
+        self.duration == 0 || current_slot.saturating_sub(self.slot) > self.duration as u64
     }
 
     /// Convert to FloatingLimitOrder when auction completes
@@ -246,14 +250,14 @@ impl OracleOrder {
 impl OrderKey for LimitOrder {
     type Key = LimitOrderKey;
     fn key(&self) -> Self::Key {
-        (self.price, self.slot, self.id)
+        (self.price, self.max_ts, self.id)
     }
 }
 
 impl OrderKey for FloatingLimitOrder {
     type Key = FloatingLimitOrderKey;
     fn key(&self) -> Self::Key {
-        (self.offset_price, self.slot, self.id)
+        (self.offset_price, self.max_ts, self.id)
     }
 }
 
@@ -427,34 +431,32 @@ impl DynamicPrice for MarketOrder {
     ///
     /// A value of None indicates the order will use the fallback/vamm price
     fn get_price(&self, slot: u64, _oracle_price: u64, tick_size: u64) -> Option<u64> {
+        if self.is_auction_complete(slot) && (self.start_price != 0 || self.end_price != 0) {
+            return Some(self.price);
+        }
         let slots_elapsed = slot.saturating_sub(self.slot) as i64;
         let delta_denominator = self.duration as i64;
         let delta_numerator = slots_elapsed.min(delta_denominator);
 
-        // limit price after auction end
-        if slots_elapsed > self.duration as i64 {
-            return if self.price > 0 {
-                Some(self.price)
-            } else {
-                None
-            };
-        }
-
         if delta_denominator == 0 {
-            return Some(self.end_price as u64);
+            return Some(standardize_price(
+                self.end_price as u64,
+                tick_size,
+                self.direction,
+            ));
         }
 
-        let price = if self.direction == Direction::Long {
-            let delta = (self.end_price.saturating_sub(self.start_price) * delta_numerator)
-                / delta_denominator;
-            self.start_price.saturating_add(delta)
-        } else {
-            let delta = (self.start_price.saturating_sub(self.end_price) * delta_numerator)
-                / delta_denominator;
-            self.start_price.saturating_sub(delta)
+        let price = match self.direction {
+            Direction::Long => {
+                self.start_price
+                    + ((self.end_price - self.start_price) * delta_numerator / delta_denominator)
+            }
+            Direction::Short => {
+                self.start_price
+                    - ((self.start_price - self.end_price) * delta_numerator / delta_denominator)
+            }
         };
 
-        let price = price.max(tick_size as i64);
         Some(standardize_price(price as u64, tick_size, self.direction))
     }
 }

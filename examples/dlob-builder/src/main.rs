@@ -135,11 +135,11 @@ async fn get_l3_orderbook(
         .unwrap();
     let max_orders = params.max_orders.unwrap_or(usize::MAX);
     let bids: Vec<L3OrderResponse> = l3_book
-        .top_bids(max_orders, Some(oracle_price), Some(&perp_market))
+        .top_bids(max_orders, Some(oracle_price), Some(&perp_market), None)
         .map(convert_order)
         .collect();
     let asks: Vec<L3OrderResponse> = l3_book
-        .top_asks(max_orders, Some(oracle_price), Some(&perp_market))
+        .top_asks(max_orders, Some(oracle_price), Some(&perp_market), None)
         .map(convert_order)
         .collect();
 

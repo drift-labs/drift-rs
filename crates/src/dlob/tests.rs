@@ -69,7 +69,7 @@ fn dlob_limit_order_sorting() {
     // Build L3 snapshot to get sorted orders
     let oracle_price = 1000;
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -285,7 +285,7 @@ fn dlob_l2_snapshot() {
     let old_order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 2, slot);
     let mut new_order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 4, slot); // Changed size from 2 to 4
     new_order.post_only = true;
-    dlob.update_order(&user, slot, new_order, old_order);
+    dlob.insert_order(&user, slot, new_order);
 
     // Get updated L2 snapshot
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
@@ -302,7 +302,7 @@ fn dlob_l2_snapshot() {
     let old_order = create_test_order(3, OrderType::Market, Direction::Long, 0, 4, slot);
     let mut new_order = create_test_order(3, OrderType::Market, Direction::Long, 1050, 4, slot);
     new_order.base_asset_amount_filled = old_order.base_asset_amount; // Set filled amount equal to total amount
-    dlob.update_order(&user, slot, new_order, old_order);
+    dlob.insert_order(&user, slot, new_order);
 
     // Get updated L2 snapshot
     if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
@@ -397,7 +397,7 @@ fn dlob_find_crosses_for_taker_order_full_fill() {
 
     // Update L3 view before finding crosses
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
 
     // Create taker order to buy 7 units at 1000
@@ -437,7 +437,7 @@ fn dlob_find_crosses_for_taker_order_partial_fill() {
 
     // Update L3 view before finding crosses
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
 
     // Create taker order to buy 5 units at 1000
@@ -634,7 +634,7 @@ fn dlob_find_crosses_for_taker_order_floating_limit() {
 
     // Update L3 view before finding crosses
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
 
     // Create taker order to buy at 1000
@@ -675,7 +675,7 @@ fn dlob_find_crosses_for_taker_order_price_priority() {
 
     // Update L3 view before finding crosses
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
 
     // Create taker order to buy 5 units at 1000
@@ -956,7 +956,7 @@ fn dlob_find_crosses_for_auctions_market_orders() {
 
     // Update L3 view before finding crosses
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
 
     let crosses =
@@ -993,7 +993,7 @@ fn dlob_find_crosses_for_auctions_oracle_orders() {
 
     // Update L3 view before finding crosses
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
 
     let crosses =
@@ -1030,7 +1030,7 @@ fn dlob_find_crosses_for_auctions_no_crosses() {
 
     // Update L3 view before finding crosses
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
 
     let crosses =
@@ -1106,7 +1106,7 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
 
     // Update L3 view before finding crosses
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
 
     let crosses =
@@ -1239,7 +1239,7 @@ fn dlob_find_crosses_for_auctions_vamm_min_order_size() {
 
     // Update L3 view before finding crosses
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
 
     let crosses = dlob.find_crosses_for_auctions(
@@ -1301,7 +1301,7 @@ fn dlob_trigger_order_transitions() {
     triggered_order.trigger_condition = OrderTriggerCondition::TriggeredAbove;
     // Set oracle trigger flag for oracle-triggered market
     triggered_order.bit_flags |= Order::ORACLE_TRIGGER_MARKET_FLAG;
-    dlob.update_order(&user, slot, triggered_order, order);
+    dlob.insert_order(&user, slot, triggered_order);
     {
         let book = dlob
             .markets
@@ -1348,7 +1348,7 @@ fn dlob_trigger_order_transitions() {
     triggered_order2.auction_duration = 5;
     triggered_order2.auction_start_price = 1050;
     triggered_order2.auction_end_price = 1048;
-    dlob.update_order(&user, slot + 1, triggered_order2, order2);
+    dlob.insert_order(&user, slot + 1, triggered_order2);
     {
         let book = dlob
             .markets
@@ -1399,7 +1399,7 @@ fn dlob_metadata_consistency_after_auction_expiry_and_removal() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in market_orders with LimitAuction metadata
-    let order_id = crate::dlob::util::order_hash(&user, 1, order.market_index);
+    let order_id = crate::dlob::util::order_hash(&user, 1);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::LimitAuction);
@@ -1498,7 +1498,7 @@ fn dlob_metadata_consistency_limit_auction_expiry_and_removal() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in market_orders with LimitAuction metadata
-    let order_id = crate::dlob::util::order_hash(&user, 1, order.market_index);
+    let order_id = crate::dlob::util::order_hash(&user, 1);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::LimitAuction);
@@ -1590,7 +1590,7 @@ fn dlob_metadata_consistency_floating_limit_auction_expiry_and_removal() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in oracle_orders with FloatingLimitAuction metadata
-    let order_id = crate::dlob::util::order_hash(&user, 1, order.market_index);
+    let order_id = crate::dlob::util::order_hash(&user, 1);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::FloatingLimitAuction);
@@ -1682,7 +1682,7 @@ fn dlob_trigger_order_transition_remove() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in trigger_orders
-    let order_id = crate::dlob::util::order_hash(&user, 1, order.market_index);
+    let order_id = crate::dlob::util::order_hash(&user, 1);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::TriggerMarket);
@@ -1700,7 +1700,7 @@ fn dlob_trigger_order_transition_remove() {
     triggered_order.slot = slot + 1; // Slot changes when triggered
     triggered_order.price = 1100; // Price might change when triggered
 
-    dlob.update_order(&user, slot, triggered_order, order);
+    dlob.insert_order(&user, slot, triggered_order);
 
     // Verify the transition worked
     {
@@ -1751,7 +1751,7 @@ fn dlob_trigger_order_transition_update() {
     dlob.insert_order(&user, slot, order);
 
     // Verify initial state - order should be in trigger_orders
-    let order_id = crate::dlob::util::order_hash(&user, 1, order.market_index);
+    let order_id = crate::dlob::util::order_hash(&user, 1);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
         assert_eq!(metadata.kind, OrderKind::TriggerMarket);
@@ -1770,7 +1770,7 @@ fn dlob_trigger_order_transition_update() {
     triggered_order.price = 1100; // Price changes when triggered
 
     // This update might fail silently
-    dlob.update_order(&user, slot, triggered_order, order);
+    dlob.insert_order(&user, slot, triggered_order);
 
     // Check if the transition actually worked
     {
@@ -1890,7 +1890,7 @@ fn dlob_get_maker_bids_l3() {
         book.update_slot(slot);
     }
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -1968,7 +1968,7 @@ fn dlob_get_maker_asks_l3() {
         book.update_slot(slot);
     }
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -2041,7 +2041,7 @@ fn dlob_get_taker_bids_l3() {
         book.update_slot(slot);
     }
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -2103,7 +2103,7 @@ fn dlob_get_taker_asks_l3() {
         book.update_slot(slot);
     }
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -2200,7 +2200,7 @@ fn dlob_l3_functions_mixed_order_types() {
         book.update_slot(slot);
     }
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -2297,7 +2297,7 @@ fn l3book_bids_query_with_fixed_and_floating_orders() {
 
     // Build L3 snapshot
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -2358,7 +2358,7 @@ fn l3book_asks_query_with_fixed_and_floating_orders() {
 
     // Build L3 snapshot
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -2410,7 +2410,7 @@ fn l3book_bids_with_oracle_price_change() {
 
     // Build L3 snapshot at initial oracle price
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(initial_oracle, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(initial_oracle, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -2465,7 +2465,7 @@ fn l3book_asks_with_oracle_price_change() {
 
     // Build L3 snapshot at initial oracle price
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(initial_oracle, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(initial_oracle, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -2532,7 +2532,7 @@ fn l3book_top_bids_and_top_asks() {
 
     // Build L3 snapshot
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -2574,7 +2574,7 @@ fn l3book_empty_orderbook() {
 
     // Build L3 snapshot with empty orderbook
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -2629,7 +2629,7 @@ fn l3book_bids_includes_all_order_types() {
         book.update_slot(slot);
     }
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -2699,7 +2699,7 @@ fn l3book_vamm_orders_sorted_correctly() {
         book.update_slot(query_slot);
     }
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -2824,7 +2824,7 @@ fn l3book_vamm_orders_sorted_correctly() {
     }
     // Update L3 view again
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -2944,7 +2944,7 @@ fn dlob_l3_order_flags_correctness() {
         book.update_slot(slot);
     }
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 
@@ -3136,7 +3136,7 @@ fn dlob_l3_trigger_orders_by_price() {
         book.update_slot(slot);
     }
     if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
-        book.update_l3_view(oracle_price, &dlob.metadata, &dashmap::DashMap::default());
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
     let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
 

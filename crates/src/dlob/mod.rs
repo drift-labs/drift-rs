@@ -82,29 +82,6 @@ impl<T: Clone + Debug + From<(u64, Order)> + OrderKey> Orders<T> {
             }
         }
     }
-
-    /// Returns true if update replaced an existing order
-    pub fn update(&mut self, order_id: u64, new_order: Order, old_order: Order) -> bool {
-        let old_order_for_key: T = (order_id, old_order).into();
-        let old_key = old_order_for_key.key();
-        let order: T = (order_id, new_order).into();
-        match new_order.direction {
-            Direction::Long => {
-                let replaced = self.bids.remove(&Reverse(old_key)).is_some();
-                if replaced {
-                    self.insert_raw(true, order);
-                }
-                replaced
-            }
-            Direction::Short => {
-                let replaced = self.asks.remove(&old_key).is_some();
-                if replaced {
-                    self.insert_raw(false, order);
-                }
-                replaced
-            }
-        }
-    }
 }
 
 /// Orderbook for a specific market
@@ -297,7 +274,7 @@ impl DLOBNotifier {
     /// ```
     pub fn user_update(&self, pubkey: Pubkey, old_user: Option<&User>, new_user: &User, slot: u64) {
         let deltas = match old_user {
-            Some(old_user) => crate::dlob::util::compare_user_orders(pubkey, old_user, new_user),
+            Some(old_user) => crate::dlob::util::compare_user_orders(pubkey, old_user, new_user).1,
             None => new_user
                 .orders
                 .iter()
@@ -305,14 +282,18 @@ impl DLOBNotifier {
                     o.status == OrderStatus::Open
                         && o.base_asset_amount > o.base_asset_amount_filled
                 })
-                .map(|o| OrderDelta::Create {
-                    order: *o,
-                    user: pubkey,
-                })
+                .map(|o| OrderDelta::Create { order: *o })
                 .collect(),
         };
+        if deltas.is_empty() {
+            return;
+        }
         self.sender
-            .send(DLOBEvent::Deltas { deltas, slot })
+            .send(DLOBEvent::Deltas {
+                deltas,
+                pubkey,
+                slot,
+            })
             .expect("Failed to send DLOB event - channel may be closed");
     }
 
@@ -338,10 +319,10 @@ impl DLOBNotifier {
 pub struct DLOB {
     /// Map from market to orderbook
     markets: DashMap<MarketId, Orderbook, FxBuildHasher>,
-    /// Map from DLOB internal order ID to order metadata
-    metadata: MetadataMap,
     /// Map from DLOB internal order ID to event history
     order_events: OrderEventMap,
+    /// Map from DLOB internal order ID to order metadata
+    metadata: MetadataMap,
     /// static drift program data e.g market tick sizes
     program_data: &'static ProgramData,
     /// last slot update
@@ -367,6 +348,71 @@ impl Default for DLOB {
 }
 
 impl DLOB {
+    /// Record an event for an order
+    fn record_order_event(&self, order_id: u64, event: OrderEvent) {
+        self.order_events
+            .entry(order_id)
+            .or_insert_with(Vec::new)
+            .push(event);
+    }
+
+    /// Log all events for a missing order (helper function for use in load_orderbook)
+    fn log_missing_order_events_helper(order_id: u64, order_events: &OrderEventMap) {
+        if let Some(events) = order_events.get(&order_id) {
+            log::warn!(
+                target: TARGET,
+                "=== MISSING ORDER EVENT LOG: order_id={} ({} events) ===",
+                order_id,
+                events.len()
+            );
+            for (idx, event) in events.iter().enumerate() {
+                match &event.event_type {
+                    OrderEventType::Insert => {
+                        log::warn!(
+                            target: TARGET,
+                            "  [{}] INSERT @ slot={}, user={}, order_id={}, order={:?}",
+                            idx + 1,
+                            event.slot,
+                            event.user,
+                            event.order_id,
+                            event.order
+                        );
+                    }
+                    OrderEventType::Update => {
+                        log::warn!(
+                            target: TARGET,
+                            "  [{}] UPDATE @ slot={}, user={}, order_id={}, old_order={:?}, new_order={:?}",
+                            idx + 1,
+                            event.slot,
+                            event.user,
+                            event.order_id,
+                            event.old_order,
+                            event.order
+                        );
+                    }
+                    OrderEventType::Remove => {
+                        log::warn!(
+                            target: TARGET,
+                            "  [{}] REMOVE @ slot={}, user={}, order_id={}, order={:?}",
+                            idx + 1,
+                            event.slot,
+                            event.user,
+                            event.order_id,
+                            event.order
+                        );
+                    }
+                }
+            }
+            log::warn!(target: TARGET, "=== END MISSING ORDER EVENT LOG ===");
+        } else {
+            log::warn!(
+                target: TARGET,
+                "Missing order {} has no event history",
+                order_id
+            );
+        }
+    }
+
     /// Enable live L2 snapshots for all orderbooks (default: disabled)
     pub fn enable_l2_snapshot(&self) {
         self.enable_l2_snapshot
@@ -382,7 +428,9 @@ impl DLOB {
     pub fn spawn_notifier(&'static self) -> DLOBNotifier {
         let (tx, rx) = crossbeam::channel::bounded(2048);
         std::thread::spawn(move || {
+            env_logger::try_init();
             while let Ok(event) = rx.recv() {
+                let t0 = std::time::SystemTime::now();
                 match event {
                     DLOBEvent::SlotAndOracleUpdate {
                         market,
@@ -391,26 +439,28 @@ impl DLOB {
                     } => {
                         self.update_slot_and_oracle_price(market, slot, oracle_price);
                     }
-                    DLOBEvent::Deltas { slot, deltas } => {
+                    DLOBEvent::Deltas {
+                        pubkey: user,
+                        slot,
+                        deltas,
+                    } => {
                         for delta in deltas {
                             match delta {
-                                OrderDelta::Create { user, order } => {
+                                OrderDelta::Create { order } => {
                                     self.insert_order(&user, slot, order);
                                 }
-                                OrderDelta::Update {
-                                    user,
-                                    new_order,
-                                    old_order,
-                                } => {
-                                    self.update_order(&user, slot, new_order, old_order);
-                                }
-                                OrderDelta::Remove { user, order } => {
+                                OrderDelta::Remove { order } => {
                                     self.remove_order(&user, slot, order);
                                 }
                             }
                         }
                     }
                 }
+                let elapsed = std::time::SystemTime::now()
+                    .duration_since(t0)
+                    .unwrap()
+                    .as_micros();
+                log::info!(target: TARGET, "processed {elapsed}mu");
             }
             log::error!(target: TARGET, "notifier thread finished");
         });
@@ -569,225 +619,38 @@ impl DLOB {
         })
     }
 
-    /// Record an event for an order
-    fn record_order_event(&self, order_id: u64, event: OrderEvent) {
-        self.order_events
-            .entry(order_id)
-            .or_insert_with(Vec::new)
-            .push(event);
-    }
-
-    /// Log all events for a missing order (helper function for use in load_orderbook)
-    fn log_missing_order_events_helper(order_id: u64, order_events: &OrderEventMap) {
-        if let Some(events) = order_events.get(&order_id) {
-            log::warn!(
-                target: TARGET,
-                "=== MISSING ORDER EVENT LOG: order_id={} ({} events) ===",
-                order_id,
-                events.len()
-            );
-            for (idx, event) in events.iter().enumerate() {
-                match &event.event_type {
-                    OrderEventType::Insert => {
-                        log::warn!(
-                            target: TARGET,
-                            "  [{}] INSERT @ slot={}, user={}, order_id={}, order={:?}",
-                            idx + 1,
-                            event.slot,
-                            event.user,
-                            event.order_id,
-                            event.order
-                        );
-                    }
-                    OrderEventType::Update => {
-                        log::warn!(
-                            target: TARGET,
-                            "  [{}] UPDATE @ slot={}, user={}, order_id={}, old_order={:?}, new_order={:?}",
-                            idx + 1,
-                            event.slot,
-                            event.user,
-                            event.order_id,
-                            event.old_order,
-                            event.order
-                        );
-                    }
-                    OrderEventType::Remove => {
-                        log::warn!(
-                            target: TARGET,
-                            "  [{}] REMOVE @ slot={}, user={}, order_id={}, order={:?}",
-                            idx + 1,
-                            event.slot,
-                            event.user,
-                            event.order_id,
-                            event.order
-                        );
-                    }
-                }
-            }
-            log::warn!(target: TARGET, "=== END MISSING ORDER EVENT LOG ===");
-        } else {
-            log::warn!(
-                target: TARGET,
-                "Missing order {} has no event history",
-                order_id
-            );
-        }
-    }
-
-    fn update_order(&self, user: &Pubkey, slot: u64, new_order: Order, old_order: Order) {
-        let order_id = order_hash(user, new_order.order_id, new_order.market_index);
-        log::trace!(target: TARGET, "update order: {order_id},{},{:?} @ {slot}", old_order.order_id, new_order.order_type);
-
-        // Record update event
-        self.record_order_event(
-            order_id,
-            OrderEvent {
-                event_type: OrderEventType::Update,
-                slot,
-                order: Some(new_order),
-                old_order: Some(old_order),
-                user: *user,
-                order_id,
-            },
-        );
-
-        if new_order.status != OrderStatus::Open {
-            log::info!(target: TARGET, "update into remove: {order_id:?}");
-            self.remove_order(user, slot, new_order);
-            return;
-        }
-
-        self.with_orderbook_mut(&MarketId::new(new_order.market_index, new_order.market_type), |mut orderbook| {
-            let mut new_meta_kind: Option<OrderKind> = None;
-            if let Some(metadata) = self.metadata.get(&order_id) {
-                log::trace!(target: TARGET, "update ({order_id}): {:?}", metadata.kind);
-                let mut updated = false;
-
-                match metadata.kind {
-                    OrderKind::Market | OrderKind::MarketTriggered => {
-                        updated = orderbook.market_orders.update(order_id, new_order, old_order);
-                    }
-                    OrderKind::Oracle | OrderKind::OracleTriggered => {
-                        updated = orderbook.oracle_orders.update(order_id, new_order, old_order);
-                    }
-                    OrderKind::LimitAuction | OrderKind::LimitTriggered => {
-                        // if the auction completed, check if order moved to resting
-                        let auction_in_progress = old_order.slot + old_order.auction_duration as u64 > slot;
-                        if auction_in_progress {
-                            log::trace!(target: TARGET, "update limit auction: {order_id}");
-                            updated = orderbook.market_orders.update(order_id, new_order, old_order);
-                        }
-
-                        if !updated {
-                            log::trace!(target: TARGET, "update limit auction (resting): {order_id}");
-                            // Remove from market_orders and insert into resting_limit_orders
-                            orderbook.market_orders.remove(order_id, old_order);
-                            orderbook.resting_limit_orders.insert(order_id, new_order);
-                            updated = true;
-                            new_meta_kind = Some(OrderKind::Limit);
-                        }
-                    }
-                    OrderKind::FloatingLimitAuction => {
-                        // if the auction completed, check if order moved to resting
-                        let auction_in_progress = old_order.slot + old_order.auction_duration as u64 > slot;
-                        if auction_in_progress {
-                            log::trace!(target: TARGET, "update oracle limit: {order_id}");
-                            updated = orderbook.oracle_orders.update(order_id, new_order, old_order);
-                        }
-
-                        if !updated {
-                            log::trace!(target: TARGET, "update oracle limit (resting): {order_id}");
-                            // Remove from oracle_orders and insert into floating_limit_orders
-                            orderbook.oracle_orders.remove(order_id, old_order);
-                            orderbook.floating_limit_orders.insert(order_id, new_order);
-                            updated = true;
-                            new_meta_kind = Some(OrderKind::FloatingLimit);
-                        }
-                    }
-                    OrderKind::Limit => {
-                        updated = orderbook.resting_limit_orders.update(order_id, new_order, old_order);
-                    }
-                    OrderKind::FloatingLimit => {
-                        updated = orderbook.floating_limit_orders.update(order_id, new_order, old_order);
-                    }
-                    OrderKind::TriggerMarket => {
-                        log::trace!(target: TARGET, "update trigger market order: {order_id},{:?}", new_order);
-                        match new_order.trigger_condition {
-                            OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
-                                updated = orderbook.trigger_orders.update(order_id, new_order, old_order);
-                            }
-                            OrderTriggerCondition::TriggeredAbove | OrderTriggerCondition::TriggeredBelow => {
-                                // order has been triggered, its an ordinary auction order now
-                                 orderbook.trigger_orders.remove(order_id, old_order);
-                                let new_kind = if new_order.is_oracle_trigger_market() {
-                                     orderbook.oracle_orders.insert(order_id, new_order);
-                                    OrderKind::OracleTriggered
-                                } else {
-                                     orderbook.market_orders.insert(order_id, new_order);
-                                    OrderKind::MarketTriggered
-                                };
-                                updated = true;
-                                new_meta_kind = Some(new_kind);
-                            }
-                        }
-                    }
-                    OrderKind::TriggerLimit => {
-                        log::trace!(target: TARGET, "update trigger limit order: {order_id},{:?}", new_order);
-                        match new_order.trigger_condition {
-                            OrderTriggerCondition::Above | OrderTriggerCondition::Below => {
-                                updated = orderbook.trigger_orders.update(order_id, new_order, old_order);
-                            }
-                            OrderTriggerCondition::TriggeredAbove | OrderTriggerCondition::TriggeredBelow => {
-                                // order has been triggered, its an ordinary auction order now
-                                log::trace!(target: TARGET, "trigger limit => market auction: {order_id}");
-                                orderbook.trigger_orders.remove(order_id, old_order);
-                                orderbook.market_orders.insert(order_id, new_order);
-                                updated = true;
-                                new_meta_kind = Some(OrderKind::LimitTriggered);
-                            }
-                        }
-                    }
-                }
-
-                if !updated {
-                    log::warn!(target: TARGET, "update order failed: {order_id}, {:?}, {old_order:?}, {new_order:?}", metadata.value());
-                }
-            }
-            if let Some(kind) = new_meta_kind {
-                self.metadata.insert(order_id, OrderMetadata::new(*user, kind, new_order.order_id, new_order.max_ts.unsigned_abs()));
-            }
-        });
-    }
-
     fn remove_order(&self, user: &Pubkey, slot: u64, order: Order) {
-        let order_id = order_hash(user, order.order_id, order.market_index);
+        let order_id = order_hash(user, order.order_id);
 
-        // Record remove event
-        self.record_order_event(
-            order_id,
-            OrderEvent {
-                event_type: OrderEventType::Remove,
-                slot,
-                order: Some(order),
-                old_order: None,
-                user: *user,
-                order_id,
-            },
-        );
+        // self.record_order_event(
+        //     order_id,
+        //     OrderEvent {
+        //         event_type: OrderEventType::Remove,
+        //         slot,
+        //         order: Some(order),
+        //         old_order: None,
+        //         user: *user,
+        //         order_id,
+        //     },
+        // );
 
         self.with_orderbook_mut(&MarketId::new(order.market_index, order.market_type), |mut orderbook| {
-            if let Some((_, metadata)) = self.metadata.remove(&order_id) {
+            if let Some(metadata) = self.metadata.get(&order_id) {
                 let mut order_removed;
                 log::trace!(target: TARGET, "remove order: {order_id} @ status: {:?}, kind: {:?}/{:?}, slot: {slot}", order.status, metadata.kind, order.order_type);
 
-                match metadata.kind {
+                match metadata.value().kind {
                     OrderKind::Market | OrderKind::MarketTriggered => {
                         order_removed = orderbook.market_orders.remove(order_id, order);
                     }
-                    OrderKind::Oracle | OrderKind::OracleTriggered => {
+                    OrderKind::Oracle => {
                         order_removed = orderbook.oracle_orders.remove(order_id, order);
                     }
-                    OrderKind::LimitAuction | OrderKind::LimitTriggered => {
+                    OrderKind::OracleTriggered => {
+                        order_removed = orderbook.oracle_orders.remove(order_id, order);
+                        orderbook.trigger_orders.remove(order_id, order);
+                    }
+                    OrderKind::LimitAuction => {
                         // if the auction completed, check if order moved to resting
                         log::trace!(target: TARGET, "remove auction limit order: {order_id}");
                         order_removed = orderbook.market_orders.remove(order_id, order);
@@ -795,6 +658,16 @@ impl DLOB {
                             log::trace!(target: TARGET, "remove auction limit order (resting): {order_id}");
                             order_removed = orderbook.resting_limit_orders.remove(order_id, order);
                         }
+                    }
+                    OrderKind::LimitTriggered => {
+                        // if the auction completed, check if order moved to resting
+                        log::trace!(target: TARGET, "remove auction limit order: {order_id}");
+                        order_removed = orderbook.market_orders.remove(order_id, order);
+                        if !order_removed {
+                            log::trace!(target: TARGET, "remove auction limit order (resting): {order_id}");
+                            order_removed = orderbook.resting_limit_orders.remove(order_id, order);
+                        }
+                        orderbook.trigger_orders.remove(order_id, order);
                     }
                     OrderKind::FloatingLimitAuction => {
                         // if the auction completed, check if order moved to resting
@@ -817,13 +690,15 @@ impl DLOB {
                     }
                 }
 
-                if !order_removed && order.max_ts.unsigned_abs() > SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() {
+                if order_removed {
+                    self.metadata.remove(&order_id);
+                } else {
                     log::warn!(
                         target: TARGET,
                         "remove order failed: {order_id} not removed. kind: {:?}, user: {}, order_id: {}",
-                        metadata.kind,
-                        metadata.user,
-                        metadata.order_id,
+                        metadata.value().kind,
+                        metadata.value().user,
+                        metadata.value().order_id,
                     );
                 }
             }
@@ -831,26 +706,20 @@ impl DLOB {
     }
 
     fn insert_order(&self, user: &Pubkey, slot: u64, order: Order) {
-        let order_id = order_hash(user, order.order_id, order.market_index);
+        let order_id = order_hash(user, order.order_id);
         log::trace!(target: TARGET, "insert order: {order_id} @ {slot}");
 
-        if order.base_asset_amount <= order.base_asset_amount_filled {
-            log::trace!(target: TARGET, "skipping fully filled order: {order:?}");
-            return;
-        }
-
-        // Record insert event
-        self.record_order_event(
-            order_id,
-            OrderEvent {
-                event_type: OrderEventType::Insert,
-                slot,
-                order: Some(order),
-                old_order: None,
-                user: *user,
-                order_id,
-            },
-        );
+        // self.record_order_event(
+        //     order_id,
+        //     OrderEvent {
+        //         event_type: OrderEventType::Insert,
+        //         slot,
+        //         order: Some(order),
+        //         old_order: None,
+        //         user: *user,
+        //         order_id,
+        //     },
+        // );
 
         self.with_orderbook_mut(
             &MarketId::new(order.market_index, order.market_type),
@@ -920,10 +789,12 @@ impl DLOB {
                             if order.is_oracle_trigger_market() {
                                 log::trace!(target: TARGET, "insert triggered oracle order: {order_id}");
                                 orderbook.oracle_orders.insert(order_id, order);
+                                orderbook.trigger_orders.remove(order_id, order);
                                 OrderKind::OracleTriggered
                             } else {
                                 log::trace!(target: TARGET, "insert triggered market order: {order_id}");
                                 orderbook.market_orders.insert(order_id, order);
+                                orderbook.trigger_orders.remove(order_id, order);
                                 OrderKind::MarketTriggered
                            }
                         }
@@ -938,6 +809,7 @@ impl DLOB {
                         | OrderTriggerCondition::TriggeredBelow => {
                             log::trace!(target: TARGET, "insert triggered limit order: {order_id}");
                             orderbook.market_orders.insert(order_id, order);
+                            orderbook.trigger_orders.remove(order_id, order);
                             OrderKind::LimitTriggered
                         }
                     },
@@ -1568,9 +1440,8 @@ impl L3Book {
                 });
             } else {
                 missing_metadata_count += 1;
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
-                // Log all events for this missing order
                 DLOB::log_missing_order_events_helper(order.id, order_events);
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1589,9 +1460,8 @@ impl L3Book {
                 });
             } else {
                 missing_metadata_count += 1;
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
-                // Log all events for this missing order
                 DLOB::log_missing_order_events_helper(order.id, order_events);
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1618,9 +1488,8 @@ impl L3Book {
                 });
             } else {
                 missing_metadata_count += 1;
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
-                // Log all events for this missing order
                 DLOB::log_missing_order_events_helper(order.id, order_events);
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1640,9 +1509,8 @@ impl L3Book {
                 });
             } else {
                 missing_metadata_count += 1;
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
-                // Log all events for this missing order
                 DLOB::log_missing_order_events_helper(order.id, order_events);
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1668,9 +1536,8 @@ impl L3Book {
                 }
             } else {
                 missing_metadata_count += 1;
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
-                // Log all events for this missing order
                 DLOB::log_missing_order_events_helper(order.id, order_events);
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1696,9 +1563,8 @@ impl L3Book {
                 }
             } else {
                 missing_metadata_count += 1;
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
-                // Log all events for this missing order
                 DLOB::log_missing_order_events_helper(order.id, order_events);
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1719,9 +1585,8 @@ impl L3Book {
                 });
             } else {
                 missing_metadata_count += 1;
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
-                // Log all events for this missing order
                 DLOB::log_missing_order_events_helper(order.id, order_events);
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1740,9 +1605,8 @@ impl L3Book {
                 });
             } else {
                 missing_metadata_count += 1;
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
-                // Log all events for this missing order
                 DLOB::log_missing_order_events_helper(order.id, order_events);
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1769,9 +1633,8 @@ impl L3Book {
                 }
             } else {
                 missing_metadata_count += 1;
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
-                // Log all events for this missing order
                 DLOB::log_missing_order_events_helper(order.id, order_events);
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
@@ -1797,9 +1660,8 @@ impl L3Book {
                 }
             } else {
                 missing_metadata_count += 1;
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
-                // Log all events for this missing order
                 DLOB::log_missing_order_events_helper(order.id, order_events);
+                log::info!(target: TARGET, "missing order id: {:?}", order.id);
             }
         }
 
