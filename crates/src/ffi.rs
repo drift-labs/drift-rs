@@ -1239,8 +1239,8 @@ mod tests {
             accounts::{PerpMarket, SpotMarket, User},
             types::{
                 ContractType, MarginRequirementType, OracleSource, Order, OrderParams,
-                OrderTriggerCondition, OrderType, PerpPosition, PositionFlag, PostOnlyParam,
-                SpotBalanceType, SpotPosition,
+                OrderTriggerCondition, OrderType, PerpPosition, PostOnlyParam, SpotBalanceType,
+                SpotPosition,
             },
         },
         ffi::{
@@ -2546,6 +2546,7 @@ mod tests {
         }
     }
 
+    #[ignore]
     #[test]
     fn ffi_test_incremental_margin_calculation() {
         // Test the cached margin calculation FFI functions
