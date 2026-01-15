@@ -54,15 +54,16 @@ impl MarketStateData {
 
 /// Optimized storage for drift markets and oracles
 pub struct MarketState {
-    state: AtomicPtr<Arc<MarketStateData>>,
+    state: AtomicPtr<MarketStateData>,
 }
 
 impl MarketState {
     /// Create a lock-free market state with initial data
     pub fn new(data: MarketStateData) -> Self {
-        let initial_state = Box::into_raw(Box::new(Arc::new(data)));
+        let arc = Arc::new(data);
+        let ptr = Arc::into_raw(arc) as *mut _;
         Self {
-            state: AtomicPtr::new(initial_state),
+            state: AtomicPtr::new(ptr),
         }
     }
 
@@ -72,9 +73,10 @@ impl MarketState {
     /// without blocking writers. The Arc ensures the data remains valid even if
     /// the state is updated concurrently.
     pub fn load(&self) -> Arc<MarketStateData> {
+        let ptr = self.state.load(Ordering::Acquire);
         unsafe {
-            let ptr = self.state.load(Ordering::Acquire);
-            (*ptr).clone()
+            Arc::increment_strong_count(ptr);
+            Arc::from_raw(ptr)
         }
     }
 
@@ -84,15 +86,11 @@ impl MarketState {
     /// replaces the current state. All readers will see the new state on their
     /// next load() call. The old state is properly deallocated.
     fn store(&self, new_state: Arc<MarketStateData>) {
-        let new_ptr = Box::into_raw(Box::new(new_state));
+        let new_ptr = Arc::into_raw(new_state) as *mut _;
         let old_ptr = self.state.swap(new_ptr, Ordering::AcqRel);
-
-        // Deallocate the old state
-        if !old_ptr.is_null() {
-            unsafe {
-                let _ = Box::from_raw(old_ptr);
-            }
-        }
+        unsafe {
+            Arc::from_raw(old_ptr);
+        } // decrements old Arc refcount
     }
 
     /// Update a single spot market
@@ -179,19 +177,6 @@ impl MarketState {
                 has_sufficient_number_of_data_points: true,
                 sequence_id: None,
             })
-    }
-    /// Batch update multiple markets atomically
-    ///
-    /// This is more efficient than multiple individual updates as it only
-    /// creates one new state and performs one atomic swap.
-    pub fn batch_update<F>(&self, update_fn: F)
-    where
-        F: FnOnce(&mut MarketStateData),
-    {
-        let current = self.load();
-        let mut new_data = (*current).clone();
-        update_fn(&mut new_data);
-        self.store(Arc::new(new_data));
     }
 }
 
