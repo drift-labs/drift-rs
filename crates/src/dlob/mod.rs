@@ -615,17 +615,17 @@ impl DLOB {
     fn remove_order(&self, user: &Pubkey, slot: u64, order: Order) {
         let order_id = order_hash(user, order.order_id);
 
-        // self.record_order_event(
-        //     order_id,
-        //     OrderEvent {
-        //         event_type: OrderEventType::Remove,
-        //         slot,
-        //         order: Some(order),
-        //         old_order: None,
-        //         user: *user,
-        //         order_id,
-        //     },
-        // );
+        self.record_order_event(
+            order_id,
+            OrderEvent {
+                event_type: OrderEventType::Remove,
+                slot,
+                order: Some(order),
+                old_order: None,
+                user: *user,
+                order_id,
+            },
+        );
 
         self.with_orderbook_mut(&MarketId::new(order.market_index, order.market_type), |mut orderbook| {
             if let Some(metadata) = self.metadata.get(&order_id) {
@@ -704,17 +704,17 @@ impl DLOB {
         let order_id = order_hash(user, order.order_id);
         log::trace!(target: TARGET, "insert order: {order_id} @ {slot}");
 
-        // self.record_order_event(
-        //     order_id,
-        //     OrderEvent {
-        //         event_type: OrderEventType::Insert,
-        //         slot,
-        //         order: Some(order),
-        //         old_order: None,
-        //         user: *user,
-        //         order_id,
-        //     },
-        // );
+        self.record_order_event(
+            order_id,
+            OrderEvent {
+                event_type: OrderEventType::Insert,
+                slot,
+                order: Some(order),
+                old_order: None,
+                user: *user,
+                order_id,
+            },
+        );
 
         self.with_orderbook_mut(
             &MarketId::new(order.market_index, order.market_type),
@@ -849,6 +849,7 @@ impl DLOB {
         slot: u64,
         oracle_price: u64,
         perp_market: Option<&PerpMarket>,
+        trigger_price: u64,
         depth: Option<usize>,
     ) -> CrossesAndTopMakers {
         let book = self.get_l3_snapshot(market_index, market_type);
@@ -866,12 +867,22 @@ impl DLOB {
         log::trace!(target: TARGET, "VAMM market={} bid={vamm_bid:?} ask={vamm_ask:?}", market_index);
 
         let (taker_asks, resting_asks): (Vec<L3Order>, Vec<L3Order>) = book
-            .top_asks(depth.unwrap_or(64), Some(oracle_price), perp_market, None)
+            .top_asks(
+                depth.unwrap_or(64),
+                Some(oracle_price),
+                perp_market,
+                Some(trigger_price),
+            )
             .map(|x| x.clone())
             .partition(|x| x.is_taker());
 
         let (taker_bids, resting_bids): (Vec<L3Order>, Vec<L3Order>) = book
-            .top_bids(depth.unwrap_or(64), Some(oracle_price), perp_market, None)
+            .top_bids(
+                depth.unwrap_or(64),
+                Some(oracle_price),
+                perp_market,
+                Some(trigger_price),
+            )
             .map(|x| x.clone())
             .partition(|x| x.is_taker());
 
@@ -980,7 +991,8 @@ impl DLOB {
             Direction::Long => {
                 let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
                 let orders: Vec<L3Order> = book
-                    .top_asks(depth.unwrap_or(20), Some(oracle_price), perp_market, None)
+                    .top_asks(depth.unwrap_or(32), Some(oracle_price), perp_market, None)
+                    .filter(|o| o.is_post_only())
                     .cloned()
                     .collect();
                 (
@@ -994,7 +1006,8 @@ impl DLOB {
             Direction::Short => {
                 let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
                 let orders: Vec<L3Order> = book
-                    .top_bids(depth.unwrap_or(20), Some(oracle_price), perp_market, None)
+                    .top_bids(depth.unwrap_or(32), Some(oracle_price), perp_market, None)
+                    .filter(|o| o.is_post_only())
                     .cloned()
                     .collect();
                 (
