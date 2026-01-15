@@ -345,11 +345,11 @@ pub type SwiftOrderStream = ReceiverStream<SignedOrderInfo>;
 /// * `accept_deposit_trades` - set to true to receive 'deposit+trade' order flow (default: false)
 /// * `swift_ws_override` - custom swift Ws server endpoint
 ///
-/// *a sanitized order may have its auction params modified by the program when
-/// placed onchain. Makers should understand the time/price implications to accept these.
+/// * a sanitized order may have its auction params modified by the program when
+///   placed onchain. Makers should understand the time/price implications to accept these.
 ///
 /// * deposit+trade orders require fillers to send an attached, preceding deposit tx
-/// before the swift order
+///   before the swift order
 ///
 /// Returns a stream of new Swift order messages
 pub async fn subscribe_swift_orders(

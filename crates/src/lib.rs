@@ -183,7 +183,7 @@ impl DriftClient {
                 .await?,
             )),
             context,
-            wallet: wallet.into(),
+            wallet,
         })
     }
 

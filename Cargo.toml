@@ -21,7 +21,9 @@ path = "crates/src/lib.rs"
 rpc_tests = []
 # make more variables public - use with caution
 unsafe_pub = []
-titan = ["titan-swap-api-client"] 
+titan = ["titan-swap-api-client"]
+# enable order event recording in DLOB
+dlob_dbg = [] 
 
 [dependencies]
 abi_stable = { version = "0.11", default-features = false }

@@ -8,7 +8,6 @@ use std::{
         Arc,
     },
     time::{SystemTime, UNIX_EPOCH},
-    u64,
 };
 
 use arrayvec::ArrayVec;
@@ -134,7 +133,7 @@ impl Orderbook {
     /// Update the L2 snapshot
     pub fn update_l2_view(&self, oracle_price: u64) {
         self.l2_snapshot.write(|b| {
-            b.load_orderbook(&self, oracle_price);
+            b.load_orderbook(self, oracle_price);
         });
     }
 
@@ -146,7 +145,7 @@ impl Orderbook {
         order_events: &OrderEventMap,
     ) {
         self.l3_snapshot.write(|b| {
-            b.load_orderbook(&self, oracle_price, metadata, order_events);
+            b.load_orderbook(self, oracle_price, metadata, order_events);
         });
     }
 
@@ -348,68 +347,76 @@ impl Default for DLOB {
 }
 
 impl DLOB {
+    #[allow(unused_variables)]
     /// Record an event for an order
     fn record_order_event(&self, order_id: u64, event: OrderEvent) {
-        self.order_events
-            .entry(order_id)
-            .or_insert_with(Vec::new)
-            .push(event);
+        #[cfg(feature = "dlob_dbg")]
+        {
+            self.order_events
+                .entry(order_id)
+                .or_insert_with(Vec::new)
+                .push(event);
+        }
     }
 
+    #[allow(unused_variables)]
     /// Log all events for a missing order (helper function for use in load_orderbook)
     fn log_missing_order_events_helper(order_id: u64, order_events: &OrderEventMap) {
-        if let Some(events) = order_events.get(&order_id) {
-            log::warn!(
-                target: TARGET,
-                "=== MISSING ORDER EVENT LOG: order_id={} ({} events) ===",
-                order_id,
-                events.len()
-            );
-            for (idx, event) in events.iter().enumerate() {
-                match &event.event_type {
-                    OrderEventType::Insert => {
-                        log::warn!(
-                            target: TARGET,
-                            "  [{}] INSERT @ slot={}, user={}, order_id={}, order={:?}",
-                            idx + 1,
-                            event.slot,
-                            event.user,
-                            event.order_id,
-                            event.order
-                        );
-                    }
-                    OrderEventType::Update => {
-                        log::warn!(
-                            target: TARGET,
-                            "  [{}] UPDATE @ slot={}, user={}, order_id={}, old_order={:?}, new_order={:?}",
-                            idx + 1,
-                            event.slot,
-                            event.user,
-                            event.order_id,
-                            event.old_order,
-                            event.order
-                        );
-                    }
-                    OrderEventType::Remove => {
-                        log::warn!(
-                            target: TARGET,
-                            "  [{}] REMOVE @ slot={}, user={}, order_id={}, order={:?}",
-                            idx + 1,
-                            event.slot,
-                            event.user,
-                            event.order_id,
-                            event.order
-                        );
+        #[cfg(feature = "dlob_dbg")]
+        {
+            if let Some(events) = order_events.get(&order_id) {
+                log::warn!(
+                    target: TARGET,
+                    "=== MISSING ORDER EVENT LOG: order_id={} ({} events) ===",
+                    order_id,
+                    events.len()
+                );
+                for (idx, event) in events.iter().enumerate() {
+                    match &event.event_type {
+                        OrderEventType::Insert => {
+                            log::warn!(
+                                target: TARGET,
+                                "  [{}] INSERT @ slot={}, user={}, order_id={}, order={:?}",
+                                idx + 1,
+                                event.slot,
+                                event.user,
+                                event.order_id,
+                                event.order
+                            );
+                        }
+                        OrderEventType::Update => {
+                            log::warn!(
+                                target: TARGET,
+                                "  [{}] UPDATE @ slot={}, user={}, order_id={}, old_order={:?}, new_order={:?}",
+                                idx + 1,
+                                event.slot,
+                                event.user,
+                                event.order_id,
+                                event.old_order,
+                                event.order
+                            );
+                        }
+                        OrderEventType::Remove => {
+                            log::warn!(
+                                target: TARGET,
+                                "  [{}] REMOVE @ slot={}, user={}, order_id={}, order={:?}",
+                                idx + 1,
+                                event.slot,
+                                event.user,
+                                event.order_id,
+                                event.order
+                            );
+                        }
                     }
                 }
+                log::warn!(target: TARGET, "=== END MISSING ORDER EVENT LOG ===");
+            } else {
+                log::warn!(
+                    target: TARGET,
+                    "Missing order {} has no event history",
+                    order_id
+                );
             }
-            log::warn!(target: TARGET, "=== END MISSING ORDER EVENT LOG ===");
-        } else {
-            log::warn!(
-                target: TARGET,
-                "Missing order {} has no event history",
-                order_id
-            );
         }
     }
 
@@ -523,10 +530,12 @@ impl DLOB {
         let book = self
             .markets
             .get(&MarketId::new(market_index, market_type))
-            .expect(&format!(
-                "orderbook missing for market {}, {:?}",
-                market_index, market_type
-            ));
+            .unwrap_or_else(|| {
+                panic!(
+                    "orderbook missing for market {}, {:?}",
+                    market_index, market_type
+                )
+            });
         book.l2_snapshot.read()
     }
 
@@ -552,10 +561,12 @@ impl DLOB {
         let book = self
             .markets
             .get(&MarketId::new(market_index, market_type))
-            .expect(&format!(
-                "orderbook missing for market {}, {:?}",
-                market_index, market_type
-            ));
+            .unwrap_or_else(|| {
+                panic!(
+                    "orderbook missing for market {}, {:?}",
+                    market_index, market_type
+                )
+            });
         book.l3_snapshot.read()
     }
 
@@ -592,14 +603,10 @@ impl DLOB {
             return None;
         }
 
-        let crossing_bids: Vec<L3Order> = bids
-            .take_while(|b| b.price > best_ask)
-            .map(|x| x.clone())
-            .collect();
-        let crossing_asks: Vec<L3Order> = asks
-            .take_while(|a| a.price < best_bid)
-            .map(|x| x.clone())
-            .collect();
+        let crossing_bids: Vec<L3Order> =
+            bids.take_while(|b| b.price > best_ask).cloned().collect();
+        let crossing_asks: Vec<L3Order> =
+            asks.take_while(|a| a.price < best_bid).cloned().collect();
 
         if crossing_asks.is_empty() || crossing_bids.is_empty() {
             return None;
@@ -629,8 +636,8 @@ impl DLOB {
 
         self.with_orderbook_mut(&MarketId::new(order.market_index, order.market_type), |mut orderbook| {
             if let Some(metadata) = self.metadata.get(&order_id) {
-                let metadata_ref = metadata.clone();
-                drop(metadata);
+                let metadata_ref = *metadata;
+                drop(metadata); // release dashmap ref
                 let mut order_removed;
                 log::trace!(target: TARGET, "remove order: {order_id} @ status: {:?}, kind: {:?}/{:?}, slot: {slot}", order.status, metadata_ref.kind, order.order_type);
 
@@ -695,6 +702,7 @@ impl DLOB {
                         metadata_ref.user,
                         metadata_ref.order_id,
                     );
+                    DLOB::log_missing_order_events_helper(order_id, &self.order_events);
                 }
             }
         });
@@ -873,7 +881,7 @@ impl DLOB {
                 perp_market,
                 Some(trigger_price),
             )
-            .map(|x| x.clone())
+            .cloned()
             .partition(|x| x.is_taker());
 
         let (taker_bids, resting_bids): (Vec<L3Order>, Vec<L3Order>) = book
@@ -883,7 +891,7 @@ impl DLOB {
                 perp_market,
                 Some(trigger_price),
             )
-            .map(|x| x.clone())
+            .cloned()
             .partition(|x| x.is_taker());
 
         let mut vamm_taker_ask = None;
@@ -1138,9 +1146,9 @@ impl L3Book {
     /// # Parameters
     /// - `oracle_price`: oracle price for floating order price calculations
     /// - `perp_market`: Used to calculate VAMM fallback price of market/oracle (taker) auctions.
-    ///    use `None` if only interested in maker orders
+    ///   use `None` if only interested in maker orders
     /// - `trigger_price`: Optional trigger price for calculating post-trigger prices of trigger orders.
-    ///    If provided, trigger orders will be included and sorted by their post-trigger price.
+    ///   If provided, trigger orders will be included and sorted by their post-trigger price.
     ///
     /// # Returns
     /// Returns an iterator over the bids
@@ -1274,9 +1282,9 @@ impl L3Book {
     /// # Parameters
     /// - `oracle_price`: oracle price for floating order price calculations
     /// - `perp_market`: Used to calculate VAMM fallback price of market/oracle (taker) auctions. i.e finished their
-    ///   auction period and did not specify a custom limit price
+    ///  auction period and did not specify a custom limit price
     /// - `trigger_price`: Optional trigger price for calculating post-trigger prices of trigger orders.
-    ///    If provided, trigger orders will be included and sorted by their post-trigger price.
+    ///  If provided, trigger orders will be included and sorted by their post-trigger price.
     ///
     /// # Returns
     /// Returns an iterator over the asks
