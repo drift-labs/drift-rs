@@ -8,6 +8,7 @@ use std::{
         Arc,
     },
     time::{SystemTime, UNIX_EPOCH},
+    u64,
 };
 
 use arrayvec::ArrayVec;
@@ -39,6 +40,7 @@ const TARGET: &str = "dlob";
 
 type Direction = PositionDirection;
 type MetadataMap = DashMap<u64, OrderMetadata, FxBuildHasher>;
+type OrderEventMap = DashMap<u64, Vec<OrderEvent>, FxBuildHasher>;
 
 /// Collection of orders
 #[derive(Debug)]
@@ -160,9 +162,14 @@ impl Orderbook {
     }
 
     /// Update the L3 snapshot
-    pub fn update_l3_view(&self, oracle_price: u64, metadata: &MetadataMap) {
+    pub fn update_l3_view(
+        &self,
+        oracle_price: u64,
+        metadata: &MetadataMap,
+        order_events: &OrderEventMap,
+    ) {
         self.l3_snapshot.write(|b| {
-            b.load_orderbook(&self, oracle_price, metadata);
+            b.load_orderbook(&self, oracle_price, metadata, order_events);
         });
     }
 
@@ -333,6 +340,8 @@ pub struct DLOB {
     markets: DashMap<MarketId, Orderbook, FxBuildHasher>,
     /// Map from DLOB internal order ID to order metadata
     metadata: MetadataMap,
+    /// Map from DLOB internal order ID to event history
+    order_events: OrderEventMap,
     /// static drift program data e.g market tick sizes
     program_data: &'static ProgramData,
     /// last slot update
@@ -348,6 +357,7 @@ impl Default for DLOB {
         Self {
             markets: DashMap::default(),
             metadata: DashMap::default(),
+            order_events: DashMap::default(),
             program_data: Box::leak(Box::new(ProgramData::uninitialized())),
             last_modified_slot: Default::default(),
             enable_l2_snapshot: AtomicBool::new(false),
@@ -454,7 +464,7 @@ impl DLOB {
                 .enable_l3_snapshot
                 .load(std::sync::atomic::Ordering::Relaxed)
             {
-                book.update_l3_view(oracle_price, &self.metadata);
+                book.update_l3_view(oracle_price, &self.metadata, &self.order_events);
             }
         });
 
@@ -529,11 +539,11 @@ impl DLOB {
     ) -> Option<CrossingRegion> {
         let book = self.get_l3_snapshot(market_index, market_type);
 
-        let mut bids = book.bids(Some(oracle_price), perp_market, None);
-        let mut asks = book.asks(Some(oracle_price), perp_market, None);
+        let mut bids = book.bids(Some(oracle_price), perp_market, None).peekable();
+        let mut asks = book.asks(Some(oracle_price), perp_market, None).peekable();
 
-        let best_bid = bids.next()?.price;
-        let best_ask = asks.next()?.price;
+        let best_bid = bids.peek()?.price;
+        let best_ask = asks.peek()?.price;
 
         if best_bid < best_ask {
             return None;
@@ -548,7 +558,7 @@ impl DLOB {
             .map(|x| x.clone())
             .collect();
 
-        if crossing_asks.is_empty() && crossing_bids.is_empty() {
+        if crossing_asks.is_empty() || crossing_bids.is_empty() {
             return None;
         }
 
@@ -559,9 +569,87 @@ impl DLOB {
         })
     }
 
+    /// Record an event for an order
+    fn record_order_event(&self, order_id: u64, event: OrderEvent) {
+        self.order_events
+            .entry(order_id)
+            .or_insert_with(Vec::new)
+            .push(event);
+    }
+
+    /// Log all events for a missing order (helper function for use in load_orderbook)
+    fn log_missing_order_events_helper(order_id: u64, order_events: &OrderEventMap) {
+        if let Some(events) = order_events.get(&order_id) {
+            log::warn!(
+                target: TARGET,
+                "=== MISSING ORDER EVENT LOG: order_id={} ({} events) ===",
+                order_id,
+                events.len()
+            );
+            for (idx, event) in events.iter().enumerate() {
+                match &event.event_type {
+                    OrderEventType::Insert => {
+                        log::warn!(
+                            target: TARGET,
+                            "  [{}] INSERT @ slot={}, user={}, order_id={}, order={:?}",
+                            idx + 1,
+                            event.slot,
+                            event.user,
+                            event.order_id,
+                            event.order
+                        );
+                    }
+                    OrderEventType::Update => {
+                        log::warn!(
+                            target: TARGET,
+                            "  [{}] UPDATE @ slot={}, user={}, order_id={}, old_order={:?}, new_order={:?}",
+                            idx + 1,
+                            event.slot,
+                            event.user,
+                            event.order_id,
+                            event.old_order,
+                            event.order
+                        );
+                    }
+                    OrderEventType::Remove => {
+                        log::warn!(
+                            target: TARGET,
+                            "  [{}] REMOVE @ slot={}, user={}, order_id={}, order={:?}",
+                            idx + 1,
+                            event.slot,
+                            event.user,
+                            event.order_id,
+                            event.order
+                        );
+                    }
+                }
+            }
+            log::warn!(target: TARGET, "=== END MISSING ORDER EVENT LOG ===");
+        } else {
+            log::warn!(
+                target: TARGET,
+                "Missing order {} has no event history",
+                order_id
+            );
+        }
+    }
+
     fn update_order(&self, user: &Pubkey, slot: u64, new_order: Order, old_order: Order) {
-        let order_id = order_hash(user, new_order.order_id);
+        let order_id = order_hash(user, new_order.order_id, new_order.market_index);
         log::trace!(target: TARGET, "update order: {order_id},{},{:?} @ {slot}", old_order.order_id, new_order.order_type);
+
+        // Record update event
+        self.record_order_event(
+            order_id,
+            OrderEvent {
+                event_type: OrderEventType::Update,
+                slot,
+                order: Some(new_order),
+                old_order: Some(old_order),
+                user: *user,
+                order_id,
+            },
+        );
 
         if new_order.status != OrderStatus::Open {
             log::info!(target: TARGET, "update into remove: {order_id:?}");
@@ -672,7 +760,20 @@ impl DLOB {
     }
 
     fn remove_order(&self, user: &Pubkey, slot: u64, order: Order) {
-        let order_id = order_hash(user, order.order_id);
+        let order_id = order_hash(user, order.order_id, order.market_index);
+
+        // Record remove event
+        self.record_order_event(
+            order_id,
+            OrderEvent {
+                event_type: OrderEventType::Remove,
+                slot,
+                order: Some(order),
+                old_order: None,
+                user: *user,
+                order_id,
+            },
+        );
 
         self.with_orderbook_mut(&MarketId::new(order.market_index, order.market_type), |mut orderbook| {
             if let Some((_, metadata)) = self.metadata.remove(&order_id) {
@@ -730,13 +831,26 @@ impl DLOB {
     }
 
     fn insert_order(&self, user: &Pubkey, slot: u64, order: Order) {
-        let order_id = order_hash(user, order.order_id);
+        let order_id = order_hash(user, order.order_id, order.market_index);
         log::trace!(target: TARGET, "insert order: {order_id} @ {slot}");
 
         if order.base_asset_amount <= order.base_asset_amount_filled {
             log::trace!(target: TARGET, "skipping fully filled order: {order:?}");
             return;
         }
+
+        // Record insert event
+        self.record_order_event(
+            order_id,
+            OrderEvent {
+                event_type: OrderEventType::Insert,
+                slot,
+                order: Some(order),
+                old_order: None,
+                user: *user,
+                order_id,
+            },
+        );
 
         self.with_orderbook_mut(
             &MarketId::new(order.market_index, order.market_type),
@@ -873,8 +987,15 @@ impl DLOB {
         let book = self.get_l3_snapshot(market_index, market_type);
         let mut all_crosses = Vec::with_capacity(16);
 
-        let vamm_bid = perp_market.map(|m| m.bid_price(None));
-        let vamm_ask = perp_market.map(|m| m.ask_price(None));
+        let (vamm_bid, vamm_ask, vamm_min_order) = if let Some(m) = perp_market {
+            (
+                Some(m.bid_price(None)),
+                Some(m.ask_price(None)),
+                m.amm.min_order_size,
+            )
+        } else {
+            (None, None, u64::MAX)
+        };
         log::trace!(target: TARGET, "VAMM market={} bid={vamm_bid:?} ask={vamm_ask:?}", market_index);
 
         let (taker_asks, resting_asks): (Vec<L3Order>, Vec<L3Order>) = book
@@ -895,13 +1016,13 @@ impl DLOB {
             // check for crossing resting limit orders
             limit_crosses = self.find_limit_cross(best_bid, best_ask);
             // check for VAMM crossing resting limit orders
-            if vamm_bid.is_some_and(|v| v > best_ask.price && best_ask.is_post_only())
-                && perp_market.is_some_and(|m| best_ask.size > m.amm.min_order_size)
+            if best_ask.size > vamm_min_order
+                && vamm_bid.is_some_and(|v| v > best_ask.price && best_ask.is_post_only())
             {
                 vamm_taker_bid = Some(best_ask.clone());
             }
-            if vamm_ask.is_some_and(|v| v < best_bid.price && best_bid.is_post_only())
-                && perp_market.is_some_and(|m| best_bid.size > m.amm.min_order_size)
+            if best_bid.size > vamm_min_order
+                && vamm_ask.is_some_and(|v| v < best_bid.price && best_bid.is_post_only())
             {
                 vamm_taker_ask = Some(best_bid.clone());
             }
@@ -916,9 +1037,11 @@ impl DLOB {
                 slot,
                 taker_bid.price,
                 taker_bid.size,
-                taker_bid.is_long(),
+                true,
                 resting_asks.iter().peekable(),
-                vamm_ask,
+                |taker_price: u64, taker_size: u64| {
+                    taker_size > vamm_min_order && vamm_ask.is_some_and(|v| taker_price > v)
+                },
             );
 
             if !new_crosses.is_empty() {
@@ -937,9 +1060,11 @@ impl DLOB {
                 slot,
                 taker_ask.price,
                 taker_ask.size,
-                taker_ask.is_long(),
+                false,
                 resting_bids.iter().peekable(),
-                vamm_bid,
+                |taker_price: u64, taker_size: u64| {
+                    taker_size > vamm_min_order && vamm_bid.is_some_and(|v| taker_price < v)
+                },
             );
 
             if !new_crosses.is_empty() {
@@ -984,14 +1109,20 @@ impl DLOB {
         perp_market: Option<&PerpMarket>,
         depth: Option<usize>,
     ) -> MakerCrosses {
-        let (resting_orders, vamm_price) = match taker_order.direction {
+        let (resting_orders, vamm_price, vamm_min_order) = match taker_order.direction {
             Direction::Long => {
                 let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
                 let orders: Vec<L3Order> = book
                     .top_asks(depth.unwrap_or(20), Some(oracle_price), perp_market, None)
                     .cloned()
                     .collect();
-                (orders, perp_market.map(|p| p.ask_price(None)))
+                (
+                    orders,
+                    perp_market.map(|p| p.ask_price(None)).unwrap_or(u64::MAX),
+                    perp_market
+                        .map(|p| p.amm.min_order_size)
+                        .unwrap_or(u64::MAX),
+                )
             }
             Direction::Short => {
                 let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
@@ -999,7 +1130,13 @@ impl DLOB {
                     .top_bids(depth.unwrap_or(20), Some(oracle_price), perp_market, None)
                     .cloned()
                     .collect();
-                (orders, perp_market.map(|p| p.bid_price(None)))
+                (
+                    orders,
+                    perp_market.map(|p| p.bid_price(None)).unwrap_or(u64::MIN),
+                    perp_market
+                        .map(|p| p.amm.min_order_size)
+                        .unwrap_or(u64::MAX),
+                )
             }
         };
 
@@ -1010,7 +1147,11 @@ impl DLOB {
             taker_order.size,
             is_long,
             resting_orders.iter().peekable(),
-            vamm_price,
+            |taker_price: u64, taker_size: u64| {
+                taker_size > vamm_min_order
+                    && ((taker_price > vamm_price && is_long)
+                        || (!is_long && taker_price < vamm_price))
+            },
         )
     }
 
@@ -1022,7 +1163,7 @@ impl DLOB {
         taker_size: u64,
         is_long: bool,
         mut resting_limit_orders: Peekable<impl Iterator<Item = &'a L3Order>>,
-        vamm_price: Option<u64>,
+        has_vamm_cross: impl Fn(u64, u64) -> bool,
     ) -> MakerCrosses {
         let mut candidates = ArrayVec::<(L3Order, u64), 16>::new();
         let mut remaining_size = taker_size;
@@ -1060,7 +1201,7 @@ impl DLOB {
         }
 
         MakerCrosses {
-            has_vamm_cross: vamm_price.is_some_and(|v| price_crosses(taker_price, v)),
+            has_vamm_cross: has_vamm_cross(taker_price, taker_size),
             orders: candidates,
             slot: current_slot,
             is_partial: remaining_size != 0,
@@ -1386,7 +1527,13 @@ impl L3Book {
     }
 
     /// Populate an `L3Book` instance given an `Orderbook` and `metadata`
-    fn load_orderbook(&mut self, orderbook: &Orderbook, oracle_price: u64, metadata: &MetadataMap) {
+    fn load_orderbook(
+        &mut self,
+        orderbook: &Orderbook,
+        oracle_price: u64,
+        metadata: &MetadataMap,
+        order_events: &OrderEventMap,
+    ) {
         self.bids.clear();
         self.asks.clear();
         self.floating_bids.clear();
@@ -1422,6 +1569,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1441,6 +1590,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1468,6 +1619,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1488,6 +1641,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1514,6 +1669,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1540,6 +1697,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1561,6 +1720,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1580,6 +1741,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1607,6 +1770,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 
@@ -1633,6 +1798,8 @@ impl L3Book {
             } else {
                 missing_metadata_count += 1;
                 log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                // Log all events for this missing order
+                DLOB::log_missing_order_events_helper(order.id, order_events);
             }
         }
 

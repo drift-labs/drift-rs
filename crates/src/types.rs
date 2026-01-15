@@ -226,6 +226,14 @@ impl NewOrder {
             ..Default::default()
         }
     }
+    /// Create an oracle order
+    pub fn oracle(market_id: MarketId) -> Self {
+        Self {
+            order_type: OrderType::Oracle,
+            market_id,
+            ..Default::default()
+        }
+    }
     /// Create a limit order
     pub fn limit(market_id: MarketId) -> Self {
         Self {

@@ -156,6 +156,37 @@ impl DriftClient {
         })
     }
 
+    /// Create a new `DriftClient` instance with explicit Ws PubSub URL
+    ///
+    /// * `context` - devnet or mainnet
+    /// * `rpc_client` - an RpcClient instance
+    /// * `wallet` - wallet to use for tx signing convenience
+    /// * `ws_pubsub_url` - custom Ws PubSub URL
+    pub async fn new_with_ws_url(
+        context: Context,
+        rpc_client: RpcClient,
+        wallet: Wallet,
+        ws_pubsub_url: &str,
+    ) -> SdkResult<Self> {
+        // check URL format here to fail early, otherwise happens at request time.
+        let _ = get_http_url(&rpc_client.url())?;
+        // validate ws url
+        let _ws_pubsub_url = get_ws_url(ws_pubsub_url)?;
+
+        Ok(Self {
+            backend: Box::leak(Box::new(
+                DriftClientBackend::new_with_explicit_ws_url(
+                    context,
+                    Arc::new(rpc_client),
+                    ws_pubsub_url,
+                )
+                .await?,
+            )),
+            context,
+            wallet: wallet.into(),
+        })
+    }
+
     pub async fn sync_user_accounts(&self, filters: Vec<RpcFilterType>) -> SdkResult<()> {
         self.backend.account_map.sync_user_accounts(filters).await
     }
@@ -1068,6 +1099,94 @@ impl DriftClientBackend {
     async fn new(context: Context, rpc_client: Arc<RpcClient>) -> SdkResult<Self> {
         let pubsub_client =
             Arc::new(PubsubClient::new(&get_ws_url(rpc_client.url().as_str())?).await?);
+
+        let perp_market_map =
+            MarketMap::<PerpMarket>::new(Arc::clone(&pubsub_client), rpc_client.commitment());
+        let spot_market_map =
+            MarketMap::<SpotMarket>::new(Arc::clone(&pubsub_client), rpc_client.commitment());
+
+        let lut_pubkeys = context.luts();
+
+        let account_map = AccountMap::new(
+            Arc::clone(&pubsub_client),
+            Arc::clone(&rpc_client),
+            rpc_client.commitment(),
+        );
+
+        tokio::try_join!(
+            account_map.subscribe_account_polled(state_account(), Some(Duration::from_secs(180))),
+            account_map.subscribe_account_polled(
+                high_leverage_mode_account(),
+                Some(Duration::from_secs(180))
+            )
+        )?;
+
+        let (_, _, lut_accounts, state_account_data) = tokio::try_join!(
+            perp_market_map.sync(&rpc_client),
+            spot_market_map.sync(&rpc_client),
+            rpc_client
+                .get_multiple_accounts(lut_pubkeys)
+                .map_err(Into::into),
+            rpc_client
+                .get_account_data(state_account())
+                .map_err(Into::into),
+        )?;
+
+        let lookup_tables = lut_pubkeys
+            .iter()
+            .zip(lut_accounts.iter())
+            .map(|(pubkey, account_data)| {
+                let data = account_data
+                    .as_ref()
+                    .ok_or_else(|| SdkError::Generic(format!("LUT account missing: {}", pubkey)))?;
+                utils::deserialize_alt(*pubkey, data).map_err(|_| SdkError::Deserializing)
+            })
+            .collect::<SdkResult<Vec<_>>>()?;
+
+        let mut all_oracles = Vec::<(MarketId, Pubkey, OracleSource)>::with_capacity(
+            perp_market_map.len() + spot_market_map.len(),
+        );
+        for market_oracle_info in perp_market_map
+            .oracles()
+            .iter()
+            .chain(spot_market_map.oracles().iter())
+        {
+            all_oracles.push(*market_oracle_info);
+        }
+
+        let oracle_map = OracleMap::new(
+            Arc::clone(&pubsub_client),
+            all_oracles.as_slice(),
+            rpc_client.commitment(),
+        );
+
+        Ok(Self {
+            rpc_client: Arc::clone(&rpc_client),
+            pubsub_client,
+            blockhash_subscriber: BlockhashSubscriber::new(Duration::from_secs(2), rpc_client),
+            program_data: ProgramData::new(
+                spot_market_map.values(),
+                perp_market_map.values(),
+                lookup_tables,
+                State::try_deserialize(&mut state_account_data.as_slice()).unwrap(),
+            ),
+            account_map,
+            perp_market_map,
+            spot_market_map,
+            oracle_map,
+            grpc_unsub: RwLock::default(),
+        })
+    }
+
+    pub async fn new_with_explicit_ws_url(
+        context: Context,
+        rpc_client: Arc<RpcClient>,
+        ws_pubsub_url: &str,
+    ) -> SdkResult<Self> {
+        use std::time::Duration;
+
+        // Initialize PubsubClient with explicit URL
+        let pubsub_client = Arc::new(PubsubClient::new(ws_pubsub_url).await?);
 
         let perp_market_map =
             MarketMap::<PerpMarket>::new(Arc::clone(&pubsub_client), rpc_client.commitment());
@@ -2912,6 +3031,7 @@ impl<'a> TransactionBuilder<'a> {
                 ix.program_id != TOKEN_PROGRAM_ID
                     && ix.program_id != TOKEN_2022_PROGRAM_ID
                     && ix.program_id != ASSOCIATED_TOKEN_PROGRAM_ID
+                    && ix.program_id != DEFAULT_PUBKEY
             })
             .collect();
 
@@ -3330,36 +3450,38 @@ impl<'a> TransactionBuilder<'a> {
         name: Option<String>,
         referrer: Option<Pubkey>,
     ) -> Self {
-        let mut accounts = build_accounts(
-            self.program_data,
-            types::accounts::InitializeUser {
-                state: *state_account(),
-                authority: self.authority,
-                user: Wallet::derive_user_account(&self.authority, sub_account_id),
-                user_stats: Wallet::derive_stats_account(&self.owner()),
-                payer: self.authority,
-                rent: SYSVAR_RENT_PUBKEY,
-                system_program: SYSTEM_PROGRAM_ID,
-            },
-            std::iter::empty(),
-            std::iter::empty(),
-            std::iter::empty(),
-        );
+        if sub_account_id == 0 {
+            let ix = Instruction {
+                program_id: constants::PROGRAM_ID,
+                accounts: types::accounts::InitializeUserStats {
+                    state: *state_account(),
+                    authority: self.authority,
+                    user_stats: Wallet::derive_stats_account(&self.owner()),
+                    payer: self.authority,
+                    rent: SYSVAR_RENT_PUBKEY,
+                    system_program: SYSTEM_PROGRAM_ID,
+                }
+                .to_account_metas(),
+                data: InstructionData::data(&drift_idl::instructions::InitializeUserStats {}),
+            };
+            self.ixs.push(ix);
+        }
 
+        let mut accounts = types::accounts::InitializeUser {
+            state: *state_account(),
+            authority: self.authority,
+            user: Wallet::derive_user_account(&self.authority, sub_account_id),
+            user_stats: Wallet::derive_stats_account(&self.owner()),
+            payer: self.authority,
+            rent: SYSVAR_RENT_PUBKEY,
+            system_program: SYSTEM_PROGRAM_ID,
+        }
+        .to_account_metas();
         if let Some(referrer) = referrer {
             accounts.extend_from_slice(&[
                 AccountMeta::new(Wallet::derive_user_account(&referrer, 0), false),
                 AccountMeta::new(Wallet::derive_stats_account(&referrer), false),
             ]);
-        }
-
-        if sub_account_id == 0 {
-            let ix = Instruction {
-                program_id: constants::PROGRAM_ID,
-                accounts: accounts.clone(),
-                data: InstructionData::data(&drift_idl::instructions::InitializeUserStats {}),
-            };
-            self.ixs.push(ix);
         }
 
         let name = name.unwrap_or_else(|| {
@@ -3369,13 +3491,14 @@ impl<'a> TransactionBuilder<'a> {
                 format!("Subaccount {}", sub_account_id + 1)
             }
         });
+        let name_padded = format!("{:<32}", name);
 
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
             data: InstructionData::data(&drift_idl::instructions::InitializeUser {
                 sub_account_id,
-                name: name.as_bytes()[..32].try_into().unwrap(),
+                name: name_padded.as_bytes()[..32].try_into().unwrap(),
             }),
         };
 
@@ -3697,6 +3820,118 @@ impl<'a> TransactionBuilder<'a> {
             accounts,
             data: InstructionData::data(&drift_idl::instructions::LiquidatePerpWithFill {
                 market_index,
+            }),
+        };
+
+        self.ixs.push(liquidate_ix);
+        self
+    }
+
+    /// Liquidate a perp pnl using deposit for a given user.
+    ///
+    /// This method constructs a liquidation instruction for a perpetual market position's pnl.
+    /// The liquidator will be the subaccount associated with this `TransactionBuilder` (i.e., the builder's default subaccount).
+    ///
+    /// # Parameters
+    /// - `liquidatee`: The user account (liquidatee) whose position will be liquidated.
+    /// - `perp_market_index`: The index of the perp market to liquidate on.
+    /// - `spot_market_index`: The index of the spot market to be used as liability.
+    /// - `liquidator_max_pnl_transfer`: The maximum pnl amount the liquidator is willing to liquidate.
+    /// - `limit_price`: Optional limit price for the liquidation (if `None`, no limit is set).
+    ///
+    /// # Returns
+    /// Returns an updated `TransactionBuilder` with the liquidation instruction appended.
+    pub fn liquidate_perp_pnl_for_deposit(
+        mut self,
+        liquidatee: &User,
+        perp_market_index: u16,
+        spot_market_index: u16,
+        liquidator_max_pnl_transfer: u128,
+        limit_price: Option<u64>,
+    ) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::LiquidatePerpPnlForDeposit {
+                state: *state_account(),
+                authority: self.authority,
+                liquidator: self.sub_account,
+                liquidator_stats: Wallet::derive_stats_account(&self.owner()),
+                user: Wallet::derive_user_account(&liquidatee.authority, liquidatee.sub_account_id),
+                user_stats: Wallet::derive_stats_account(&liquidatee.authority),
+            },
+            [&self.account_data, liquidatee].into_iter(),
+            std::iter::empty(),
+            [
+                MarketId::perp(perp_market_index),
+                MarketId::spot(spot_market_index),
+            ]
+            .iter(),
+        );
+
+        let liquidate_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::LiquidatePerpPnlForDeposit {
+                perp_market_index,
+                spot_market_index,
+                liquidator_max_pnl_transfer,
+                limit_price,
+            }),
+        };
+
+        self.ixs.push(liquidate_ix);
+        self
+    }
+
+    /// Liquidate borrows using perp pnl for a given user.
+    ///
+    /// This method constructs a liquidation instruction for a borrow position's pnl.
+    /// The liquidator will be the subaccount associated with this `TransactionBuilder` (i.e., the builder's default subaccount).
+    ///
+    /// # Parameters
+    /// - `liquidatee`: The user account (liquidatee) whose position will be liquidated.
+    /// - `perp_market_index`: The index of the perp market to liquidate on.
+    /// - `spot_market_index`: The index of the spot market to be used as liability.
+    /// - `liquidator_max_liability_transfer`: The maximum transfer amount the liquidator is willing to liquidate.
+    /// - `limit_price`: Optional limit price for the liquidation (if `None`, no limit is set).
+    ///
+    /// # Returns
+    /// Returns an updated `TransactionBuilder` with the liquidation instruction appended.
+    pub fn liquidate_borrow_for_perp_pnl(
+        mut self,
+        liquidatee: &User,
+        perp_market_index: u16,
+        spot_market_index: u16,
+        liquidator_max_liability_transfer: u128,
+        limit_price: Option<u64>,
+    ) -> Self {
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::LiquidateBorrowForPerpPnl {
+                state: *state_account(),
+                authority: self.authority,
+                liquidator: self.sub_account,
+                liquidator_stats: Wallet::derive_stats_account(&self.owner()),
+                user: Wallet::derive_user_account(&liquidatee.authority, liquidatee.sub_account_id),
+                user_stats: Wallet::derive_stats_account(&liquidatee.authority),
+            },
+            [&self.account_data, liquidatee].into_iter(),
+            std::iter::empty(),
+            [
+                MarketId::perp(perp_market_index),
+                MarketId::spot(spot_market_index),
+            ]
+            .iter(),
+        );
+
+        let liquidate_ix = Instruction {
+            program_id: PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift_idl::instructions::LiquidateBorrowForPerpPnl {
+                perp_market_index,
+                spot_market_index,
+                liquidator_max_liability_transfer,
+                limit_price,
             }),
         };
 

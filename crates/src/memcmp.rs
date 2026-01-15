@@ -30,6 +30,14 @@ pub fn get_user_stats_filter() -> RpcFilterType {
     RpcFilterType::Memcmp(Memcmp::new_raw_bytes(0, UserStats::DISCRIMINATOR.to_vec()))
 }
 
+pub fn get_user_stats_is_referred_filter() -> RpcFilterType {
+    RpcFilterType::Memcmp(Memcmp::new_raw_bytes(188, vec![2]))
+}
+
+pub fn get_user_stats_is_referred_or_referrer_filter() -> RpcFilterType {
+    RpcFilterType::Memcmp(Memcmp::new_raw_bytes(188, vec![3]))
+}
+
 pub fn get_market_filter(market_type: MarketType) -> RpcFilterType {
     match market_type {
         MarketType::Spot => {
