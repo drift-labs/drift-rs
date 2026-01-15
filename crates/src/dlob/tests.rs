@@ -959,8 +959,15 @@ fn dlob_find_crosses_for_auctions_market_orders() {
         book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
 
-    let crosses =
-        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None, None);
+    let crosses = dlob.find_crosses_for_auctions(
+        market_index,
+        market_type,
+        slot,
+        oracle_price,
+        None,
+        oracle_price,
+        None,
+    );
     assert_eq!(crosses.crosses.len(), 1);
     assert!(!crosses.crosses[0].1.is_empty());
     assert_eq!(crosses.crosses[0].1.orders.len(), 1);
@@ -996,8 +1003,15 @@ fn dlob_find_crosses_for_auctions_oracle_orders() {
         book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
 
-    let crosses =
-        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None, None);
+    let crosses = dlob.find_crosses_for_auctions(
+        market_index,
+        market_type,
+        slot,
+        oracle_price,
+        None,
+        oracle_price,
+        None,
+    );
     assert_eq!(crosses.crosses.len(), 1);
     assert!(!crosses.crosses[0].1.is_empty());
     assert_eq!(crosses.crosses[0].1.orders.len(), 1);
@@ -1033,8 +1047,15 @@ fn dlob_find_crosses_for_auctions_no_crosses() {
         book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
 
-    let crosses =
-        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None, None);
+    let crosses = dlob.find_crosses_for_auctions(
+        market_index,
+        market_type,
+        slot,
+        oracle_price,
+        None,
+        oracle_price,
+        None,
+    );
     assert!(crosses.crosses.is_empty());
 }
 
@@ -1109,8 +1130,15 @@ fn dlob_find_crosses_for_auctions_comprehensive() {
         book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
     }
 
-    let crosses =
-        dlob.find_crosses_for_auctions(market_index, market_type, slot, oracle_price, None, None);
+    let crosses = dlob.find_crosses_for_auctions(
+        market_index,
+        market_type,
+        slot,
+        oracle_price,
+        None,
+        oracle_price,
+        None,
+    );
     dbg!(&crosses);
 
     // Should find 4 crosses:
@@ -1248,6 +1276,7 @@ fn dlob_find_crosses_for_auctions_vamm_min_order_size() {
         slot,
         oracle_price,
         Some(&perp_market),
+        oracle_price,
         None,
     );
 

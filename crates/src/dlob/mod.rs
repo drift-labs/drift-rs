@@ -636,8 +636,9 @@ impl DLOB {
 
         self.with_orderbook_mut(&MarketId::new(order.market_index, order.market_type), |mut orderbook| {
             if let Some(metadata) = self.metadata.get(&order_id) {
-                let metadata_ref = *metadata;
+                let metadata_ref = metadata.clone();
                 drop(metadata); // release dashmap ref
+
                 let mut order_removed;
                 log::trace!(target: TARGET, "remove order: {order_id} @ status: {:?}, kind: {:?}/{:?}, slot: {slot}", order.status, metadata_ref.kind, order.order_type);
 
@@ -1176,9 +1177,9 @@ impl L3Book {
         // Skip non-triggering trigger orders
         if let Some(trig_price) = trigger_price {
             while let Some(x) = trigger_iter.peek() {
-                let would_trigger = (x.is_trigger_above() && trig_price > x.price)
-                    || (!x.is_trigger_above() && trig_price < x.price);
-                if would_trigger {
+                if trig_price > x.price && x.is_trigger_above()
+                    || trig_price < x.price && !x.is_trigger_above()
+                {
                     break;
                 }
                 trigger_iter.next();
@@ -1221,7 +1222,7 @@ impl L3Book {
                         || (!x.is_trigger_above() && trig_price < x.price);
                     if would_trigger {
                         if let Some(post_trigger_price) =
-                            x.post_trigger_price(slot, trig_price, market)
+                            x.post_trigger_price(slot, oracle_price_for_vamm as u64, market)
                         {
                             if post_trigger_price > best_price {
                                 best_price = post_trigger_price;
@@ -1309,9 +1310,9 @@ impl L3Book {
         // Skip non-triggering trigger orders
         if let Some(trig_price) = trigger_price {
             while let Some(x) = trigger_iter.peek() {
-                let would_trigger = (x.is_trigger_above() && trig_price > x.price)
-                    || (!x.is_trigger_above() && trig_price < x.price);
-                if would_trigger {
+                if trig_price > x.price && x.is_trigger_above()
+                    || trig_price < x.price && !x.is_trigger_above()
+                {
                     break;
                 }
                 trigger_iter.next();
@@ -1357,7 +1358,7 @@ impl L3Book {
                         || (!x.is_trigger_above() && trig_price < x.price);
                     if would_trigger {
                         if let Some(post_trigger_price) =
-                            x.post_trigger_price(slot, trig_price, market)
+                            x.post_trigger_price(slot, oracle_price_for_vamm as u64, market)
                         {
                             if post_trigger_price < best_price {
                                 best_src = Some(Src::Trigger);
