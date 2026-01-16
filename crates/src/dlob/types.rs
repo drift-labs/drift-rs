@@ -432,7 +432,11 @@ impl DynamicPrice for MarketOrder {
     /// A value of None indicates the order will use the fallback/vamm price
     fn get_price(&self, slot: u64, _oracle_price: u64, tick_size: u64) -> Option<u64> {
         if self.is_auction_complete(slot) && (self.start_price != 0 || self.end_price != 0) {
-            return Some(self.price);
+            return if self.price == 0 {
+                None
+            } else {
+                Some(self.price)
+            };
         }
         let slots_elapsed = slot.saturating_sub(self.slot) as i64;
         let delta_denominator = self.duration as i64;

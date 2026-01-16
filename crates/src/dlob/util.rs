@@ -51,14 +51,10 @@ pub fn compare_user_orders(pubkey: Pubkey, old: &User, new: &User) -> (Pubkey, V
                             order: *existing_order,
                         });
                     } else {
-                        // order still exists, but may have changed (price, fill amount, etc.)
-                        // Remove old order so it can be re-inserted with updated data
-                        deltas.push(OrderDelta::Remove {
-                            order: *existing_order,
-                        });
+                        // same logical order
                     }
                 } else {
-                    // order_id points to a different order in `new` state
+                    // this order_id points to a different order in `new` state
                     deltas.push(OrderDelta::Remove {
                         order: *existing_order,
                     });
@@ -235,7 +231,6 @@ mod tests {
                     assert_eq!(order.order_id, expected_create_id);
                     has_create = true;
                 }
-                _ => panic!("Unexpected delta type: {:?}", delta),
             }
         }
 
@@ -344,15 +339,6 @@ mod tests {
         order
     }
 
-    // Helper to create an order with different logical properties (different user_order_id)
-    fn create_different_logical_order(
-        order_id: u32,
-        user_order_id: u8,
-        status: OrderStatus,
-    ) -> Order {
-        create_logical_order(order_id, user_order_id, status)
-    }
-
     #[test]
     fn test_scenario_1_order_id_shift() {
         // scenario 1: (old orderIds shift, not finalized)
@@ -396,7 +382,6 @@ mod tests {
                         has_create_6_a = true;
                     }
                 }
-                _ => {}
             }
         }
 
