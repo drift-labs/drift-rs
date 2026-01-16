@@ -22,7 +22,8 @@ use crate::{
         standardize_price_i64,
     },
     types::{
-        accounts::HighLeverageModeConfig, ContractTier, OrderParams, OrderType, PositionDirection,
+        accounts::{HighLeverageModeConfig, PerpMarket},
+        ContractTier, FeeTier, Order, OrderParams, OrderType, PositionDirection,
         ProtectedMakerParams, RevenueShareOrder, SdkError, ValidityGuardRails,
     },
     SdkResult,
@@ -194,6 +195,15 @@ extern "C" {
         oracle_price: &OraclePriceData,
         perp_market: Option<&accounts::PerpMarket>,
     ) -> FfiResult<(u8, i64, i64)>;
+    #[allow(improper_ctypes)]
+    pub fn math_calculate_base_asset_amount_for_amm_to_fulfill(
+        order: &Order,
+        market: &PerpMarket,
+        limit_price: Option<u64>,
+        override_fill_price: Option<u64>,
+        existing_base_asset_amount: i64,
+        fee_tier: &FeeTier,
+    ) -> FfiResult<(u64, Option<u64>)>;
 }
 
 //
@@ -777,6 +787,28 @@ impl accounts::PerpMarket {
         let reserve_price = reserve_price.unwrap_or(self.reserve_price());
 
         (reserve_price * multiplier.unsigned_abs()) / BID_ASK_SPREAD_PRECISION_I64 as u64
+    }
+
+    /// Return the base asset amount of `order` that could be fulfilled by AMM now
+    pub fn calculate_base_asset_amount_for_amm_to_fulfill(
+        &self,
+        order: &Order,
+        market: &PerpMarket,
+        limit_price: Option<u64>,
+        override_fill_price: Option<u64>,
+        existing_base_asset_amount: i64,
+        fee_tier: &FeeTier,
+    ) -> SdkResult<(u64, Option<u64>)> {
+        to_sdk_result(unsafe {
+            math_calculate_base_asset_amount_for_amm_to_fulfill(
+                order,
+                market,
+                limit_price,
+                override_fill_price,
+                existing_base_asset_amount,
+                fee_tier,
+            )
+        })
     }
 }
 
