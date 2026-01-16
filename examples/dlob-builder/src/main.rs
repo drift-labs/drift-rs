@@ -133,13 +133,30 @@ async fn get_l3_orderbook(
         .drift
         .try_get_perp_market_account(params.market_index)
         .unwrap();
+    let unix_now = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as i64;
+    let trigger_price = perp_market
+        .get_trigger_price(oracle_price as i64, unix_now, true)
+        .expect("got trigger price");
     let max_orders = params.max_orders.unwrap_or(usize::MAX);
     let bids: Vec<L3OrderResponse> = l3_book
-        .top_bids(max_orders, Some(oracle_price), Some(&perp_market))
+        .top_bids(
+            max_orders,
+            Some(oracle_price),
+            Some(&perp_market),
+            Some(trigger_price),
+        )
         .map(convert_order)
         .collect();
     let asks: Vec<L3OrderResponse> = l3_book
-        .top_asks(max_orders, Some(oracle_price), Some(&perp_market))
+        .top_asks(
+            max_orders,
+            Some(oracle_price),
+            Some(&perp_market),
+            Some(trigger_price),
+        )
         .map(convert_order)
         .collect();
 

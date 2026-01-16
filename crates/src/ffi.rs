@@ -52,6 +52,15 @@ extern "C" {
         accounts: &mut AccountsList,
         mode: MarginContextMode,
     ) -> FfiResult<MarginCalculation>;
+    #[allow(improper_ctypes)]
+    pub fn math_calculate_base_asset_amount_for_amm_to_fulfill(
+        order: &Order,
+        market: &PerpMarket,
+        limit_price: Option<u64>,
+        override_fill_price: Option<u64>,
+        existing_base_asset_amount: i64,
+        fee_tier: &FeeTier,
+    ) -> FfiResult<(u64, Option<u64>)>;
 
     #[allow(improper_ctypes)]
     pub fn oracle_get_oracle_price(
@@ -195,15 +204,6 @@ extern "C" {
         oracle_price: &OraclePriceData,
         perp_market: Option<&accounts::PerpMarket>,
     ) -> FfiResult<(u8, i64, i64)>;
-    #[allow(improper_ctypes)]
-    pub fn math_calculate_base_asset_amount_for_amm_to_fulfill(
-        order: &Order,
-        market: &PerpMarket,
-        limit_price: Option<u64>,
-        override_fill_price: Option<u64>,
-        existing_base_asset_amount: i64,
-        fee_tier: &FeeTier,
-    ) -> FfiResult<(u64, Option<u64>)>;
 }
 
 //

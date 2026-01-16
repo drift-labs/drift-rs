@@ -54,7 +54,7 @@ impl<'a> DLOBBuilder<'a> {
 
         let notifier_ref = notifier.clone();
         account_map.iter_accounts_with::<User>(move |pubkey, user, slot| {
-            notifier_ref.user_update(*pubkey, None, &user, slot);
+            notifier_ref.user_update(*pubkey, None, user, slot);
         });
 
         Self { dlob, notifier }

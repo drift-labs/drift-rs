@@ -7,48 +7,87 @@ use solana_sdk::pubkey::Pubkey;
 /// change of order signal dlob
 #[derive(Debug, PartialEq, Clone)]
 pub enum OrderDelta {
-    Create {
-        order: Order,
-        user: Pubkey,
-    },
-    Update {
-        new_order: Order,
-        old_order: Order,
-        user: Pubkey,
-    },
-    Remove {
-        order: Order,
-        user: Pubkey,
-    },
+    Create { order: Order },
+    Remove { order: Order },
+}
+
+impl OrderDelta {
+    pub fn order_id(&self) -> u32 {
+        match self {
+            Self::Create { order, .. } => order.order_id,
+            Self::Remove { order, .. } => order.order_id,
+        }
+    }
 }
 
 /// Helper function to generate unique order Id hash for internal DLOB use
-pub fn order_hash(user: &Pubkey, order_id: u32, market_index: u16) -> u64 {
+pub fn order_hash(user: &Pubkey, order_id: u32) -> u64 {
     let mut hasher = AHasher::default();
     user.hash(&mut hasher);
     order_id.hash(&mut hasher);
-    market_index.hash(&mut hasher);
     hasher.finish()
 }
 
-pub fn compare_user_orders(pubkey: Pubkey, old: &User, new: &User) -> Vec<OrderDelta> {
+pub fn compare_user_orders(pubkey: Pubkey, old: &User, new: &User) -> (Pubkey, Vec<OrderDelta>) {
     let mut deltas = Vec::<OrderDelta>::with_capacity(16);
 
-    for order in old.orders.iter().filter(|o| o.status == OrderStatus::Open) {
-        deltas.push(OrderDelta::Remove {
-            order: *order,
-            user: pubkey,
-        });
+    // an `order_id` may "point" to a different logical order between new/old states due to eventual consistency.
+    // decide whether this transition represents an update to the same logical order OR
+    // a reassignment to a logically different one
+    //
+    // the order of operations, remove old orders followed by insert new orders is required to ensure
+    // correctness
+    for existing_order in old.orders.iter().filter(|o| o.status == OrderStatus::Open) {
+        match new
+            .orders
+            .iter()
+            .find(|o| o.order_id == existing_order.order_id)
+        {
+            Some(new_order) => {
+                if is_same_logical_order(existing_order, new_order) {
+                    if new_order.status != OrderStatus::Open {
+                        // order has cancelled/filled
+                        deltas.push(OrderDelta::Remove {
+                            order: *existing_order,
+                        });
+                    } else {
+                        // same logical order
+                    }
+                } else {
+                    // this order_id points to a different order in `new` state
+                    deltas.push(OrderDelta::Remove {
+                        order: *existing_order,
+                    });
+                }
+            }
+            None => {
+                // doesn't exist anymore remove
+                deltas.push(OrderDelta::Remove {
+                    order: *existing_order,
+                });
+            }
+        }
     }
 
-    for order in new.orders.iter().filter(|o| o.status == OrderStatus::Open) {
-        deltas.push(OrderDelta::Create {
-            order: *order,
-            user: pubkey,
-        });
+    // assume whatever is in `new` is the best view of current state, it may or may not be final
+    for new_order in new.orders.iter().filter(|o| o.status == OrderStatus::Open) {
+        deltas.push(OrderDelta::Create { order: *new_order });
     }
 
-    deltas
+    (pubkey, deltas)
+}
+
+/// true if the order is logically the same order
+fn is_same_logical_order(a: &Order, b: &Order) -> bool {
+    // any field that can naturally or spuriously change should not be included here
+    // e.g. `slot` is volatile, auction params, and bit_flags can change as a normal part of the order's lifecycle
+    // so are not used here
+    a.user_order_id == b.user_order_id
+        && a.market_index == b.market_index
+        && a.market_type == b.market_type
+        && a.direction == b.direction
+        && a.order_type == b.order_type
+        && a.max_ts == b.max_ts
 }
 
 #[cfg(test)]
@@ -94,7 +133,7 @@ mod tests {
         let old = create_test_user(vec![]);
         let new = create_test_user(vec![]);
 
-        let deltas = compare_user_orders(pubkey, &old, &new);
+        let (_, deltas) = compare_user_orders(pubkey, &old, &new);
         assert!(deltas.is_empty());
     }
 
@@ -104,12 +143,12 @@ mod tests {
         let old = create_test_user(vec![]);
         let new = create_test_user(vec![create_test_order(1, OrderStatus::Open)]);
 
-        let deltas = compare_user_orders(pubkey, &old, &new);
+        let (returned_pubkey, deltas) = compare_user_orders(pubkey, &old, &new);
+        assert_eq!(returned_pubkey, pubkey);
         assert_eq!(deltas.len(), 1);
 
         match &deltas[0] {
-            OrderDelta::Create { user, order } => {
-                assert_eq!(*user, pubkey);
+            OrderDelta::Create { order } => {
                 assert_eq!(order.order_id, 1);
             }
             _ => panic!("Expected Create delta"),
@@ -122,12 +161,12 @@ mod tests {
         let old = create_test_user(vec![create_test_order(1, OrderStatus::Open)]);
         let new = create_test_user(vec![]);
 
-        let deltas = compare_user_orders(pubkey, &old, &new);
+        let (returned_pubkey, deltas) = compare_user_orders(pubkey, &old, &new);
+        assert_eq!(returned_pubkey, pubkey);
         assert_eq!(deltas.len(), 1);
 
         match &deltas[0] {
-            OrderDelta::Remove { user, order } => {
-                assert_eq!(*user, pubkey);
+            OrderDelta::Remove { order } => {
                 assert_eq!(order.order_id, 1);
             }
             _ => panic!("Expected Remove delta"),
@@ -142,12 +181,12 @@ mod tests {
         order.status = OrderStatus::Canceled;
         let new = create_test_user(vec![order]);
 
-        let deltas = compare_user_orders(pubkey, &old, &new);
+        let (returned_pubkey, deltas) = compare_user_orders(pubkey, &old, &new);
+        assert_eq!(returned_pubkey, pubkey);
         assert_eq!(deltas.len(), 1);
 
         match &deltas[0] {
-            OrderDelta::Remove { user, order } => {
-                assert_eq!(*user, pubkey);
+            OrderDelta::Remove { order } => {
                 assert_eq!(order.order_id, 1);
             }
             _ => panic!("Expected Remove delta"),
@@ -167,8 +206,9 @@ mod tests {
 
         let new = create_test_user(vec![new_order, create_test_order(3, OrderStatus::Open)]);
 
-        let deltas = compare_user_orders(pubkey, &old, &new);
-        assert_eq!(deltas.len(), 4);
+        let (pubkey_out, deltas) = compare_user_orders(pubkey, &old, &new);
+        assert_eq!(pubkey_out, pubkey);
+        assert_eq!(deltas.len(), 3);
     }
 
     // Helper function to assert order replacement deltas
@@ -192,7 +232,6 @@ mod tests {
                     assert_eq!(order.order_id, expected_create_id);
                     has_create = true;
                 }
-                _ => panic!("Unexpected delta type: {:?}", delta),
             }
         }
 
@@ -216,7 +255,7 @@ mod tests {
         let old = create_test_user(vec![create_test_order(1, OrderStatus::Open)]);
         let new = create_test_user(vec![create_test_order(2, OrderStatus::Open)]);
 
-        let deltas = compare_user_orders(pubkey, &old, &new);
+        let (_, deltas) = compare_user_orders(pubkey, &old, &new);
         assert_order_replacement_deltas(&deltas, 1, 2);
     }
 
@@ -229,7 +268,7 @@ mod tests {
         let old = create_test_user(vec![]); // Empty user, all slots have default Order (order_id=0, status=Init)
         let new = create_test_user(vec![create_test_order(1, OrderStatus::Filled)]); // Order created and filled atomically
 
-        let deltas = compare_user_orders(pubkey, &old, &new);
+        let (_, deltas) = compare_user_orders(pubkey, &old, &new);
 
         // Should emit NO deltas - the order was created and filled atomically, so it never
         // existed in an open state that we need to track
@@ -248,7 +287,7 @@ mod tests {
         let old = create_test_user(vec![]);
         let new = create_test_user(vec![create_test_order(1, OrderStatus::Canceled)]);
 
-        let deltas = compare_user_orders(pubkey, &old, &new);
+        let (_, deltas) = compare_user_orders(pubkey, &old, &new);
 
         assert_eq!(
             deltas.len(),
@@ -267,7 +306,7 @@ mod tests {
         let old = create_test_user(vec![create_test_order(1, OrderStatus::Filled)]);
         let new = create_test_user(vec![create_test_order(2, OrderStatus::Filled)]);
 
-        let deltas = compare_user_orders(pubkey, &old, &new);
+        let (_, deltas) = compare_user_orders(pubkey, &old, &new);
 
         // Should emit NO deltas - both orders are filled, so neither was ever open in the DLOB
         assert_eq!(
@@ -285,12 +324,138 @@ mod tests {
         let old = create_test_user(vec![create_test_order(1, OrderStatus::Canceled)]);
         let new = create_test_user(vec![create_test_order(2, OrderStatus::Filled)]);
 
-        let deltas = compare_user_orders(pubkey, &old, &new);
+        let (_, deltas) = compare_user_orders(pubkey, &old, &new);
 
         assert_eq!(
             deltas.len(),
             0,
             "Should not emit Remove+Create for replacement of canceled order with filled order"
         );
+    }
+
+    // Helper to create an order with specific logical properties
+    fn create_logical_order(order_id: u32, user_order_id: u8, status: OrderStatus) -> Order {
+        let mut order = create_test_order(order_id, status);
+        order.user_order_id = user_order_id;
+        order
+    }
+
+    #[test]
+    fn test_scenario_1_order_id_shift() {
+        // scenario 1: (old orderIds shift, not finalized)
+        // old: 5 = A
+        // new: 5 = B, 6 = A
+        // Expected: Remove(5=A), Create(5=B), Create(6=A)
+        let pubkey = Pubkey::new_unique();
+
+        // Order A has user_order_id=1, Order B has user_order_id=2
+        let order_a = create_logical_order(5, 1, OrderStatus::Open);
+        let old = create_test_user(vec![order_a.clone()]);
+
+        let order_b = create_logical_order(5, 2, OrderStatus::Open);
+        let order_a_new = create_logical_order(6, 1, OrderStatus::Open);
+        let new = create_test_user(vec![order_b.clone(), order_a_new.clone()]);
+
+        let (_, deltas) = compare_user_orders(pubkey, &old, &new);
+
+        // Should have: Remove(5=A), Create(5=B), Create(6=A)
+        assert_eq!(
+            deltas.len(),
+            3,
+            "Should have 3 deltas: Remove(5=A), Create(5=B), Create(6=A)"
+        );
+
+        let mut has_remove_5_a = false;
+        let mut has_create_5_b = false;
+        let mut has_create_6_a = false;
+
+        for delta in &deltas {
+            match delta {
+                OrderDelta::Remove { order } => {
+                    if order.order_id == 5 && order.user_order_id == 1 {
+                        has_remove_5_a = true;
+                    }
+                }
+                OrderDelta::Create { order } => {
+                    if order.order_id == 5 && order.user_order_id == 2 {
+                        has_create_5_b = true;
+                    } else if order.order_id == 6 && order.user_order_id == 1 {
+                        has_create_6_a = true;
+                    }
+                }
+            }
+        }
+
+        assert!(
+            has_remove_5_a,
+            "Should have Remove for order 5 (logical order A)"
+        );
+        assert!(
+            has_create_5_b,
+            "Should have Create for order 5 (logical order B)"
+        );
+        assert!(
+            has_create_6_a,
+            "Should have Create for order 6 (logical order A)"
+        );
+    }
+
+    #[test]
+    fn test_scenario_2_status_change() {
+        // scenario 2: (old orderId status change not finalized)
+        // old: 4 = Filled
+        // new: 4 = Open
+        // Expected: Create(4=Open)
+        let pubkey = Pubkey::new_unique();
+
+        let order_filled = create_logical_order(4, 1, OrderStatus::Filled);
+        let old = create_test_user(vec![order_filled]);
+
+        let order_open = create_logical_order(4, 1, OrderStatus::Open);
+        let new = create_test_user(vec![order_open.clone()]);
+
+        let (_, deltas) = compare_user_orders(pubkey, &old, &new);
+
+        // Should have: Create(4=Open)
+        // Note: The old order is Filled (not Open), so it's filtered out in the second loop
+        // The new order is Open, so it gets a Create delta
+        assert_eq!(deltas.len(), 1, "Should have 1 delta: Create(4=Open)");
+
+        match &deltas[0] {
+            OrderDelta::Create { order } => {
+                assert_eq!(order.order_id, 4);
+                assert_eq!(order.user_order_id, 1);
+                assert_eq!(order.status, OrderStatus::Open);
+            }
+            _ => panic!("Expected Create delta for order 4"),
+        }
+    }
+
+    #[test]
+    fn test_scenario_3_order_id_removed() {
+        // scenario 3: (old orderId created not finalized)
+        // old: 4 = A (Open)
+        // new: *4 not assigned* (or default/Init order)
+        // Expected: Remove(4=A)
+        let pubkey = Pubkey::new_unique();
+
+        let order_a = create_logical_order(4, 1, OrderStatus::Open);
+        let old = create_test_user(vec![order_a.clone()]);
+
+        // New user has no order at index 0 (or has default order with order_id=0)
+        let new = create_test_user(vec![]);
+
+        let (_, deltas) = compare_user_orders(pubkey, &old, &new);
+
+        // Should have: Remove(4=A)
+        assert_eq!(deltas.len(), 1, "Should have 1 delta: Remove(4=A)");
+
+        match &deltas[0] {
+            OrderDelta::Remove { order } => {
+                assert_eq!(order.order_id, 4);
+                assert_eq!(order.user_order_id, 1);
+            }
+            _ => panic!("Expected Remove delta for order 4"),
+        }
     }
 }
