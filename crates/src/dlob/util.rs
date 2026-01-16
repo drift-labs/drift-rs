@@ -206,8 +206,9 @@ mod tests {
 
         let new = create_test_user(vec![new_order, create_test_order(3, OrderStatus::Open)]);
 
-        let (_, deltas) = compare_user_orders(pubkey, &old, &new);
-        assert_eq!(deltas.len(), 4);
+        let (pubkey_out, deltas) = compare_user_orders(pubkey, &old, &new);
+        assert_eq!(pubkey_out, pubkey);
+        assert_eq!(deltas.len(), 3);
     }
 
     // Helper function to assert order replacement deltas
