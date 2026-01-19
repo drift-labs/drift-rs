@@ -18,6 +18,7 @@ pub mod constants;
 pub mod leverage;
 pub mod liquidation;
 pub mod order;
+pub mod tiers;
 
 #[derive(Clone, Copy, Debug)]
 pub struct MarginContext {
