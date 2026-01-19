@@ -187,7 +187,7 @@ impl AccountMap {
                 .entry(update.pubkey)
                 .and_modify(|x| {
                     if update.write_version < x.write_version {
-                        log::info!(target: LOG_TARGET, "ooo account udpate");
+                        log::debug!(target: LOG_TARGET, "skip stale update pubkey={:?}. update: {}, current: {}", update.pubkey, update.write_version, x.write_version);
                         return;
                     }
                     x.slot = update.slot;
