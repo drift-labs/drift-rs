@@ -19,11 +19,7 @@ See the official [docs](https://docs.rs/drift-rs/latest/drift_rs/)
 
 ## Install
 ```toml
-<<<<<<< HEAD
-drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.16" }
-=======
 drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0-alpha.18" }
->>>>>>> a8eaa7e (feat: gRPC add write_version field to account updates)
 ```
 _*_ crates.io requires [libdrift](https://github.com/drift-labs/drift-ffi-sys/?tab=readme-ov-file#from-source) is installed and linked locally
 
