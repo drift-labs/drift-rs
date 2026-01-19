@@ -1315,8 +1315,8 @@ mod tests {
         ffi::{
             abi_types, calculate_auction_price,
             calculate_margin_requirement_and_total_collateral_and_liability_info,
-            check_ffi_version, get_oracle_price, IncrementalMarginCalculation, OraclePriceData,
-            simulate_update_amm,
+            check_ffi_version, get_oracle_price, simulate_update_amm, IncrementalMarginCalculation,
+            OraclePriceData,
         },
         math::constants::{
             BASE_PRECISION, BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, MARGIN_PRECISION,
@@ -3078,7 +3078,10 @@ mod tests {
         let slot = 1000;
 
         let result = simulate_update_amm(&mut perp_market, &state, mm_oracle_price_data, now, slot);
-        assert!(result.is_ok(), "simulate_update_amm should succeed for valid input");
+        assert!(
+            result.is_ok(),
+            "simulate_update_amm should succeed for valid input"
+        );
         let funding_payment = result.unwrap();
         // Funding payment can be positive, negative, or zero depending on market conditions
         // Just verify we got a valid i128 value
@@ -3144,7 +3147,10 @@ mod tests {
         let slot = 2000;
 
         let result = simulate_update_amm(&mut perp_market, &state, mm_oracle_price_data, now, slot);
-        assert!(result.is_ok(), "simulate_update_amm should succeed with price change");
+        assert!(
+            result.is_ok(),
+            "simulate_update_amm should succeed with price change"
+        );
         let funding_payment = result.unwrap();
         // Verify we got a valid result
         assert!(
@@ -3207,10 +3213,12 @@ mod tests {
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .as_secs() + (i as u64 * 3600); // Increment by 1 hour each iteration
+                .as_secs()
+                + (i as u64 * 3600); // Increment by 1 hour each iteration
             let slot = base_slot + (i as u64 * 100);
 
-            let result = simulate_update_amm(&mut perp_market, &state, mm_oracle_price_data, now, slot);
+            let result =
+                simulate_update_amm(&mut perp_market, &state, mm_oracle_price_data, now, slot);
             assert!(
                 result.is_ok(),
                 "simulate_update_amm should succeed on iteration {}",
