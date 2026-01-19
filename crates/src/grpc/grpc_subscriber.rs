@@ -419,6 +419,7 @@ impl DriftGrpcClient {
                                     executable: account.executable,
                                     rent_epoch: account.rent_epoch,
                                     data: &account.data,
+                                    write_version: account.write_version,
                                 };
 
                                 for (filter, hook) in &on_account {
@@ -461,6 +462,9 @@ impl DriftGrpcClient {
                             }
                             Some(UpdateOneof::Slot(msg)) => {
                                 log::trace!(target: "grpc", "slot: {}", msg.slot);
+                                if msg.status() as u8 > 2 {
+                                    log::info!(target: "grpc", "slot: {}, {}", msg.slot, msg.status);
+                                }
                                 if msg.slot > latest_slot {
                                     latest_slot = msg.slot;
                                     on_slot(latest_slot);
