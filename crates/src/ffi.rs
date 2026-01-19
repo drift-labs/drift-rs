@@ -207,7 +207,7 @@ extern "C" {
     #[allow(improper_ctypes)]
     #[link_name = "simulate_update_amm"]
     pub fn simulate_update_amm_ffi(
-        market: &mut PerpMarket,
+        market: &mut accounts::PerpMarket,
         state: &accounts::State,
         mm_oracle_price_data: MMOraclePriceData,
         now: u64,
