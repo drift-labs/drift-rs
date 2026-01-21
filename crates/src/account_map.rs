@@ -33,6 +33,8 @@ const LOG_TARGET: &str = "accountmap";
 pub struct AccountSlot {
     raw: Arc<[u8]>,
     slot: Slot,
+    /// gRPC subscribed accounts only
+    write_version: u64,
 }
 
 /// Set of subscriptions to network accounts
@@ -184,6 +186,10 @@ impl AccountMap {
             accounts
                 .entry(update.pubkey)
                 .and_modify(|x| {
+                    if update.write_version < x.write_version {
+                        log::debug!(target: LOG_TARGET, "skip stale update pubkey={:?}. update: {}, current: {}", update.pubkey, update.write_version, x.write_version);
+                        return;
+                    }
                     x.slot = update.slot;
                     x.raw = Arc::from(update.data);
                 })
@@ -201,6 +207,7 @@ impl AccountMap {
                     AccountSlot {
                         slot: update.slot,
                         raw: Arc::from(update.data),
+                        write_version: update.write_version,
                     }
                 });
         }
@@ -259,6 +266,7 @@ impl AccountMap {
                 lamports: account.lamports,
                 owner: PROGRAM_ID,
                 rent_epoch: u64::MAX,
+                write_version: 0,
                 executable: false,
                 slot,
             });
@@ -296,6 +304,7 @@ impl AccountMap {
                 lamports: account.lamports,
                 owner: PROGRAM_ID,
                 rent_epoch: u64::MAX,
+                write_version: 0,
                 executable: false,
                 slot,
             });
@@ -373,6 +382,7 @@ impl AccountSub<Unsubscribed> {
                             .or_insert(AccountSlot {
                                 raw: Arc::from(update.data.as_slice()),
                                 slot: update.slot,
+                                write_version: 0,
                             });
 
                         on_account(update);
@@ -396,6 +406,7 @@ impl AccountSub<Unsubscribed> {
                         .or_insert(AccountSlot {
                             raw: Arc::from(update.data.as_slice()),
                             slot: update.slot,
+                            write_version: 0,
                         });
 
                     on_account(update);

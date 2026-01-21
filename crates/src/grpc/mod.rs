@@ -31,18 +31,23 @@ pub type OnBlockMetaFn = dyn Fn(SubscribeUpdateBlockMeta) + Send + Sync + 'stati
 pub struct AccountUpdate<'a> {
     /// the account's pubkey
     pub pubkey: Pubkey,
-    /// lamports in the account
-    pub lamports: u64,
-    /// data held in the account
-    pub data: &'a [u8],
     /// the program that owns the account. If executable, the program that loads the account.
     pub owner: Pubkey,
-    /// the account's data contains a loaded program (and is now read-only)
-    pub executable: bool,
+    /// data held in the account
+    pub data: &'a [u8],
+    /// lamports in the account
+    pub lamports: u64,
     /// the epoch at which the account will next owe rent
     pub rent_epoch: Epoch,
     /// Slot the update was retrieved
     pub slot: Slot,
+    /// A global monotonically increasing atomic number, which can be used
+    /// to tell the order of the account update. For example, when an
+    /// account is updated in the same slot multiple times, the update
+    /// with higher write_version should supersede the one with lower
+    pub write_version: u64,
+    /// the account's data contains a loaded program (and is now read-only)
+    pub executable: bool,
 }
 /// Transaction update from gRPC
 #[derive(Clone, Debug)]
