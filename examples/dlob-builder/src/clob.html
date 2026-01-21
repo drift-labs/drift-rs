@@ -532,17 +532,12 @@
     <div class="view-toggle">
         <button id="l2ViewBtn" class="active">L2 Aggregated</button>
         <button id="l3ViewBtn">L3 Individual</button>
-        <button id="l3CompareViewBtn">L3 Compare</button>
     </div>
 
     <div class="controls">
         <div class="control-group">
             <label for="marketIndex">Market Index:</label>
             <input type="number" id="marketIndex" value="0" min="0" max="100">
-        </div>
-        <div class="control-group" id="marketNameGroup" style="display: none;">
-            <label for="marketName">Market Name:</label>
-            <input type="text" id="marketName" value="HYPE-PERP" placeholder="HYPE-PERP">
         </div>
         <div class="control-group">
             <label for="refreshInterval">Refresh (ms):</label>
@@ -660,117 +655,6 @@
         </div>
     </div>
 
-    <!-- L3 Comparison View -->
-    <div id="l3CompareContainer" style="display: none;">
-        <div style="max-width: 2800px; margin: 0 auto;">
-            <!-- ASKS Comparison -->
-            <div style="margin-bottom: 30px;">
-                <h2 style="text-align: center; color: #ff4444; margin-bottom: 15px;">ASKS (Sell Orders) Comparison</h2>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                    <div>
-                        <h3 style="text-align: center; color: #00ff88; margin-bottom: 10px; font-size: 16px;">Local L3 (/l3)</h3>
-                        <div class="orderbook-side">
-                            <div class="orderbook-header asks-header">ASKS</div>
-                            <table class="orderbook-table">
-                                <thead>
-                                    <tr>
-                                        <th>Price</th>
-                                        <th>Size</th>
-                                        <th>Order ID</th>
-                                        <th>User</th>
-                                        <th>Kind</th>
-                                        <th>RO</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="asksTableLocal">
-                                    <tr>
-                                        <td colspan="6" class="loading">Loading...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div>
-                        <h3 style="text-align: center; color: #ff6b6b; margin-bottom: 10px; font-size: 16px;">External L3 (/l3_ts)</h3>
-                        <div class="orderbook-side">
-                            <div class="orderbook-header asks-header">ASKS</div>
-                            <table class="orderbook-table">
-                                <thead>
-                                    <tr>
-                                        <th>Price</th>
-                                        <th>Size</th>
-                                        <th>Order ID</th>
-                                        <th>User</th>
-                                        <th>Kind</th>
-                                        <th>RO</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="asksTableTs">
-                                    <tr>
-                                        <td colspan="6" class="loading">Loading...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- BIDS Comparison -->
-            <div>
-                <h2 style="text-align: center; color: #00ff88; margin-bottom: 15px;">BIDS (Buy Orders) Comparison</h2>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                    <div>
-                        <h3 style="text-align: center; color: #00ff88; margin-bottom: 10px; font-size: 16px;">Local L3 (/l3)</h3>
-                        <div class="orderbook-side">
-                            <div class="orderbook-header bids-header">BIDS</div>
-                            <table class="orderbook-table">
-                                <thead>
-                                    <tr>
-                                        <th>Price</th>
-                                        <th>Size</th>
-                                        <th>Order ID</th>
-                                        <th>User</th>
-                                        <th>Kind</th>
-                                        <th>RO</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="bidsTableLocal">
-                                    <tr>
-                                        <td colspan="6" class="loading">Loading...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                    <div>
-                        <h3 style="text-align: center; color: #ff6b6b; margin-bottom: 10px; font-size: 16px;">External L3 (/l3_ts)</h3>
-                        <div class="orderbook-side">
-                            <div class="orderbook-header bids-header">BIDS</div>
-                            <table class="orderbook-table">
-                                <thead>
-                                    <tr>
-                                        <th>Price</th>
-                                        <th>Size</th>
-                                        <th>Order ID</th>
-                                        <th>User</th>
-                                        <th>Kind</th>
-                                        <th>RO</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="bidsTableTs">
-                                    <tr>
-                                        <td colspan="6" class="loading">Loading...</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script>
         let refreshInterval = null;
         let isRefreshing = false;
@@ -785,12 +669,9 @@
         const l2BidsTableEl = document.getElementById('l2BidsTable');
         const l2ContainerEl = document.getElementById('l2Container');
         const l3ContainerEl = document.getElementById('l3Container');
-        const l3CompareContainerEl = document.getElementById('l3CompareContainer');
         const l2ViewBtn = document.getElementById('l2ViewBtn');
         const l3ViewBtn = document.getElementById('l3ViewBtn');
-        const l3CompareViewBtn = document.getElementById('l3CompareViewBtn');
         const marketIndexInput = document.getElementById('marketIndex');
-        const marketNameInput = document.getElementById('marketName');
         const refreshIntervalInput = document.getElementById('refreshInterval');
         const maxOrdersInput = document.getElementById('maxOrders');
         const refreshBtn = document.getElementById('refreshBtn');
@@ -930,12 +811,12 @@
             updateStatus(`L2 Orderbook updated - Slot: ${data.slot}, Oracle: ${formatPrice(data.oracle_price)}, Market: ${data.market_index}`);
         }
 
-        function renderL3OrderbookToTables(data, asksTable, bidsTable) {
+        function renderL3Orderbook(data) {
             const maxOrders = parseInt(maxOrdersInput.value);
 
             // Clear existing data
-            asksTable.innerHTML = '';
-            bidsTable.innerHTML = '';
+            asksTableEl.innerHTML = '';
+            bidsTableEl.innerHTML = '';
 
             // Sort asks by price ascending (lowest first)
             const sortedAsks = [...data.asks].sort((a, b) => a.price - b.price);
@@ -967,7 +848,7 @@
                     window.open(`https://app.drift.trade?userAccount=${order.user}`, '_blank');
                 });
 
-                asksTable.appendChild(row);
+                asksTableEl.appendChild(row);
             });
 
             // Render bids
@@ -996,7 +877,7 @@
                     window.open(`https://app.drift.trade?userAccount=${order.user}`, '_blank');
                 });
                 
-                bidsTable.appendChild(row);
+                bidsTableEl.appendChild(row);
             });
 
             // Calculate and display spread
@@ -1011,10 +892,7 @@
             } else {
                 spreadEl.style.display = 'none';
             }
-        }
 
-        function renderL3Orderbook(data) {
-            renderL3OrderbookToTables(data, asksTableEl, bidsTableEl);
             updateStatus(`L3 Orderbook updated - Slot: ${data.slot}, Oracle: ${formatPrice(data.oracle_price)}`);
         }
 
@@ -1026,52 +904,20 @@
             refreshBtn.classList.add('loading');
 
             try {
-                if (currentView === 'l3_compare') {
-                    // Fetch from both endpoints
-                    const marketIndex = marketIndexInput.value;
-                    const marketName = marketNameInput.value || 'HYPE-PERP';
-                    
-                    const [localResponse, tsResponse] = await Promise.all([
-                        fetch(`/l3?market_index=${marketIndex}`),
-                        fetch(`/l3_ts?market_name=${encodeURIComponent(marketName)}&include_oracle=true`)
-                    ]);
+                const marketIndex = marketIndexInput.value;
+                const endpoint = currentView === 'l2' ? '/l2' : '/l3';
+                const response = await fetch(`${endpoint}?market_index=${marketIndex}`);
 
-                    if (!localResponse.ok) {
-                        throw new Error(`Local L3 HTTP ${localResponse.status}: ${localResponse.statusText}`);
-                    }
-                    if (!tsResponse.ok) {
-                        throw new Error(`External L3 TS HTTP ${tsResponse.status}: ${tsResponse.statusText}`);
-                    }
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
 
-                    const localData = await localResponse.json();
-                    const tsData = await tsResponse.json();
+                const data = await response.json();
 
-                    // Render to comparison tables
-                    const asksTableLocal = document.getElementById('asksTableLocal');
-                    const bidsTableLocal = document.getElementById('bidsTableLocal');
-                    const asksTableTs = document.getElementById('asksTableTs');
-                    const bidsTableTs = document.getElementById('bidsTableTs');
-
-                    renderL3OrderbookToTables(localData, asksTableLocal, bidsTableLocal);
-                    renderL3OrderbookToTables(tsData, asksTableTs, bidsTableTs);
-
-                    updateStatus(`L3 Comparison updated - Local: Slot ${localData.slot}, TS: Slot ${tsData.slot}`);
+                if (currentView === 'l2') {
+                    renderL2Orderbook(data);
                 } else {
-                    const marketIndex = marketIndexInput.value;
-                    const endpoint = currentView === 'l2' ? '/l2' : '/l3';
-                    const response = await fetch(`${endpoint}?market_index=${marketIndex}`);
-
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-
-                    const data = await response.json();
-
-                    if (currentView === 'l2') {
-                        renderL2Orderbook(data);
-                    } else {
-                        renderL3Orderbook(data);
-                    }
+                    renderL3Orderbook(data);
                 }
             } catch (error) {
                 console.error('Error fetching orderbook:', error);
@@ -1123,30 +969,15 @@
             if (view === 'l2') {
                 l2ViewBtn.classList.add('active');
                 l3ViewBtn.classList.remove('active');
-                l3CompareViewBtn.classList.remove('active');
                 l2ContainerEl.style.display = 'grid';
                 l3ContainerEl.style.display = 'none';
-                l3CompareContainerEl.style.display = 'none';
                 document.getElementById('priceGroupingGroup').style.display = 'flex';
-                document.getElementById('marketNameGroup').style.display = 'none';
-            } else if (view === 'l3') {
+            } else {
                 l2ViewBtn.classList.remove('active');
                 l3ViewBtn.classList.add('active');
-                l3CompareViewBtn.classList.remove('active');
                 l2ContainerEl.style.display = 'none';
                 l3ContainerEl.style.display = 'grid';
-                l3CompareContainerEl.style.display = 'none';
                 document.getElementById('priceGroupingGroup').style.display = 'none';
-                document.getElementById('marketNameGroup').style.display = 'none';
-            } else if (view === 'l3_compare') {
-                l2ViewBtn.classList.remove('active');
-                l3ViewBtn.classList.remove('active');
-                l3CompareViewBtn.classList.add('active');
-                l2ContainerEl.style.display = 'none';
-                l3ContainerEl.style.display = 'none';
-                l3CompareContainerEl.style.display = 'block';
-                document.getElementById('priceGroupingGroup').style.display = 'none';
-                document.getElementById('marketNameGroup').style.display = 'flex';
             }
 
             // Refresh data for the new view
@@ -1161,7 +992,6 @@
 
         l2ViewBtn.addEventListener('click', () => switchView('l2'));
         l3ViewBtn.addEventListener('click', () => switchView('l3'));
-        l3CompareViewBtn.addEventListener('click', () => switchView('l3_compare'));
 
 
         document.getElementById('priceGrouping').addEventListener('change', () => {
@@ -1176,14 +1006,6 @@
             stopAutoRefresh();
             fetchOrderbook();
             startAutoRefresh();
-        });
-
-        marketNameInput.addEventListener('change', () => {
-            if (currentView === 'l3_compare') {
-                stopAutoRefresh();
-                fetchOrderbook();
-                startAutoRefresh();
-            }
         });
 
         refreshIntervalInput.addEventListener('change', () => {

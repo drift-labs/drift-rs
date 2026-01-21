@@ -702,32 +702,6 @@ impl accounts::SpotMarket {
 }
 
 impl accounts::PerpMarket {
-    /// Simulate updating the AMM for a perp market modifying the instance
-    ///
-    /// This function simulates the AMM update process, which typically includes:
-    /// - Updating funding rates
-    /// - Adjusting reserves based on oracle prices
-    /// - Calculating funding payments
-    ///
-    /// ## Parameters
-    /// * `state` - The program state account
-    /// * `mm_oracle_price_data` - Market maker oracle price data
-    /// * `now` - Current timestamp in seconds
-    /// * `slot` - Current Solana slot
-    ///
-    /// ## Returns
-    /// Returns the funding payment amount (i128) as a result of the AMM update
-    pub fn update_amm(
-        &mut self,
-        state: &accounts::State,
-        mm_oracle_price_data: abi_types::MMOraclePriceData,
-        now: u64,
-        slot: Slot,
-    ) -> SdkResult<i128> {
-        to_sdk_result(unsafe {
-            simulate_update_amm_ffi(self, state, mm_oracle_price_data, now, slot)
-        })
-    }
     /// Return VAMM fallback price
     pub fn fallback_price(
         &self,
