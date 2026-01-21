@@ -66,6 +66,42 @@ struct L3Query {
     max_orders: Option<usize>,
 }
 
+#[derive(Deserialize)]
+struct L3TsQuery {
+    market_name: String,
+    #[serde(default = "default_include_oracle")]
+    include_oracle: bool,
+}
+
+fn default_include_oracle() -> bool {
+    true
+}
+
+// External API response structures
+#[derive(Deserialize)]
+struct ExternalL3Order {
+    price: String,
+    size: String,
+    maker: String,
+    #[serde(rename = "orderId")]
+    order_id: u32,
+}
+
+#[derive(Deserialize)]
+struct ExternalL3Response {
+    bids: Vec<ExternalL3Order>,
+    asks: Vec<ExternalL3Order>,
+    #[serde(rename = "marketName")]
+    market_name: String,
+    #[serde(rename = "marketType")]
+    market_type: String,
+    #[serde(rename = "marketIndex")]
+    market_index: u16,
+    ts: u64,
+    slot: u64,
+    oracle: u64,
+}
+
 async fn get_l2_orderbook(
     Query(params): Query<L2Query>,
     State(state): State<Arc<AppState>>,
@@ -169,6 +205,55 @@ async fn get_l3_orderbook(
     }))
 }
 
+async fn get_l3_ts_orderbook(
+    Query(params): Query<L3TsQuery>,
+) -> Result<Json<L3Response>, StatusCode> {
+    // Build the URL for the external API
+    let url = format!(
+        "https://dlob.drift.trade/l3?marketName={}&includeOracle={}",
+        params.market_name, params.include_oracle
+    );
+
+    // Fetch data from external API
+    let response = reqwest::get(&url)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    if !response.status().is_success() {
+        return Err(StatusCode::BAD_GATEWAY);
+    }
+
+    let external_data: ExternalL3Response = response
+        .json()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Transform external API response to match L3Response format
+    let convert_order = |order: &ExternalL3Order| -> L3OrderResponse {
+        L3OrderResponse {
+            price: order.price.parse().unwrap_or(0),
+            size: order.size.parse().unwrap_or(0),
+            max_ts: 0, // Not available in external API
+            order_id: order.order_id,
+            reduce_only: false,          // Not available in external API
+            kind: "Unknown".to_string(), // Not available in external API
+            user: order.maker.clone(),
+        }
+    };
+
+    let bids: Vec<L3OrderResponse> = external_data.bids.iter().map(convert_order).collect();
+
+    let asks: Vec<L3OrderResponse> = external_data.asks.iter().map(convert_order).collect();
+
+    Ok(Json(L3Response {
+        slot: external_data.slot,
+        oracle_price: external_data.oracle,
+        bids,
+        asks,
+        market_index: external_data.market_index,
+    }))
+}
+
 async fn clob_ui() -> Html<&'static str> {
     Html(include_str!("clob.html"))
 }
@@ -234,7 +319,7 @@ async fn main() {
     }
 
     let dlob = dlob_builder.dlob();
-    dlob.enable_l2_snapshot(); // disabled by default
+    // dlob.enable_l2_snapshot(); // disabled by default
     let state = Arc::new(AppState { dlob, drift });
 
     // Build the web server
@@ -242,6 +327,7 @@ async fn main() {
         .route("/", get(clob_ui))
         .route("/l2", get(get_l2_orderbook))
         .route("/l3", get(get_l3_orderbook))
+        .route("/l3_ts", get(get_l3_ts_orderbook))
         .layer(ServiceBuilder::new().layer(CorsLayer::permissive()))
         .with_state(state);
 
@@ -249,6 +335,9 @@ async fn main() {
     println!("CLOB UI: http://localhost:8080/");
     println!("L2 API: curl 'http://localhost:8080/l2?market_index=0'");
     println!("L3 API: curl 'http://localhost:8080/l3?market_index=0'");
+    println!(
+        "L3 TS API: curl 'http://localhost:8080/l3_ts?market_name=HYPE-PERP&include_oracle=true'"
+    );
 
     // Start the web server
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();

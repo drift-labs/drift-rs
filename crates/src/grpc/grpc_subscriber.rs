@@ -463,7 +463,7 @@ impl DriftGrpcClient {
                             Some(UpdateOneof::Slot(msg)) => {
                                 log::trace!(target: "grpc", "slot: {}", msg.slot);
                                 if msg.status() as u8 > 2 {
-                                    log::info!(target: "grpc", "slot: {}, {}", msg.slot, msg.status);
+                                    log::debug!(target: "grpc", "slot: {}, {}", msg.slot, msg.status);
                                 }
                                 if msg.slot > latest_slot {
                                     latest_slot = msg.slot;

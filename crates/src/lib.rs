@@ -19,7 +19,7 @@ use crate::{
         SYSVAR_INSTRUCTIONS_PUBKEY, SYSVAR_RENT_PUBKEY,
     },
     drift_idl::traits::ToAccountMetas,
-    ffi::OraclePriceData,
+    ffi::{MMOraclePriceData, OraclePriceData},
     grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, GeyserSubscribeOpts},
     jupiter::JupiterSwapInfo,
     marketmap::MarketMap,
@@ -959,15 +959,32 @@ impl DriftClient {
         market_index: u16,
         current_slot: Slot,
     ) -> SdkResult<OraclePriceData> {
+        self.try_get_mmoracle_for_perp_market_raw(market_index, current_slot)
+            .map(|x| x.safe_oracle_price_data)
+    }
+
+    /// Get `MMOraclePriceData` if valid, otherwise return the conventional `OraclePriceData`
+    ///
+    /// ## Params
+    /// * `market_index` - perp market index
+    /// * `current_slot` - current solana slot
+    ///
+    pub fn try_get_mmoracle_for_perp_market_raw(
+        &self,
+        market_index: u16,
+        current_slot: Slot,
+    ) -> SdkResult<MMOraclePriceData> {
         let oracle_data = self
             .try_get_oracle_price_data_and_slot(MarketId::perp(market_index))
             .ok_or(SdkError::InvalidOracle)?;
         let perp_market = self.try_get_perp_market_account(market_index)?;
         let oracle_validity_guard_rails = self.state_account().unwrap().oracle_guard_rails.validity;
 
-        perp_market
-            .get_mm_oracle_price_data(oracle_data.data, current_slot, &oracle_validity_guard_rails)
-            .map(|x| x.safe_oracle_price_data)
+        perp_market.get_mm_oracle_price_data(
+            oracle_data.data,
+            current_slot,
+            &oracle_validity_guard_rails,
+        )
     }
 
     /// Get the latest oracle data for `market`
