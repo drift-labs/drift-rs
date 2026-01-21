@@ -332,6 +332,19 @@ impl SignedOrderInfo {
             }
         }
     }
+
+    /// True if the signed order uses isolated margin mode
+    pub fn has_isolated_position_deposit(&self) -> bool {
+        self.isolated_position_deposit().is_some_and(|x| x > 0)
+    }
+
+    /// Return the isolated deposit amount
+    pub fn isolated_position_deposit(&self) -> Option<u64> {
+        match self.order {
+            SignedOrderType::Authority { ref inner, .. } => inner.isolated_position_deposit,
+            SignedOrderType::Delegated { ref inner, .. } => inner.isolated_position_deposit,
+        }
+    }
 }
 
 /// Emits swift orders from the Ws server
