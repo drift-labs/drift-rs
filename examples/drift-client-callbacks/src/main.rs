@@ -50,7 +50,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create RPC client and wallet (dummy wallet for read-only operations)
     let rpc_client = RpcClient::new(rpc_url);
     // Create a read-only wallet for client creation (we don't need signing for subscriptions)
-    let dummy_wallet = Wallet::read_only(solana_sdk::pubkey!("11111111111111111111111111111111")); // System program as dummy
+    let dummy_wallet =
+        Wallet::read_only(solana_pubkey::pubkey!("11111111111111111111111111111111")); // System program as dummy
 
     // Initialize Drift client
     let client = DriftClient::new(context, rpc_client, dummy_wallet).await?;

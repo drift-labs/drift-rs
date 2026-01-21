@@ -28,7 +28,7 @@ dlob_dbg = []
 [dependencies]
 abi_stable = { version = "0.11", default-features = false }
 ahash = "0.8.12"
-anchor-lang = { version = "0.32.1", features = ["derive"] }
+anchor-lang = { version = "1.0.0-rc.2", features = ["derive"] }
 arrayvec = "0.7.6"
 base64 = "0.22"
 bytemuck = "1.17"
@@ -38,31 +38,42 @@ env_logger = "0.11"
 futures-util = "0.3"
 fxhash = "0.2.1"
 hex = "0.4"
-jupiter-swap-api-client = { git = "https://github.com/drift-labs/jupiter-swap-api-client", branch = "patch/2025-12-28", package = "jupiter-swap-api-client" }
+jupiter-swap-api-client = { git = "https://github.com/drift-labs/jupiter-swap-api-client", rev = "411fd7b", package = "jupiter-swap-api-client" }
 log = "0.4"
-pythnet-sdk = "2"
 regex = "1.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-solana-account-decoder-client-types = "2"
-solana-rpc-client = "2"
-solana-rpc-client-api = "2"
-solana-sdk = "2" 
-solana-transaction-status = "2"
-spl-associated-token-account = "7.0"
+solana-account-decoder-client-types = "3"
+solana-account = "3"
+solana-commitment-config = "3"
+solana-compute-budget-interface = "3"
+solana-ed25519-program = "3"
+solana-instruction = "3"
+solana-keypair = "3"
+solana-message = "3"
+solana-pubkey = "3"
+solana-rpc-client = "3"
+solana-rpc-client-api = "3"
+solana-signature = "3"
+solana-signer = "3"
+solana-transaction = "3"
+solana-transaction-status = "3"
+spl-associated-token-account = "8.0"
 thiserror = "1"
+titan-swap-api-client = { git = "https://github.com/drift-labs/titan-swap-api-client.git", optional = true }
 tokio = { version = "1.48", features = ["full"] }
 tokio-stream = "0.1.17"
 tokio-tungstenite = { version = "0.28", features = ["native-tls"] }
-yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc", rev = "660797" }
-yellowstone-grpc-proto = { git = "https://github.com/rpcpool/yellowstone-grpc", rev = "660797" }
+yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc", branch = "master" }
+yellowstone-grpc-proto = { git = "https://github.com/rpcpool/yellowstone-grpc", branch = "master" }
 drift-pubsub-client = { version = "0.1.1", path = "crates/pubsub-client" }
-titan-swap-api-client = { git = "https://github.com/0xahzam/titan-swap-api-client.git", optional = true }
 
 [dev-dependencies]
+bs58 = { version = "0.5.1", default-features = false }
 bytes = "1"
 hex-literal = "0.4"
-solana-account-decoder = "2"
+solana-account-decoder = "3"
+solana-signature = { version = "3", features = ["rand"] }
 toml = "0.8"
 
 [build-dependencies]

@@ -1,12 +1,12 @@
+use solana_transaction::{InstructionError, TransactionError};
+
+const LAMPORTS_PER_SOL: u64 = 1_000_000_000;
 use drift_rs::{
     event_subscriber::RpcClient,
     jupiter::{JupiterSwapApi, SwapMode},
     types::{accounts::User, Context, MarketId},
     utils::test_envs::{mainnet_endpoint, mainnet_test_keypair},
     DriftClient, TransactionBuilder, Wallet,
-};
-use solana_sdk::{
-    instruction::InstructionError, native_token::LAMPORTS_PER_SOL, transaction::TransactionError,
 };
 use tokio::sync::OnceCell;
 
@@ -94,7 +94,7 @@ async fn jupiter_swap_exact_in_udsc_to_sol() {
         Some(err) => {
             assert_eq!(
                 err,
-                TransactionError::InstructionError(4, InstructionError::Custom(6157))
+                TransactionError::InstructionError(4, InstructionError::Custom(6157)).into()
             )
         }
         None => assert!(true),
@@ -168,7 +168,7 @@ async fn jupiter_swap_exact_out_udsc_to_sol() {
         Some(err) => {
             assert_eq!(
                 err,
-                TransactionError::InstructionError(2, InstructionError::Custom(6157))
+                TransactionError::InstructionError(2, InstructionError::Custom(6157)).into()
             )
         }
         None => assert!(true),
@@ -242,7 +242,7 @@ async fn jupiter_swap_exact_out_udsc_jto() {
         Some(err) => {
             assert_eq!(
                 err,
-                TransactionError::InstructionError(4, InstructionError::Custom(6157))
+                TransactionError::InstructionError(4, InstructionError::Custom(6157)).into()
             )
         }
         None => assert!(true),
@@ -316,7 +316,7 @@ async fn jupiter_swap_sol_unwrap() {
         Some(err) => {
             assert_eq!(
                 err,
-                TransactionError::InstructionError(4, InstructionError::Custom(6157))
+                TransactionError::InstructionError(4, InstructionError::Custom(6157)).into()
             )
         }
         None => assert!(true),
