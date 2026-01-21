@@ -2575,6 +2575,10 @@ impl<'a> TransactionBuilder<'a> {
             "only swift perps are supported"
         );
 
+        if signed_order_info.has_isolated_position_deposit() {
+            self.force_include_markets(&[], &[MarketId::QUOTE_SPOT]);
+        }
+
         let perp_readable = [MarketId::perp(order_params.market_index)];
         let mut accounts = build_accounts(
             self.program_data,
