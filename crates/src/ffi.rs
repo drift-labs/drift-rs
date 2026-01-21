@@ -5,7 +5,6 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
-use abi_stable::std_types::ROption;
 use anchor_lang::{prelude::AccountInfo, Discriminator};
 
 pub use self::abi_types::*;
@@ -43,7 +42,7 @@ extern "C" {
         order: &types::Order,
         slot: Slot,
         tick_size: u64,
-        oracle_price: ROption<i64>,
+        oracle_price: Option<i64>,
         is_prediction_market: bool,
     ) -> FfiResult<u64>;
     #[allow(improper_ctypes)]
@@ -875,8 +874,8 @@ pub fn calculate_auction_params_for_trigger_order(
 
 fn to_sdk_result<T>(value: FfiResult<T>) -> SdkResult<T> {
     match value {
-        FfiResult::ROk(t) => Ok(t),
-        FfiResult::RErr(code) => {
+        FfiResult::Ok(t) => Ok(t),
+        FfiResult::Err(code) => {
             let error_code = unsafe {
                 std::mem::transmute::<u32, ErrorCode>(code - anchor_lang::error::ERROR_CODE_OFFSET)
             };
@@ -954,7 +953,6 @@ impl IncrementalMarginCalculation {
 pub mod abi_types {
     //! cross-boundary FFI types
     use crate::solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
-    use abi_stable::std_types::RResult;
 
     use crate::{drift_idl::types::MarginRequirementType, types::OracleValidity, OracleGuardRails};
 
@@ -1113,7 +1111,7 @@ pub mod abi_types {
     }
 
     /// C-ABI compatible result type for drift FFI calls
-    pub type FfiResult<T> = RResult<T, u32>;
+    pub type FfiResult<T> = Result<T, u32>;
 
     /// FFI-compatible simplified margin calculation result
     #[repr(C, align(16))]
@@ -2591,14 +2589,14 @@ mod tests {
 
             // Verify the FFI call succeeds
             assert!(
-                matches!(result, FfiResult::ROk(_)),
+                matches!(result, FfiResult::Ok(_)),
                 "FFI call should succeed for margin type: {:?}",
                 margin_type
             );
 
             let result = match result {
-                FfiResult::ROk(data) => data,
-                FfiResult::RErr(_) => panic!("FFI call failed for margin type: {:?}", margin_type),
+                FfiResult::Ok(data) => data,
+                FfiResult::Err(_) => panic!("FFI call failed for margin type: {:?}", margin_type),
             };
 
             // Verify we get reasonable values
