@@ -580,14 +580,15 @@ fn generate_idl_types(idl: &Idl) -> String {
         //!
         use anchor_lang::{prelude::{account, AnchorSerialize, AnchorDeserialize, InitSpace, event, error_code, msg, borsh::{self}}, Discriminator};
         // use solana-sdk Pubkey, the vendored anchor-lang Pubkey maybe behind
-        use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
+        use solana_pubkey::Pubkey;
+        use solana_instruction::AccountMeta;
         use serde::{Serialize, Deserialize};
 
         pub const IDL_VERSION: &str = #idl_version;
 
         use self::traits::ToAccountMetas;
         pub mod traits {
-            use solana_sdk::instruction::AccountMeta;
+            use crate::solana_sdk::instruction::AccountMeta;
 
             /// This is distinct from the anchor_lang version of the trait
             /// reimplemented to ensure the types used are from `solana`` crates _not_ the anchor_lang vendored versions which may be lagging behind

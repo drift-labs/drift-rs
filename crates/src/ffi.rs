@@ -4,9 +4,9 @@
 //!
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 use abi_stable::std_types::ROption;
 use anchor_lang::{prelude::AccountInfo, Discriminator};
-use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 
 pub use self::abi_types::*;
 use crate::{
@@ -365,7 +365,6 @@ pub fn simulate_place_perp_order<'a>(
                 data.as_mut_slice(),
                 &PROGRAM_ID,
                 false,
-                u64::MAX,
             );
             unsafe {
                 orders_place_perp_order(
@@ -954,8 +953,8 @@ impl IncrementalMarginCalculation {
 
 pub mod abi_types {
     //! cross-boundary FFI types
+    use crate::solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
     use abi_stable::std_types::RResult;
-    use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 
     use crate::{drift_idl::types::MarginRequirementType, types::OracleValidity, OracleGuardRails};
 
@@ -1293,8 +1292,8 @@ pub mod abi_types {
 
 #[cfg(test)]
 mod tests {
+    use crate::solana_sdk::{account::Account, pubkey::Pubkey};
     use anchor_lang::Discriminator;
-    use solana_sdk::{account::Account, pubkey::Pubkey};
 
     use super::{
         margin_calculate_simplified_margin_requirement, simulate_place_perp_order, AccountWithKey,
@@ -1333,7 +1332,7 @@ mod tests {
         SpotMarket {
             market_index: 1,
             oracle_source: OracleSource::Pyth,
-            oracle: solana_sdk::pubkey!("J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix"),
+            oracle: solana_pubkey::pubkey!("J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix"),
             cumulative_deposit_interest: SPOT_CUMULATIVE_INTEREST_PRECISION.into(),
             cumulative_borrow_interest: SPOT_CUMULATIVE_INTEREST_PRECISION.into(),
             decimals: 9,

@@ -6,6 +6,7 @@ use std::{
     },
 };
 
+use crate::solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 use anchor_lang::{AccountDeserialize, AnchorDeserialize};
 use dashmap::DashMap;
 use serde_json::json;
@@ -17,7 +18,6 @@ use solana_rpc_client_api::{
     request::RpcRequest,
     response::{OptionalContext, RpcKeyedAccount},
 };
-use solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{
     constants,
@@ -188,7 +188,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_usermap() {
-        use solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
+        use crate::solana_sdk::commitment_config::{CommitmentConfig, CommitmentLevel};
 
         use crate::usermap::GlobalUserMap;
 

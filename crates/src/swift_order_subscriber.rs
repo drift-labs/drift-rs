@@ -1,11 +1,11 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 use anchor_lang::{AnchorDeserialize, AnchorSerialize, Space};
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
 use serde_json::{json, Value};
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
@@ -721,11 +721,11 @@ mod tests {
 
         assert_eq!(
             actual.order.signer,
-            solana_sdk::pubkey!("GiMXQkJXLVjScmQDkoLJShBJpTh9SDPvT2AZQq8NyEBf")
+            solana_pubkey::pubkey!("GiMXQkJXLVjScmQDkoLJShBJpTh9SDPvT2AZQq8NyEBf")
         );
         assert_eq!(
             actual.order.taker_authority,
-            solana_sdk::pubkey!("4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE")
+            solana_pubkey::pubkey!("4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE")
         );
         assert_eq!(actual.order.order_uuid_str(), "s8luJLZe");
 
@@ -754,7 +754,9 @@ mod tests {
                     auction_start_price: Some(2102419643),
                     auction_end_price: Some(2081603607),
                 },
-                taker_pubkey: solana_sdk::pubkey!("4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"),
+                taker_pubkey: solana_pubkey::pubkey!(
+                    "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"
+                ),
                 slot: 369631527,
                 uuid: [115, 56, 108, 117, 74, 76, 90, 101],
                 take_profit_order_params: None,

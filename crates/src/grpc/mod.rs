@@ -1,11 +1,11 @@
 //! Drift gRPC module
 
-use anchor_lang::Discriminator;
-use solana_sdk::{
+use crate::solana_sdk::{
     clock::{Epoch, Slot},
     commitment_config::CommitmentLevel,
     pubkey::Pubkey,
 };
+use anchor_lang::Discriminator;
 pub mod grpc_subscriber;
 use grpc_subscriber::{AccountFilter, GrpcConnectionOpts};
 use yellowstone_grpc_proto::{

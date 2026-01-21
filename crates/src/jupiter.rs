@@ -1,11 +1,11 @@
 //! Jupiter SDK helpers
+use crate::solana_sdk::{message::AddressLookupTableAccount, pubkey::Pubkey};
 pub use jupiter_swap_api_client::{
     quote::{QuoteResponse, SwapMode},
     swap::SwapInstructionsResponse,
     transaction_config::TransactionConfig,
     JupiterSwapApiClient,
 };
-use solana_sdk::{message::AddressLookupTableAccount, pubkey::Pubkey};
 
 use crate::{
     types::{SdkError, SdkResult},
@@ -65,7 +65,7 @@ impl JupiterSwapApi for DriftClient {
     /// # Example
     ///
     /// ```no_run
-    /// use solana_sdk::pubkey::Pubkey;
+    /// use solana_pubkey::Pubkey;
     ///
     /// let swap_info = jupiter_swap_query(
     ///     rpc_client,

@@ -1,20 +1,20 @@
 //! SDK utility functions
 
+use crate::{
+    constants::ED25519_PROGRAM_ID,
+    solana_sdk::{account::Account, instruction::Instruction, keypair::Keypair, pubkey::Pubkey},
+};
 use anchor_lang::Discriminator;
 use base64::Engine;
 use bytemuck::{bytes_of, Pod, Zeroable};
 use serde_json::json;
-use solana_sdk::{
-    account::Account, address_lookup_table::AddressLookupTableAccount, bs58,
-    instruction::Instruction, pubkey::Pubkey, signature::Keypair,
-};
+use solana_message::AddressLookupTableAccount;
 
 use crate::{
     constants::PROGRAM_ID,
     types::{SdkError, SdkResult},
 };
 
-// kudos @wphan
 /// Try to parse secret `key` string
 ///
 /// Returns error if the key cannot be parsed
@@ -25,25 +25,27 @@ pub fn read_keypair_str_multi_format(key: &str) -> SdkResult<Keypair> {
     // first try to decode as a byte array
     if key.contains(',') {
         // decode the numbers array into json string
-        let bytes: Result<Vec<u8>, _> = key.split(',').map(|x| x.parse::<u8>()).collect();
-        if let Ok(bytes) = bytes {
-            return Keypair::from_bytes(bytes.as_ref()).map_err(|_| SdkError::InvalidSeed);
-        } else {
-            return Err(SdkError::InvalidSeed);
+        if let Ok(bytes) = key
+            .split(',')
+            .map(|x| x.parse::<u8>())
+            .collect::<Result<Vec<u8>, _>>()
+        {
+            if bytes.len() == 32 {
+                return Ok(Keypair::new_from_array(bytes.try_into().unwrap()));
+            }
         }
-    }
-
-    // try to decode as base58 string
-    if let Ok(bytes) = bs58::decode(key.as_bytes()).into_vec() {
-        return Keypair::from_bytes(bytes.as_ref()).map_err(|_| SdkError::InvalidSeed);
+        return Err(SdkError::InvalidSeed);
     }
 
     // try to decode as base64 string
     if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(key.as_bytes()) {
-        return Keypair::from_bytes(bytes.as_ref()).map_err(|_| SdkError::InvalidSeed);
+        if bytes.len() == 32 {
+            return Ok(Keypair::new_from_array(bytes.try_into().unwrap()));
+        }
     }
 
-    Err(SdkError::InvalidSeed)
+    // decode as base58 string
+    return Ok(Keypair::from_base58_string(&key));
 }
 
 /// Try load a `Keypair` from a file path or given string, supports json format and base58 format.
@@ -159,7 +161,7 @@ pub fn derive_pyth_lazer_oracle_public_key(feed_id: u32) -> Pubkey {
 
 pub mod test_envs {
     //! test env vars
-    use solana_sdk::signature::Keypair;
+    use solana_keypair::Keypair;
 
     /// solana mainnet endpoint
     pub fn mainnet_endpoint() -> String {
@@ -207,13 +209,13 @@ pub fn new_ed25519_ix_ptr(
     instruction_index: u16,
     magic_len: Option<usize>,
 ) -> Instruction {
-    let mut instruction_data = Vec::with_capacity(solana_sdk::ed25519_instruction::DATA_START);
+    let mut instruction_data = Vec::with_capacity(solana_ed25519_program::DATA_START);
     let message_offset = 12_usize;
     let signature_offset = message_offset + magic_len.unwrap_or_default();
     let public_key_offset =
-        signature_offset.saturating_add(solana_sdk::ed25519_instruction::SIGNATURE_SERIALIZED_SIZE);
+        signature_offset.saturating_add(solana_ed25519_program::SIGNATURE_SERIALIZED_SIZE);
     let message_data_size_offset =
-        public_key_offset.saturating_add(solana_sdk::ed25519_instruction::PUBKEY_SERIALIZED_SIZE);
+        public_key_offset.saturating_add(solana_ed25519_program::PUBKEY_SERIALIZED_SIZE);
     let message_data_size = u16::from_le_bytes([
         message[message_data_size_offset - message_offset],
         message[message_data_size_offset - message_offset + 1],
@@ -234,7 +236,7 @@ pub fn new_ed25519_ix_ptr(
     }));
 
     Instruction {
-        program_id: solana_sdk::ed25519_program::id(),
+        program_id: ED25519_PROGRAM_ID,
         accounts: vec![],
         data: instruction_data,
     }
@@ -395,7 +397,7 @@ pub mod test_utils {
 
 #[cfg(test)]
 mod tests {
-    use solana_sdk::signer::Signer;
+    use crate::solana_sdk::signer::Signer;
 
     use super::*;
 

@@ -7,6 +7,16 @@ use std::{
     time::Duration,
 };
 
+use crate::solana_sdk::{
+    account::Account,
+    clock::Slot,
+    commitment_config::CommitmentLevel,
+    compute_budget::ComputeBudgetInstruction,
+    instruction::{AccountMeta, Instruction},
+    message::{v0, Hash, Message, VersionedMessage},
+    signature::Signature,
+};
+pub use crate::solana_sdk::{message::AddressLookupTableAccount, pubkey::Pubkey};
 #[cfg(feature = "titan")]
 use crate::titan::TitanSwapInfo;
 use crate::{
@@ -14,7 +24,6 @@ use crate::{
     blockhash_subscriber::BlockhashSubscriber,
     constants::{
         derive_perp_market_account, derive_revenue_share_escrow, derive_spot_market_account,
-        ids::{drift_oracle_receiver_program, wormhole_program},
         state_account, MarketExt, ProgramData, DEFAULT_PUBKEY, PYTH_LAZER_STORAGE_ACCOUNT_KEY,
         SYSVAR_INSTRUCTIONS_PUBKEY, SYSVAR_RENT_PUBKEY,
     },
@@ -32,8 +41,7 @@ use crate::{
     utils::{get_http_url, get_ws_url},
 };
 pub use crate::{grpc::GrpcSubscribeOpts, types::Context, wallet::Wallet};
-use anchor_lang::{AccountDeserialize, AnchorSerialize, Discriminator, InstructionData};
-use base64::Engine;
+use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
 use bytemuck::Pod;
 use constants::{
     high_leverage_mode_account, ASSOCIATED_TOKEN_PROGRAM_ID, PROGRAM_ID, SYSTEM_PROGRAM_ID,
@@ -42,24 +50,12 @@ use constants::{
 pub use drift_pubsub_client::PubsubClient;
 use futures_util::TryFutureExt;
 use log::debug;
-use pythnet_sdk::wire::v1::{AccumulatorUpdateData, Proof};
 pub use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::{
     config::RpcSimulateTransactionConfig,
     filter::RpcFilterType,
     response::{Response, RpcSimulateTransactionResult},
 };
-use solana_sdk::{
-    account::Account,
-    clock::Slot,
-    commitment_config::CommitmentLevel,
-    compute_budget::ComputeBudgetInstruction,
-    hash::Hash,
-    instruction::{AccountMeta, Instruction},
-    message::{v0, Message, VersionedMessage},
-    signature::Signature,
-};
-pub use solana_sdk::{address_lookup_table::AddressLookupTableAccount, pubkey::Pubkey};
 
 // utils
 pub mod async_utils;
@@ -683,7 +679,7 @@ impl DriftClient {
                 &VersionedTransaction {
                     message: tx,
                     // must provide a signature for the RPC call to work
-                    signatures: vec![Signature::new_unique()],
+                    signatures: vec![Signature::default()],
                 },
                 RpcSimulateTransactionConfig {
                     sig_verify: false,
@@ -3431,7 +3427,7 @@ impl<'a> TransactionBuilder<'a> {
     /// # Example
     /// ```
     /// use drift_rs::{TransactionBuilder, Wallet};
-    /// use solana_sdk::pubkey::Pubkey;
+    /// use solana_pubkey::Pubkey;
     ///
     /// let wallet = Wallet::new_random();
     /// let program_data = /* obtain ProgramData */;
@@ -4039,115 +4035,6 @@ impl<'a> TransactionBuilder<'a> {
         &self.account_data
     }
 
-    /// Update Pyth pull oracle with VAA data
-    ///
-    /// This method adds ix to update a Pyth pull oracle using VAA data.
-    /// NOTE: Only the first update in the VAA will be posted
-    ///
-    /// ## Parameters
-    /// * `vaa_proof` - ` Base64 encoded VAA string from Pyth
-    /// * `feed_id` - The Pyth feed ID to update (can include 0x prefix)
-    /// * `vaa_signature_count` - max. number of VAA signatures to keep in the proof (default: 2)
-    ///
-    /// ## Panics
-    /// if the provided VAA proof is invalid
-    ///
-    /// ## Example
-    /// ```no_run
-    /// use drift_rs::{TransactionBuilder, Wallet};
-    /// use solana_pubkey::Pubkey;
-    ///
-    /// let wallet = Wallet::new();
-    /// let program_data =
-    /// let mut builder = TransactionBuilder::new(&program_data, wallet.default_sub_account(), /* user data */, false);
-    ///
-    /// // Update Pyth pull oracle
-    /// builder = builder.post_pyth_pull_oracle_update_atomic(
-    ///     "<BASE64_ENCODED_VAA>",
-    ///     &hex_literal::hex!("1234567890abcdef"),
-    ///     Some(2),
-    /// );
-    /// ```
-    pub fn post_pyth_pull_oracle_update_atomic(
-        mut self,
-        vaa_proof: &str,
-        feed_id: &[u8; 32],
-        vaa_signature_count: Option<usize>,
-    ) -> Self {
-        // Parse VAA data
-        let vaa_bytes = base64::prelude::BASE64_STANDARD.decode(vaa_proof).unwrap();
-        let accumulator_update_data = AccumulatorUpdateData::try_from_slice(&vaa_bytes).unwrap();
-        let Proof::WormholeMerkle { vaa, updates } = accumulator_update_data.proof;
-        let mut vaa: Vec<u8> = vaa.into();
-
-        // Read guardian set index from VAA (big-endian, offset 1)
-        let guardian_set_index = u32::from_be_bytes(vaa[1..=4].try_into().unwrap());
-
-        // Get guardian set PDA
-        let guardian_set = {
-            let guardian_set_bytes = guardian_set_index.to_be_bytes();
-            let seeds = &[b"GuardianSet".as_slice(), &guardian_set_bytes];
-            let (pubkey, _bump) = Pubkey::find_program_address(seeds, &wormhole_program::ID);
-            pubkey
-        };
-
-        // Get Pyth pull oracle public key
-        let price_feed = {
-            let seeds = [b"pyth_pull".as_slice(), feed_id];
-            let (pubkey, _bump) = Pubkey::find_program_address(&seeds, &constants::PROGRAM_ID);
-            pubkey
-        };
-
-        // strip extraneous VAA signatures
-        let existing_signature_count = vaa[5] as usize;
-        let target_signature_count = vaa_signature_count.unwrap_or(2);
-        if existing_signature_count > target_signature_count {
-            // truncate extra signatures
-            let _: Vec<u8> = vaa
-                .drain(6 + (target_signature_count * 66)..6 + existing_signature_count * 66)
-                .collect();
-            vaa[5] = target_signature_count as u8;
-        }
-
-        // only post first update from the VAA
-        if let Some(update) = updates.first() {
-            let params = PostUpdateAtomicParams {
-                vaa,
-                merkle_price_update: update.clone(),
-                treasury_id: 0,
-            };
-            let encoded_params = params.try_to_vec().unwrap();
-
-            let accounts = build_accounts(
-                self.program_data,
-                drift_idl::accounts::PostPythPullOracleUpdateAtomic {
-                    keeper: self.authority,
-                    pyth_solana_receiver: drift_oracle_receiver_program::ID,
-                    guardian_set,
-                    price_feed,
-                },
-                std::iter::empty(),
-                std::iter::empty(),
-                std::iter::empty(),
-            );
-
-            // Add the oracle update instruction
-            let oracle_update_ix = Instruction {
-                program_id: constants::PROGRAM_ID,
-                accounts,
-                data: InstructionData::data(
-                    &drift_idl::instructions::PostPythPullOracleUpdateAtomic {
-                        feed_id: *feed_id,
-                        params: encoded_params,
-                    },
-                ),
-            };
-
-            self.ixs.push(oracle_update_ix);
-        }
-
-        self
-    }
     /// Update user position margin ratio
     ///
     /// ## Params
@@ -4268,6 +4155,7 @@ pub fn build_accounts<'a>(
 mod tests {
     use std::str::FromStr;
 
+    use crate::solana_sdk::keypair::Keypair;
     use serde_json::json;
     use solana_account_decoder_client_types::{UiAccount, UiAccountData, UiAccountEncoding};
     use solana_rpc_client::rpc_client::Mocks;
@@ -4275,7 +4163,6 @@ mod tests {
         request::RpcRequest,
         response::{Response, RpcResponseContext},
     };
-    use solana_sdk::signature::Keypair;
     use types::accounts::PerpMarket;
 
     use super::*;
@@ -4380,7 +4267,7 @@ mod tests {
             context: RpcResponseContext::new(12_345),
             value: Some(UiAccount {
                 data: UiAccountData::Binary(
-                    solana_sdk::bs58::encode(account_data).into_string(),
+                    bs58::encode(account_data).into_string(),
                     UiAccountEncoding::Base58
                 ),
                 owner: user.to_string(),
@@ -4408,7 +4295,7 @@ mod tests {
             context: RpcResponseContext::new(12_345),
             value: Some(UiAccount {
                 data: UiAccountData::Binary(
-                    solana_sdk::bs58::encode(account_data).into_string(),
+                    bs58::encode(account_data).into_string(),
                     UiAccountEncoding::Base58
                 ),
                 owner: user.to_string(),

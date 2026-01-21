@@ -5,6 +5,7 @@ use std::{
     time::Duration,
 };
 
+use crate::solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
 use anchor_lang::Discriminator;
 use bytemuck::Pod;
 use dashmap::DashMap;
@@ -16,7 +17,6 @@ use solana_rpc_client_api::{
     config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     filter::RpcFilterType,
 };
-use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{
     constants::PROGRAM_ID,
@@ -239,7 +239,7 @@ impl AccountMap {
             .await?;
         let stats_sync_result = self
             .rpc
-            .get_program_accounts_with_config(
+            .get_program_ui_accounts_with_config(
                 &PROGRAM_ID,
                 RpcProgramAccountsConfig {
                     filters: Some(vec![crate::memcmp::get_user_stats_filter()]),
@@ -255,7 +255,7 @@ impl AccountMap {
         for (pubkey, account) in stats_sync_result {
             self.on_account_fn()(&AccountUpdate {
                 pubkey,
-                data: &account.data,
+                data: &account.data.decode().unwrap_or_default(),
                 lamports: account.lamports,
                 owner: PROGRAM_ID,
                 rent_epoch: u64::MAX,
@@ -276,7 +276,7 @@ impl AccountMap {
 
         let sync_result = self
             .rpc
-            .get_program_accounts_with_config(
+            .get_program_ui_accounts_with_config(
                 &PROGRAM_ID,
                 RpcProgramAccountsConfig {
                     filters: Some(filters),
@@ -292,7 +292,7 @@ impl AccountMap {
         for (pubkey, account) in sync_result {
             self.on_account_fn()(&AccountUpdate {
                 pubkey,
-                data: &account.data,
+                data: &account.data.decode().unwrap_or_default(),
                 lamports: account.lamports,
                 owner: PROGRAM_ID,
                 rent_epoch: u64::MAX,
@@ -456,8 +456,6 @@ impl<T: Pod> Deref for AccountRef<T> {
 mod tests {
     use std::time::Duration;
 
-    use solana_sdk::pubkey;
-
     use super::*;
     use crate::{
         accounts::User,
@@ -478,11 +476,11 @@ mod tests {
         let rpc = Arc::new(RpcClient::new(mainnet_endpoint()));
         let account_map = AccountMap::new(pubsub, rpc, CommitmentConfig::confirmed());
         let user_1 = Wallet::derive_user_account(
-            &pubkey!("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"),
+            &solana_pubkey::pubkey!("DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"),
             0,
         );
         let user_2 = Wallet::derive_user_account(
-            &pubkey!("Drift7AMLeq3FoKBMpT9wzqyMM3HVvvZFtsn81iSSkWV"),
+            &solana_pubkey::pubkey!("Drift7AMLeq3FoKBMpT9wzqyMM3HVvvZFtsn81iSSkWV"),
             0,
         );
 

@@ -9,6 +9,8 @@ use log::*;
 use serde::de::DeserializeOwned;
 use serde_json::{json, Value};
 use solana_account_decoder_client_types::UiAccount;
+use solana_clock::Slot;
+use solana_pubkey::Pubkey;
 use solana_rpc_client_api::{
     config::{
         RpcAccountInfoConfig, RpcBlockSubscribeConfig, RpcBlockSubscribeFilter,
@@ -21,7 +23,7 @@ use solana_rpc_client_api::{
         RpcSignatureResult, RpcVote, SlotInfo, SlotUpdate,
     },
 };
-use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
+use solana_signature::Signature;
 use thiserror::Error;
 use tokio::{
     sync::{
