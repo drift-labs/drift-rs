@@ -26,7 +26,6 @@ titan = ["titan-swap-api-client"]
 dlob_dbg = [] 
 
 [dependencies]
-abi_stable = { version = "0.11", default-features = false }
 ahash = "0.8.12"
 anchor-lang = { version = "1.0.0-rc.2", features = ["derive"] }
 arrayvec = "0.7.6"
@@ -38,7 +37,7 @@ env_logger = "0.11"
 futures-util = "0.3"
 fxhash = "0.2.1"
 hex = "0.4"
-jupiter-swap-api-client = { git = "https://github.com/drift-labs/jupiter-swap-api-client", rev = "411fd7b", package = "jupiter-swap-api-client" }
+jupiter-swap-api-client = { git = "https://github.com/drift-labs/jupiter-swap-api-client", rev = "424ad8", package = "jupiter-swap-api-client" }
 log = "0.4"
 regex = "1.10"
 serde = { version = "1", features = ["derive"] }
