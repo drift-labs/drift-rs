@@ -24,7 +24,7 @@ use crate::{
     types::{
         accounts::{HighLeverageModeConfig, PerpMarket},
         ContractTier, FeeTier, Order, OrderParams, OrderType, PositionDirection,
-        ProtectedMakerParams, RevenueShareOrder, SdkError, ValidityGuardRails,
+        ProtectedMakerParams, RevenueShareOrder, SdkError, SpotBalanceType, ValidityGuardRails,
     },
     SdkResult,
 };
@@ -61,6 +61,8 @@ extern "C" {
         existing_base_asset_amount: i64,
         fee_tier: &FeeTier,
     ) -> FfiResult<(u64, Option<u64>)>;
+    #[allow(improper_ctypes)]
+    pub fn math_calculate_net_user_pnl(amm: &types::AMM, oracle_price: i64) -> FfiResult<i128>;
 
     #[allow(improper_ctypes)]
     pub fn oracle_get_oracle_price(
@@ -164,6 +166,12 @@ extern "C" {
     pub fn spot_position_get_token_amount(
         position: &types::SpotPosition,
         market: &accounts::SpotMarket,
+    ) -> FfiResult<u128>;
+    #[allow(improper_ctypes)]
+    pub fn spot_balance_get_token_amount(
+        balance: u128,
+        spot_market: &accounts::SpotMarket,
+        balance_type: &SpotBalanceType,
     ) -> FfiResult<u128>;
     #[allow(improper_ctypes)]
     pub fn user_get_spot_position(
@@ -567,6 +575,66 @@ pub fn calculate_auction_prices(
     };
 
     Some((oracle_price, auction_end_price))
+}
+
+pub fn get_token_amount(
+    balance: u128,
+    spot_market: &accounts::SpotMarket,
+    balance_type: SpotBalanceType,
+) -> SdkResult<u128> {
+    to_sdk_result(unsafe { spot_balance_get_token_amount(balance, spot_market, &balance_type) })
+}
+
+pub fn calculate_net_user_pnl(amm: &types::AMM, oracle_price: i64) -> SdkResult<i128> {
+    to_sdk_result(unsafe { math_calculate_net_user_pnl(amm, oracle_price) })
+}
+
+pub fn calculate_net_user_pnl_imbalance(
+    perp_market: &accounts::PerpMarket,
+    spot_market: &accounts::SpotMarket,
+    oracle_price: i64,
+    apply_fee_pool_discount: bool,
+) -> SdkResult<i128> {
+    let net_user_pnl = calculate_net_user_pnl(&perp_market.amm, oracle_price)?;
+
+    let pnl_pool = get_token_amount(
+        perp_market.pnl_pool.scaled_balance.as_u128(),
+        spot_market,
+        SpotBalanceType::Deposit,
+    )? as i128;
+
+    let mut fee_pool = get_token_amount(
+        perp_market.amm.fee_pool.scaled_balance.as_u128(),
+        spot_market,
+        SpotBalanceType::Deposit,
+    )? as i128;
+
+    if apply_fee_pool_discount {
+        fee_pool = fee_pool.saturating_div(5);
+    }
+
+    let imbalance = net_user_pnl.saturating_sub(pnl_pool.saturating_add(fee_pool));
+    Ok(imbalance)
+}
+
+pub fn calculate_claimable_pnl(
+    perp_market: &accounts::PerpMarket,
+    spot_market: &accounts::SpotMarket,
+    perp_position: &types::PerpPosition,
+    oracle_price: i64,
+) -> SdkResult<i128> {
+    let unrealized_pnl = perp_position.get_unrealized_pnl(oracle_price)?;
+
+    if unrealized_pnl > 0 {
+        let excess_pnl_pool =
+            calculate_net_user_pnl_imbalance(perp_market, spot_market, oracle_price, true)?
+                .saturating_mul(-1)
+                .max(0);
+
+        perp_position.get_claimable_pnl(oracle_price, excess_pnl_pool)
+    } else {
+        Ok(unrealized_pnl)
+    }
 }
 
 impl types::SpotPosition {
