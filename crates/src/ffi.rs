@@ -125,6 +125,12 @@ extern "C" {
         position: &types::PerpPosition,
         oracle_price: i64,
     ) -> FfiResult<i128>;
+    #[allow(improper_ctypes)]
+    pub fn perp_position_get_claimable_pnl(
+        position: &types::PerpPosition,
+        oracle_price: i64,
+        pnl_pool_excess: i128,
+    ) -> FfiResult<i128>;
     pub fn perp_position_is_available(position: &types::PerpPosition) -> bool;
     pub fn perp_position_is_open_position(position: &types::PerpPosition) -> bool;
     #[allow(improper_ctypes)]
@@ -587,6 +593,11 @@ impl types::PerpPosition {
     }
     pub fn get_unrealized_pnl(&self, oracle_price: i64) -> SdkResult<i128> {
         to_sdk_result(unsafe { perp_position_get_unrealized_pnl(self, oracle_price) })
+    }
+    pub fn get_claimable_pnl(&self, oracle_price: i64, pnl_pool_excess: i128) -> SdkResult<i128> {
+        to_sdk_result(unsafe {
+            perp_position_get_claimable_pnl(self, oracle_price, pnl_pool_excess)
+        })
     }
     pub fn is_available(&self) -> bool {
         unsafe { perp_position_is_available(self) }
