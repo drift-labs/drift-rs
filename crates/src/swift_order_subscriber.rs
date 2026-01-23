@@ -1,3 +1,4 @@
+//! Swift order subscriber and serialization utilities
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anchor_lang::{AnchorDeserialize, AnchorSerialize, Space};
@@ -58,7 +59,20 @@ pub enum SignedOrderType {
     },
 }
 
+/*
+from Ws its just a hex payload
+- repr in memory with fields we know about
+- serialize as the hex if we know it otherwise serialize it ourselves
+- deserialize from borsh
+ */
 impl SignedOrderType {
+    /// Return the original, hexified message
+    pub fn raw(&self) -> &Option<String> {
+        match self {
+            Self::Authority { inner: _, ref raw } => raw,
+            Self::Delegated { inner: _, ref raw } => raw,
+        }
+    }
     pub fn delegated(order: SignedDelegateOrder) -> Self {
         Self::Delegated {
             inner: order,
@@ -102,7 +116,7 @@ impl SignedOrderType {
 
         buf
     }
-
+    /// Returns order details
     pub fn info(&self, taker_authority: &Pubkey) -> SignedMessageInfo {
         match self {
             Self::Authority { inner, .. } => SignedMessageInfo {
@@ -131,6 +145,7 @@ struct OrderNotification<'a> {
 }
 
 /// Error notification from Websocket
+#[allow(unused)]
 #[derive(Clone, Debug, Deserialize)]
 struct ErrorNotification<'a> {
     channel: &'a str,
@@ -579,12 +594,11 @@ where
     if payload.len() % 2 != 0 {
         return Err(serde::de::Error::custom("Hex string length must be even"));
     }
-
-    // decode expecting the largest possible variant
-    if (payload.len() / 2) > SignedDelegateOrder::INIT_SPACE + 8 || payload.is_empty() {
+    if payload.is_empty() {
         return Err(serde::de::Error::custom("invalid signed message hex"));
     }
 
+    // decode expecting the largest possible variant
     let mut borsh_buf = [0u8; SignedDelegateOrder::INIT_SPACE + 8];
     hex::decode_to_slice(payload, &mut borsh_buf[..payload.len() / 2])
         .map_err(serde::de::Error::custom)?;
