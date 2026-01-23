@@ -584,7 +584,7 @@ pub fn deser_signed_msg_type<'de, D>(deserializer: D) -> Result<SignedOrderType,
 where
     D: serde::Deserializer<'de>,
 {
-    let payload: &str = serde::Deserialize::deserialize(deserializer)?;
+    let payload: std::borrow::Cow<String> = serde::Deserialize::deserialize(deserializer)?;
     if payload.len() % 2 != 0 {
         return Err(serde::de::Error::custom("Hex string length must be even"));
     }
@@ -594,7 +594,7 @@ where
 
     // decode expecting the largest possible variant
     let mut borsh_buf = [0u8; SignedDelegateOrder::INIT_SPACE + 8];
-    hex::decode_to_slice(payload, &mut borsh_buf[..payload.len() / 2])
+    hex::decode_to_slice(payload.as_bytes(), &mut borsh_buf[..payload.len() / 2])
         .map_err(serde::de::Error::custom)?;
 
     // this is basically the same as if we derived AnchorDeserialize on `SignedOrderType` _expect_ it does not
