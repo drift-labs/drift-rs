@@ -24,7 +24,7 @@ use crate::{
     types::{
         accounts::{HighLeverageModeConfig, PerpMarket},
         ContractTier, FeeTier, Order, OrderParams, OrderType, PositionDirection,
-        ProtectedMakerParams, RevenueShareOrder, SdkError, ValidityGuardRails,
+        ProtectedMakerParams, RevenueShareOrder, SdkError, SpotBalanceType, ValidityGuardRails,
     },
     SdkResult,
 };
@@ -61,6 +61,8 @@ extern "C" {
         existing_base_asset_amount: i64,
         fee_tier: &FeeTier,
     ) -> FfiResult<(u64, Option<u64>)>;
+    #[allow(improper_ctypes)]
+    pub fn math_calculate_net_user_pnl(amm: &types::AMM, oracle_price: i64) -> FfiResult<i128>;
 
     #[allow(improper_ctypes)]
     pub fn oracle_get_oracle_price(
@@ -125,6 +127,12 @@ extern "C" {
         position: &types::PerpPosition,
         oracle_price: i64,
     ) -> FfiResult<i128>;
+    #[allow(improper_ctypes)]
+    pub fn perp_position_get_claimable_pnl(
+        position: &types::PerpPosition,
+        oracle_price: i64,
+        pnl_pool_excess: i128,
+    ) -> FfiResult<i128>;
     pub fn perp_position_is_available(position: &types::PerpPosition) -> bool;
     pub fn perp_position_is_open_position(position: &types::PerpPosition) -> bool;
     #[allow(improper_ctypes)]
@@ -158,6 +166,12 @@ extern "C" {
     pub fn spot_position_get_token_amount(
         position: &types::SpotPosition,
         market: &accounts::SpotMarket,
+    ) -> FfiResult<u128>;
+    #[allow(improper_ctypes)]
+    pub fn spot_balance_get_token_amount(
+        balance: u128,
+        spot_market: &accounts::SpotMarket,
+        balance_type: &SpotBalanceType,
     ) -> FfiResult<u128>;
     #[allow(improper_ctypes)]
     pub fn user_get_spot_position(
@@ -563,6 +577,66 @@ pub fn calculate_auction_prices(
     Some((oracle_price, auction_end_price))
 }
 
+pub fn get_token_amount(
+    balance: u128,
+    spot_market: &accounts::SpotMarket,
+    balance_type: SpotBalanceType,
+) -> SdkResult<u128> {
+    to_sdk_result(unsafe { spot_balance_get_token_amount(balance, spot_market, &balance_type) })
+}
+
+pub fn calculate_net_user_pnl(amm: &types::AMM, oracle_price: i64) -> SdkResult<i128> {
+    to_sdk_result(unsafe { math_calculate_net_user_pnl(amm, oracle_price) })
+}
+
+pub fn calculate_net_user_pnl_imbalance(
+    perp_market: &accounts::PerpMarket,
+    spot_market: &accounts::SpotMarket,
+    oracle_price: i64,
+    apply_fee_pool_discount: bool,
+) -> SdkResult<i128> {
+    let net_user_pnl = calculate_net_user_pnl(&perp_market.amm, oracle_price)?;
+
+    let pnl_pool = get_token_amount(
+        perp_market.pnl_pool.scaled_balance.as_u128(),
+        spot_market,
+        SpotBalanceType::Deposit,
+    )? as i128;
+
+    let mut fee_pool = get_token_amount(
+        perp_market.amm.fee_pool.scaled_balance.as_u128(),
+        spot_market,
+        SpotBalanceType::Deposit,
+    )? as i128;
+
+    if apply_fee_pool_discount {
+        fee_pool = fee_pool.saturating_div(5);
+    }
+
+    let imbalance = net_user_pnl.saturating_sub(pnl_pool.saturating_add(fee_pool));
+    Ok(imbalance)
+}
+
+pub fn calculate_claimable_pnl(
+    perp_market: &accounts::PerpMarket,
+    spot_market: &accounts::SpotMarket,
+    perp_position: &types::PerpPosition,
+    oracle_price: i64,
+) -> SdkResult<i128> {
+    let unrealized_pnl = perp_position.get_unrealized_pnl(oracle_price)?;
+
+    if unrealized_pnl > 0 {
+        let excess_pnl_pool =
+            calculate_net_user_pnl_imbalance(perp_market, spot_market, oracle_price, true)?
+                .saturating_mul(-1)
+                .max(0);
+
+        perp_position.get_claimable_pnl(oracle_price, excess_pnl_pool)
+    } else {
+        Ok(unrealized_pnl)
+    }
+}
+
 impl types::SpotPosition {
     pub fn is_available(&self) -> bool {
         unsafe { spot_position_is_available(self) }
@@ -587,6 +661,11 @@ impl types::PerpPosition {
     }
     pub fn get_unrealized_pnl(&self, oracle_price: i64) -> SdkResult<i128> {
         to_sdk_result(unsafe { perp_position_get_unrealized_pnl(self, oracle_price) })
+    }
+    pub fn get_claimable_pnl(&self, oracle_price: i64, pnl_pool_excess: i128) -> SdkResult<i128> {
+        to_sdk_result(unsafe {
+            perp_position_get_claimable_pnl(self, oracle_price, pnl_pool_excess)
+        })
     }
     pub fn is_available(&self) -> bool {
         unsafe { perp_position_is_available(self) }
@@ -3227,6 +3306,125 @@ mod tests {
             let _funding_payment = result.unwrap();
             // Each update should modify the market state
         }
+    }
+
+    #[test]
+    fn ffi_perp_position_get_claimable_pnl() {
+        let position = PerpPosition {
+            market_index: 0,
+            base_asset_amount: 100 * BASE_PRECISION_I64,
+            quote_asset_amount: -5_000 * QUOTE_PRECISION_I64,
+            ..Default::default()
+        };
+        let oracle_price = 60 * PRICE_PRECISION_I64;
+        let pnl_pool_excess = 1_000 * QUOTE_PRECISION as i128;
+
+        let result = position.get_claimable_pnl(oracle_price, pnl_pool_excess);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn ffi_calculate_net_user_pnl() {
+        use crate::math::constants::{AMM_RESERVE_PRECISION, PEG_PRECISION};
+
+        let amm = AMM {
+            base_asset_reserve: (100 * AMM_RESERVE_PRECISION).into(),
+            quote_asset_reserve: (100 * AMM_RESERVE_PRECISION).into(),
+            peg_multiplier: PEG_PRECISION.into(),
+            base_asset_amount_with_amm: (10 * BASE_PRECISION as i128).into(),
+            ..Default::default()
+        };
+        let oracle_price = 100 * PRICE_PRECISION_I64;
+
+        let result = crate::ffi::calculate_net_user_pnl(&amm, oracle_price);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn ffi_get_token_amount() {
+        let balance = 1_000 * SPOT_BALANCE_PRECISION;
+        let spot_market = sol_spot_market();
+
+        let result = crate::ffi::get_token_amount(balance, &spot_market, SpotBalanceType::Deposit);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn ffi_calculate_net_user_pnl_imbalance() {
+        use crate::math::constants::{AMM_RESERVE_PRECISION, PEG_PRECISION};
+
+        let perp_market = PerpMarket {
+            market_index: 0,
+            quote_spot_market_index: 0,
+            amm: AMM {
+                base_asset_reserve: (100 * AMM_RESERVE_PRECISION).into(),
+                quote_asset_reserve: (100 * AMM_RESERVE_PRECISION).into(),
+                peg_multiplier: PEG_PRECISION.into(),
+                base_asset_amount_with_amm: (10 * BASE_PRECISION as i128).into(),
+                fee_pool: crate::drift_idl::types::PoolBalance {
+                    scaled_balance: (100 * SPOT_BALANCE_PRECISION).into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            pnl_pool: crate::drift_idl::types::PoolBalance {
+                scaled_balance: (500 * SPOT_BALANCE_PRECISION).into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let spot_market = usdc_spot_market();
+        let oracle_price = 100 * PRICE_PRECISION_I64;
+
+        let result = crate::ffi::calculate_net_user_pnl_imbalance(
+            &perp_market,
+            &spot_market,
+            oracle_price,
+            true,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn ffi_calculate_claimable_pnl() {
+        use crate::math::constants::{AMM_RESERVE_PRECISION, PEG_PRECISION};
+
+        let perp_market = PerpMarket {
+            market_index: 0,
+            quote_spot_market_index: 0,
+            amm: AMM {
+                base_asset_reserve: (100 * AMM_RESERVE_PRECISION).into(),
+                quote_asset_reserve: (100 * AMM_RESERVE_PRECISION).into(),
+                peg_multiplier: PEG_PRECISION.into(),
+                base_asset_amount_with_amm: (10 * BASE_PRECISION as i128).into(),
+                fee_pool: crate::drift_idl::types::PoolBalance {
+                    scaled_balance: (100 * SPOT_BALANCE_PRECISION).into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            pnl_pool: crate::drift_idl::types::PoolBalance {
+                scaled_balance: (500 * SPOT_BALANCE_PRECISION).into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let spot_market = usdc_spot_market();
+        let position = PerpPosition {
+            market_index: 0,
+            base_asset_amount: 100 * BASE_PRECISION_I64,
+            quote_asset_amount: -5_000 * QUOTE_PRECISION_I64,
+            ..Default::default()
+        };
+        let oracle_price = 60 * PRICE_PRECISION_I64;
+
+        let result = crate::ffi::calculate_claimable_pnl(
+            &perp_market,
+            &spot_market,
+            &position,
+            oracle_price,
+        );
+        assert!(result.is_ok());
     }
 }
 
