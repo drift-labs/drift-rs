@@ -3307,6 +3307,125 @@ mod tests {
             // Each update should modify the market state
         }
     }
+
+    #[test]
+    fn ffi_perp_position_get_claimable_pnl() {
+        let position = PerpPosition {
+            market_index: 0,
+            base_asset_amount: 100 * BASE_PRECISION_I64,
+            quote_asset_amount: -5_000 * QUOTE_PRECISION_I64,
+            ..Default::default()
+        };
+        let oracle_price = 60 * PRICE_PRECISION_I64;
+        let pnl_pool_excess = 1_000 * QUOTE_PRECISION as i128;
+
+        let result = position.get_claimable_pnl(oracle_price, pnl_pool_excess);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn ffi_calculate_net_user_pnl() {
+        use crate::math::constants::{AMM_RESERVE_PRECISION, PEG_PRECISION};
+
+        let amm = AMM {
+            base_asset_reserve: (100 * AMM_RESERVE_PRECISION).into(),
+            quote_asset_reserve: (100 * AMM_RESERVE_PRECISION).into(),
+            peg_multiplier: PEG_PRECISION.into(),
+            base_asset_amount_with_amm: (10 * BASE_PRECISION as i128).into(),
+            ..Default::default()
+        };
+        let oracle_price = 100 * PRICE_PRECISION_I64;
+
+        let result = crate::ffi::calculate_net_user_pnl(&amm, oracle_price);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn ffi_get_token_amount() {
+        let balance = 1_000 * SPOT_BALANCE_PRECISION;
+        let spot_market = sol_spot_market();
+
+        let result = crate::ffi::get_token_amount(balance, &spot_market, SpotBalanceType::Deposit);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn ffi_calculate_net_user_pnl_imbalance() {
+        use crate::math::constants::{AMM_RESERVE_PRECISION, PEG_PRECISION};
+
+        let perp_market = PerpMarket {
+            market_index: 0,
+            quote_spot_market_index: 0,
+            amm: AMM {
+                base_asset_reserve: (100 * AMM_RESERVE_PRECISION).into(),
+                quote_asset_reserve: (100 * AMM_RESERVE_PRECISION).into(),
+                peg_multiplier: PEG_PRECISION.into(),
+                base_asset_amount_with_amm: (10 * BASE_PRECISION as i128).into(),
+                fee_pool: crate::drift_idl::types::PoolBalance {
+                    scaled_balance: (100 * SPOT_BALANCE_PRECISION).into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            pnl_pool: crate::drift_idl::types::PoolBalance {
+                scaled_balance: (500 * SPOT_BALANCE_PRECISION).into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let spot_market = usdc_spot_market();
+        let oracle_price = 100 * PRICE_PRECISION_I64;
+
+        let result = crate::ffi::calculate_net_user_pnl_imbalance(
+            &perp_market,
+            &spot_market,
+            oracle_price,
+            true,
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn ffi_calculate_claimable_pnl() {
+        use crate::math::constants::{AMM_RESERVE_PRECISION, PEG_PRECISION};
+
+        let perp_market = PerpMarket {
+            market_index: 0,
+            quote_spot_market_index: 0,
+            amm: AMM {
+                base_asset_reserve: (100 * AMM_RESERVE_PRECISION).into(),
+                quote_asset_reserve: (100 * AMM_RESERVE_PRECISION).into(),
+                peg_multiplier: PEG_PRECISION.into(),
+                base_asset_amount_with_amm: (10 * BASE_PRECISION as i128).into(),
+                fee_pool: crate::drift_idl::types::PoolBalance {
+                    scaled_balance: (100 * SPOT_BALANCE_PRECISION).into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            pnl_pool: crate::drift_idl::types::PoolBalance {
+                scaled_balance: (500 * SPOT_BALANCE_PRECISION).into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let spot_market = usdc_spot_market();
+        let position = PerpPosition {
+            market_index: 0,
+            base_asset_amount: 100 * BASE_PRECISION_I64,
+            quote_asset_amount: -5_000 * QUOTE_PRECISION_I64,
+            ..Default::default()
+        };
+        let oracle_price = 60 * PRICE_PRECISION_I64;
+
+        let result = crate::ffi::calculate_claimable_pnl(
+            &perp_market,
+            &spot_market,
+            &position,
+            oracle_price,
+        );
+        assert!(result.is_ok());
+    }
 }
 
 // Simplified Margin Calculation FFI declarations
