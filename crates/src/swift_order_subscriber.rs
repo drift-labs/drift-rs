@@ -59,12 +59,6 @@ pub enum SignedOrderType {
     },
 }
 
-/*
-from Ws its just a hex payload
-- repr in memory with fields we know about
-- serialize as the hex if we know it otherwise serialize it ourselves
-- deserialize from borsh
- */
 impl SignedOrderType {
     /// Return the original, hexified message
     pub fn raw(&self) -> &Option<String> {
