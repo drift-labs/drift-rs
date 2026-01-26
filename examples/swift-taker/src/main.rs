@@ -15,6 +15,9 @@ struct SwiftTakerArgs {
     /// make a depositTrade request
     #[argh(switch)]
     deposit_trade: bool,
+    /// isolated position deposit amount
+    #[argh(option)]
+    isolated_position: Option<u64>,
 }
 
 #[tokio::main]
@@ -63,7 +66,7 @@ async fn main() {
         max_margin_ratio: None,
         builder_idx: None,
         builder_fee_tenth_bps: None,
-        isolated_position_deposit: None,
+        isolated_position_deposit: args.isolated_position,
     };
     let swift_order_type = SignedOrderType::authority(signed_order_params);
     let signed_msg = hex::encode(swift_order_type.to_borsh());

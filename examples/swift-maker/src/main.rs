@@ -4,7 +4,9 @@
 //!
 use drift_rs::{
     swift_order_subscriber::SignedOrderInfo,
-    types::{MarketId, OrderParams, OrderType, PositionDirection, PostOnlyParam},
+    types::{
+        MarketId, OrderParams, OrderParamsBitFlag, OrderType, PositionDirection, PostOnlyParam,
+    },
     DriftClient, RpcClient, Wallet,
 };
 use futures_util::StreamExt;
@@ -116,7 +118,7 @@ async fn try_fill(drift: DriftClient, filler_subaccount: Pubkey, swift_order: Si
                 // try fill the whole order amount
                 base_asset_amount: taker_order.base_asset_amount,
                 post_only: PostOnlyParam::MustPostOnly,
-                bit_flags: 0,
+                bit_flags: OrderParams::IMMEDIATE_OR_CANCEL_FLAG,
                 ..Default::default()
             },
             &swift_order,
