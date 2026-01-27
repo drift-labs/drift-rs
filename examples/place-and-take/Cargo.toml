@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 base64 = "0.21"
-borsh = "0.10"
 dotenv = "0.15.0"
 drift-rs = { path = "../../../drift-rs" }
 env_logger = "0.11"

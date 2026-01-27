@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use crate::solana_sdk::{clock::Slot, signature::Keypair};
 use anchor_lang::Discriminator;
 use drift_rs::{
     constants::DEFAULT_PUBKEY,
@@ -11,7 +12,6 @@ use drift_rs::{
     DriftClient, GrpcSubscribeOpts, Pubkey, TransactionBuilder, Wallet,
 };
 use futures_util::StreamExt;
-use solana_sdk::{clock::Slot, signature::Keypair};
 
 #[tokio::test]
 async fn client_sync_subscribe_all_devnet() {

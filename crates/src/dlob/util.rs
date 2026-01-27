@@ -2,7 +2,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::types::{accounts::User, Order, OrderStatus};
 use ahash::AHasher;
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 /// change of order signal dlob
 #[derive(Debug, PartialEq, Clone)]

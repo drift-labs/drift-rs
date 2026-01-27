@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use solana_sdk::{
-    hash::Hash,
-    message::VersionedMessage,
+use crate::solana_sdk::{
+    keypair::{keypair_from_seed, Keypair},
+    message::{Hash, VersionedMessage},
     pubkey::Pubkey,
-    signature::{keypair_from_seed, Keypair, Signature},
+    signature::Signature,
     signer::Signer,
-    transaction::VersionedTransaction,
+    transaction::versioned::VersionedTransaction,
 };
 
 use crate::{

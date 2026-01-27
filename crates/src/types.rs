@@ -5,24 +5,22 @@ use std::{
     str::FromStr,
 };
 
-use anchor_lang::{AnchorDeserialize, AnchorSerialize};
-use dashmap::DashMap;
-use pythnet_sdk::wire::v1::MerklePriceUpdate;
-pub use solana_rpc_client_api::config::RpcSendTransactionConfig;
-pub use solana_sdk::{
+pub use crate::solana_sdk::{
     commitment_config::CommitmentConfig, message::VersionedMessage,
-    transaction::VersionedTransaction,
+    transaction::versioned::VersionedTransaction,
 };
-use solana_sdk::{
-    instruction::{AccountMeta, InstructionError},
+use crate::solana_sdk::{
+    instruction::{error::InstructionError, AccountMeta},
     pubkey::Pubkey,
     transaction::TransactionError,
 };
+use dashmap::DashMap;
+pub use solana_rpc_client_api::config::RpcSendTransactionConfig;
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tokio_tungstenite::tungstenite;
 
-// re-export types in public API
+// re-export IDL types in public API
 pub use crate::drift_idl::{
     accounts::{self},
     errors::{self},
@@ -37,6 +35,24 @@ use crate::{
     types::accounts::UserStats,
     Wallet,
 };
+
+pub mod solana_sdk {
+    //! convenience type re-exports for solana v3 crates in v2 format
+    pub use solana_account as account;
+    pub mod clock {
+        pub type Slot = u64;
+        pub type Epoch = u64;
+    }
+    pub use solana_commitment_config as commitment_config;
+    pub use solana_compute_budget_interface as compute_budget;
+    pub use solana_instruction as instruction;
+    pub use solana_keypair as keypair;
+    pub use solana_message as message;
+    pub use solana_pubkey as pubkey;
+    pub use solana_signature as signature;
+    pub use solana_signer as signer;
+    pub use solana_transaction as transaction;
+}
 
 use self::accounts::SpotMarket;
 
@@ -380,8 +396,8 @@ impl From<anchor_lang::error::Error> for SdkError {
         SdkError::Anchor(Box::new(e))
     }
 }
-impl From<solana_sdk::signer::SignerError> for SdkError {
-    fn from(e: solana_sdk::signer::SignerError) -> Self {
+impl From<crate::solana_sdk::signer::SignerError> for SdkError {
+    fn from(e: crate::solana_sdk::signer::SignerError) -> Self {
         SdkError::Signing(Box::new(e))
     }
 }
@@ -674,26 +690,17 @@ pub enum TokenProgramFlag {
     TransferHook = 0b00000010,
 }
 
-// copied from pythnet-solana-receiver-sdk
-use anchor_lang::prelude::borsh::{self};
-#[derive(Debug, AnchorSerialize, AnchorDeserialize, Clone)]
-pub struct PostUpdateAtomicParams {
-    pub vaa: Vec<u8>,
-    pub merkle_price_update: MerklePriceUpdate,
-    pub treasury_id: u8,
-}
-
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
+    use crate::solana_sdk::{
+        instruction::error::InstructionError, pubkey::Pubkey, transaction::TransactionError,
+    };
     use solana_rpc_client_api::{
         client_error::{Error as ClientError, ErrorKind as ClientErrorKind},
         request::{RpcError, RpcRequest, RpcResponseErrorData},
         response::RpcSimulateTransactionResult,
-    };
-    use solana_sdk::{
-        instruction::InstructionError, pubkey::Pubkey, transaction::TransactionError,
     };
 
     use super::{RemainingAccount, SdkError};
@@ -712,24 +719,30 @@ mod tests {
         let err = SdkError::Rpc(
             Box::new(ClientError {
                 request: Some(RpcRequest::SendTransaction),
-                kind: ClientErrorKind::RpcError(
+                kind: Box::new(ClientErrorKind::RpcError(
                     RpcError::RpcResponseError {
                         code: -32002,
                         message: "Transaction simulation failed: Error processing Instruction 0: custom program error: 0x17b7".to_string(),
                         data: RpcResponseErrorData::SendTransactionPreflightFailure(
                             RpcSimulateTransactionResult {
-                                err: Some(TransactionError::InstructionError(0, InstructionError::Custom(6071))),
+                                err: Some(TransactionError::InstructionError(0, InstructionError::Custom(6071)).into()),
                                 logs: None,
                                 accounts: None,
                                 units_consumed: None,
+                                loaded_accounts_data_size: None,
                                 return_data: None,
                                 inner_instructions: None,
                                 replacement_blockhash: None,
-                                loaded_accounts_data_size: None,
+                                fee: None,
+                                pre_balances: None,
+                                post_balances: None,
+                                pre_token_balances: None,
+                                post_token_balances: None,
+                                loaded_addresses: None,
                             }
                         )
                     }
-                )
+                ))
             })
         );
 

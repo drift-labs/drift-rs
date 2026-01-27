@@ -3,18 +3,18 @@
 //! Routes JIT maker orders via onchain jit-proxy program
 use std::borrow::Cow;
 
-use anchor_lang::{
-    prelude::borsh::{self, BorshDeserialize, BorshSerialize},
-    AnchorDeserialize, AnchorSerialize, InstructionData,
-};
-use solana_rpc_client_api::config::RpcSendTransactionConfig;
-use solana_sdk::{
+use crate::solana_sdk::{
     compute_budget::ComputeBudgetInstruction,
     instruction::{AccountMeta, Instruction},
     message::{v0, VersionedMessage},
     pubkey::Pubkey,
     signature::Signature,
 };
+use anchor_lang::{
+    prelude::borsh::{self},
+    AnchorDeserialize, AnchorSerialize, InstructionData,
+};
+use solana_rpc_client_api::config::RpcSendTransactionConfig;
 
 use crate::{
     accounts::User,
@@ -27,7 +27,7 @@ use crate::{
     TransactionBuilder, Wallet,
 };
 
-#[derive(Clone, Copy, BorshSerialize, BorshDeserialize, PartialEq, Debug, Eq)]
+#[derive(Clone, Copy, AnchorSerialize, AnchorDeserialize, PartialEq, Debug, Eq)]
 pub enum PriceType {
     Limit,
     Oracle,
@@ -462,7 +462,7 @@ pub mod instruction {
     //! simplifies dependency graph, unlikely to change frequently
     use super::*;
     use crate::PostOnlyParam;
-    #[derive(BorshDeserialize, BorshSerialize)]
+    #[derive(AnchorSerialize, AnchorDeserialize)]
     pub struct Jit {
         pub params: JitParams,
     }
@@ -482,7 +482,7 @@ pub mod instruction {
         pub post_only: Option<PostOnlyParam>,
     }
 
-    #[derive(BorshDeserialize, BorshSerialize)]
+    #[derive(AnchorSerialize, AnchorDeserialize)]
     pub struct JitSignedMsg {
         pub params: JitSignedMsgParams,
     }
@@ -506,7 +506,7 @@ pub mod instruction {
 pub mod accounts {
     //! copied from jit-proxy program
     //! simplifies dependency graph, unlikely to change frequently
-    use solana_sdk::instruction::AccountMeta;
+    use crate::solana_sdk::instruction::AccountMeta;
 
     use super::*;
     use crate::drift_idl::traits::ToAccountMetas;

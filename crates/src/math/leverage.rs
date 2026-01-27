@@ -1,4 +1,4 @@
-use solana_sdk::pubkey::Pubkey;
+use solana_pubkey::Pubkey;
 
 use super::{
     account_list_builder::AccountsListBuilder,
@@ -239,7 +239,7 @@ mod tests {
 
 #[cfg(feature = "rpc_tests")]
 mod rpc_tests {
-    use solana_sdk::signature::Keypair;
+    use crate::solana_sdk::signature::Keypair;
 
     use super::*;
     use crate::{

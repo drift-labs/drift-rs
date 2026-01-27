@@ -1,6 +1,6 @@
 #![cfg(feature = "titan")]
 //! Titan SDK helpers
-use solana_sdk::{message::AddressLookupTableAccount, pubkey::Pubkey};
+use crate::solana_sdk::{message::AddressLookupTableAccount, pubkey::Pubkey};
 pub use titan_swap_api_client::{
     quote::{Provider, QuoteRequest, QuoteResponse, SwapMode},
     swap::SwapResponse,

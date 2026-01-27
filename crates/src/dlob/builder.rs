@@ -1,5 +1,3 @@
-use solana_sdk::pubkey::Pubkey;
-
 use crate::{
     account_map::AccountMap,
     accounts::User,
@@ -8,6 +6,7 @@ use crate::{
     types::MarketId,
     DriftClient, Wallet,
 };
+use solana_pubkey::Pubkey;
 
 /// Convenience builder for constructing and managing an event driven [`DLOB`] instance.
 /// It should be plugged into a gRPC subscription to receive live order updates and slot changes.
