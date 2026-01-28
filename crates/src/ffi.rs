@@ -1136,7 +1136,7 @@ pub mod abi_types {
         }
     }
 
-    #[repr(C)]
+    #[repr(C, align(16))]
     #[derive(Clone, Copy, Debug, Default, PartialEq)]
     pub struct IsolatedMarginCalculation {
         pub market_index: u16,
