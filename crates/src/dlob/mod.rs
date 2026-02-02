@@ -18,6 +18,7 @@ use solana_sdk::pubkey::Pubkey;
 use crate::{
     constants::ProgramData,
     dlob::util::order_hash,
+    math::auction::is_auction_complete,
     types::{
         accounts::{PerpMarket, User},
         MarketId, MarketType, Order, OrderStatus, OrderTriggerCondition, OrderType,
@@ -80,6 +81,34 @@ impl<T: Clone + Debug + From<(u64, Order)> + OrderKey> Orders<T> {
                 self.asks.remove(&order.key()).is_some()
             }
         }
+    }
+}
+
+impl<T: Clone + Debug + From<(u64, Order)> + OrderKey + types::HasOrderId> Orders<T> {
+    /// Remove any entry with this order_id from the given side.
+    /// Fallback when key-based remove fails (e.g. duplicate entries with different keys due to
+    /// auction params changing between account snapshots).
+    pub fn remove_by_id(&mut self, order_id: u64, is_bid: bool) -> bool {
+        if is_bid {
+            let key = self
+                .bids
+                .iter()
+                .find(|(_, v)| v.order_id() == order_id)
+                .map(|(k, _)| k.0.clone());
+            if let Some(k) = key {
+                return self.bids.remove(&Reverse(k)).is_some();
+            }
+        } else {
+            let key = self
+                .asks
+                .iter()
+                .find(|(_, v)| v.order_id() == order_id)
+                .map(|(k, _)| k.clone());
+            if let Some(k) = key {
+                return self.asks.remove(&k).is_some();
+            }
+        }
+        false
     }
 }
 
@@ -168,13 +197,13 @@ impl Orderbook {
             let mut keep = true;
             let is_auction_complete = x.is_auction_complete(slot);
             if is_auction_complete {
-                if x.is_limit {
+                if x.is_expired(now) {
+                    log::trace!(target: TARGET, "market auction expired: {}@{}", x.id, slot);
+                    keep = false;
+                } else if x.is_limit {
                     log::trace!(target: TARGET, "market auction => resting: {}@{}", x.id, slot);
                     self.resting_limit_orders
                         .insert_raw(false, x.to_limit_order());
-                    keep = false;
-                } else if x.is_expired(now) {
-                    log::trace!(target: TARGET, "market auction expired: {}@{}", x.id, slot);
                     keep = false;
                 }
             }
@@ -184,13 +213,13 @@ impl Orderbook {
             let mut keep = true;
             let is_auction_complete = x.is_auction_complete(slot);
             if is_auction_complete {
-                if x.is_limit {
+                if x.is_expired(now) {
+                    log::trace!(target: TARGET, "market auction expired: {}@{}", x.id, slot);
+                    keep = false;
+                } else if x.is_limit {
                     log::trace!(target: TARGET, "market auction => resting:: {}@{}", x.id, slot);
                     self.resting_limit_orders
                         .insert_raw(true, x.to_limit_order());
-                    keep = false;
-                } else if x.is_expired(now) {
-                    log::trace!(target: TARGET, "market auction expired: {}@{}", x.id, slot);
                     keep = false;
                 }
             }
@@ -200,13 +229,13 @@ impl Orderbook {
             let mut keep = true;
             let is_auction_complete = x.is_auction_complete(slot);
             if is_auction_complete {
-                if x.is_limit {
+                if x.is_expired(now) {
+                    log::trace!(target: TARGET, "oracle auction expired:: {}@{}", x.id, slot);
+                    keep = false;
+                } else if x.is_limit {
                     log::trace!(target: TARGET, "oracle auction => resting:: {}@{}", x.id, slot);
                     self.floating_limit_orders
                         .insert_raw(false, x.to_floating_limit_order());
-                    keep = false;
-                } else if x.is_expired(now) {
-                    log::trace!(target: TARGET, "oracle auction expired:: {}@{}", x.id, slot);
                     keep = false;
                 }
             }
@@ -216,13 +245,13 @@ impl Orderbook {
             let mut keep = true;
             let is_auction_complete = x.is_auction_complete(slot);
             if is_auction_complete {
-                if x.is_limit {
+                if x.is_expired(now) {
+                    log::trace!(target: TARGET, "oracle auction expired:: {}@{}", x.id, slot);
+                    keep = false;
+                } else if x.is_limit {
                     log::trace!(target: TARGET, "oracle auction => resting:: {}@{}", x.id, slot);
                     self.floating_limit_orders
                         .insert_raw(true, x.to_floating_limit_order());
-                    keep = false;
-                } else if x.is_expired(now) {
-                    log::trace!(target: TARGET, "oracle auction expired:: {}@{}", x.id, slot);
                     keep = false;
                 }
             }
@@ -639,58 +668,46 @@ impl DLOB {
                 let metadata_ref = metadata.clone();
                 drop(metadata); // release dashmap ref
 
-                let mut order_removed;
                 log::trace!(target: TARGET, "remove order: {order_id} @ status: {:?}, kind: {:?}/{:?}, slot: {slot}", order.status, metadata_ref.kind, order.order_type);
 
-                match metadata_ref.kind {
-                    OrderKind::Market | OrderKind::MarketTriggered => {
-                        order_removed = orderbook.market_orders.remove(order_id, order);
+                let mut order_removed = match metadata_ref.kind {
+                    OrderKind::Market => {
+                        orderbook.market_orders.remove(order_id, order) || orderbook.resting_limit_orders.remove(order_id, order)
                     }
                     OrderKind::Oracle => {
-                        order_removed = orderbook.oracle_orders.remove(order_id, order);
-                    }
-                    OrderKind::OracleTriggered => {
-                        order_removed = orderbook.oracle_orders.remove(order_id, order);
-                        orderbook.trigger_orders.remove(order_id, order);
-                    }
-                    OrderKind::LimitAuction => {
-                        // if the auction completed, check if order moved to resting
-                        log::trace!(target: TARGET, "remove auction limit order: {order_id}");
-                        order_removed = orderbook.market_orders.remove(order_id, order);
-                        if !order_removed {
-                            log::trace!(target: TARGET, "remove auction limit order (resting): {order_id}");
-                            order_removed = orderbook.resting_limit_orders.remove(order_id, order);
-                        }
-                    }
-                    OrderKind::LimitTriggered => {
-                        // if the auction completed, check if order moved to resting
-                        log::trace!(target: TARGET, "remove auction limit order: {order_id}");
-                        order_removed = orderbook.market_orders.remove(order_id, order);
-                        if !order_removed {
-                            log::trace!(target: TARGET, "remove auction limit order (resting): {order_id}");
-                            order_removed = orderbook.resting_limit_orders.remove(order_id, order);
-                        }
-                        orderbook.trigger_orders.remove(order_id, order);
-                    }
-                    OrderKind::FloatingLimitAuction => {
-                        // if the auction completed, check if order moved to resting
-                        log::trace!(target: TARGET, "remove oracle order: {order_id}, order.slot: {}, order.duration: {}", order.slot, order.auction_duration);
-                        order_removed = orderbook.oracle_orders.remove(order_id, order);
-                        if !order_removed {
-                            log::trace!(target: TARGET, "remove limit order: {order_id}");
-                            order_removed = orderbook.floating_limit_orders.remove(order_id, order);
-                        }
+                        orderbook.oracle_orders.remove(order_id, order) || orderbook.floating_limit_orders.remove(order_id, order)
                     }
                     OrderKind::Limit => {
-                        order_removed = orderbook.resting_limit_orders.remove(order_id, order);
+                        orderbook.resting_limit_orders.remove(order_id, order)
                     }
                     OrderKind::FloatingLimit => {
-                        order_removed = orderbook.floating_limit_orders.remove(order_id, order);
+                        orderbook.floating_limit_orders.remove(order_id, order)
                     }
                     OrderKind::TriggerMarket | OrderKind::TriggerLimit => {
-                        log::trace!(target: TARGET, "trigger order: {order_id},{:?}", order.trigger_condition);
-                        order_removed = orderbook.trigger_orders.remove(order_id, order);
+                        orderbook.trigger_orders.remove(order_id, order)
                     }
+                };
+
+                // Fallback: key-based remove can fail when the same order_id was inserted
+                // multiple times with different keys (e.g. auction params changed between
+                // snapshots). Remove by order_id to clear any stale entry.
+                if !order_removed {
+                    let is_bid = order.direction == Direction::Long;
+                    order_removed = match metadata_ref.kind {
+                        OrderKind::Market => {
+                            orderbook.market_orders.remove_by_id(order_id, is_bid)
+                                || orderbook.resting_limit_orders.remove_by_id(order_id, is_bid)
+                        }
+                        OrderKind::Oracle => {
+                            orderbook.oracle_orders.remove_by_id(order_id, is_bid)
+                                || orderbook.floating_limit_orders.remove_by_id(order_id, is_bid)
+                        }
+                        OrderKind::Limit => orderbook.resting_limit_orders.remove_by_id(order_id, is_bid),
+                        OrderKind::FloatingLimit => orderbook.floating_limit_orders.remove_by_id(order_id, is_bid),
+                        OrderKind::TriggerMarket | OrderKind::TriggerLimit => {
+                            orderbook.trigger_orders.remove_by_id(order_id, is_bid)
+                        }
+                    };
                 }
 
                 if order_removed {
@@ -749,16 +766,16 @@ impl DLOB {
                         */
                         let is_floating = order.oracle_price_offset != 0;
                         let is_post_only = order.post_only;
-                        let is_auction = order.auction_duration != 0;
+                        let has_auction_price = (order.auction_end_price != 0 && order.auction_start_price != 0) && !is_auction_complete(&order, slot);
                         let order_kind = if !is_post_only {
-                            match (is_auction, is_floating) {
+                            match (has_auction_price, is_floating) {
                                 (true, true) => {
                                     orderbook.oracle_orders.insert(order_id, order);
-                                    OrderKind::FloatingLimitAuction
+                                    OrderKind::Oracle
                                 }
                                 (true, false) => {
                                     orderbook.market_orders.insert(order_id, order);
-                                    OrderKind::LimitAuction
+                                    OrderKind::Market
                                 }
                                 (false, true) => {
                                     orderbook.floating_limit_orders.insert(order_id, order);
@@ -793,13 +810,11 @@ impl DLOB {
                             if order.is_oracle_trigger_market() {
                                 log::trace!(target: TARGET, "insert triggered oracle order: {order_id}");
                                 orderbook.oracle_orders.insert(order_id, order);
-                                orderbook.trigger_orders.remove(order_id, order);
-                                OrderKind::OracleTriggered
+                                OrderKind::Oracle
                             } else {
                                 log::trace!(target: TARGET, "insert triggered market order: {order_id}");
                                 orderbook.market_orders.insert(order_id, order);
-                                orderbook.trigger_orders.remove(order_id, order);
-                                OrderKind::MarketTriggered
+                                OrderKind::Market
                            }
                         }
                     },
@@ -812,9 +827,16 @@ impl DLOB {
                         OrderTriggerCondition::TriggeredAbove
                         | OrderTriggerCondition::TriggeredBelow => {
                             log::trace!(target: TARGET, "insert triggered limit order: {order_id}");
-                            orderbook.market_orders.insert(order_id, order);
-                            orderbook.trigger_orders.remove(order_id, order);
-                            OrderKind::LimitTriggered
+                            // does trigger limit floating exist??
+                            let is_resting = is_auction_complete(&order, slot);
+                            if is_resting {
+                                orderbook.resting_limit_orders.insert(order_id, order);
+                                OrderKind::Limit
+                            } else {
+                                // trigger limit does not have an option for oracle offset
+                                orderbook.market_orders.insert(order_id, order);
+                                OrderKind::Market
+                            }
                         }
                     },
                 };

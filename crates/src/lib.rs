@@ -1074,6 +1074,10 @@ impl DriftClient {
         self.backend.grpc_unsubscribe();
     }
 
+    pub async fn get_slot(&self) -> Option<u64> {
+        self.backend.client().get_slot().await.ok()
+    }
+
     /// Return a reference to the internal backend
     #[cfg(feature = "unsafe_pub")]
     pub fn backend(&self) -> &'static DriftClientBackend {

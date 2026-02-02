@@ -30,10 +30,6 @@ pub enum OrderKind {
     Market,
     /// auction oracle offset
     Oracle,
-    /// oracle limit order undergoing initial auction (taking)
-    FloatingLimitAuction,
-    /// fixed limit order undergoing initial auction (taking)
-    LimitAuction,
     /// resting limit order
     Limit,
     /// resting oracle limit order
@@ -42,12 +38,6 @@ pub enum OrderKind {
     TriggerMarket,
     /// trigger order that will result in Limit/Market auction order (untriggered)
     TriggerLimit,
-    /// Triggered oracle order
-    OracleTriggered,
-    /// Triggered market order
-    MarketTriggered,
-    /// Triggered limit order
-    LimitTriggered,
 }
 
 impl OrderKind {
@@ -185,10 +175,21 @@ pub(crate) trait OrderKey {
     fn key(&self) -> Self::Key;
 }
 
+/// Order types store a DLOB-internal id (hash of user + order.order_id).
+/// Used to remove by id when key-based remove fails (e.g. duplicate entries with different keys).
+pub(crate) trait HasOrderId {
+    fn order_id(&self) -> u64;
+}
+
 impl OrderKey for MarketOrder {
     type Key = MarketOrderKey;
     fn key(&self) -> Self::Key {
         (self.start_price as u64, self.id)
+    }
+}
+impl HasOrderId for MarketOrder {
+    fn order_id(&self) -> u64 {
+        self.id
     }
 }
 
@@ -222,6 +223,11 @@ impl OrderKey for OracleOrder {
         (self.end_price_offset, self.id)
     }
 }
+impl HasOrderId for OracleOrder {
+    fn order_id(&self) -> u64 {
+        self.id
+    }
+}
 
 impl OracleOrder {
     /// Check if this order has expired
@@ -253,11 +259,21 @@ impl OrderKey for LimitOrder {
         (self.price, self.max_ts, self.id)
     }
 }
+impl HasOrderId for LimitOrder {
+    fn order_id(&self) -> u64 {
+        self.id
+    }
+}
 
 impl OrderKey for FloatingLimitOrder {
     type Key = FloatingLimitOrderKey;
     fn key(&self) -> Self::Key {
         (self.offset_price, self.max_ts, self.id)
+    }
+}
+impl HasOrderId for FloatingLimitOrder {
+    fn order_id(&self) -> u64 {
+        self.id
     }
 }
 
@@ -266,6 +282,11 @@ impl OrderKey for TriggerOrder {
     fn key(&self) -> Self::Key {
         // nb: trigger order slot updates when triggered so is unreliable as a sort key
         (self.price, self.id)
+    }
+}
+impl HasOrderId for TriggerOrder {
+    fn order_id(&self) -> u64 {
+        self.id
     }
 }
 
