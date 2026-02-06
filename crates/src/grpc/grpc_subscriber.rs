@@ -1,5 +1,6 @@
 use std::{collections::HashMap, time::Duration};
 
+use crate::solana_sdk::{clock::Slot, commitment_config::CommitmentLevel, pubkey::Pubkey};
 use ahash::HashSet;
 use futures_util::{
     sink::SinkExt,
@@ -7,7 +8,6 @@ use futures_util::{
 };
 use log::{error, info, warn};
 use solana_rpc_client_api::filter::Memcmp;
-use solana_sdk::{clock::Slot, commitment_config::CommitmentLevel, pubkey::Pubkey};
 use yellowstone_grpc_client::{
     ClientTlsConfig, GeyserGrpcBuilderError, GeyserGrpcClient, GeyserGrpcClientError, Interceptor,
 };
@@ -671,7 +671,7 @@ async fn grpc_connect(
 
 #[cfg(test)]
 mod test {
-    use solana_sdk::pubkey::Pubkey;
+    use solana_pubkey::Pubkey;
 
     use super::*;
 

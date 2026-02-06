@@ -11,11 +11,12 @@ use anchor_lang::{
     Discriminator,
 };
 use serde::{Deserialize, Serialize};
-use solana_sdk::{instruction::AccountMeta, pubkey::Pubkey};
+use solana_instruction::AccountMeta;
+use solana_pubkey::Pubkey;
 pub const IDL_VERSION: &str = "2.150.0";
 use self::traits::ToAccountMetas;
 pub mod traits {
-    use solana_sdk::instruction::AccountMeta;
+    use crate::solana_sdk::instruction::AccountMeta;
     #[doc = r" This is distinct from the anchor_lang version of the trait"]
     #[doc = r" reimplemented to ensure the types used are from `solana`` crates _not_ the anchor_lang vendored versions which may be lagging behind"]
     pub trait ToAccountMetas {

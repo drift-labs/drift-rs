@@ -4,9 +4,8 @@
 //!
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use abi_stable::std_types::ROption;
+use crate::solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 use anchor_lang::{prelude::AccountInfo, Discriminator};
-use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 
 pub use self::abi_types::*;
 use crate::{
@@ -43,7 +42,7 @@ extern "C" {
         order: &types::Order,
         slot: Slot,
         tick_size: u64,
-        oracle_price: ROption<i64>,
+        oracle_price: Option<i64>,
         is_prediction_market: bool,
     ) -> FfiResult<u64>;
     #[allow(improper_ctypes)]
@@ -379,7 +378,6 @@ pub fn simulate_place_perp_order<'a>(
                 data.as_mut_slice(),
                 &PROGRAM_ID,
                 false,
-                u64::MAX,
             );
             unsafe {
                 orders_place_perp_order(
@@ -955,8 +953,8 @@ pub fn calculate_auction_params_for_trigger_order(
 
 fn to_sdk_result<T>(value: FfiResult<T>) -> SdkResult<T> {
     match value {
-        FfiResult::ROk(t) => Ok(t),
-        FfiResult::RErr(code) => {
+        FfiResult::Ok(t) => Ok(t),
+        FfiResult::Err(code) => {
             let error_code = unsafe {
                 std::mem::transmute::<u32, ErrorCode>(code - anchor_lang::error::ERROR_CODE_OFFSET)
             };
@@ -1033,8 +1031,7 @@ impl IncrementalMarginCalculation {
 
 pub mod abi_types {
     //! cross-boundary FFI types
-    use abi_stable::std_types::RResult;
-    use solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
+    use crate::solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
 
     use crate::{drift_idl::types::MarginRequirementType, types::OracleValidity, OracleGuardRails};
 
@@ -1193,7 +1190,7 @@ pub mod abi_types {
     }
 
     /// C-ABI compatible result type for drift FFI calls
-    pub type FfiResult<T> = RResult<T, u32>;
+    pub type FfiResult<T> = Result<T, u32>;
 
     /// FFI-compatible simplified margin calculation result
     #[repr(C, align(16))]
@@ -1372,8 +1369,8 @@ pub mod abi_types {
 
 #[cfg(test)]
 mod tests {
+    use crate::solana_sdk::{account::Account, pubkey::Pubkey};
     use anchor_lang::Discriminator;
-    use solana_sdk::{account::Account, pubkey::Pubkey};
 
     use super::{
         margin_calculate_simplified_margin_requirement, simulate_place_perp_order, AccountWithKey,
@@ -1412,7 +1409,7 @@ mod tests {
         SpotMarket {
             market_index: 1,
             oracle_source: OracleSource::Pyth,
-            oracle: solana_sdk::pubkey!("J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix"),
+            oracle: solana_pubkey::pubkey!("J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix"),
             cumulative_deposit_interest: SPOT_CUMULATIVE_INTEREST_PRECISION.into(),
             cumulative_borrow_interest: SPOT_CUMULATIVE_INTEREST_PRECISION.into(),
             decimals: 9,
@@ -2671,14 +2668,14 @@ mod tests {
 
             // Verify the FFI call succeeds
             assert!(
-                matches!(result, FfiResult::ROk(_)),
+                matches!(result, FfiResult::Ok(_)),
                 "FFI call should succeed for margin type: {:?}",
                 margin_type
             );
 
             let result = match result {
-                FfiResult::ROk(data) => data,
-                FfiResult::RErr(_) => panic!("FFI call failed for margin type: {:?}", margin_type),
+                FfiResult::Ok(data) => data,
+                FfiResult::Err(_) => panic!("FFI call failed for margin type: {:?}", margin_type),
             };
 
             // Verify we get reasonable values

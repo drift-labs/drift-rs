@@ -6,6 +6,7 @@ use std::{
     },
 };
 
+use crate::solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
 use anchor_lang::{AccountDeserialize, AnchorDeserialize};
 use dashmap::DashMap;
 use drift_pubsub_client::PubsubClient;
@@ -21,7 +22,6 @@ use solana_rpc_client_api::{
     request::RpcRequest,
     response::{OptionalContext, RpcKeyedAccount},
 };
-use solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
 
 use crate::{
     accounts::State,
@@ -337,13 +337,15 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
     );
 
     let state_response = rpc
-        .get_account_with_config(state_account(), account_config)
+        .get_ui_account_with_config(state_account(), account_config)
         .await
         .expect("state account fetch");
 
     let state_data = state_response.value.expect("state has data").data;
-    let state =
-        State::try_deserialize_unchecked(&mut state_data.as_slice()).expect("state deserializes");
+    let state = State::try_deserialize_unchecked(
+        &mut state_data.decode().expect("deser state account").as_slice(),
+    )
+    .expect("state deserializes");
 
     let market_pdas: Vec<Pubkey> = match T::MARKET_TYPE {
         MarketType::Spot => (0..state.number_of_spot_markets)
@@ -424,9 +426,9 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
 mod tests {
     use std::sync::Arc;
 
+    use crate::solana_sdk::commitment_config::CommitmentConfig;
     use drift_pubsub_client::PubsubClient;
     use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-    use solana_sdk::commitment_config::CommitmentConfig;
 
     use super::{get_market_accounts_with_fallback, MarketMap};
     use crate::{
@@ -478,7 +480,7 @@ mod tests {
 
 #[cfg(feature = "rpc_tests")]
 mod rpc_tests {
-    use solana_sdk::commitment_config::CommitmentConfig;
+    use crate::solana_sdk::commitment_config::CommitmentConfig;
 
     use super::*;
     use crate::utils::test_envs::mainnet_endpoint;

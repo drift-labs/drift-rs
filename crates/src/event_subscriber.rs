@@ -6,6 +6,10 @@ use std::{
     time::Duration,
 };
 
+pub use crate::solana_sdk::commitment_config::CommitmentConfig;
+use crate::solana_sdk::{
+    pubkey::Pubkey, signature::Signature, transaction::versioned::VersionedTransaction,
+};
 use ahash::HashSet;
 use anchor_lang::{AnchorDeserialize, Discriminator};
 use base64::Engine;
@@ -19,8 +23,6 @@ use solana_rpc_client_api::{
     config::{RpcTransactionConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter},
     response::RpcLogsResponse,
 };
-pub use solana_sdk::commitment_config::CommitmentConfig;
-use solana_sdk::{pubkey::Pubkey, signature::Signature, transaction::VersionedTransaction};
 use solana_transaction_status::{
     option_serializer::OptionSerializer, EncodedTransactionWithStatusMeta, UiTransactionEncoding,
 };
@@ -861,16 +863,15 @@ impl TxSignatureCache {
 
 #[cfg(test)]
 mod test {
+    use crate::solana_sdk::{
+        instruction::{AccountMeta, Instruction},
+        message::{v0, Hash, VersionedMessage},
+        pubkey::Pubkey,
+    };
     use ahash::HashMap;
     use anchor_lang::prelude::*;
     use base64::Engine;
     use futures_util::future::ready;
-    use solana_sdk::{
-        hash::Hash,
-        instruction::{AccountMeta, Instruction},
-        message::{v0, VersionedMessage},
-        pubkey::Pubkey,
-    };
     use solana_transaction_status::{TransactionStatusMeta, VersionedTransactionWithStatusMeta};
     use tokio::sync::Mutex;
 
@@ -1269,7 +1270,7 @@ mod test {
 
         let res: Vec<DriftEvent> = logs.iter().enumerate().filter_map(|(idx, log)| try_parse_log(log, "2M1e4UJ1x6rwvjFR6kh5CDCWZg8NcGeqzT2GbDRGaC2TmZDgNTNbKSn4Y4pu11apErVycpk5p3Hq6Tg2nrFdGimm", idx)).collect();
         assert_eq!(res[0], DriftEvent::Swap {
-            user: solana_sdk::pubkey!("7q6FkeUEvTDS6DaM2WTHw6s1gTzbBasGTPATLzMZW41S"),
+            user: solana_pubkey::pubkey!("7q6FkeUEvTDS6DaM2WTHw6s1gTzbBasGTPATLzMZW41S"),
             amount_in: 2000000,
             amount_out: 13814365,
             market_in: 0,

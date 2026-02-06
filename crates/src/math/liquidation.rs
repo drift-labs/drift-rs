@@ -399,7 +399,7 @@ fn calculate_collateral_inner(
 
 #[cfg(test)]
 mod tests {
-    use solana_sdk::{account::Account, pubkey::Pubkey};
+    use crate::solana_sdk::{account::Account, pubkey::Pubkey};
 
     use super::*;
     use crate::{
@@ -417,8 +417,10 @@ mod tests {
         MarketId,
     };
 
-    const SOL_ORACLE: Pubkey = solana_sdk::pubkey!("J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix");
-    const BTC_ORACLE: Pubkey = solana_sdk::pubkey!("GVXRSBjFk6e6J3NbVPXohDJetcTjaeeuykUpbQF8UoMU");
+    const SOL_ORACLE: Pubkey =
+        solana_pubkey::pubkey!("J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix");
+    const BTC_ORACLE: Pubkey =
+        solana_pubkey::pubkey!("GVXRSBjFk6e6J3NbVPXohDJetcTjaeeuykUpbQF8UoMU");
 
     fn sol_spot_market() -> SpotMarket {
         SpotMarket {
@@ -515,7 +517,7 @@ mod tests {
 
         use crate::{utils::test_envs::mainnet_endpoint, Wallet};
 
-        let wallet = Wallet::read_only(solana_sdk::pubkey!(
+        let wallet = Wallet::read_only(solana_pubkey::pubkey!(
             "DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"
         ));
         let client = DriftClient::new(
@@ -541,7 +543,7 @@ mod tests {
 
         use crate::{utils::test_envs::mainnet_endpoint, Wallet};
 
-        let wallet = Wallet::read_only(solana_sdk::pubkey!(
+        let wallet = Wallet::read_only(solana_pubkey::pubkey!(
             "DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"
         ));
         let client = DriftClient::new(

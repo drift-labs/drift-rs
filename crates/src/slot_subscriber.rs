@@ -1,9 +1,9 @@
 use std::sync::{atomic::AtomicU64, Arc, Mutex};
 
+use crate::solana_sdk::clock::Slot;
 use drift_pubsub_client::PubsubClient;
 use futures_util::StreamExt;
 use log::{debug, error, warn};
-use solana_sdk::clock::Slot;
 use tokio::sync::oneshot;
 
 use crate::types::{SdkError, SdkResult};
