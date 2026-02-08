@@ -538,8 +538,10 @@ pub async fn subscribe_swift_orders(
                 }
                 Ok(_) => continue,
                 Err(err) => {
-                    log::error!(target: LOG_TARGET, "failed reading swift msg: {err:?}");
-                    break;
+                    // Invalid UTF-8 or other read error in a single frame: log and skip
+                    // so one bad message does not terminate the stream (e.g. filler keeps running).
+                    log::error!(target: LOG_TARGET, "failed reading swift msg (skipping frame): {err:?}");
+                    continue;
                 }
             }
         }
