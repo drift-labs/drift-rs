@@ -827,7 +827,6 @@ impl DLOB {
                         OrderTriggerCondition::TriggeredAbove
                         | OrderTriggerCondition::TriggeredBelow => {
                             log::trace!(target: TARGET, "insert triggered limit order: {order_id}");
-                            // does trigger limit floating exist??
                             let is_resting = is_auction_complete(&order, slot);
                             if is_resting {
                                 orderbook.resting_limit_orders.insert(order_id, order);

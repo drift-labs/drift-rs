@@ -95,7 +95,7 @@ fn is_same_logical_order(a: &Order, b: &Order) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{MarketType, OrderType, PositionDirection};
+    use crate::types::{MarketType, OrderTriggerCondition, OrderType, PositionDirection};
 
     fn create_test_order(id: u32, status: OrderStatus) -> Order {
         Order {
@@ -192,6 +192,37 @@ mod tests {
                 assert_eq!(order.order_id, 1);
             }
             _ => panic!("Expected Remove delta"),
+        }
+    }
+
+    #[test]
+    fn dlob_util_test_remove_order_when_trigger_condition_changes() {
+        let pubkey = Pubkey::new_unique();
+        let old_order = create_test_order(1, OrderStatus::Open);
+        assert_eq!(old_order.trigger_condition, OrderTriggerCondition::Above);
+        let old = create_test_user(vec![old_order]);
+
+        let mut new_order = create_test_order(1, OrderStatus::Open);
+        new_order.trigger_condition = OrderTriggerCondition::Below;
+        let new = create_test_user(vec![new_order]);
+
+        let (returned_pubkey, deltas) = compare_user_orders(pubkey, &old, &new);
+        assert_eq!(returned_pubkey, pubkey);
+        assert_eq!(deltas.len(), 2, "expect Remove (old) + Create (new) when trigger_condition changes");
+
+        match &deltas[0] {
+            OrderDelta::Remove { order } => {
+                assert_eq!(order.order_id, 1);
+                assert_eq!(order.trigger_condition, OrderTriggerCondition::Above);
+            }
+            _ => panic!("First delta should be Remove for old order"),
+        }
+        match &deltas[1] {
+            OrderDelta::Create { order } => {
+                assert_eq!(order.order_id, 1);
+                assert_eq!(order.trigger_condition, OrderTriggerCondition::Below);
+            }
+            _ => panic!("Second delta should be Create for new order"),
         }
     }
 
