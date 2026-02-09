@@ -8,7 +8,10 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tokio_tungstenite::{
+    connect_async,
+    tungstenite::{error::Error as WsError, Message},
+};
 
 pub use crate::types::{
     SignedMsgOrderParamsDelegateMessage as SignedDelegateOrder,
@@ -538,10 +541,18 @@ pub async fn subscribe_swift_orders(
                 }
                 Ok(_) => continue,
                 Err(err) => {
-                    // Invalid UTF-8 or other read error in a single frame: log and skip
-                    // so one bad message does not terminate the stream (e.g. filler keeps running).
-                    log::error!(target: LOG_TARGET, "failed reading swift msg (skipping frame): {err:?}");
-                    continue;
+                    // Invalid UTF-8 in a single frame (e.g. bad nanoid): skip so stream stays alive.
+                    // Connection closed, I/O, protocol errors etc. end the stream so caller can reconnect.
+                    match &err {
+                        WsError::Utf8(_) => {
+                            log::error!(target: LOG_TARGET, "invalid UTF-8 in swift msg (skipping frame): {err:?}");
+                            continue;
+                        }
+                        _ => {
+                            log::error!(target: LOG_TARGET, "failed reading swift msg: {err:?}");
+                            break;
+                        }
+                    }
                 }
             }
         }
