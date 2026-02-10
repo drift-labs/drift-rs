@@ -1622,7 +1622,7 @@ fn dlob_metadata_consistency_floating_limit_auction_expiry_and_removal() {
     let order_id = crate::dlob::util::order_hash(&user, 1);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
-        assert_eq!(metadata.kind, OrderKind::FloatingLimit);
+        assert_eq!(metadata.kind, OrderKind::FloatingLimitAuction);
     } // Drop metadata reference before accessing orderbook
 
     {
@@ -1807,7 +1807,7 @@ fn dlob_trigger_order_transition_update() {
         let metadata = dlob.metadata.get(&order_id).unwrap();
 
         // Metadata should be updated
-        assert_eq!(metadata.kind, OrderKind::Market);
+        assert_eq!(metadata.kind, OrderKind::MarketTriggered);
 
         // But the order might not actually be in market_orders if the update failed
         if book.market_orders.bids.len() == 0 {

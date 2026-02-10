@@ -45,10 +45,8 @@ pub fn compare_user_orders(pubkey: Pubkey, old: &User, new: &User) -> (Pubkey, V
         {
             Some(new_order) => {
                 if is_same_logical_order(existing_order, new_order) {
-                    if new_order.status != OrderStatus::Open
-                        || new_order.trigger_condition != existing_order.trigger_condition
-                    {
-                        // order has cancelled/filled/triggered
+                    if new_order.status != OrderStatus::Open {
+                        // order has cancelled/filled
                         deltas.push(OrderDelta::Remove {
                             order: *existing_order,
                         });
