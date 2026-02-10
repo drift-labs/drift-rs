@@ -1139,11 +1139,11 @@ pub mod abi_types {
     #[repr(C, align(16))]
     #[derive(Clone, Copy, Debug, Default, PartialEq)]
     pub struct IsolatedMarginCalculation {
-        pub market_index: u16,
         pub margin_requirement: u128,
         pub total_collateral: i128,
         pub total_collateral_buffer: i128,
         pub margin_requirement_plus_buffer: u128,
+        pub market_index: u16,
     }
 
     impl IsolatedMarginCalculation {
@@ -1196,7 +1196,7 @@ pub mod abi_types {
     pub type FfiResult<T> = RResult<T, u32>;
 
     /// FFI-compatible simplified margin calculation result
-    #[repr(C, align(16))]
+    #[repr(C)]
     #[derive(Copy, Clone, Debug, PartialEq)]
     pub struct SimplifiedMarginCalculation {
         pub total_collateral: i128,
