@@ -1977,6 +1977,52 @@ impl<'a> TransactionBuilder<'a> {
         &self.ixs
     }
 
+    pub fn transfer_isolated_perp_position_deposit(
+        mut self,
+        amount: i64,
+        market_index: u16,
+    ) -> Self {
+        // assume USDC collateralized
+        let quote_spot_market = self
+            .program_data
+            .spot_market_config_by_index(MarketId::QUOTE_SPOT.index())
+            .expect("spot markets syncd");
+        let accounts = build_accounts(
+            self.program_data,
+            types::accounts::TransferIsolatedPerpPositionDeposit {
+                state: *state_account(),
+                user: self.sub_account,
+                user_stats: Wallet::derive_stats_account(&self.owner()),
+                authority: self.authority,
+                spot_market_vault: quote_spot_market.vault,
+            },
+            [self.account_data.as_ref()].into_iter(),
+            self.force_markets
+                .readable
+                .iter()
+                .chain(&[MarketId::perp(market_index)]),
+            self.force_markets
+                .writeable
+                .iter()
+                .chain(&[MarketId::QUOTE_SPOT]),
+        );
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(
+                &drift_idl::instructions::TransferIsolatedPerpPositionDeposit {
+                    perp_market_index: market_index,
+                    spot_market_index: quote_spot_market.market_index,
+                    amount,
+                },
+            ),
+        };
+
+        self.ixs.push(ix);
+
+        self
+    }
+
     /// Deposit collateral into the user's account for a given spot market.
     ///
     /// Automatically derives the user's associated token account. Optionally supports reduce-only deposits.

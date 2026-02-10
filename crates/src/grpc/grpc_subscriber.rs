@@ -23,7 +23,7 @@ use yellowstone_grpc_proto::{
         SubscribeRequestFilterAccountsFilter, SubscribeRequestFilterAccountsFilterMemcmp,
         SubscribeRequestFilterSlots, SubscribeRequestFilterTransactions, SubscribeRequestPing,
     },
-    tonic::{transport::Certificate, Status},
+    tonic::{codec::CompressionEncoding, transport::Certificate, Status},
 };
 
 use crate::types::UnsubHandle;
@@ -152,6 +152,8 @@ pub struct GrpcConnectionOpts {
     timeout_ms: Option<u64>,
     /// Max message size before decoding, full blocks can be super large, default is 1GiB
     max_decoding_message_size: usize,
+    /// Turn on zstd compression
+    compression: bool,
 }
 
 impl Default for GrpcConnectionOpts {
@@ -169,6 +171,7 @@ impl Default for GrpcConnectionOpts {
             tcp_nodelay: None,
             timeout_ms: None,
             max_decoding_message_size: 1024 * 1024 * 1024,
+            compression: false,
         }
     }
 }
@@ -626,6 +629,9 @@ async fn grpc_connect(
         .tls_config(tls_config)?
         .max_decoding_message_size(opts.max_decoding_message_size);
 
+    if opts.compression {
+        builder = builder.accept_compressed(CompressionEncoding::Zstd);
+    }
     if let Some(duration) = opts.connect_timeout_ms {
         builder = builder.connect_timeout(Duration::from_millis(duration));
     }
