@@ -175,34 +175,14 @@ pub(crate) trait OrderKey {
     fn key(&self) -> Self::Key;
 }
 
-/// Order types store a DLOB-internal id (hash of user + order.order_id).
-/// Used to remove by id when key-based remove fails (e.g. duplicate entries with different keys).
-pub(crate) trait HasOrderId {
-    fn order_id(&self) -> u64;
-}
-
 impl OrderKey for MarketOrder {
     type Key = MarketOrderKey;
     fn key(&self) -> Self::Key {
         (self.start_price as u64, self.id)
     }
 }
-impl HasOrderId for MarketOrder {
-    fn order_id(&self) -> u64 {
-        self.id
-    }
-}
 
 impl MarketOrder {
-    /// Check if this order has expired
-    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
-        self.max_ts != 0 && self.max_ts < now_unix_seconds
-    }
-    /// Check if this auction order has completed
-    pub fn is_auction_complete(&self, current_slot: u64) -> bool {
-        self.duration == 0 || current_slot.saturating_sub(self.slot) > self.duration as u64
-    }
-
     /// Convert to LimitOrder when auction completes
     pub fn to_limit_order(&self) -> LimitOrder {
         LimitOrder {
@@ -223,22 +203,8 @@ impl OrderKey for OracleOrder {
         (self.end_price_offset, self.id)
     }
 }
-impl HasOrderId for OracleOrder {
-    fn order_id(&self) -> u64 {
-        self.id
-    }
-}
 
 impl OracleOrder {
-    /// Check if this order has expired
-    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
-        self.max_ts != 0 && self.max_ts < now_unix_seconds
-    }
-    /// Check if this auction order has completed
-    pub fn is_auction_complete(&self, current_slot: u64) -> bool {
-        self.duration == 0 || current_slot.saturating_sub(self.slot) > self.duration as u64
-    }
-
     /// Convert to FloatingLimitOrder when auction completes
     pub fn to_floating_limit_order(&self) -> FloatingLimitOrder {
         FloatingLimitOrder {
@@ -259,21 +225,11 @@ impl OrderKey for LimitOrder {
         (self.price, self.max_ts, self.id)
     }
 }
-impl HasOrderId for LimitOrder {
-    fn order_id(&self) -> u64 {
-        self.id
-    }
-}
 
 impl OrderKey for FloatingLimitOrder {
     type Key = FloatingLimitOrderKey;
     fn key(&self) -> Self::Key {
         (self.offset_price, self.max_ts, self.id)
-    }
-}
-impl HasOrderId for FloatingLimitOrder {
-    fn order_id(&self) -> u64 {
-        self.id
     }
 }
 
@@ -282,11 +238,6 @@ impl OrderKey for TriggerOrder {
     fn key(&self) -> Self::Key {
         // nb: trigger order slot updates when triggered so is unreliable as a sort key
         (self.price, self.id)
-    }
-}
-impl HasOrderId for TriggerOrder {
-    fn order_id(&self) -> u64 {
-        self.id
     }
 }
 
@@ -452,7 +403,9 @@ impl DynamicPrice for MarketOrder {
     ///
     /// A value of None indicates the order will use the fallback/vamm price
     fn get_price(&self, slot: u64, _oracle_price: u64, tick_size: u64) -> Option<u64> {
-        if self.is_auction_complete(slot) && (self.start_price != 0 || self.end_price != 0) {
+        if Order::is_auction_complete(slot, self.slot, self.duration)
+            && (self.start_price != 0 || self.end_price != 0)
+        {
             return if self.price == 0 {
                 None
             } else {
@@ -576,9 +529,6 @@ impl LimitOrder {
     pub fn get_price(&self) -> u64 {
         self.price
     }
-    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
-        self.max_ts != 0 && self.max_ts < now_unix_seconds
-    }
 }
 
 impl From<(u64, Order)> for LimitOrder {
@@ -597,9 +547,6 @@ impl From<(u64, Order)> for LimitOrder {
 }
 
 impl FloatingLimitOrder {
-    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
-        self.max_ts != 0 && self.max_ts < now_unix_seconds
-    }
     pub fn get_price(&self, oracle_price: u64, tick_size: u64) -> u64 {
         (oracle_price as i64 + self.offset_price as i64).max(tick_size as i64) as u64
     }
@@ -809,5 +756,16 @@ impl L3Order {
     /// True if order is taker only
     pub fn is_taker(&self) -> bool {
         self.kind.is_taker()
+    }
+}
+
+impl Order {
+    /// Check if order has expired
+    pub fn is_expired(max_ts: u64, now_unix_seconds: u64) -> bool {
+        max_ts != 0 && max_ts < now_unix_seconds
+    }
+    /// Check if order's auction is complete
+    pub fn is_auction_complete(current_slot: u64, order_slot: u64, auction_duration: u8) -> bool {
+        auction_duration == 0 || current_slot.saturating_sub(order_slot) > auction_duration as u64
     }
 }

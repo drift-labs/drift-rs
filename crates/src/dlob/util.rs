@@ -208,7 +208,11 @@ mod tests {
 
         let (returned_pubkey, deltas) = compare_user_orders(pubkey, &old, &new);
         assert_eq!(returned_pubkey, pubkey);
-        assert_eq!(deltas.len(), 2, "expect Remove (old) + Create (new) when trigger_condition changes");
+        assert_eq!(
+            deltas.len(),
+            2,
+            "expect Remove (old) + Create (new) when trigger_condition changes"
+        );
 
         match &deltas[0] {
             OrderDelta::Remove { order } => {

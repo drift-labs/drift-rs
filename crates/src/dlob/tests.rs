@@ -1727,9 +1727,16 @@ fn dlob_expire_market_orders_on_max_ts() {
     // Verify initial state - order should be in market_orders
     {
         let book = dlob.markets.get(&MarketId::perp(0)).unwrap();
-        assert_eq!(book.market_orders.bids.len(), 1, "Order should be in market_orders initially");
+        assert_eq!(
+            book.market_orders.bids.len(),
+            1,
+            "Order should be in market_orders initially"
+        );
     }
-    assert!(dlob.metadata.get(&order_id).is_some(), "Metadata should exist initially");
+    assert!(
+        dlob.metadata.get(&order_id).is_some(),
+        "Metadata should exist initially"
+    );
 
     // Update slot - this should expire the order based on max_ts even though auction hasn't completed
     let updated_slot = slot + 1; // Before auction completes (auction completes at slot 111)
@@ -1793,9 +1800,16 @@ fn dlob_expire_oracle_orders_on_max_ts() {
     // Verify initial state - order should be in oracle_orders
     {
         let book = dlob.markets.get(&MarketId::perp(0)).unwrap();
-        assert_eq!(book.oracle_orders.asks.len(), 1, "Order should be in oracle_orders initially");
+        assert_eq!(
+            book.oracle_orders.asks.len(),
+            1,
+            "Order should be in oracle_orders initially"
+        );
     }
-    assert!(dlob.metadata.get(&order_id).is_some(), "Metadata should exist initially");
+    assert!(
+        dlob.metadata.get(&order_id).is_some(),
+        "Metadata should exist initially"
+    );
 
     // Update slot - this should expire the order based on max_ts even though auction hasn't completed
     let updated_slot = slot + 1; // Before auction completes (auction completes at slot 111)
