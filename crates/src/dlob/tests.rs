@@ -826,6 +826,44 @@ fn dlob_auction_expiry_oracle_orders() {
     assert_eq!(book.floating_limit_orders.asks.len(), 1);
 }
 
+/// Verifies the bug fix: expired auction orders are removed entirely, not moved to resting.
+/// Previously the code checked is_limit before is_expired, so expired limit orders were
+/// incorrectly moved to resting_limit_orders.
+#[test]
+fn dlob_auction_expiry_expired_orders_removed_not_resting() {
+    let _ = env_logger::try_init();
+    let dlob = DLOB::default();
+    let user = Pubkey::new_unique();
+    let slot = 100;
+    let oracle_price = 1000;
+
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market: MarketId::perp(0),
+        market_tick_size: 10,
+        ..Default::default()
+    });
+
+    // Limit order with auction; max_ts=1 ensures it's expired (current time >> 1)
+    let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 2, slot);
+    order.auction_duration = 5; // Auction completes at slot 106
+    order.max_ts = 1; // Expired - should be removed, NOT moved to resting
+    order.post_only = false;
+    dlob.insert_order(&user, slot, order);
+
+    // Advance to slot 106 - auction completes
+    if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
+        book.update_slot(106);
+    }
+    let book = dlob
+        .markets
+        .get(&MarketId::new(0, MarketType::Perp))
+        .unwrap();
+
+    // Expired order must be removed entirely, not moved to resting
+    assert_eq!(book.market_orders.bids.len(), 0);
+    assert_eq!(book.resting_limit_orders.bids.len(), 0);
+}
+
 #[test]
 fn dlob_auction_expiry_non_limit_orders() {
     let _ = env_logger::try_init();
@@ -1409,6 +1447,49 @@ fn dlob_trigger_order_transitions() {
             .unwrap();
         assert_eq!(book.market_orders.asks.len(), 0);
         assert_eq!(book.trigger_orders.asks.len(), 0);
+    }
+}
+
+/// Verifies trigger limit routing: auction complete -> resting_limit_orders, auction not complete -> market_orders.
+#[test]
+fn dlob_trigger_limit_auction_resting_vs_market() {
+    use crate::types::OrderTriggerCondition;
+    let _ = env_logger::try_init();
+    let dlob = DLOB::default();
+    let user = Pubkey::new_unique();
+    let slot = 100;
+
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market: MarketId::perp(0),
+        market_tick_size: 10,
+        ..Default::default()
+    });
+
+    // Trigger limit with auction_duration=0 -> is_auction_complete is true -> resting_limit_orders
+    let mut order_resting =
+        create_test_order(1, OrderType::TriggerLimit, Direction::Long, 1050, 5, slot);
+    order_resting.trigger_price = 950;
+    order_resting.trigger_condition = OrderTriggerCondition::TriggeredAbove;
+    order_resting.auction_duration = 0; // Auction complete immediately
+    dlob.insert_order(&user, slot, order_resting);
+    {
+        let book = dlob.markets.get(&MarketId::perp(0)).unwrap();
+        assert_eq!(book.resting_limit_orders.bids.len(), 1);
+        assert_eq!(book.market_orders.bids.len(), 0);
+    }
+
+    // Trigger limit with auction not complete at insert -> market_orders
+    let mut order2 = create_test_order(2, OrderType::TriggerLimit, Direction::Short, 950, 5, slot);
+    order2.trigger_price = 1050;
+    order2.trigger_condition = OrderTriggerCondition::TriggeredBelow;
+    order2.auction_duration = 10; // Auction not complete at slot 100
+    order2.auction_start_price = 1050;
+    order2.auction_end_price = 950;
+    dlob.insert_order(&user, slot, order2);
+    {
+        let book = dlob.markets.get(&MarketId::perp(0)).unwrap();
+        assert_eq!(book.market_orders.asks.len(), 1);
+        assert_eq!(book.resting_limit_orders.asks.len(), 0);
     }
 }
 
@@ -3109,6 +3190,65 @@ fn dlob_l3_order_flags_correctness() {
     assert_eq!(
         ask_3.flags, 0,
         "Ask order 3 flags should be 0 (no flags set)"
+    );
+}
+
+/// Verifies reduce_only flag is correctly set for market orders in L3 (bids/asks from market_orders).
+/// This covers the RO_FLAG fix: use * not & so reduce_only=true yields RO_FLAG in flags.
+#[test]
+fn dlob_l3_market_order_reduce_only_flag() {
+    let _ = env_logger::try_init();
+    let dlob = DLOB::default();
+    let user = Pubkey::new_unique();
+    let slot = 100;
+    let oracle_price = 1000;
+
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market: MarketId::perp(0),
+        market_tick_size: 10,
+        ..Default::default()
+    });
+
+    // Limit order with active auction -> goes to market_orders; reduce_only=true
+    let mut bid_order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 5, slot);
+    bid_order.auction_duration = 10; // Auction not complete at slot 100
+    bid_order.auction_start_price = 1000;
+    bid_order.auction_end_price = 1100;
+    bid_order.post_only = false;
+    bid_order.reduce_only = true;
+    bid_order.max_ts = 0;
+    dlob.insert_order(&user, slot, bid_order);
+
+    let mut ask_order = create_test_order(2, OrderType::Limit, Direction::Short, 900, 5, slot);
+    ask_order.auction_duration = 10;
+    ask_order.auction_start_price = 1000;
+    ask_order.auction_end_price = 900;
+    ask_order.post_only = false;
+    ask_order.reduce_only = true;
+    ask_order.max_ts = 0;
+    dlob.insert_order(&user, slot, ask_order);
+
+    if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
+        book.update_slot(slot);
+    }
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
+    }
+    let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
+
+    let bids: Vec<_> = l3book.bids(Some(oracle_price), None, None).collect();
+    let asks: Vec<_> = l3book.asks(Some(oracle_price), None, None).collect();
+
+    let bid = bids.iter().find(|o| o.order_id == 1).expect("bid order 1");
+    let ask = asks.iter().find(|o| o.order_id == 2).expect("ask order 2");
+
+    assert!(
+        bid.is_reduce_only(),
+        "Market bid with reduce_only should have RO_FLAG"
+    );
+    assert!(
+        ask.is_reduce_only(),
+        "Market ask with reduce_only should have RO_FLAG"
     );
 }
 

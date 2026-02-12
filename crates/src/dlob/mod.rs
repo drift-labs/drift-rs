@@ -1497,7 +1497,7 @@ impl L3Book {
                 let order = L3Order {
                     price,
                     size: order.size(),
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)) | L3Order::IS_LONG,
+                    flags: (L3Order::RO_FLAG * (order.reduce_only as u8)) | L3Order::IS_LONG,
                     user: meta.user,
                     order_id: meta.order_id,
                     max_ts: order.max_ts,
@@ -1522,7 +1522,7 @@ impl L3Book {
                 let order = L3Order {
                     price,
                     size: order.size(),
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)),
+                    flags: (L3Order::RO_FLAG * (order.reduce_only as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
                     max_ts: order.max_ts,
