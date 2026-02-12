@@ -18,6 +18,7 @@ use solana_sdk::pubkey::Pubkey;
 use crate::{
     constants::ProgramData,
     dlob::util::order_hash,
+    math::auction::is_auction_complete,
     types::{
         accounts::{PerpMarket, User},
         MarketId, MarketType, Order, OrderStatus, OrderTriggerCondition, OrderType,
@@ -159,75 +160,59 @@ impl Orderbook {
     /// Expire all auctions past current `slot`
     ///
     /// limit orders with finishing auctions are moved to resting orders
+    /// expired orders are removed from the orderbook
     fn expire_auction_orders(&mut self, slot: u64) {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
-        self.market_orders.asks.retain(|_, x| {
-            let mut keep = true;
-            let is_auction_complete = x.is_auction_complete(slot);
-            if is_auction_complete {
-                if x.is_limit {
-                    log::trace!(target: TARGET, "market auction => resting: {}@{}", x.id, slot);
-                    self.resting_limit_orders
-                        .insert_raw(false, x.to_limit_order());
-                    keep = false;
-                } else if x.is_expired(now) {
-                    log::trace!(target: TARGET, "market auction expired: {}@{}", x.id, slot);
-                    keep = false;
+
+        let filter_fn = move |x: &MarketOrder, orderbook: &mut Orders<LimitOrder>, is_bid: bool| {
+            if Order::is_auction_complete(slot, x.slot, x.duration) {
+                if Order::is_expired(x.max_ts, now) {
+                    log::trace!(target: TARGET, "auction expired: {}@{}", x.id, slot);
+                    false
+                } else if x.is_limit {
+                    log::trace!(target: TARGET, "auction => resting: {}@{}", x.id, slot);
+                    orderbook.insert_raw(is_bid, x.to_limit_order());
+                    false
+                } else {
+                    true
                 }
+            } else {
+                true
             }
-            keep
-        });
-        self.market_orders.bids.retain(|_, x| {
-            let mut keep = true;
-            let is_auction_complete = x.is_auction_complete(slot);
-            if is_auction_complete {
-                if x.is_limit {
-                    log::trace!(target: TARGET, "market auction => resting:: {}@{}", x.id, slot);
-                    self.resting_limit_orders
-                        .insert_raw(true, x.to_limit_order());
-                    keep = false;
-                } else if x.is_expired(now) {
-                    log::trace!(target: TARGET, "market auction expired: {}@{}", x.id, slot);
-                    keep = false;
+        };
+        self.market_orders
+            .asks
+            .retain(|_, x| filter_fn(x, &mut self.resting_limit_orders, false));
+        self.market_orders
+            .bids
+            .retain(|_, x| filter_fn(x, &mut self.resting_limit_orders, true));
+
+        let filter_fn =
+            move |x: &OracleOrder, orderbook: &mut Orders<FloatingLimitOrder>, is_bid: bool| {
+                if Order::is_auction_complete(slot, x.slot, x.duration) {
+                    if Order::is_expired(x.max_ts, now) {
+                        log::trace!(target: TARGET, "auction expired: {}@{}", x.id, slot);
+                        false
+                    } else if x.is_limit {
+                        log::trace!(target: TARGET, "auction => resting: {}@{}", x.id, slot);
+                        orderbook.insert_raw(is_bid, x.to_floating_limit_order());
+                        false
+                    } else {
+                        true
+                    }
+                } else {
+                    true
                 }
-            }
-            keep
-        });
-        self.oracle_orders.asks.retain(|_, x| {
-            let mut keep = true;
-            let is_auction_complete = x.is_auction_complete(slot);
-            if is_auction_complete {
-                if x.is_limit {
-                    log::trace!(target: TARGET, "oracle auction => resting:: {}@{}", x.id, slot);
-                    self.floating_limit_orders
-                        .insert_raw(false, x.to_floating_limit_order());
-                    keep = false;
-                } else if x.is_expired(now) {
-                    log::trace!(target: TARGET, "oracle auction expired:: {}@{}", x.id, slot);
-                    keep = false;
-                }
-            }
-            keep
-        });
-        self.oracle_orders.bids.retain(|_, x| {
-            let mut keep = true;
-            let is_auction_complete = x.is_auction_complete(slot);
-            if is_auction_complete {
-                if x.is_limit {
-                    log::trace!(target: TARGET, "oracle auction => resting:: {}@{}", x.id, slot);
-                    self.floating_limit_orders
-                        .insert_raw(true, x.to_floating_limit_order());
-                    keep = false;
-                } else if x.is_expired(now) {
-                    log::trace!(target: TARGET, "oracle auction expired:: {}@{}", x.id, slot);
-                    keep = false;
-                }
-            }
-            keep
-        });
+            };
+        self.oracle_orders
+            .asks
+            .retain(|_, x| filter_fn(x, &mut self.floating_limit_orders, false));
+        self.oracle_orders
+            .bids
+            .retain(|_, x| filter_fn(x, &mut self.floating_limit_orders, true));
     }
 }
 
@@ -639,59 +624,25 @@ impl DLOB {
                 let metadata_ref = metadata.clone();
                 drop(metadata); // release dashmap ref
 
-                let mut order_removed;
                 log::trace!(target: TARGET, "remove order: {order_id} @ status: {:?}, kind: {:?}/{:?}, slot: {slot}", order.status, metadata_ref.kind, order.order_type);
 
-                match metadata_ref.kind {
-                    OrderKind::Market | OrderKind::MarketTriggered => {
-                        order_removed = orderbook.market_orders.remove(order_id, order);
+                let order_removed = match metadata_ref.kind {
+                    OrderKind::Market => {
+                        orderbook.market_orders.remove(order_id, order) || orderbook.resting_limit_orders.remove(order_id, order)
                     }
                     OrderKind::Oracle => {
-                        order_removed = orderbook.oracle_orders.remove(order_id, order);
-                    }
-                    OrderKind::OracleTriggered => {
-                        order_removed = orderbook.oracle_orders.remove(order_id, order);
-                        orderbook.trigger_orders.remove(order_id, order);
-                    }
-                    OrderKind::LimitAuction => {
-                        // if the auction completed, check if order moved to resting
-                        log::trace!(target: TARGET, "remove auction limit order: {order_id}");
-                        order_removed = orderbook.market_orders.remove(order_id, order);
-                        if !order_removed {
-                            log::trace!(target: TARGET, "remove auction limit order (resting): {order_id}");
-                            order_removed = orderbook.resting_limit_orders.remove(order_id, order);
-                        }
-                    }
-                    OrderKind::LimitTriggered => {
-                        // if the auction completed, check if order moved to resting
-                        log::trace!(target: TARGET, "remove auction limit order: {order_id}");
-                        order_removed = orderbook.market_orders.remove(order_id, order);
-                        if !order_removed {
-                            log::trace!(target: TARGET, "remove auction limit order (resting): {order_id}");
-                            order_removed = orderbook.resting_limit_orders.remove(order_id, order);
-                        }
-                        orderbook.trigger_orders.remove(order_id, order);
-                    }
-                    OrderKind::FloatingLimitAuction => {
-                        // if the auction completed, check if order moved to resting
-                        log::trace!(target: TARGET, "remove oracle order: {order_id}, order.slot: {}, order.duration: {}", order.slot, order.auction_duration);
-                        order_removed = orderbook.oracle_orders.remove(order_id, order);
-                        if !order_removed {
-                            log::trace!(target: TARGET, "remove limit order: {order_id}");
-                            order_removed = orderbook.floating_limit_orders.remove(order_id, order);
-                        }
+                        orderbook.oracle_orders.remove(order_id, order) || orderbook.floating_limit_orders.remove(order_id, order)
                     }
                     OrderKind::Limit => {
-                        order_removed = orderbook.resting_limit_orders.remove(order_id, order);
+                        orderbook.resting_limit_orders.remove(order_id, order)
                     }
                     OrderKind::FloatingLimit => {
-                        order_removed = orderbook.floating_limit_orders.remove(order_id, order);
+                        orderbook.floating_limit_orders.remove(order_id, order)
                     }
                     OrderKind::TriggerMarket | OrderKind::TriggerLimit => {
-                        log::trace!(target: TARGET, "trigger order: {order_id},{:?}", order.trigger_condition);
-                        order_removed = orderbook.trigger_orders.remove(order_id, order);
+                        orderbook.trigger_orders.remove(order_id, order)
                     }
-                }
+                };
 
                 if order_removed {
                     self.metadata.remove(&order_id);
@@ -709,6 +660,10 @@ impl DLOB {
         });
     }
 
+    /// Insert an onchain order type into the DLOB
+    ///
+    /// this transforms the order into an internal order representation and organizes them based on
+    /// order semantics e.g. limit order auctions and market order auctions are equivalent until auction end time
     fn insert_order(&self, user: &Pubkey, slot: u64, order: Order) {
         let order_id = order_hash(user, order.order_id);
         log::trace!(target: TARGET, "insert order: {order_id} @ {slot}");
@@ -749,16 +704,16 @@ impl DLOB {
                         */
                         let is_floating = order.oracle_price_offset != 0;
                         let is_post_only = order.post_only;
-                        let is_auction = order.auction_duration != 0;
+                        let has_auction_price = (order.auction_end_price != 0 && order.auction_start_price != 0) && !is_auction_complete(&order, slot);
                         let order_kind = if !is_post_only {
-                            match (is_auction, is_floating) {
+                            match (has_auction_price, is_floating) {
                                 (true, true) => {
                                     orderbook.oracle_orders.insert(order_id, order);
-                                    OrderKind::FloatingLimitAuction
+                                    OrderKind::Oracle
                                 }
                                 (true, false) => {
                                     orderbook.market_orders.insert(order_id, order);
-                                    OrderKind::LimitAuction
+                                    OrderKind::Market
                                 }
                                 (false, true) => {
                                     orderbook.floating_limit_orders.insert(order_id, order);
@@ -793,13 +748,11 @@ impl DLOB {
                             if order.is_oracle_trigger_market() {
                                 log::trace!(target: TARGET, "insert triggered oracle order: {order_id}");
                                 orderbook.oracle_orders.insert(order_id, order);
-                                orderbook.trigger_orders.remove(order_id, order);
-                                OrderKind::OracleTriggered
+                                OrderKind::Oracle
                             } else {
                                 log::trace!(target: TARGET, "insert triggered market order: {order_id}");
                                 orderbook.market_orders.insert(order_id, order);
-                                orderbook.trigger_orders.remove(order_id, order);
-                                OrderKind::MarketTriggered
+                                OrderKind::Market
                            }
                         }
                     },
@@ -812,9 +765,15 @@ impl DLOB {
                         OrderTriggerCondition::TriggeredAbove
                         | OrderTriggerCondition::TriggeredBelow => {
                             log::trace!(target: TARGET, "insert triggered limit order: {order_id}");
-                            orderbook.market_orders.insert(order_id, order);
-                            orderbook.trigger_orders.remove(order_id, order);
-                            OrderKind::LimitTriggered
+                            let is_resting = is_auction_complete(&order, slot);
+                            if is_resting {
+                                orderbook.resting_limit_orders.insert(order_id, order);
+                                OrderKind::Limit
+                            } else {
+                                // trigger limit does not have an option for oracle offset
+                                orderbook.market_orders.insert(order_id, order);
+                                OrderKind::Market
+                            }
                         }
                     },
                 };
@@ -1440,6 +1399,12 @@ impl L3Book {
         let mut missing_metadata_count = 0u32;
         let mut total_orders_count = 0u32;
 
+        let mut missing_fn = move |order_id: u64| {
+            missing_metadata_count = missing_metadata_count + 1;
+            DLOB::log_missing_order_events_helper(order_id, order_events);
+            log::info!(target: TARGET, "missing order id: {:?}", order_id);
+        };
+
         // Add resting limit orders
         for order in orderbook.resting_limit_orders.bids.values() {
             total_orders_count += 1;
@@ -1447,7 +1412,7 @@ impl L3Book {
                 self.bids.push(L3Order {
                     price: order.get_price(),
                     size: order.size,
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
+                    flags: (L3Order::RO_FLAG * (order.reduce_only as u8))
                         | L3Order::IS_LONG
                         | (L3Order::IS_POST_ONLY * (order.post_only as u8)),
                     user: meta.user,
@@ -1456,9 +1421,7 @@ impl L3Book {
                     max_ts: order.max_ts,
                 });
             } else {
-                missing_metadata_count += 1;
-                DLOB::log_missing_order_events_helper(order.id, order_events);
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                missing_fn(order.id);
             }
         }
 
@@ -1468,7 +1431,7 @@ impl L3Book {
                 self.asks.push(L3Order {
                     price: order.get_price(),
                     size: order.size,
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
+                    flags: (L3Order::RO_FLAG * (order.reduce_only as u8))
                         | (L3Order::IS_POST_ONLY * (order.post_only as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
@@ -1476,9 +1439,7 @@ impl L3Book {
                     max_ts: order.max_ts,
                 });
             } else {
-                missing_metadata_count += 1;
-                DLOB::log_missing_order_events_helper(order.id, order_events);
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                missing_fn(order.id);
             }
         }
 
@@ -1494,7 +1455,7 @@ impl L3Book {
                 self.trigger_bids.push(L3Order {
                     price: order.price, // This is the trigger price, not the post-trigger price
                     size: order.size,
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
+                    flags: (L3Order::RO_FLAG * (order.reduce_only as u8))
                         | L3Order::IS_LONG
                         | (L3Order::IS_TRIGGER_ABOVE
                             * ((order.condition == OrderTriggerCondition::Above) as u8)),
@@ -1504,9 +1465,7 @@ impl L3Book {
                     max_ts: order.max_ts,
                 });
             } else {
-                missing_metadata_count += 1;
-                DLOB::log_missing_order_events_helper(order.id, order_events);
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                missing_fn(order.id);
             }
         }
 
@@ -1516,7 +1475,7 @@ impl L3Book {
                 self.trigger_asks.push(L3Order {
                     price: order.price, // This is the trigger price, not the post-trigger price
                     size: order.size,
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
+                    flags: (L3Order::RO_FLAG * (order.reduce_only as u8))
                         | (L3Order::IS_TRIGGER_ABOVE
                             * ((order.condition == OrderTriggerCondition::Above) as u8)),
                     user: meta.user,
@@ -1525,9 +1484,7 @@ impl L3Book {
                     max_ts: order.max_ts,
                 });
             } else {
-                missing_metadata_count += 1;
-                DLOB::log_missing_order_events_helper(order.id, order_events);
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                missing_fn(order.id);
             }
         }
 
@@ -1536,11 +1493,11 @@ impl L3Book {
             if let Some(meta) = metadata.get(&order.id) {
                 let price = order
                     .get_price(self.slot, oracle_price, market_tick_size)
-                    .unwrap_or_default();
+                    .unwrap_or_default(); // 0 => fill at vamm price
                 let order = L3Order {
                     price,
                     size: order.size(),
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)) | L3Order::IS_LONG,
+                    flags: (L3Order::RO_FLAG * (order.reduce_only as u8)) | L3Order::IS_LONG,
                     user: meta.user,
                     order_id: meta.order_id,
                     max_ts: order.max_ts,
@@ -1552,9 +1509,7 @@ impl L3Book {
                     self.vamm_bids.push(order);
                 }
             } else {
-                missing_metadata_count += 1;
-                DLOB::log_missing_order_events_helper(order.id, order_events);
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                missing_fn(order.id);
             }
         }
 
@@ -1563,11 +1518,11 @@ impl L3Book {
             if let Some(meta) = metadata.get(&order.id) {
                 let price = order
                     .get_price(self.slot, oracle_price, market_tick_size)
-                    .unwrap_or_default();
+                    .unwrap_or_default(); // 0 => fill at vamm price
                 let order = L3Order {
                     price,
                     size: order.size(),
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)),
+                    flags: (L3Order::RO_FLAG * (order.reduce_only as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
                     max_ts: order.max_ts,
@@ -1579,9 +1534,7 @@ impl L3Book {
                     self.vamm_asks.push(order);
                 }
             } else {
-                missing_metadata_count += 1;
-                DLOB::log_missing_order_events_helper(order.id, order_events);
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                missing_fn(order.id);
             }
         }
 
@@ -1592,7 +1545,7 @@ impl L3Book {
                 self.floating_bids.push(L3Order {
                     price: order.get_price(oracle_price, market_tick_size),
                     size: order.size,
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
+                    flags: (L3Order::RO_FLAG * (order.reduce_only as u8))
                         | L3Order::IS_LONG
                         | (L3Order::IS_POST_ONLY * (order.post_only as u8)),
                     user: meta.user,
@@ -1601,9 +1554,7 @@ impl L3Book {
                     kind: meta.kind,
                 });
             } else {
-                missing_metadata_count += 1;
-                DLOB::log_missing_order_events_helper(order.id, order_events);
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                missing_fn(order.id);
             }
         }
 
@@ -1613,7 +1564,7 @@ impl L3Book {
                 self.floating_asks.push(L3Order {
                     price: order.get_price(oracle_price, market_tick_size),
                     size: order.size,
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8))
+                    flags: (L3Order::RO_FLAG * (order.reduce_only as u8))
                         | (L3Order::IS_POST_ONLY * (order.post_only as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
@@ -1621,9 +1572,7 @@ impl L3Book {
                     kind: meta.kind,
                 });
             } else {
-                missing_metadata_count += 1;
-                DLOB::log_missing_order_events_helper(order.id, order_events);
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                missing_fn(order.id);
             }
         }
 
@@ -1637,7 +1586,7 @@ impl L3Book {
                 let order = L3Order {
                     price,
                     size: order.size(),
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)) | L3Order::IS_LONG,
+                    flags: (L3Order::RO_FLAG * (order.reduce_only as u8)) | L3Order::IS_LONG,
                     user: meta.user,
                     order_id: meta.order_id,
                     max_ts: order.max_ts,
@@ -1649,9 +1598,7 @@ impl L3Book {
                     self.vamm_bids.push(order);
                 }
             } else {
-                missing_metadata_count += 1;
-                DLOB::log_missing_order_events_helper(order.id, order_events);
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                missing_fn(order.id);
             }
         }
 
@@ -1664,7 +1611,7 @@ impl L3Book {
                 let order = L3Order {
                     price,
                     size: order.size(),
-                    flags: (L3Order::RO_FLAG & (order.reduce_only as u8)),
+                    flags: (L3Order::RO_FLAG * (order.reduce_only as u8)),
                     user: meta.user,
                     order_id: meta.order_id,
                     max_ts: order.max_ts,
@@ -1676,9 +1623,7 @@ impl L3Book {
                     self.vamm_asks.push(order);
                 }
             } else {
-                missing_metadata_count += 1;
-                DLOB::log_missing_order_events_helper(order.id, order_events);
-                log::info!(target: TARGET, "missing order id: {:?}", order.id);
+                missing_fn(order.id);
             }
         }
 

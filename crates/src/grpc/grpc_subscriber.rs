@@ -156,6 +156,14 @@ pub struct GrpcConnectionOpts {
     compression: bool,
 }
 
+impl GrpcConnectionOpts {
+    /// Enable compression
+    pub fn enable_compression(mut self) -> Self {
+        self.compression = true;
+        self
+    }
+}
+
 impl Default for GrpcConnectionOpts {
     fn default() -> Self {
         Self {

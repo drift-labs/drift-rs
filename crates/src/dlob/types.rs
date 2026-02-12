@@ -30,10 +30,6 @@ pub enum OrderKind {
     Market,
     /// auction oracle offset
     Oracle,
-    /// oracle limit order undergoing initial auction (taking)
-    FloatingLimitAuction,
-    /// fixed limit order undergoing initial auction (taking)
-    LimitAuction,
     /// resting limit order
     Limit,
     /// resting oracle limit order
@@ -42,12 +38,6 @@ pub enum OrderKind {
     TriggerMarket,
     /// trigger order that will result in Limit/Market auction order (untriggered)
     TriggerLimit,
-    /// Triggered oracle order
-    OracleTriggered,
-    /// Triggered market order
-    MarketTriggered,
-    /// Triggered limit order
-    LimitTriggered,
 }
 
 impl OrderKind {
@@ -193,15 +183,6 @@ impl OrderKey for MarketOrder {
 }
 
 impl MarketOrder {
-    /// Check if this order has expired
-    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
-        self.max_ts != 0 && self.max_ts < now_unix_seconds
-    }
-    /// Check if this auction order has completed
-    pub fn is_auction_complete(&self, current_slot: u64) -> bool {
-        self.duration == 0 || current_slot.saturating_sub(self.slot) > self.duration as u64
-    }
-
     /// Convert to LimitOrder when auction completes
     pub fn to_limit_order(&self) -> LimitOrder {
         LimitOrder {
@@ -224,15 +205,6 @@ impl OrderKey for OracleOrder {
 }
 
 impl OracleOrder {
-    /// Check if this order has expired
-    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
-        self.max_ts != 0 && self.max_ts < now_unix_seconds
-    }
-    /// Check if this auction order has completed
-    pub fn is_auction_complete(&self, current_slot: u64) -> bool {
-        self.duration == 0 || current_slot.saturating_sub(self.slot) > self.duration as u64
-    }
-
     /// Convert to FloatingLimitOrder when auction completes
     pub fn to_floating_limit_order(&self) -> FloatingLimitOrder {
         FloatingLimitOrder {
@@ -431,7 +403,9 @@ impl DynamicPrice for MarketOrder {
     ///
     /// A value of None indicates the order will use the fallback/vamm price
     fn get_price(&self, slot: u64, _oracle_price: u64, tick_size: u64) -> Option<u64> {
-        if self.is_auction_complete(slot) && (self.start_price != 0 || self.end_price != 0) {
+        if Order::is_auction_complete(slot, self.slot, self.duration)
+            && (self.start_price != 0 || self.end_price != 0)
+        {
             return if self.price == 0 {
                 None
             } else {
@@ -555,9 +529,6 @@ impl LimitOrder {
     pub fn get_price(&self) -> u64 {
         self.price
     }
-    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
-        self.max_ts != 0 && self.max_ts < now_unix_seconds
-    }
 }
 
 impl From<(u64, Order)> for LimitOrder {
@@ -576,9 +547,6 @@ impl From<(u64, Order)> for LimitOrder {
 }
 
 impl FloatingLimitOrder {
-    pub fn is_expired(&self, now_unix_seconds: u64) -> bool {
-        self.max_ts != 0 && self.max_ts < now_unix_seconds
-    }
     pub fn get_price(&self, oracle_price: u64, tick_size: u64) -> u64 {
         (oracle_price as i64 + self.offset_price as i64).max(tick_size as i64) as u64
     }
@@ -788,5 +756,16 @@ impl L3Order {
     /// True if order is taker only
     pub fn is_taker(&self) -> bool {
         self.kind.is_taker()
+    }
+}
+
+impl Order {
+    /// Check if order has expired
+    pub fn is_expired(max_ts: u64, now_unix_seconds: u64) -> bool {
+        max_ts != 0 && max_ts < now_unix_seconds
+    }
+    /// Check if order's auction is complete
+    pub fn is_auction_complete(current_slot: u64, order_slot: u64, auction_duration: u8) -> bool {
+        auction_duration == 0 || current_slot.saturating_sub(order_slot) > auction_duration as u64
     }
 }

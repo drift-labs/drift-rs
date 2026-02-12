@@ -710,10 +710,12 @@ fn dlob_auction_expiry_market_orders() {
     // Insert market orders with different auction durations
     let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 2, slot);
     order.auction_duration = 5; // Will expire at slot 106
+    order.max_ts = 0; // Don't expire based on timestamp
     dlob.insert_order(&user, slot, order);
 
     let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 900, 3, slot);
     order.auction_duration = 10; // Will expire at slot 111
+    order.max_ts = 0; // Don't expire based on timestamp
     dlob.insert_order(&user, slot, order);
 
     // Update to slot 104 - no orders should expire
@@ -766,14 +768,21 @@ fn dlob_auction_expiry_oracle_orders() {
     let slot = 100;
 
     // Insert oracle orders with different auction durations
-    let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 0, 2, slot);
+    // Need auction_start_price/auction_end_price != 0 so orders go to oracle_orders (not floating_limit_orders)
+    let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 100, 2, slot);
     order.auction_duration = 5; // Will expire at slot 106
     order.oracle_price_offset = 100;
+    order.auction_start_price = 100;
+    order.auction_end_price = 100;
+    order.max_ts = 0; // Don't expire based on timestamp
     dlob.insert_order(&user, slot, order);
 
-    let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 0, 3, slot);
+    let mut order = create_test_order(2, OrderType::Limit, Direction::Short, 100, 3, slot);
     order.auction_duration = 10; // Will expire at slot 111
     order.oracle_price_offset = -100;
+    order.auction_start_price = 100;
+    order.auction_end_price = 100;
+    order.max_ts = 0; // Don't expire based on timestamp
     dlob.insert_order(&user, slot, order);
 
     // Update to slot 105 - no orders should expire
@@ -815,6 +824,44 @@ fn dlob_auction_expiry_oracle_orders() {
     assert_eq!(book.oracle_orders.asks.len(), 0);
     assert_eq!(book.floating_limit_orders.bids.len(), 1);
     assert_eq!(book.floating_limit_orders.asks.len(), 1);
+}
+
+/// Verifies the bug fix: expired auction orders are removed entirely, not moved to resting.
+/// Previously the code checked is_limit before is_expired, so expired limit orders were
+/// incorrectly moved to resting_limit_orders.
+#[test]
+fn dlob_auction_expiry_expired_orders_removed_not_resting() {
+    let _ = env_logger::try_init();
+    let dlob = DLOB::default();
+    let user = Pubkey::new_unique();
+    let slot = 100;
+    let oracle_price = 1000;
+
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market: MarketId::perp(0),
+        market_tick_size: 10,
+        ..Default::default()
+    });
+
+    // Limit order with auction; max_ts=1 ensures it's expired (current time >> 1)
+    let mut order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 2, slot);
+    order.auction_duration = 5; // Auction completes at slot 106
+    order.max_ts = 1; // Expired - should be removed, NOT moved to resting
+    order.post_only = false;
+    dlob.insert_order(&user, slot, order);
+
+    // Advance to slot 106 - auction completes
+    if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
+        book.update_slot(106);
+    }
+    let book = dlob
+        .markets
+        .get(&MarketId::new(0, MarketType::Perp))
+        .unwrap();
+
+    // Expired order must be removed entirely, not moved to resting
+    assert_eq!(book.market_orders.bids.len(), 0);
+    assert_eq!(book.resting_limit_orders.bids.len(), 0);
 }
 
 #[test]
@@ -1330,6 +1377,7 @@ fn dlob_trigger_order_transitions() {
     triggered_order.trigger_condition = OrderTriggerCondition::TriggeredAbove;
     // Set oracle trigger flag for oracle-triggered market
     triggered_order.bit_flags |= Order::ORACLE_TRIGGER_MARKET_FLAG;
+    dlob.remove_order(&user, slot, order);
     dlob.insert_order(&user, slot, triggered_order);
     {
         let book = dlob
@@ -1377,6 +1425,7 @@ fn dlob_trigger_order_transitions() {
     triggered_order2.auction_duration = 5;
     triggered_order2.auction_start_price = 1050;
     triggered_order2.auction_end_price = 1048;
+    dlob.remove_order(&user, slot, order2);
     dlob.insert_order(&user, slot + 1, triggered_order2);
     {
         let book = dlob
@@ -1401,6 +1450,49 @@ fn dlob_trigger_order_transitions() {
     }
 }
 
+/// Verifies trigger limit routing: auction complete -> resting_limit_orders, auction not complete -> market_orders.
+#[test]
+fn dlob_trigger_limit_auction_resting_vs_market() {
+    use crate::types::OrderTriggerCondition;
+    let _ = env_logger::try_init();
+    let dlob = DLOB::default();
+    let user = Pubkey::new_unique();
+    let slot = 100;
+
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market: MarketId::perp(0),
+        market_tick_size: 10,
+        ..Default::default()
+    });
+
+    // Trigger limit with auction_duration=0 -> is_auction_complete is true -> resting_limit_orders
+    let mut order_resting =
+        create_test_order(1, OrderType::TriggerLimit, Direction::Long, 1050, 5, slot);
+    order_resting.trigger_price = 950;
+    order_resting.trigger_condition = OrderTriggerCondition::TriggeredAbove;
+    order_resting.auction_duration = 0; // Auction complete immediately
+    dlob.insert_order(&user, slot, order_resting);
+    {
+        let book = dlob.markets.get(&MarketId::perp(0)).unwrap();
+        assert_eq!(book.resting_limit_orders.bids.len(), 1);
+        assert_eq!(book.market_orders.bids.len(), 0);
+    }
+
+    // Trigger limit with auction not complete at insert -> market_orders
+    let mut order2 = create_test_order(2, OrderType::TriggerLimit, Direction::Short, 950, 5, slot);
+    order2.trigger_price = 1050;
+    order2.trigger_condition = OrderTriggerCondition::TriggeredBelow;
+    order2.auction_duration = 10; // Auction not complete at slot 100
+    order2.auction_start_price = 1050;
+    order2.auction_end_price = 950;
+    dlob.insert_order(&user, slot, order2);
+    {
+        let book = dlob.markets.get(&MarketId::perp(0)).unwrap();
+        assert_eq!(book.market_orders.asks.len(), 1);
+        assert_eq!(book.resting_limit_orders.asks.len(), 0);
+    }
+}
+
 #[test]
 fn dlob_metadata_consistency_after_auction_expiry_and_removal() {
     let _ = env_logger::try_init();
@@ -1422,16 +1514,17 @@ fn dlob_metadata_consistency_after_auction_expiry_and_removal() {
     order.auction_start_price = 100_000;
     order.auction_end_price = 200_000;
     order.auction_duration = 5; // Will expire at slot 106
-    order.post_only = false; // This makes it a LimitAuction
+    order.post_only = false; // This makes it a Market order (limit order with auction)
+    order.max_ts = 0; // Don't expire based on timestamp
 
     // Insert the order
     dlob.insert_order(&user, slot, order);
 
-    // Verify initial state - order should be in market_orders with LimitAuction metadata
+    // Verify initial state - order should be in market_orders with Market metadata
     let order_id = crate::dlob::util::order_hash(&user, 1);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
-        assert_eq!(metadata.kind, OrderKind::LimitAuction);
+        assert_eq!(metadata.kind, OrderKind::Market);
     } // Drop metadata reference before accessing orderbook
 
     {
@@ -1521,16 +1614,17 @@ fn dlob_metadata_consistency_limit_auction_expiry_and_removal() {
     order.auction_end_price = 200_000;
     order.auction_duration = 5; // Will expire at slot 106
                                 // No oracle_price_offset - this makes it a regular limit order
-    order.post_only = false; // This makes it a LimitAuction
+    order.post_only = false; // This makes it a Market order (limit order with auction)
+    order.max_ts = 0; // Don't expire based on timestamp
 
     // Insert the order
     dlob.insert_order(&user, slot, order);
 
-    // Verify initial state - order should be in market_orders with LimitAuction metadata
+    // Verify initial state - order should be in market_orders with Market metadata
     let order_id = crate::dlob::util::order_hash(&user, 1);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
-        assert_eq!(metadata.kind, OrderKind::LimitAuction);
+        assert_eq!(metadata.kind, OrderKind::Market);
     } // Drop metadata reference before accessing orderbook
 
     {
@@ -1613,16 +1707,17 @@ fn dlob_metadata_consistency_floating_limit_auction_expiry_and_removal() {
     order.auction_end_price = 200_000;
     order.auction_duration = 5; // Will expire at slot 106
     order.oracle_price_offset = 1000; // This makes it a floating limit order
-    order.post_only = false; // This makes it a FloatingLimitAuction
+    order.post_only = false; // This makes it an Oracle order (floating limit order with auction)
+    order.max_ts = 0; // Don't expire based on timestamp
 
     // Insert the order
     dlob.insert_order(&user, slot, order);
 
-    // Verify initial state - order should be in oracle_orders with FloatingLimitAuction metadata
+    // Verify initial state - order should be in oracle_orders with Oracle metadata
     let order_id = crate::dlob::util::order_hash(&user, 1);
     {
         let metadata = dlob.metadata.get(&order_id).unwrap();
-        assert_eq!(metadata.kind, OrderKind::FloatingLimitAuction);
+        assert_eq!(metadata.kind, OrderKind::Oracle);
     } // Drop metadata reference before accessing orderbook
 
     {
@@ -1729,6 +1824,7 @@ fn dlob_trigger_order_transition_remove() {
     triggered_order.slot = slot + 1; // Slot changes when triggered
     triggered_order.price = 1100; // Price might change when triggered
 
+    dlob.remove_order(&user, slot, order);
     dlob.insert_order(&user, slot, triggered_order);
 
     // Verify the transition worked
@@ -1739,8 +1835,8 @@ fn dlob_trigger_order_transition_remove() {
     }
 
     // Now try to remove the triggered order
-    // This might fail if the same key mismatch issue exists
-    dlob.remove_order(&user, slot, triggered_order);
+    // Use slot where order exists (triggered order has slot + 1)
+    dlob.remove_order(&user, slot + 1, triggered_order);
 
     // Verify the order was properly removed
     {
@@ -1798,7 +1894,7 @@ fn dlob_trigger_order_transition_update() {
     triggered_order.slot = slot + 1; // Slot changes when triggered
     triggered_order.price = 1100; // Price changes when triggered
 
-    // This update might fail silently
+    dlob.remove_order(&user, slot, order);
     dlob.insert_order(&user, slot, triggered_order);
 
     // Check if the transition actually worked
@@ -1807,7 +1903,7 @@ fn dlob_trigger_order_transition_update() {
         let metadata = dlob.metadata.get(&order_id).unwrap();
 
         // Metadata should be updated
-        assert_eq!(metadata.kind, OrderKind::MarketTriggered);
+        assert_eq!(metadata.kind, OrderKind::Market);
 
         // But the order might not actually be in market_orders if the update failed
         if book.market_orders.bids.len() == 0 {
@@ -3094,6 +3190,65 @@ fn dlob_l3_order_flags_correctness() {
     assert_eq!(
         ask_3.flags, 0,
         "Ask order 3 flags should be 0 (no flags set)"
+    );
+}
+
+/// Verifies reduce_only flag is correctly set for market orders in L3 (bids/asks from market_orders).
+/// This covers the RO_FLAG fix: use * not & so reduce_only=true yields RO_FLAG in flags.
+#[test]
+fn dlob_l3_market_order_reduce_only_flag() {
+    let _ = env_logger::try_init();
+    let dlob = DLOB::default();
+    let user = Pubkey::new_unique();
+    let slot = 100;
+    let oracle_price = 1000;
+
+    dlob.markets.entry(MarketId::perp(0)).or_insert(Orderbook {
+        market: MarketId::perp(0),
+        market_tick_size: 10,
+        ..Default::default()
+    });
+
+    // Limit order with active auction -> goes to market_orders; reduce_only=true
+    let mut bid_order = create_test_order(1, OrderType::Limit, Direction::Long, 1100, 5, slot);
+    bid_order.auction_duration = 10; // Auction not complete at slot 100
+    bid_order.auction_start_price = 1000;
+    bid_order.auction_end_price = 1100;
+    bid_order.post_only = false;
+    bid_order.reduce_only = true;
+    bid_order.max_ts = 0;
+    dlob.insert_order(&user, slot, bid_order);
+
+    let mut ask_order = create_test_order(2, OrderType::Limit, Direction::Short, 900, 5, slot);
+    ask_order.auction_duration = 10;
+    ask_order.auction_start_price = 1000;
+    ask_order.auction_end_price = 900;
+    ask_order.post_only = false;
+    ask_order.reduce_only = true;
+    ask_order.max_ts = 0;
+    dlob.insert_order(&user, slot, ask_order);
+
+    if let Some(mut book) = dlob.markets.get_mut(&MarketId::new(0, MarketType::Perp)) {
+        book.update_slot(slot);
+    }
+    if let Some(book) = dlob.markets.get(&MarketId::new(0, MarketType::Perp)) {
+        book.update_l3_view(oracle_price, &dlob.metadata, &Default::default());
+    }
+    let l3book = dlob.get_l3_snapshot(0, MarketType::Perp);
+
+    let bids: Vec<_> = l3book.bids(Some(oracle_price), None, None).collect();
+    let asks: Vec<_> = l3book.asks(Some(oracle_price), None, None).collect();
+
+    let bid = bids.iter().find(|o| o.order_id == 1).expect("bid order 1");
+    let ask = asks.iter().find(|o| o.order_id == 2).expect("ask order 2");
+
+    assert!(
+        bid.is_reduce_only(),
+        "Market bid with reduce_only should have RO_FLAG"
+    );
+    assert!(
+        ask.is_reduce_only(),
+        "Market ask with reduce_only should have RO_FLAG"
     );
 }
 
