@@ -214,7 +214,7 @@ impl LogEventStream {
         );
         for (tx_idx, log) in response.logs.iter().enumerate() {
             // a drift sub-account should not interact with any other program by definition
-            if let Some(event) = try_parse_log(log.as_str(), &signature, tx_idx) {
+            if let Some(event) = try_parse_log_with_slot(log.as_str(), &signature, tx_idx, slot) {
                 // unrelated events from same tx should not be emitted e.g. a filler tx which produces other fill events
                 if event.pertains_to(self.sub_account) {
                     if self.event_tx.send(event).await.is_err() {
@@ -297,9 +297,12 @@ impl GrpcLogEventStream {
             target: LOG_TARGET,
             "log extracting events, slot: {}, tx: {}", event.slot, signature
         );
+        let slot = event.slot;
         let logs = &event.meta.log_messages;
         for (tx_idx, log) in logs.iter().enumerate() {
-            if let Some(event) = try_parse_log(log.as_str(), &signature.to_string(), tx_idx) {
+            if let Some(event) =
+                try_parse_log_with_slot(log.as_str(), &signature.to_string(), tx_idx, slot)
+            {
                 // unrelated events from same tx should not be emitted e.g. a filler tx which produces other fill events
                 if event.pertains_to(self.sub_account) {
                     if self.event_tx.send(event).await.is_err() {
@@ -546,6 +549,16 @@ const PROGRAM_DATA: &str = "Program data: ";
 /// Try deserialize a drift event type from raw log string
 /// https://github.com/coral-xyz/anchor/blob/9d947cb26b693e85e1fd26072bb046ff8f95bdcf/client/src/lib.rs#L552
 pub fn try_parse_log(raw: &str, signature: &str, tx_idx: usize) -> Option<DriftEvent> {
+    try_parse_log_with_slot(raw, signature, tx_idx, 0)
+}
+
+/// Try deserialize a drift event type from raw log string, with slot context
+pub fn try_parse_log_with_slot(
+    raw: &str,
+    signature: &str,
+    tx_idx: usize,
+    slot: u64,
+) -> Option<DriftEvent> {
     // Log emitted from the current program.
     if let Some(log) = raw
         .strip_prefix(PROGRAM_LOG)
@@ -555,7 +568,7 @@ pub fn try_parse_log(raw: &str, signature: &str, tx_idx: usize) -> Option<DriftE
             let (disc, mut data) = borsh_bytes.split_at(8);
             let disc: [u8; 8] = disc.try_into().unwrap();
 
-            return DriftEvent::from_discriminant(disc, &mut data, signature, tx_idx);
+            return DriftEvent::from_discriminant(disc, &mut data, signature, tx_idx, slot);
         }
 
         // experimental
@@ -569,18 +582,18 @@ pub fn try_parse_log(raw: &str, signature: &str, tx_idx: usize) -> Option<DriftE
                 .parse::<u32>()
                 .expect("<u32");
             let event = if captures.get(1).is_some() {
-                // cancel by user order Id
                 DriftEvent::OrderCancelMissing {
                     user_order_id: order_id as u8,
                     order_id: 0,
                     signature: signature.to_string(),
+                    slot,
                 }
             } else {
-                // cancel by order id
                 DriftEvent::OrderCancelMissing {
                     user_order_id: 0,
                     order_id,
                     signature: signature.to_string(),
+                    slot,
                 }
             };
 
@@ -613,6 +626,7 @@ pub enum DriftEvent {
         signature: String,
         tx_idx: usize,
         ts: u64,
+        slot: u64,
         bit_flags: u8,
     },
     OrderCancel {
@@ -623,12 +637,14 @@ pub enum DriftEvent {
         signature: String,
         tx_idx: usize,
         ts: u64,
+        slot: u64,
     },
     /// An order cancel for a missing order Id / user order id
     OrderCancelMissing {
         user_order_id: u8,
         order_id: u32,
         signature: String,
+        slot: u64,
     },
     OrderCreate {
         order: Order,
@@ -636,6 +652,7 @@ pub enum DriftEvent {
         ts: u64,
         signature: String,
         tx_idx: usize,
+        slot: u64,
     },
     // sub-case of cancel?
     OrderExpire {
@@ -645,6 +662,7 @@ pub enum DriftEvent {
         ts: u64,
         signature: String,
         tx_idx: usize,
+        slot: u64,
     },
     FundingPayment {
         amount: i64,
@@ -653,6 +671,7 @@ pub enum DriftEvent {
         ts: u64,
         signature: String,
         tx_idx: usize,
+        slot: u64,
     },
     Swap {
         user: Pubkey,
@@ -664,6 +683,7 @@ pub enum DriftEvent {
         ts: u64,
         signature: String,
         tx_idx: usize,
+        slot: u64,
     },
     OrderTrigger {
         /// trigger order owner
@@ -672,6 +692,7 @@ pub enum DriftEvent {
         oracle_price: u64,
         /// base asset amount
         amount: u64,
+        slot: u64,
     },
 }
 
@@ -700,6 +721,7 @@ impl DriftEvent {
         data: &mut &[u8],
         signature: &str,
         tx_idx: usize,
+        slot: u64,
     ) -> Option<Self> {
         match disc.as_slice() {
             // deser should only fail on a breaking protocol changes
@@ -707,21 +729,25 @@ impl DriftEvent {
                 OrderActionRecord::deserialize(data).expect("deserializes"),
                 signature,
                 tx_idx,
+                slot,
             ),
             OrderRecord::DISCRIMINATOR => Self::from_order_record(
                 OrderRecord::deserialize(data).expect("deserializes"),
                 signature,
                 tx_idx,
+                slot,
             ),
             FundingPaymentRecord::DISCRIMINATOR => Some(Self::from_funding_payment_record(
                 FundingPaymentRecord::deserialize(data).expect("deserializes"),
                 signature,
                 tx_idx,
+                slot,
             )),
             SwapRecord::DISCRIMINATOR => Some(Self::from_swap_record(
                 SwapRecord::deserialize(data).expect("deserializes"),
                 signature,
                 tx_idx,
+                slot,
             )),
             _ => {
                 debug!(target: LOG_TARGET, "unhandled event: {disc:?}");
@@ -729,7 +755,7 @@ impl DriftEvent {
             }
         }
     }
-    fn from_swap_record(value: SwapRecord, signature: &str, tx_idx: usize) -> Self {
+    fn from_swap_record(value: SwapRecord, signature: &str, tx_idx: usize, slot: u64) -> Self {
         Self::Swap {
             amount_in: value.amount_in,
             amount_out: value.amount_out,
@@ -740,12 +766,14 @@ impl DriftEvent {
             user: value.user,
             signature: signature.to_string(),
             tx_idx,
+            slot,
         }
     }
     fn from_funding_payment_record(
         value: FundingPaymentRecord,
         signature: &str,
         tx_idx: usize,
+        slot: u64,
     ) -> Self {
         Self::FundingPayment {
             amount: value.funding_payment,
@@ -754,18 +782,30 @@ impl DriftEvent {
             user: value.user,
             signature: signature.to_string(),
             tx_idx,
+            slot,
         }
     }
-    fn from_order_record(value: OrderRecord, signature: &str, tx_idx: usize) -> Option<Self> {
+    fn from_order_record(
+        value: OrderRecord,
+        signature: &str,
+        tx_idx: usize,
+        slot: u64,
+    ) -> Option<Self> {
         Some(DriftEvent::OrderCreate {
             order: value.order,
             user: value.user,
             ts: value.ts.unsigned_abs(),
             signature: signature.to_string(),
             tx_idx,
+            slot,
         })
     }
-    fn from_oar(value: OrderActionRecord, signature: &str, tx_idx: usize) -> Option<Self> {
+    fn from_oar(
+        value: OrderActionRecord,
+        signature: &str,
+        tx_idx: usize,
+        slot: u64,
+    ) -> Option<Self> {
         match value.action {
             OrderAction::Cancel => {
                 if let OrderActionExplanation::OrderExpired = value.action_explanation {
@@ -779,6 +819,7 @@ impl DriftEvent {
                         ts: value.ts.unsigned_abs(),
                         signature: signature.to_string(),
                         tx_idx,
+                        slot,
                         user: value.maker.or(value.taker),
                     })
                 } else {
@@ -790,6 +831,7 @@ impl DriftEvent {
                         ts: value.ts.unsigned_abs(),
                         signature: signature.to_string(),
                         tx_idx,
+                        slot,
                     })
                 }
             }
@@ -810,6 +852,7 @@ impl DriftEvent {
                 ts: value.ts.unsigned_abs(),
                 signature: signature.to_string(),
                 tx_idx,
+                slot,
                 bit_flags: value.bit_flags,
             }),
             OrderAction::Trigger => Some(DriftEvent::OrderTrigger {
@@ -817,6 +860,7 @@ impl DriftEvent {
                 oracle_price: value.oracle_price.unsigned_abs(),
                 user: value.taker.unwrap_or_default(),
                 order_id: value.taker_order_id.unwrap_or(0),
+                slot,
             }),
             // Place - parsed from `OrderRecord` event, ignored here due to lack of useful info
             // Expire - never emitted
@@ -976,6 +1020,7 @@ mod test {
                 signature: "2jLk34wWwgecuws9iD9Ug63JdL8kYBePdtcakzG34zEx9KYVYD6HuokxMZYpFw799cJZBcaCMZ47WAxkGJjM7zNC".into(),
                 tx_idx: 9,
                 ts: 1710893646,
+                slot: 338797360,
                 bit_flags: 0,
             }
         );
@@ -1278,6 +1323,7 @@ mod test {
             ts: 1746413978,
             signature: "2M1e4UJ1x6rwvjFR6kh5CDCWZg8NcGeqzT2GbDRGaC2TmZDgNTNbKSn4Y4pu11apErVycpk5p3Hq6Tg2nrFdGimm".try_into().unwrap(),
             tx_idx: 44,
+            slot: 0,
         });
     }
 
