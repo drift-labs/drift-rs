@@ -19,7 +19,7 @@ use solana_sdk::{
 use crate::{
     accounts::User,
     build_accounts,
-    constants::{self, state_account, JIT_PROXY_ID},
+    constants::{self, derive_revenue_share_escrow, state_account, JIT_PROXY_ID},
     drift_idl,
     swift_order_subscriber::SignedOrderInfo,
     types::PositionDirection,
@@ -171,6 +171,13 @@ impl JitProxyClient {
             std::iter::empty(),
             writable_markets.iter(),
         );
+
+        if order.has_builder() {
+            accounts.push(AccountMeta::new(
+                derive_revenue_share_escrow(&taker_params.taker.authority),
+                false,
+            ))
+        }
 
         if let Some(referrer_info) = taker_params.taker_referrer_info {
             accounts.push(AccountMeta::new(referrer_info.referrer(), false));
