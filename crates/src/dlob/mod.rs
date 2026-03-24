@@ -825,8 +825,8 @@ impl DLOB {
 
         let (vamm_bid, vamm_ask, vamm_min_order) = if let Some(m) = perp_market {
             (
-                Some(m.bid_price(None)),
-                Some(m.ask_price(None)),
+                Some(m.bid_price(Some(oracle_price))),
+                Some(m.ask_price(Some(oracle_price))),
                 m.amm.min_order_size,
             )
         } else {
@@ -965,7 +965,9 @@ impl DLOB {
                     .collect();
                 (
                     orders,
-                    perp_market.map(|p| p.ask_price(None)).unwrap_or(u64::MAX),
+                    perp_market
+                        .map(|p| p.ask_price(Some(oracle_price)))
+                        .unwrap_or(u64::MAX),
                     perp_market
                         .map(|p| p.amm.min_order_size)
                         .unwrap_or(u64::MAX),
@@ -980,7 +982,9 @@ impl DLOB {
                     .collect();
                 (
                     orders,
-                    perp_market.map(|p| p.bid_price(None)).unwrap_or(u64::MIN),
+                    perp_market
+                        .map(|p| p.bid_price(Some(oracle_price)))
+                        .unwrap_or(u64::MIN),
                     perp_market
                         .map(|p| p.amm.min_order_size)
                         .unwrap_or(u64::MAX),
