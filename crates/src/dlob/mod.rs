@@ -955,52 +955,38 @@ impl DLOB {
         perp_market: Option<&PerpMarket>,
         depth: Option<usize>,
     ) -> MakerCrosses {
-        let (resting_orders, vamm_price, vamm_min_order) = match taker_order.direction {
-            Direction::Long => {
-                let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
-                let orders: Vec<L3Order> = book
-                    .top_asks(depth.unwrap_or(32), Some(oracle_price), perp_market, None)
-                    .filter(|o| o.is_post_only())
-                    .cloned()
-                    .collect();
-                (
-                    orders,
-                    perp_market.map(|p| p.ask_price(None)).unwrap_or(u64::MAX),
-                    perp_market
-                        .map(|p| p.amm.min_order_size)
-                        .unwrap_or(u64::MAX),
-                )
-            }
-            Direction::Short => {
-                let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
-                let orders: Vec<L3Order> = book
-                    .top_bids(depth.unwrap_or(32), Some(oracle_price), perp_market, None)
-                    .filter(|o| o.is_post_only())
-                    .cloned()
-                    .collect();
-                (
-                    orders,
-                    perp_market.map(|p| p.bid_price(None)).unwrap_or(u64::MIN),
-                    perp_market
-                        .map(|p| p.amm.min_order_size)
-                        .unwrap_or(u64::MAX),
-                )
-            }
-        };
-
+        let book = self.get_l3_snapshot(taker_order.market_index, taker_order.market_type);
         let is_long = taker_order.direction == PositionDirection::Long;
-        self.find_crosses_for_taker_order_inner(
-            current_slot,
-            taker_order.price,
-            taker_order.size,
-            is_long,
-            resting_orders.iter().peekable(),
-            |taker_price: u64, taker_size: u64| {
-                taker_size > vamm_min_order
-                    && ((taker_price > vamm_price && is_long)
-                        || (!is_long && taker_price < vamm_price))
-            },
-        )
+        let depth = depth.unwrap_or(32);
+        let vamm_min_order = perp_market
+            .map(|p| p.amm.min_order_size)
+            .unwrap_or(u64::MAX);
+
+        if is_long {
+            let vamm_price = perp_market.map(|p| p.ask_price(None)).unwrap_or(u64::MAX);
+            self.find_crosses_for_taker_order_inner(
+                current_slot,
+                taker_order.price,
+                taker_order.size,
+                true,
+                book.top_asks(depth, Some(oracle_price), perp_market, None)
+                    .filter(|o| o.is_post_only())
+                    .peekable(),
+                |taker_price, taker_size| taker_size > vamm_min_order && taker_price > vamm_price,
+            )
+        } else {
+            let vamm_price = perp_market.map(|p| p.bid_price(None)).unwrap_or(u64::MIN);
+            self.find_crosses_for_taker_order_inner(
+                current_slot,
+                taker_order.price,
+                taker_order.size,
+                false,
+                book.top_bids(depth, Some(oracle_price), perp_market, None)
+                    .filter(|o| o.is_post_only())
+                    .peekable(),
+                |taker_price, taker_size| taker_size > vamm_min_order && taker_price < vamm_price,
+            )
+        }
     }
 
     /// Find crosses for given `taker_order` consuming or updating `resting_limit_orders` upon finding a match
