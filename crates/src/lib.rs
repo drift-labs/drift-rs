@@ -1866,6 +1866,8 @@ pub struct TransactionBuilder<'a> {
     authority: Pubkey,
     /// use legacy transaction mode
     legacy: bool,
+    /// optional fee payer account (defaults to `authority`)
+    fee_payer: Option<Pubkey>,
 }
 
 /// Jupiter swap instructions prepared for insertion into a transaction
@@ -1924,6 +1926,7 @@ impl<'a> TransactionBuilder<'a> {
             lookup_tables: program_data.lookup_tables.to_vec(),
             legacy: false,
             force_markets: Default::default(),
+            fee_payer: None,
         }
     }
     /// Pubkey of sub-account owner
@@ -1938,6 +1941,11 @@ impl<'a> TransactionBuilder<'a> {
     /// Use legacy tx mode
     pub fn legacy(mut self) -> Self {
         self.legacy = true;
+        self
+    }
+    /// Set fee payer
+    pub fn fee_payer(mut self, fee_payer: Pubkey) -> Self {
+        self.fee_payer = Some(fee_payer);
         self
     }
     /// Extend the tx lookup tables (always includes the defacto drift LUTs)
@@ -4070,12 +4078,13 @@ impl<'a> TransactionBuilder<'a> {
 
     /// Build the transaction message ready for signing and sending
     pub fn build(self) -> VersionedMessage {
+        let payer = self.fee_payer.unwrap_or(self.authority);
         if self.legacy {
-            let message = Message::new(self.ixs.as_ref(), Some(&self.authority));
+            let message = Message::new(self.ixs.as_ref(), Some(&payer));
             VersionedMessage::Legacy(message)
         } else {
             let message = v0::Message::try_compile(
-                &self.authority,
+                &payer,
                 self.ixs.as_slice(),
                 self.lookup_tables.as_slice(),
                 Default::default(),
@@ -4322,6 +4331,7 @@ pub fn build_accounts<'a>(
 mod tests {
     use std::str::FromStr;
 
+    use anchor_lang::prelude::system_instruction;
     use serde_json::json;
     use solana_account_decoder_client_types::{UiAccount, UiAccountData, UiAccountEncoding};
     use solana_rpc_client::rpc_client::Mocks;

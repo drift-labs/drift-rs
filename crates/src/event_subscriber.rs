@@ -553,9 +553,13 @@ pub fn try_parse_log(raw: &str, signature: &str, tx_idx: usize) -> Option<DriftE
     {
         if let Ok(borsh_bytes) = base64::engine::general_purpose::STANDARD.decode(log) {
             let (disc, mut data) = borsh_bytes.split_at(8);
-            let disc: [u8; 8] = disc.try_into().unwrap();
-
-            return DriftEvent::from_discriminant(disc, &mut data, signature, tx_idx);
+            return match disc.try_into() {
+                Ok(disc) => DriftEvent::from_discriminant(disc, &mut data, signature, tx_idx),
+                Err(err) => {
+                    log::debug!("event subscriber: invalid program log: {log}");
+                    None
+                }
+            };
         }
 
         // experimental

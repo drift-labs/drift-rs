@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{str::FromStr, time::Duration};
 
 use anchor_lang::Discriminator;
 use drift_rs::{
@@ -6,12 +6,19 @@ use drift_rs::{
     event_subscriber::RpcClient,
     grpc::grpc_subscriber::AccountFilter,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
-    types::{accounts::User, Context, MarketId, NewOrder, PostOnlyParam, SettlePnlMode},
+    types::{
+        accounts::User, Context, MarketId, MarketType, NewOrder, OrderParams, OrderType,
+        PositionDirection, PostOnlyParam, SettlePnlMode,
+    },
     utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
     DriftClient, GrpcSubscribeOpts, Pubkey, TransactionBuilder, Wallet,
 };
 use futures_util::StreamExt;
-use solana_sdk::{clock::Slot, signature::Keypair};
+use solana_rpc_client_api::config::RpcSimulateTransactionConfig;
+use solana_sdk::{
+    clock::Slot,
+    signature::{Keypair, Signature},
+};
 
 #[tokio::test]
 async fn client_sync_subscribe_all_devnet() {
@@ -430,4 +437,97 @@ async fn pyth_pull_update_atomic() {
     let result = client.simulate_tx(tx).await;
     dbg!(&result);
     assert!(result.is_ok_and(|x| x.err.is_none()));
+}
+
+#[tokio::test]
+async fn place_order_sim_via_privy_account() {
+    use drift_rs::utils::test_envs::mainnet_endpoint;
+    use solana_sdk::{commitment_config::CommitmentConfig, transaction::VersionedTransaction};
+
+    let authority = Pubkey::from_str("GoHqm1MJ2JY7XoMtvedRNHBzUncY1uPaRJNeB1oAgQbQ").unwrap();
+    let sub_account_pubkey = Wallet::derive_user_account(&authority, 0);
+
+    let client = DriftClient::new(
+        Context::MainNet,
+        RpcClient::new(mainnet_endpoint()),
+        Wallet::read_only(authority),
+    )
+    .await
+    .expect("drift client");
+
+    let user = client
+        .get_user_account(&sub_account_pubkey)
+        .await
+        .expect("user account");
+
+    let taker_order_params = OrderParams {
+        order_type: OrderType::Oracle,
+        market_type: MarketType::Perp,
+        direction: PositionDirection::Long,
+        base_asset_amount: 100000,
+        price: 0,
+        market_index: 1,
+        post_only: PostOnlyParam::None,
+        bit_flags: 0,
+        oracle_price_offset: Some(62656166),
+        auction_duration: Some(20),
+        auction_start_price: Some(21469327),
+        auction_end_price: Some(62656166),
+        ..Default::default()
+    };
+
+    let isolated_deposit = Some(379918_u64);
+    let market_index = taker_order_params.market_index;
+
+    let message = TransactionBuilder::new(
+        client.program_data(),
+        sub_account_pubkey,
+        std::borrow::Cow::Owned(user),
+        false,
+    )
+    .transfer_isolated_perp_position_deposit(isolated_deposit.unwrap() as i64, market_index)
+    .place_orders(vec![taker_order_params])
+    .fee_payer(solana_sdk::pubkey!(
+        "4feEEMTPNnzwRiFeCNsogqXzHj3QyYowkYn4Y5BFv3rH" // some privy fee payer
+    ))
+    .build();
+
+    let slot = client.get_slot().await.unwrap_or(0);
+    let rpc = client.rpc();
+
+    let sim_result = rpc
+        .simulate_transaction_with_config(
+            &VersionedTransaction {
+                message,
+                // two signers, authority & fee payer
+                signatures: vec![Signature::new_unique(), Signature::new_unique()],
+            },
+            RpcSimulateTransactionConfig {
+                sig_verify: false,
+                replace_recent_blockhash: true,
+                commitment: Some(CommitmentConfig::confirmed()),
+                min_context_slot: Some(slot.saturating_sub(30)),
+                ..Default::default()
+            },
+        )
+        .await;
+
+    match sim_result {
+        Ok(response) => {
+            eprintln!("=== Simulation Result ===");
+            eprintln!("err: {:?}", response.value.err);
+            eprintln!("logs:");
+            if let Some(logs) = &response.value.logs {
+                for log in logs {
+                    eprintln!("  {log}");
+                }
+            }
+            dbg!(&response);
+            eprintln!("units consumed: {:?}", response.value.units_consumed);
+        }
+        Err(e) => {
+            eprintln!("=== Simulation Failed ===");
+            eprintln!("{e:#?}");
+        }
+    }
 }
