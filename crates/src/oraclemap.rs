@@ -3,6 +3,7 @@ use std::sync::{
     Arc,
 };
 
+use crate::ffi::abi_types::Account as FfiAccount;
 use crate::solana_sdk::{
     account::Account, clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey,
 };
@@ -292,7 +293,7 @@ impl OracleMap {
                     );
                     let price_data = get_oracle_price(
                         oracle_source,
-                        &mut (*oracle_pubkey, oracle_account.clone()),
+                        &mut (*oracle_pubkey, oracle_account.clone().into()),
                         latest_slot,
                     )
                     .expect("valid oracle data");
@@ -310,7 +311,7 @@ impl OracleMap {
                     );
                     let price_data = get_oracle_price(
                         oracle_source,
-                        &mut (*oracle_pubkey, oracle_account.clone()),
+                        &mut (*oracle_pubkey, oracle_account.clone().into()),
                         latest_slot,
                     )
                     .expect("valid oracle data");
@@ -417,7 +418,7 @@ fn update_handler_grpc(
         oracle_source,
         &mut (
             update.pubkey,
-            Account {
+            FfiAccount {
                 owner: update.owner,
                 data: update.data.to_vec(),
                 lamports,
@@ -462,7 +463,7 @@ fn update_handler(
         oracle_source,
         &mut (
             oracle_pubkey,
-            Account {
+            FfiAccount {
                 owner: update.owner,
                 data: update.data.clone(),
                 lamports,

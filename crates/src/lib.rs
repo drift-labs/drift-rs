@@ -1745,7 +1745,7 @@ impl DriftClientBackend {
             };
             let (account_data, slot) = self.get_account_with_slot_raw(&oracle).await?;
             let oracle_price_data =
-                ffi::get_oracle_price(oracle_source, &mut (oracle, account_data.clone()), slot)?;
+                ffi::get_oracle_price(oracle_source, &mut (oracle, account_data.clone().into()), slot)?;
 
             Ok(Oracle {
                 pubkey: oracle,

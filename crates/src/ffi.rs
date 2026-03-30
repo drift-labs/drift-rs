@@ -4,7 +4,8 @@
 //!
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
+use crate::solana_sdk::{account::Account as SolanaAccount, clock::Slot, pubkey::Pubkey};
+use abi_types::Account;
 use anchor_lang::{prelude::AccountInfo, Discriminator};
 
 pub use self::abi_types::*;
@@ -953,8 +954,8 @@ pub fn calculate_auction_params_for_trigger_order(
 
 fn to_sdk_result<T>(value: FfiResult<T>) -> SdkResult<T> {
     match value {
-        FfiResult::Ok(t) => Ok(t),
-        FfiResult::Err(code) => {
+        abi_stable::std_types::RResult::ROk(t) => Ok(t),
+        abi_stable::std_types::RResult::RErr(code) => {
             let error_code = unsafe {
                 std::mem::transmute::<u32, ErrorCode>(code - anchor_lang::error::ERROR_CODE_OFFSET)
             };
@@ -1031,15 +1032,63 @@ impl IncrementalMarginCalculation {
 
 pub mod abi_types {
     //! cross-boundary FFI types
-    use crate::solana_sdk::{account::Account, clock::Slot, pubkey::Pubkey};
+    use crate::solana_sdk::{account::Account as SolanaAccount, clock::Slot, pubkey::Pubkey};
 
     use crate::{drift_idl::types::MarginRequirementType, types::OracleValidity, OracleGuardRails};
+
+    /// `#[repr(C)]` account for a stable field layout across compiler versions.
+    ///
+    /// The FFI dylib may be compiled with a different Rust toolchain than the
+    /// caller. Without `#[repr(C)]`, the compiler is free to reorder fields
+    /// and the two sides would disagree on offsets, causing segfaults.
+    #[repr(C)]
+    #[derive(Clone, Debug, Default, PartialEq, Eq)]
+    pub struct Account {
+        pub lamports: u64,
+        pub data: Vec<u8>,
+        pub owner: Pubkey,
+        pub executable: bool,
+        pub rent_epoch: u64,
+    }
+
+    impl From<SolanaAccount> for Account {
+        fn from(a: SolanaAccount) -> Self {
+            Self {
+                lamports: a.lamports,
+                data: a.data,
+                owner: a.owner,
+                executable: a.executable,
+                rent_epoch: a.rent_epoch,
+            }
+        }
+    }
+
+    impl From<Account> for SolanaAccount {
+        fn from(a: Account) -> Self {
+            Self {
+                lamports: a.lamports,
+                data: a.data,
+                owner: a.owner,
+                executable: a.executable,
+                rent_epoch: a.rent_epoch,
+            }
+        }
+    }
 
     /// FFI safe version of (pubkey, account)
     #[repr(C)]
     pub struct AccountWithKey {
         pub key: Pubkey,
         pub account: Account,
+    }
+
+    impl From<(Pubkey, SolanaAccount)> for AccountWithKey {
+        fn from(value: (Pubkey, SolanaAccount)) -> Self {
+            Self {
+                key: value.0,
+                account: value.1.into(),
+            }
+        }
     }
 
     impl From<(Pubkey, Account)> for AccountWithKey {
@@ -1190,7 +1239,7 @@ pub mod abi_types {
     }
 
     /// C-ABI compatible result type for drift FFI calls
-    pub type FfiResult<T> = Result<T, u32>;
+    pub type FfiResult<T> = abi_stable::std_types::RResult<T, u32>;
 
     /// FFI-compatible simplified margin calculation result
     #[repr(C)]
@@ -1369,7 +1418,8 @@ pub mod abi_types {
 
 #[cfg(test)]
 mod tests {
-    use crate::solana_sdk::{account::Account, pubkey::Pubkey};
+    use crate::solana_sdk::pubkey::Pubkey;
+    use super::abi_types::Account;
     use anchor_lang::Discriminator;
 
     use super::{
@@ -2668,15 +2718,14 @@ mod tests {
 
             // Verify the FFI call succeeds
             assert!(
-                matches!(result, FfiResult::Ok(_)),
+                result.is_ok(),
                 "FFI call should succeed for margin type: {:?}",
                 margin_type
             );
 
-            let result = match result {
-                FfiResult::Ok(data) => data,
-                FfiResult::Err(_) => panic!("FFI call failed for margin type: {:?}", margin_type),
-            };
+            let result = result.into_result().unwrap_or_else(|_| {
+                panic!("FFI call failed for margin type: {:?}", margin_type)
+            });
 
             // Verify we get reasonable values
             assert!(

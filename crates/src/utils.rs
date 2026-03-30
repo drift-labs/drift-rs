@@ -15,6 +15,15 @@ use crate::{
     types::{SdkError, SdkResult},
 };
 
+/// Create a Keypair from a byte slice (supports 32-byte seed or 64-byte keypair)
+fn keypair_from_bytes(bytes: &[u8]) -> SdkResult<Keypair> {
+    match bytes.len() {
+        32 => Ok(Keypair::new_from_array(bytes.try_into().unwrap())),
+        64 => Keypair::try_from(bytes).map_err(|_| SdkError::InvalidSeed),
+        _ => Err(SdkError::InvalidSeed),
+    }
+}
+
 /// Try to parse secret `key` string
 ///
 /// Returns error if the key cannot be parsed
@@ -30,17 +39,15 @@ pub fn read_keypair_str_multi_format(key: &str) -> SdkResult<Keypair> {
             .map(|x| x.parse::<u8>())
             .collect::<Result<Vec<u8>, _>>()
         {
-            if bytes.len() == 32 {
-                return Ok(Keypair::new_from_array(bytes.try_into().unwrap()));
-            }
+            return keypair_from_bytes(&bytes);
         }
         return Err(SdkError::InvalidSeed);
     }
 
     // try to decode as base64 string
     if let Ok(bytes) = base64::engine::general_purpose::STANDARD.decode(key.as_bytes()) {
-        if bytes.len() == 32 {
-            return Ok(Keypair::new_from_array(bytes.try_into().unwrap()));
+        if let Ok(kp) = keypair_from_bytes(&bytes) {
+            return Ok(kp);
         }
     }
 
