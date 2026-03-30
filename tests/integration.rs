@@ -7,10 +7,8 @@ use drift_rs::{
     grpc::grpc_subscriber::AccountFilter,
     math::constants::{BASE_PRECISION_I64, LAMPORTS_PER_SOL_I64, PRICE_PRECISION_U64},
     types::{
-        accounts::User,
-        solana_sdk::clock::Slot,
-        Context, MarketId, MarketType, NewOrder, OrderParams, OrderType, PositionDirection,
-        PostOnlyParam, SettlePnlMode,
+        accounts::User, solana_sdk::clock::Slot, Context, MarketId, MarketType, NewOrder,
+        OrderParams, OrderType, PositionDirection, PostOnlyParam, SettlePnlMode,
     },
     utils::test_envs::{devnet_endpoint, mainnet_endpoint, test_keypair},
     DriftClient, GrpcSubscribeOpts, Pubkey, TransactionBuilder, Wallet,

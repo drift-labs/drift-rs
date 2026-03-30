@@ -1,6 +1,5 @@
 #![cfg(feature = "titan")]
 
-use solana_transaction::{InstructionError, TransactionError};
 use drift_rs::{
     event_subscriber::RpcClient,
     titan::{Provider, SwapMode, TitanSwapApi},
@@ -8,6 +7,7 @@ use drift_rs::{
     utils::test_envs::{mainnet_endpoint, mainnet_test_keypair},
     DriftClient, TransactionBuilder, Wallet,
 };
+use solana_transaction::{InstructionError, TransactionError};
 use tokio::sync::OnceCell;
 
 const DRIFT_CLIENT: OnceCell<DriftClient> = OnceCell::const_new();

@@ -557,7 +557,7 @@ pub fn try_parse_log(raw: &str, signature: &str, tx_idx: usize) -> Option<DriftE
             let (disc, mut data) = borsh_bytes.split_at(8);
             return match disc.try_into() {
                 Ok(disc) => DriftEvent::from_discriminant(disc, &mut data, signature, tx_idx),
-                Err(err) => {
+                Err(_err) => {
                     log::debug!("event subscriber: invalid program log: {log}");
                     None
                 }

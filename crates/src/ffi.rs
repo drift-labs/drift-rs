@@ -4,8 +4,7 @@
 //!
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::solana_sdk::{account::Account as SolanaAccount, clock::Slot, pubkey::Pubkey};
-use abi_types::Account;
+use crate::solana_sdk::{clock::Slot, pubkey::Pubkey};
 use anchor_lang::{prelude::AccountInfo, Discriminator};
 
 pub use self::abi_types::*;
@@ -1418,8 +1417,8 @@ pub mod abi_types {
 
 #[cfg(test)]
 mod tests {
-    use crate::solana_sdk::pubkey::Pubkey;
     use super::abi_types::Account;
+    use crate::solana_sdk::pubkey::Pubkey;
     use anchor_lang::Discriminator;
 
     use super::{
@@ -2723,9 +2722,9 @@ mod tests {
                 margin_type
             );
 
-            let result = result.into_result().unwrap_or_else(|_| {
-                panic!("FFI call failed for margin type: {:?}", margin_type)
-            });
+            let result = result
+                .into_result()
+                .unwrap_or_else(|_| panic!("FFI call failed for margin type: {:?}", margin_type));
 
             // Verify we get reasonable values
             assert!(
