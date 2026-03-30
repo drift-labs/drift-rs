@@ -42,7 +42,7 @@ extern "C" {
         order: &types::Order,
         slot: Slot,
         tick_size: u64,
-        oracle_price: Option<i64>,
+        oracle_price: abi_stable::std_types::ROption<i64>,
         is_prediction_market: bool,
     ) -> FfiResult<u64>;
     #[allow(improper_ctypes)]
