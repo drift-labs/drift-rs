@@ -4,9 +4,9 @@ use std::{
     time::Duration,
 };
 
+use crate::solana_sdk::message::Hash;
 use log::warn;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::hash::Hash;
 use tokio::sync::oneshot;
 
 use crate::UnsubHandle;

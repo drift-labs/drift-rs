@@ -3,9 +3,9 @@ use std::{
     time::Duration,
 };
 
+use crate::solana_sdk::{clock::Slot, pubkey::Pubkey};
 use log::warn;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
-use solana_sdk::{clock::Slot, pubkey::Pubkey};
 use tokio::sync::oneshot;
 
 pub const DEFAULT_REFRESH_FREQUENCY: Duration = Duration::from_millis(5 * 400);
@@ -20,7 +20,7 @@ pub const DEFAULT_SLOT_WINDOW: Slot = 30;
 /// # Example
 /// ```rust
 /// # use drift_rs::PriorityFeeSubscriber;
-/// # use solana_sdk::pubkey::Pubkey;
+/// # use solana_pubkey::Pubkey;
 /// let endpoint = "https://api.mainnet-beta.solana.com".to_string();
 /// let accounts = vec![Pubkey::new_unique()];
 /// let subscriber = PriorityFeeSubscriber::new(endpoint, &accounts);

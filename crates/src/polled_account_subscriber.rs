@@ -1,10 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::{str::FromStr, sync::Arc, time::Duration};
 
 use log::error;
 use solana_account_decoder_client_types::UiAccountEncoding;
+use solana_pubkey::Pubkey;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 use solana_rpc_client_api::config::RpcAccountInfoConfig;
-use solana_sdk::pubkey::Pubkey;
 use tokio::sync::oneshot;
 
 use crate::{AccountUpdate, UnsubHandle};
@@ -60,15 +60,15 @@ impl PolledAccountSubscriber {
                     tokio::select! {
                         biased;
                         _ = interval.tick() => {
-                            match rpc_client.get_account_with_config(&pubkey, config.clone()).await {
+                            match rpc_client.get_ui_account_with_config(&pubkey, config.clone()).await {
                                 Ok(response) => {
                                     if let Some(new_account) = response.value {
                                         on_update(
                                             &AccountUpdate {
-                                                owner: new_account.owner,
+                                                owner: Pubkey::from_str(&new_account.owner).unwrap(),
                                                 lamports: new_account.lamports,
                                                 pubkey,
-                                                data: new_account.data.clone(),
+                                                data: new_account.data.decode().unwrap_or_default(),
                                                 slot: response.context.slot,
                                             }
                                         );
@@ -91,13 +91,13 @@ impl PolledAccountSubscriber {
 
 #[cfg(test)]
 mod tests {
+    use crate::solana_sdk::account::Account;
     use anchor_lang::AccountSerialize;
     use serde_json::json;
     use solana_account_decoder::encode_ui_account;
     use solana_account_decoder_client_types::UiAccountEncoding;
     use solana_rpc_client::rpc_client::Mocks;
     use solana_rpc_client_api::request::RpcRequest;
-    use solana_sdk::account::Account;
 
     use super::*;
     use crate::{accounts::User, SpotPosition};

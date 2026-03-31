@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use crate::solana_sdk::commitment_config::CommitmentConfig;
 use anchor_lang::AnchorDeserialize;
 use drift_pubsub_client::PubsubClient;
 use futures_util::StreamExt;
@@ -9,7 +10,6 @@ use solana_rpc_client_api::{
     config::{RpcAccountInfoConfig, RpcProgramAccountsConfig},
     filter::RpcFilterType,
 };
-use solana_sdk::commitment_config::CommitmentConfig;
 use tokio::sync::oneshot;
 
 use crate::{constants, types::DataAndSlot, UnsubHandle};
