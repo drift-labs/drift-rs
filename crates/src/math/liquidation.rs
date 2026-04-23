@@ -63,7 +63,7 @@ pub async fn calculate_liquidation_price_and_unrealized_pnl(
         .expect("oracle loaded");
     let oracle_source = perp_market.amm.oracle_source;
     let oracle_price = ffi::get_oracle_price(
-        oracle_source,
+        crate::types::idl_conv::oracle_source_to_idl(oracle_source),
         &mut (oracle.key, oracle.account.clone()),
         accounts_list.latest_slot,
     )?
@@ -167,8 +167,10 @@ pub fn calculate_liquidation_price_inner(
     oracle_price: i64,
     accounts: &mut AccountsList,
 ) -> SdkResult<i64> {
+    let user_idl: &crate::drift_idl::accounts::User =
+        unsafe { &*(user as *const User as *const crate::drift_idl::accounts::User) };
     let margin_calculation = calculate_margin_requirement_and_total_collateral_and_liability_info(
-        user,
+        user_idl,
         accounts,
         MarginContextMode::StandardMaintenance,
     )?;
@@ -178,12 +180,8 @@ pub fn calculate_liquidation_price_inner(
         .get_perp_position(perp_market.market_index)
         .map_err(|_| SdkError::NoPosition(perp_market.market_index))?;
 
-    let perp_free_collateral_delta = calculate_perp_free_collateral_delta(
-        &perp_position,
-        perp_market,
-        oracle_price,
-        user.margin_mode,
-    );
+    let perp_free_collateral_delta =
+        calculate_perp_free_collateral_delta(&perp_position, perp_market, oracle_price);
 
     // user holding spot asset case
     let mut spot_free_collateral_delta = 0;
@@ -221,18 +219,16 @@ pub fn calculate_perp_free_collateral_delta(
     position: &PerpPosition,
     market: &PerpMarket,
     oracle_price: i64,
-    margin_mode: MarginMode,
 ) -> i64 {
     let current_base_asset_amount = position.base_asset_amount;
 
     let worst_case_base_amount = position
-        .worst_case_base_asset_amount(oracle_price, market.contract_type)
+        .worst_case_base_asset_amount(oracle_price)
         .unwrap();
     let margin_ratio = market
         .get_margin_ratio(
             worst_case_base_amount.unsigned_abs(),
             MarginRequirementType::Maintenance,
-            margin_mode.is_high_leverage_mode(MarginRequirementType::Maintenance),
         )
         .unwrap();
     let margin_ratio = (margin_ratio as i64 * QUOTE_PRECISION_I64) / MARGIN_PRECISION as i64;
@@ -266,7 +262,7 @@ pub fn calculate_spot_free_collateral_delta(position: &SpotPosition, market: &Sp
             .get_asset_weight(
                 signed_token_amount.unsigned_abs(),
                 0, // unused by Maintenance margin type, hence 0
-                MarginRequirementType::Maintenance,
+                &MarginRequirementType::Maintenance,
             )
             .unwrap() as i128;
         (((QUOTE_PRECISION_I128 * weight) / SPOT_WEIGHT_PRECISION as i128) * signed_token_amount)
@@ -275,7 +271,7 @@ pub fn calculate_spot_free_collateral_delta(position: &SpotPosition, market: &Sp
         let weight = market
             .get_liability_weight(
                 signed_token_amount.unsigned_abs(),
-                MarginRequirementType::Maintenance,
+                &MarginRequirementType::Maintenance,
             )
             .unwrap() as i128;
         (((QUOTE_PRECISION_I128.neg() * weight) / SPOT_WEIGHT_PRECISION as i128)
@@ -310,14 +306,16 @@ fn calculate_margin_requirements_inner(
     user: &User,
     accounts: &mut AccountsList,
 ) -> SdkResult<MarginRequirementInfo> {
+    let user_idl: &crate::drift_idl::accounts::User =
+        unsafe { &*(user as *const User as *const crate::drift_idl::accounts::User) };
     let maintenance_result = calculate_margin_requirement_and_total_collateral_and_liability_info(
-        user,
+        user_idl,
         accounts,
         MarginContextMode::StandardMaintenance,
     )?;
 
     let initial_result = calculate_margin_requirement_and_total_collateral_and_liability_info(
-        user,
+        user_idl,
         accounts,
         MarginContextMode::StandardInitial,
     )?;
@@ -385,10 +383,14 @@ fn calculate_collateral_inner(
     accounts: &mut AccountsList,
     margin_requirement_type: MarginRequirementType,
 ) -> SdkResult<CollateralInfo> {
+    let user_idl: &crate::drift_idl::accounts::User =
+        unsafe { &*(user as *const User as *const crate::drift_idl::accounts::User) };
+    let mr_idl: crate::drift_idl::types::MarginRequirementType =
+        unsafe { std::mem::transmute(margin_requirement_type) };
     let result = calculate_margin_requirement_and_total_collateral_and_liability_info(
-        user,
+        user_idl,
         accounts,
-        MarginContextMode::StandardCustom(margin_requirement_type),
+        MarginContextMode::StandardCustom(mr_idl),
     )?;
 
     Ok(CollateralInfo {

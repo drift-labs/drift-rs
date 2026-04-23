@@ -967,11 +967,14 @@ impl DriftClient {
         let drift_oracle_data: drift::state::oracle::OraclePriceData = unsafe {
             std::mem::transmute_copy::<ffi::abi_types::OraclePriceData, _>(&oracle_data.data)
         };
+        let drift_validity_guard_rails: drift::state::state::ValidityGuardRails = unsafe {
+            std::mem::transmute_copy::<_, _>(&oracle_validity_guard_rails)
+        };
         perp_market
             .get_mm_oracle_price_data(
                 drift_oracle_data,
                 current_slot,
-                &oracle_validity_guard_rails,
+                &drift_validity_guard_rails,
             )
             .map(|x| x.get_safe_oracle_price_data())
             .map(|d| unsafe {

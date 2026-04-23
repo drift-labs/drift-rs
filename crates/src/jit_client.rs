@@ -22,7 +22,7 @@ use crate::{
     constants::{self, derive_revenue_share_escrow, state_account, JIT_PROXY_ID},
     drift_idl,
     swift_order_subscriber::SignedOrderInfo,
-    types::PositionDirection,
+    types::{OrderExt, PositionDirection},
     DriftClient, MarketId, MarketType, PostOnlyParam, ReferrerInfo, SdkError, SdkResult,
     TransactionBuilder, Wallet,
 };
@@ -184,7 +184,7 @@ impl JitProxyClient {
             accounts.push(AccountMeta::new(referrer_info.referrer_stats(), false));
         }
 
-        if order.market_type == drift_idl::types::MarketType::Spot {
+        if order.market_type == MarketType::Spot {
             let spot_market_vault = self
                 .drift_client
                 .try_get_spot_market_account(order.market_index)?
@@ -259,10 +259,10 @@ impl JitProxyClient {
         let market_type = signed_order_info_params.market_type;
 
         let writable_markets = match market_type {
-            MarketType::Perp => {
+            drift_idl::types::MarketType::Perp => {
                 vec![MarketId::perp(market_index)]
             }
-            MarketType::Spot => {
+            drift_idl::types::MarketType::Spot => {
                 vec![MarketId::spot(market_index), MarketId::QUOTE_SPOT]
             }
         };

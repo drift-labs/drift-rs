@@ -1,7 +1,7 @@
 use crate::{
-    drift_idl::types::{Order, OrderType, PositionDirection},
     ffi::OraclePriceData,
     math::auction::{get_auction_price, is_auction_complete},
+    types::{Order, OrderType, PositionDirection},
 };
 
 pub fn get_limit_price(

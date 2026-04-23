@@ -1,7 +1,7 @@
 use std::cmp::min;
 
 use crate::{
-    drift_idl::types::{Order, OrderType, PositionDirection},
+    types::{Order, OrderType, PositionDirection},
     is_one_of_variant,
 };
 

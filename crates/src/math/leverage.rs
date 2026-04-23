@@ -126,7 +126,7 @@ impl UserMargin for DriftClient {
         let mut builder = AccountsListBuilder::default();
         let mut accounts = builder.try_build(self, user, &[])?;
         calculate_margin_requirement_and_total_collateral_and_liability_info(
-            user,
+            user_as_idl(user),
             &mut accounts,
             MarginContextMode::StandardMaintenance,
         )
@@ -155,7 +155,7 @@ impl UserMargin for DriftClient {
             let opposite_side_liability_value = calculate_perp_liability_value(
                 position.base_asset_amount,
                 oracle_price,
-                market_account.contract_type == ContractType::Prediction,
+                market_account.contract_type == ContractType::DeprecatedPrediction,
             );
 
             let lp_buffer = ((oracle_price as u64 * market_account.amm.order_step_size)
@@ -189,8 +189,9 @@ impl UserMargin for DriftClient {
             .get_perp_position(market.market_index)
             .map_err(|_| SdkError::NoMarketData(MarketId::perp(market.market_index)))?;
 
-        let worst_case_base_amount =
-            position.worst_case_base_asset_amount(oracle_price, market.contract_type)?;
+        let worst_case_base_amount = position
+            .worst_case_base_asset_amount(oracle_price)
+            .map_err(|e| SdkError::Anchor(Box::new(e.into())))?;
 
         let margin_info = self.calculate_margin_info(user)?;
         let free_collateral = margin_info
@@ -202,7 +203,6 @@ impl UserMargin for DriftClient {
             .get_margin_ratio(
                 worst_case_base_amount.unsigned_abs(),
                 MarginRequirementType::Initial,
-                user.margin_mode == MarginMode::HighLeverage,
             )
             .expect("got margin ratio");
         let margin_ratio = margin_ratio.max(user.max_margin_ratio);

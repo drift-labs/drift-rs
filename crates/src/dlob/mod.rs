@@ -21,7 +21,7 @@ use crate::{
     math::auction::is_auction_complete,
     types::{
         accounts::{PerpMarket, User},
-        MarketId, MarketType, Order, OrderStatus, OrderTriggerCondition, OrderType,
+        MarketId, MarketType, Order, OrderExt, OrderStatus, OrderTriggerCondition, OrderType,
         PositionDirection,
     },
 };
@@ -824,9 +824,12 @@ impl DLOB {
         let mut all_crosses = Vec::with_capacity(16);
 
         let (vamm_bid, vamm_ask, vamm_min_order) = if let Some(m) = perp_market {
+            let m_idl: &crate::drift_idl::accounts::PerpMarket = unsafe {
+                &*(m as *const _ as *const crate::drift_idl::accounts::PerpMarket)
+            };
             (
-                Some(m.bid_price(None)),
-                Some(m.ask_price(None)),
+                Some(m_idl.bid_price(None)),
+                Some(m_idl.ask_price(None)),
                 m.amm.min_order_size,
             )
         } else {
@@ -963,7 +966,14 @@ impl DLOB {
             .unwrap_or(u64::MAX);
 
         if is_long {
-            let vamm_price = perp_market.map(|p| p.ask_price(None)).unwrap_or(u64::MAX);
+            let vamm_price = perp_market
+                .map(|p| {
+                    let p_idl: &crate::drift_idl::accounts::PerpMarket = unsafe {
+                        &*(p as *const _ as *const crate::drift_idl::accounts::PerpMarket)
+                    };
+                    p_idl.ask_price(None)
+                })
+                .unwrap_or(u64::MAX);
             self.find_crosses_for_taker_order_inner(
                 current_slot,
                 taker_order.price,
@@ -975,7 +985,14 @@ impl DLOB {
                 |taker_price, taker_size| taker_size > vamm_min_order && taker_price > vamm_price,
             )
         } else {
-            let vamm_price = perp_market.map(|p| p.bid_price(None)).unwrap_or(u64::MIN);
+            let vamm_price = perp_market
+                .map(|p| {
+                    let p_idl: &crate::drift_idl::accounts::PerpMarket = unsafe {
+                        &*(p as *const _ as *const crate::drift_idl::accounts::PerpMarket)
+                    };
+                    p_idl.bid_price(None)
+                })
+                .unwrap_or(u64::MIN);
             self.find_crosses_for_taker_order_inner(
                 current_slot,
                 taker_order.price,
@@ -1178,8 +1195,11 @@ impl L3Book {
                 }
 
                 if let Some(x) = v {
-                    if let Ok(vamm_price) = market.fallback_price(
-                        Direction::Long,
+                    let market_idl: &crate::drift_idl::accounts::PerpMarket = unsafe {
+                        &*(market as *const _ as *const crate::drift_idl::accounts::PerpMarket)
+                    };
+                    if let Ok(vamm_price) = market_idl.fallback_price(
+                        crate::drift_idl::types::PositionDirection::Long,
                         oracle_price_for_vamm,
                         x.max_ts.saturating_sub(now) as i64,
                     ) {
@@ -1314,8 +1334,11 @@ impl L3Book {
                 }
 
                 if let Some(x) = v {
-                    if let Ok(vamm_price) = market.fallback_price(
-                        Direction::Short,
+                    let market_idl: &crate::drift_idl::accounts::PerpMarket = unsafe {
+                        &*(market as *const _ as *const crate::drift_idl::accounts::PerpMarket)
+                    };
+                    if let Ok(vamm_price) = market_idl.fallback_price(
+                        crate::drift_idl::types::PositionDirection::Short,
                         oracle_price_for_vamm,
                         x.max_ts.saturating_sub(now) as i64,
                     ) {
