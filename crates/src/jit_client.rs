@@ -10,17 +10,13 @@ use crate::solana_sdk::{
     pubkey::Pubkey,
     signature::Signature,
 };
-use anchor_lang::{
-    prelude::borsh::{self},
-    AnchorDeserialize, AnchorSerialize, InstructionData,
-};
+use anchor_lang::{AnchorDeserialize, AnchorSerialize, InstructionData};
 use solana_rpc_client_api::config::RpcSendTransactionConfig;
 
 use crate::{
     accounts::User,
     build_accounts,
     constants::{self, derive_revenue_share_escrow, state_account, JIT_PROXY_ID},
-    drift_idl,
     swift_order_subscriber::SignedOrderInfo,
     types::{OrderExt, PositionDirection},
     DriftClient, MarketId, MarketType, PostOnlyParam, ReferrerInfo, SdkError, SdkResult,

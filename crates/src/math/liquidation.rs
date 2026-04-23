@@ -6,7 +6,7 @@ use std::ops::Neg;
 
 use super::get_oracle_normalization_factor;
 use drift::{
-    sdk::{calculate_margin, oracle_price as sdk_oracle_price, DriftAccounts, OwnedAccount},
+    sdk::{calculate_margin, oracle_price as sdk_oracle_price, DriftAccounts},
     state::margin_calculation::MarginContext,
 };
 

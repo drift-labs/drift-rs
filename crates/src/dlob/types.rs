@@ -16,8 +16,8 @@ use crate::{
     dlob::{Direction, OrderDelta},
     math::standardize_price,
     types::{
-        accounts::PerpMarket, MarketId, MarketType, Order, OrderParams, OrderStatus,
-        OrderTriggerCondition, OrderType, SdkResult,
+        accounts::PerpMarket, MarketId, MarketType, Order, OrderParams, OrderTriggerCondition,
+        OrderType, SdkResult,
     },
 };
 
@@ -363,7 +363,6 @@ impl TriggerOrder {
                     OrderTriggerCondition::Below => OrderTriggerCondition::TriggeredBelow,
                     other @ (OrderTriggerCondition::TriggeredAbove
                     | OrderTriggerCondition::TriggeredBelow) => other,
-                    _ => OrderTriggerCondition::Above,
                 },
                 bit_flags: self.bit_flags,
                 ..Default::default()

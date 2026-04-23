@@ -2,7 +2,6 @@ use std::{
     cell::{BorrowError, BorrowMutError},
     cmp::Ordering,
     fmt::Display,
-    str::FromStr,
 };
 
 pub use crate::solana_sdk::{
@@ -143,84 +142,6 @@ pub fn is_one_of_variant<T: PartialEq>(value: &T, variants: &[T]) -> bool {
     variants.iter().any(|variant| value == variant)
 }
 
-/// Conversions between drift native enums and their IDL-generated equivalents.
-///
-/// These exist while Phase 4 (instruction-building rewrite) is pending:
-/// TransactionBuilder still uses IDL-generated instruction structs that embed
-/// `drift_idl::types::{MarketType, PositionDirection, OracleSource, ...}`, so
-/// drift-native values need a shim on their way into those structs.
-pub mod idl_conv {
-    use crate::drift_idl::types as idl;
-    pub fn market_type_to_idl(v: super::MarketType) -> idl::MarketType {
-        match v {
-            super::MarketType::Perp => idl::MarketType::Perp,
-            super::MarketType::Spot => idl::MarketType::Spot,
-        }
-    }
-    pub fn market_type_from_idl(v: idl::MarketType) -> super::MarketType {
-        match v {
-            idl::MarketType::Perp => super::MarketType::Perp,
-            idl::MarketType::Spot => super::MarketType::Spot,
-        }
-    }
-    pub fn position_direction_to_idl(v: super::PositionDirection) -> idl::PositionDirection {
-        match v {
-            super::PositionDirection::Long => idl::PositionDirection::Long,
-            super::PositionDirection::Short => idl::PositionDirection::Short,
-        }
-    }
-    pub fn position_direction_from_idl(v: idl::PositionDirection) -> super::PositionDirection {
-        match v {
-            idl::PositionDirection::Long => super::PositionDirection::Long,
-            idl::PositionDirection::Short => super::PositionDirection::Short,
-        }
-    }
-    pub fn oracle_source_to_idl(v: super::OracleSource) -> idl::OracleSource {
-        // Match on discriminant ordering (drift's IDL is the source of truth).
-        match v {
-            super::OracleSource::Pyth => idl::OracleSource::Pyth,
-            super::OracleSource::DeprecatedSwitchboard => idl::OracleSource::Switchboard,
-            super::OracleSource::QuoteAsset => idl::OracleSource::QuoteAsset,
-            super::OracleSource::Pyth1K => idl::OracleSource::Pyth1K,
-            super::OracleSource::Pyth1M => idl::OracleSource::Pyth1M,
-            super::OracleSource::PythStableCoin => idl::OracleSource::PythStableCoin,
-            super::OracleSource::Prelaunch => idl::OracleSource::Prelaunch,
-            super::OracleSource::PythPull => idl::OracleSource::PythPull,
-            super::OracleSource::Pyth1KPull => idl::OracleSource::Pyth1KPull,
-            super::OracleSource::Pyth1MPull => idl::OracleSource::Pyth1MPull,
-            super::OracleSource::PythStableCoinPull => idl::OracleSource::PythStableCoinPull,
-            super::OracleSource::DeprecatedSwitchboardOnDemand => {
-                idl::OracleSource::SwitchboardOnDemand
-            }
-            super::OracleSource::PythLazer => idl::OracleSource::PythLazer,
-            super::OracleSource::PythLazer1K => idl::OracleSource::PythLazer1K,
-            super::OracleSource::PythLazer1M => idl::OracleSource::PythLazer1M,
-            super::OracleSource::PythLazerStableCoin => idl::OracleSource::PythLazerStableCoin,
-        }
-    }
-    pub fn oracle_source_from_idl(v: idl::OracleSource) -> super::OracleSource {
-        match v {
-            idl::OracleSource::Pyth => super::OracleSource::Pyth,
-            idl::OracleSource::Switchboard => super::OracleSource::DeprecatedSwitchboard,
-            idl::OracleSource::QuoteAsset => super::OracleSource::QuoteAsset,
-            idl::OracleSource::Pyth1K => super::OracleSource::Pyth1K,
-            idl::OracleSource::Pyth1M => super::OracleSource::Pyth1M,
-            idl::OracleSource::PythStableCoin => super::OracleSource::PythStableCoin,
-            idl::OracleSource::Prelaunch => super::OracleSource::Prelaunch,
-            idl::OracleSource::PythPull => super::OracleSource::PythPull,
-            idl::OracleSource::Pyth1KPull => super::OracleSource::Pyth1KPull,
-            idl::OracleSource::Pyth1MPull => super::OracleSource::Pyth1MPull,
-            idl::OracleSource::PythStableCoinPull => super::OracleSource::PythStableCoinPull,
-            idl::OracleSource::SwitchboardOnDemand => {
-                super::OracleSource::DeprecatedSwitchboardOnDemand
-            }
-            idl::OracleSource::PythLazer => super::OracleSource::PythLazer,
-            idl::OracleSource::PythLazer1K => super::OracleSource::PythLazer1K,
-            idl::OracleSource::PythLazer1M => super::OracleSource::PythLazer1M,
-            idl::OracleSource::PythLazerStableCoin => super::OracleSource::PythLazerStableCoin,
-        }
-    }
-}
 
 /// SDK-side helpers for drift's `SpotMarket` (extension trait — orphan rule).
 pub trait SpotMarketExt {
@@ -372,18 +293,6 @@ impl From<(u16, MarketType)> for MarketId {
         Self {
             index: value.0,
             kind: value.1,
-        }
-    }
-}
-
-impl From<(u16, crate::drift_idl::types::MarketType)> for MarketId {
-    fn from(value: (u16, crate::drift_idl::types::MarketType)) -> Self {
-        Self {
-            index: value.0,
-            kind: match value.1 {
-                crate::drift_idl::types::MarketType::Perp => MarketType::Perp,
-                crate::drift_idl::types::MarketType::Spot => MarketType::Spot,
-            },
         }
     }
 }

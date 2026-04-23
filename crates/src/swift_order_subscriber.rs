@@ -2,7 +2,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::solana_sdk::{clock::Slot, pubkey::Pubkey, signature::Signature};
-use anchor_lang::{AnchorDeserialize, AnchorSerialize, Space};
+use anchor_lang::{AnchorDeserialize, AnchorSerialize};
 use base64::Engine;
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
