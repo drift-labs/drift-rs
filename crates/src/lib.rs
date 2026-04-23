@@ -58,7 +58,6 @@ use solana_rpc_client_api::{
 
 // utils
 pub mod async_utils;
-pub mod ffi;
 pub mod jupiter;
 pub mod market_state;
 pub mod titan;
@@ -1010,24 +1009,6 @@ impl DriftClient {
         Ok(())
     }
 
-    /// Check IDL and libdrift_ffi_sys version
-    ///
-    /// panics if there's a mismatch
-    pub fn check_libs() -> SdkResult<()> {
-        let libdrift_version = ffi::check_ffi_version();
-        let idl_version = drift_idl::IDL_VERSION;
-
-        if libdrift_version != idl_version {
-            log::warn!(
-                "libdrift_ffi_sys: {} does not match IDL: {}",
-                libdrift_version,
-                drift_idl::IDL_VERSION
-            );
-            return Err(SdkError::LibDriftVersion);
-        }
-
-        Ok(())
-    }
 
     /// Return a reference to the internal spot market map
     #[cfg(feature = "unsafe_pub")]

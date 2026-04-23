@@ -376,30 +376,6 @@ pub mod test_utils {
         bytes
     }
 
-    #[macro_export]
-    macro_rules! create_account_info {
-        ($account:expr, $pubkey:expr, $owner:expr, $name: ident) => {
-            let acc = Account {
-                data: crate::utils::test_utils::get_account_bytes(&mut $account).to_vec(),
-                owner: $owner,
-                ..Default::default()
-            };
-            let $name: crate::ffi::AccountWithKey = (*$pubkey, acc).into();
-        };
-    }
-
-    #[macro_export]
-    macro_rules! create_anchor_account_info {
-        ($account:expr, $pubkey:expr, $type:ident, $name: ident) => {
-            let owner = constants::PROGRAM_ID;
-            let acc = Account {
-                data: crate::utils::test_utils::get_anchor_account_bytes(&mut $account).to_vec(),
-                owner,
-                ..Default::default()
-            };
-            let $name: crate::ffi::AccountWithKey = ($pubkey, acc).into();
-        };
-    }
 }
 
 #[cfg(test)]

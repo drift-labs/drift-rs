@@ -559,8 +559,6 @@ pub enum SdkError {
     InvalidUrl,
     #[error("{0}")]
     WsClient(#[from] Box<tungstenite::Error>),
-    #[error("libdrift_ffi_sys out-of-date")]
-    LibDriftVersion,
     #[error("wallet signing disabled")]
     WalletSigningDisabled,
     #[error("{0}")]
