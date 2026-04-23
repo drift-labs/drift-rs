@@ -824,12 +824,10 @@ impl DLOB {
         let mut all_crosses = Vec::with_capacity(16);
 
         let (vamm_bid, vamm_ask, vamm_min_order) = if let Some(m) = perp_market {
-            let m_idl: &crate::drift_idl::accounts::PerpMarket = unsafe {
-                &*(m as *const _ as *const crate::drift_idl::accounts::PerpMarket)
-            };
+            let r = m.amm.reserve_price().unwrap_or(0);
             (
-                Some(m_idl.bid_price(None)),
-                Some(m_idl.ask_price(None)),
+                m.amm.bid_price(r).ok(),
+                m.amm.ask_price(r).ok(),
                 m.amm.min_order_size,
             )
         } else {
@@ -967,11 +965,9 @@ impl DLOB {
 
         if is_long {
             let vamm_price = perp_market
-                .map(|p| {
-                    let p_idl: &crate::drift_idl::accounts::PerpMarket = unsafe {
-                        &*(p as *const _ as *const crate::drift_idl::accounts::PerpMarket)
-                    };
-                    p_idl.ask_price(None)
+                .and_then(|p| {
+                    let r = p.amm.reserve_price().ok()?;
+                    p.amm.ask_price(r).ok()
                 })
                 .unwrap_or(u64::MAX);
             self.find_crosses_for_taker_order_inner(
@@ -986,11 +982,9 @@ impl DLOB {
             )
         } else {
             let vamm_price = perp_market
-                .map(|p| {
-                    let p_idl: &crate::drift_idl::accounts::PerpMarket = unsafe {
-                        &*(p as *const _ as *const crate::drift_idl::accounts::PerpMarket)
-                    };
-                    p_idl.bid_price(None)
+                .and_then(|p| {
+                    let r = p.amm.reserve_price().ok()?;
+                    p.amm.bid_price(r).ok()
                 })
                 .unwrap_or(u64::MIN);
             self.find_crosses_for_taker_order_inner(
@@ -1195,16 +1189,19 @@ impl L3Book {
                 }
 
                 if let Some(x) = v {
-                    let market_idl: &crate::drift_idl::accounts::PerpMarket = unsafe {
-                        &*(market as *const _ as *const crate::drift_idl::accounts::PerpMarket)
-                    };
-                    if let Ok(vamm_price) = market_idl.fallback_price(
-                        crate::drift_idl::types::PositionDirection::Long,
-                        oracle_price_for_vamm,
-                        x.max_ts.saturating_sub(now) as i64,
+                    if let Ok(liq) = drift::math::amm::calculate_amm_available_liquidity(
+                        &market.amm,
+                        &PositionDirection::Long,
                     ) {
-                        if vamm_price > best_price {
-                            best_src = Some(Src::Vamm);
+                        if let Ok(vamm_price) = market.amm.get_fallback_price(
+                            &PositionDirection::Long,
+                            liq,
+                            oracle_price_for_vamm,
+                            x.max_ts.saturating_sub(now) as i64,
+                        ) {
+                            if vamm_price > best_price {
+                                best_src = Some(Src::Vamm);
+                            }
                         }
                     }
                 }
@@ -1334,16 +1331,19 @@ impl L3Book {
                 }
 
                 if let Some(x) = v {
-                    let market_idl: &crate::drift_idl::accounts::PerpMarket = unsafe {
-                        &*(market as *const _ as *const crate::drift_idl::accounts::PerpMarket)
-                    };
-                    if let Ok(vamm_price) = market_idl.fallback_price(
-                        crate::drift_idl::types::PositionDirection::Short,
-                        oracle_price_for_vamm,
-                        x.max_ts.saturating_sub(now) as i64,
+                    if let Ok(liq) = drift::math::amm::calculate_amm_available_liquidity(
+                        &market.amm,
+                        &PositionDirection::Short,
                     ) {
-                        if vamm_price < best_price {
-                            best_src = Some(Src::Vamm);
+                        if let Ok(vamm_price) = market.amm.get_fallback_price(
+                            &PositionDirection::Short,
+                            liq,
+                            oracle_price_for_vamm,
+                            x.max_ts.saturating_sub(now) as i64,
+                        ) {
+                            if vamm_price < best_price {
+                                best_src = Some(Src::Vamm);
+                            }
                         }
                     }
                 }

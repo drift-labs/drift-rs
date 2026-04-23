@@ -542,7 +542,7 @@ fn dlob_find_crosses_for_taker_order_vamm_cross() {
     // Test 1: Taker order with size > min_order_size that crosses vamm
     // Get the actual VAMM ask price and ensure taker price is higher
     // Both prices should be in the same units for comparison
-    let vamm_ask_price = unsafe { &*(&perp_market as *const _ as *const crate::drift_idl::accounts::PerpMarket) }.ask_price(None);
+    let vamm_ask_price = perp_market.amm.reserve_price().and_then(|r| perp_market.amm.ask_price(r)).unwrap_or(0);
     // Use a price that's definitely higher than VAMM ask price
     // Add a large buffer to account for any unit differences
     let taker_price = vamm_ask_price.saturating_add(1_000_000_000).max(10_000_000);
@@ -1278,7 +1278,7 @@ fn dlob_find_crosses_for_auctions_vamm_min_order_size() {
     };
 
     // Get the actual VAMM ask price and use prices that are definitely higher
-    let vamm_ask_price = unsafe { &*(&perp_market as *const _ as *const crate::drift_idl::accounts::PerpMarket) }.ask_price(None);
+    let vamm_ask_price = perp_market.amm.reserve_price().and_then(|r| perp_market.amm.ask_price(r)).unwrap_or(0);
     let taker_price = vamm_ask_price.saturating_add(1_000_000_000).max(10_000_000);
     let taker_price_i64 = taker_price.min(i64::MAX as u64) as i64;
 
