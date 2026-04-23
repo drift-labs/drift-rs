@@ -431,13 +431,13 @@ async fn place_order_sim_via_privy_account() {
         .expect("user account");
 
     let taker_order_params = OrderParams {
-        order_type: OrderType::Oracle,
-        market_type: MarketType::Perp,
-        direction: PositionDirection::Long,
+        order_type: drift_rs::drift_idl::types::OrderType::Oracle,
+        market_type: drift_rs::drift_idl::types::MarketType::Perp,
+        direction: drift_rs::drift_idl::types::PositionDirection::Long,
         base_asset_amount: 100000,
         price: 0,
         market_index: 1,
-        post_only: PostOnlyParam::None,
+        post_only: drift_rs::drift_idl::types::PostOnlyParam::None,
         bit_flags: 0,
         oracle_price_offset: Some(62656166),
         auction_duration: Some(20),

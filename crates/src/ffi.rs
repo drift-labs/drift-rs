@@ -1457,8 +1457,8 @@ mod tests {
             accounts::{PerpMarket, SpotMarket, User},
             types::{
                 ContractType, MarginRequirementType, OracleSource, Order, OrderParams,
-                OrderTriggerCondition, OrderType, PerpPosition, PostOnlyParam, SpotBalanceType,
-                SpotPosition,
+                OrderTriggerCondition, OrderType, PerpPosition, PositionDirection,
+                PostOnlyParam, SpotBalanceType, SpotPosition,
             },
         },
         ffi::{
@@ -1473,9 +1473,11 @@ mod tests {
             QUOTE_PRECISION_I64, SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64,
             SPOT_CUMULATIVE_INTEREST_PRECISION, SPOT_WEIGHT_PRECISION,
         },
-        types::{accounts::HighLeverageModeConfig, ContractTier, MarketType, ValidityGuardRails},
+        drift_idl::types::{
+            ContractTier, HistoricalOracleData, MarketStatus, MarketType, ValidityGuardRails, AMM,
+        },
+        drift_idl::accounts::HighLeverageModeConfig,
         utils::test_utils::{get_account_bytes, get_pyth_price},
-        HistoricalOracleData, MarketStatus, PositionDirection, AMM,
     };
 
     fn sol_spot_market() -> SpotMarket {

@@ -465,8 +465,14 @@ impl NewOrder {
         self
     }
     /// Set post-only (default: None)
-    pub fn post_only(mut self, value: crate::drift_idl::types::PostOnlyParam) -> Self {
-        self.post_only = value;
+    pub fn post_only(mut self, value: PostOnlyParam) -> Self {
+        use crate::drift_idl::types::PostOnlyParam as IdlPostOnly;
+        self.post_only = match value {
+            PostOnlyParam::None => IdlPostOnly::None,
+            PostOnlyParam::MustPostOnly => IdlPostOnly::MustPostOnly,
+            PostOnlyParam::TryPostOnly => IdlPostOnly::TryPostOnly,
+            PostOnlyParam::Slide => IdlPostOnly::Slide,
+        };
         self
     }
     /// Set user order id
@@ -897,13 +903,14 @@ mod tests {
         response::RpcSimulateTransactionResult,
     };
 
-    use super::{RemainingAccount, SdkError};
-    use crate::{drift_idl::errors::ErrorCode, types::ProgramError, MarketType};
+    use super::{market_type_from_str, MarketTypeExt, RemainingAccount, SdkError};
+    use crate::{types::ProgramError, MarketType};
+    use drift::error::ErrorCode;
 
     #[test]
     fn market_type_str() {
-        assert_eq!(MarketType::from_str("PERP").unwrap(), MarketType::Perp,);
-        assert_eq!(MarketType::from_str("spot").unwrap(), MarketType::Spot,);
+        assert_eq!(market_type_from_str("PERP").unwrap(), MarketType::Perp);
+        assert_eq!(market_type_from_str("spot").unwrap(), MarketType::Spot);
         assert_eq!("perp", MarketType::Perp.as_str());
         assert_eq!("spot", MarketType::Spot.as_str());
     }

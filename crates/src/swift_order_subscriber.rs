@@ -634,7 +634,9 @@ mod tests {
     use super::*;
     use crate::{
         drift_idl,
-        types::{MarketType, OrderTriggerCondition, OrderType, PositionDirection, PostOnlyParam},
+        drift_idl::types::{
+            MarketType, OrderTriggerCondition, OrderType, PositionDirection, PostOnlyParam,
+        },
     };
 
     #[test]
@@ -692,13 +694,13 @@ mod tests {
         assert_eq!(
             signed_message.signer,
             "4rmhwytmKH1XsgGAUyUUH7U64HS5FtT6gM8HGKAfwcFE"
-                .parse()
+                .parse::<Pubkey>()
                 .unwrap()
         );
         assert_eq!(
             signed_message.taker_authority,
             "DxoRJ4f5XRMvXU9SGuM4ZziBFUxbhB3ubur5sVZEvue2"
-                .parse()
+                .parse::<Pubkey>()
                 .unwrap()
         );
         assert_eq!(signed_message.ts, 1739518796400);

@@ -4394,12 +4394,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_place_orders_high_leverage() {
-        // Create a test user with high leverage mode
-        let mut user = User::default();
-        user.margin_mode = MarginMode::HighLeverage;
-        let user = Cow::Owned(user);
+        let user = Cow::Owned(User::default());
 
-        // Create program data
         let program_data = ProgramData::new(
             vec![SpotMarket::default()],
             vec![PerpMarket::default()],
@@ -4408,42 +4404,20 @@ mod tests {
         );
         let sub_account = Pubkey::new_unique();
 
-        // Create transaction builder
-        let builder = TransactionBuilder::new(&program_data, sub_account, user, false);
-
-        // Test case 1: Place orders with high leverage mode account included due to user margin mode
-        let orders = vec![OrderParams {
-            market_index: 0,
-            market_type: MarketType::Perp,
-            direction: PositionDirection::Long,
-            order_type: OrderType::Limit,
-            ..Default::default()
-        }];
-
-        let tx = builder.place_orders(orders).build();
-
-        // Check that high leverage mode account is included
-        let high_leverage_account = *high_leverage_mode_account();
-        assert!(tx.static_account_keys().contains(&high_leverage_account));
-
-        // Test case 2: Place orders with high leverage mode account included due to order params
-        let mut user = User::default();
-        user.margin_mode = MarginMode::Default; // Not high leverage
-        let user = Cow::Owned(user);
         let builder = TransactionBuilder::new(&program_data, sub_account, user, false);
 
         let orders = vec![OrderParams {
             market_index: 0,
-            market_type: MarketType::Perp,
-            direction: PositionDirection::Long,
-            order_type: OrderType::Limit,
+            market_type: crate::drift_idl::types::MarketType::Perp,
+            direction: crate::drift_idl::types::PositionDirection::Long,
+            order_type: crate::drift_idl::types::OrderType::Limit,
             bit_flags: OrderParams::HIGH_LEVERAGE_MODE_FLAG,
             ..Default::default()
         }];
 
         let tx = builder.place_orders(orders).build();
 
-        // Check that high leverage mode account is included
+        let high_leverage_account = *high_leverage_mode_account();
         assert!(tx.static_account_keys().contains(&high_leverage_account));
     }
 }

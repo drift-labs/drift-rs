@@ -118,8 +118,9 @@ mod tests {
             ..Default::default()
         };
 
-        let mut buf = Vec::<u8>::default();
-        mock_user.try_serialize(&mut buf).expect("serializes");
+        let mut buf = Vec::<u8>::with_capacity(8 + std::mem::size_of::<User>());
+        buf.extend_from_slice(&<User as anchor_lang::Discriminator>::DISCRIMINATOR);
+        buf.extend_from_slice(bytemuck::bytes_of(&mock_user));
 
         let mock_account = Account {
             data: buf,

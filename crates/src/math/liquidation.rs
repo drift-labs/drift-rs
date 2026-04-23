@@ -409,7 +409,10 @@ mod tests {
             ids::pyth_program,
             {self},
         },
-        drift_idl::types::{HistoricalOracleData, MarketStatus, OracleSource, SpotPosition, AMM},
+        types::{
+            HistoricalOracleData, MarketStatus, OracleSource, AMM,
+        },
+        SpotPosition,
         math::constants::{
             AMM_RESERVE_PRECISION, BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, PEG_PRECISION,
             PRICE_PRECISION_I64, SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64,
@@ -505,7 +508,7 @@ mod tests {
                 last_oracle_conf: 0,
                 last_oracle_delay: 0,
                 last_oracle_price_twap: PRICE_PRECISION_I64,
-                last_oracle_price_twap5min: PRICE_PRECISION_I64,
+                last_oracle_price_twap_5min: PRICE_PRECISION_I64,
                 ..HistoricalOracleData::default()
             },
             ..SpotMarket::default()
