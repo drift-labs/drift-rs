@@ -1,7 +1,11 @@
 use crate::types::{AssetTier, ContractTier};
 
-impl ContractTier {
-    pub fn to_number(&self) -> u8 {
+/// Extension trait: numeric ordering for drift's `ContractTier` (orphan rule).
+pub trait ContractTierExt {
+    fn to_number(&self) -> u8;
+}
+impl ContractTierExt for ContractTier {
+    fn to_number(&self) -> u8 {
         match self {
             ContractTier::A => 0,
             ContractTier::B => 1,
@@ -13,8 +17,12 @@ impl ContractTier {
     }
 }
 
-impl AssetTier {
-    pub fn to_number(&self) -> u8 {
+/// Extension trait: numeric ordering for drift's `AssetTier` (orphan rule).
+pub trait AssetTierExt {
+    fn to_number(&self) -> u8;
+}
+impl AssetTierExt for AssetTier {
+    fn to_number(&self) -> u8 {
         match self {
             AssetTier::Collateral => 0,
             AssetTier::Protected => 1,

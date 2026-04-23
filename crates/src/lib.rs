@@ -961,9 +961,23 @@ impl DriftClient {
         let perp_market = self.try_get_perp_market_account(market_index)?;
         let oracle_validity_guard_rails = self.state_account().unwrap().oracle_guard_rails.validity;
 
+        // FFI returns `abi_types::OraclePriceData`; layouts match drift's native
+        // `OraclePriceData` (both `#[repr(C)]` with identical fields). Transmute
+        // until Phase 3 replaces FFI get_oracle_price with a direct drift call.
+        let drift_oracle_data: drift::state::oracle::OraclePriceData = unsafe {
+            std::mem::transmute_copy::<ffi::abi_types::OraclePriceData, _>(&oracle_data.data)
+        };
         perp_market
-            .get_mm_oracle_price_data(oracle_data.data, current_slot, &oracle_validity_guard_rails)
-            .map(|x| x.safe_oracle_price_data)
+            .get_mm_oracle_price_data(
+                drift_oracle_data,
+                current_slot,
+                &oracle_validity_guard_rails,
+            )
+            .map(|x| x.get_safe_oracle_price_data())
+            .map(|d| unsafe {
+                std::mem::transmute_copy::<drift::state::oracle::OraclePriceData, _>(&d)
+            })
+            .map_err(|e| SdkError::Anchor(Box::new(e.into())))
     }
 
     /// Get the latest oracle data for `market`
@@ -1745,7 +1759,7 @@ impl DriftClientBackend {
             };
             let (account_data, slot) = self.get_account_with_slot_raw(&oracle).await?;
             let oracle_price_data = ffi::get_oracle_price(
-                oracle_source,
+                crate::types::idl_conv::oracle_source_to_idl(oracle_source),
                 &mut (oracle, account_data.clone().into()),
                 slot,
             )?;
@@ -2177,12 +2191,9 @@ impl<'a> TransactionBuilder<'a> {
             self.force_markets.writeable.iter(),
         );
 
-        if self
-            .account_data
-            .margin_mode
-            .is_high_leverage_mode(MarginRequirementType::Maintenance)
-            || orders.iter().any(|x| x.high_leverage_mode())
-        {
+        // Upstream drift removed User.margin_mode; high-leverage mode now
+        // comes exclusively from individual OrderParams flags.
+        if orders.iter().any(|x| x.high_leverage_mode()) {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
@@ -2254,8 +2265,8 @@ impl<'a> TransactionBuilder<'a> {
             accounts,
             data: InstructionData::data(&drift_idl::instructions::CancelOrders {
                 market_index: Some(idx),
-                market_type: Some(r#type),
-                direction,
+                market_type: Some(crate::types::idl_conv::market_type_to_idl(r#type)),
+                direction: direction.map(crate::types::idl_conv::position_direction_to_idl),
             }),
         };
         self.ixs.push(ix);
@@ -2389,7 +2400,7 @@ impl<'a> TransactionBuilder<'a> {
         fulfillment_type: Option<SpotFulfillmentType>,
     ) -> Self {
         let (taker, taker_account) = taker_info;
-        let is_perp = order.market_type == MarketType::Perp;
+        let is_perp = order.market_type == crate::drift_idl::types::MarketType::Perp;
         let perp_writable = [MarketId::perp(order.market_index)];
         let spot_writable = [MarketId::spot(order.market_index), MarketId::QUOTE_SPOT];
         let mut accounts = build_accounts(
@@ -2412,12 +2423,9 @@ impl<'a> TransactionBuilder<'a> {
             .chain(self.force_markets.writeable.iter()),
         );
 
-        if order.high_leverage_mode()
-            || taker_info
-                .1
-                .margin_mode
-                .is_high_leverage_mode(MarginRequirementType::Maintenance)
-        {
+        // Upstream drift removed User.margin_mode; high-leverage mode now
+        // comes exclusively from individual OrderParams flags.
+        if order.high_leverage_mode() {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
@@ -2429,7 +2437,7 @@ impl<'a> TransactionBuilder<'a> {
             accounts.push(AccountMeta::new(referrer, false));
         }
 
-        let ix = if order.market_type == MarketType::Perp {
+        let ix = if order.market_type == crate::drift_idl::types::MarketType::Perp {
             Instruction {
                 program_id: constants::PROGRAM_ID,
                 accounts,
@@ -2474,7 +2482,7 @@ impl<'a> TransactionBuilder<'a> {
             user_accounts.push(maker_account);
         }
 
-        let is_perp = order.market_type == MarketType::Perp;
+        let is_perp = order.market_type == crate::drift_idl::types::MarketType::Perp;
         let perp_writable = [MarketId::perp(order.market_index)];
         let spot_writable = [MarketId::spot(order.market_index), MarketId::QUOTE_SPOT];
 
@@ -2559,7 +2567,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let order_params = signed_order_info.order_params();
         assert!(
-            order_params.market_type == MarketType::Perp,
+            order_params.market_type == crate::drift_idl::types::MarketType::Perp,
             "only swift perps are supported"
         );
         self = self.place_swift_order(signed_order_info, taker_account);
@@ -2628,7 +2636,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let order_params = signed_order_info.order_params();
         assert!(
-            order_params.market_type == MarketType::Perp,
+            order_params.market_type == crate::drift_idl::types::MarketType::Perp,
             "only swift perps are supported"
         );
 
@@ -2656,11 +2664,9 @@ impl<'a> TransactionBuilder<'a> {
             self.force_markets.writeable.iter(),
         );
 
-        if order_params.high_leverage_mode()
-            || taker_account
-                .margin_mode
-                .is_high_leverage_mode(MarginRequirementType::Maintenance)
-        {
+        // Upstream drift removed User.margin_mode; high-leverage mode now
+        // comes exclusively from individual OrderParams flags.
+        if order_params.high_leverage_mode() {
             accounts.push(AccountMeta::new(*high_leverage_mode_account(), false));
         }
 
@@ -3309,7 +3315,10 @@ impl<'a> TransactionBuilder<'a> {
             accounts,
             data: InstructionData::data(&drift_idl::instructions::SettleMultiplePnls {
                 market_indexes: markets.to_vec(),
-                mode,
+                mode: match mode {
+                    SettlePnlMode::MustSettle => drift_idl::types::SettlePnlMode::MustSettle,
+                    SettlePnlMode::TrySettle => drift_idl::types::SettlePnlMode::TrySettle,
+                },
             }),
         };
 
@@ -3617,7 +3626,7 @@ impl<'a> TransactionBuilder<'a> {
             data: InstructionData::data(&drift_idl::instructions::LiquidateSpot {
                 asset_market_index,
                 liability_market_index,
-                liquidator_max_liability_transfer,
+                liquidator_max_liability_transfer: liquidator_max_liability_transfer.into(),
                 limit_price,
             }),
         };
@@ -3935,7 +3944,7 @@ impl<'a> TransactionBuilder<'a> {
             data: InstructionData::data(&drift_idl::instructions::LiquidatePerpPnlForDeposit {
                 perp_market_index,
                 spot_market_index,
-                liquidator_max_pnl_transfer,
+                liquidator_max_pnl_transfer: liquidator_max_pnl_transfer.into(),
                 limit_price,
             }),
         };
@@ -3991,7 +4000,7 @@ impl<'a> TransactionBuilder<'a> {
             data: InstructionData::data(&drift_idl::instructions::LiquidateBorrowForPerpPnl {
                 perp_market_index,
                 spot_market_index,
-                liquidator_max_liability_transfer,
+                liquidator_max_liability_transfer: liquidator_max_liability_transfer.into(),
                 limit_price,
             }),
         };

@@ -7,7 +7,8 @@ use std::{
 };
 
 use crate::solana_sdk::{clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey};
-use anchor_lang::{AccountDeserialize, AnchorDeserialize};
+use anchor_lang::{AccountDeserialize, Discriminator};
+use bytemuck::Pod;
 use dashmap::DashMap;
 use drift_pubsub_client::PubsubClient;
 use futures_util::{
@@ -26,10 +27,9 @@ use solana_rpc_client_api::{
 use crate::{
     accounts::State,
     constants::{self, derive_perp_market_account, derive_spot_market_account, state_account},
-    drift_idl::types::OracleSource,
     grpc::AccountUpdate,
     memcmp::get_market_filter,
-    types::{MapOf, EMPTY_ACCOUNT_CALLBACK},
+    types::{MapOf, OracleSource, EMPTY_ACCOUNT_CALLBACK},
     websocket_account_subscriber::WebsocketAccountSubscriber,
     DataAndSlot, MarketId, MarketType, PerpMarket, SdkResult, SpotMarket, UnsubHandle,
 };
@@ -78,7 +78,7 @@ impl Market for SpotMarket {
 ///
 /// Caller can subscribe to updates via Ws with `.subscribe(..)`
 /// or drive the map by calling `.sync()` periodically
-pub struct MarketMap<T: AnchorDeserialize + Send> {
+pub struct MarketMap<T: Pod + Discriminator + Send> {
     pub marketmap: Arc<DashMap<u16, DataAndSlot<T>, ahash::RandomState>>,
     subscriptions: DashMap<u16, UnsubHandle, ahash::RandomState>,
     latest_slot: Arc<AtomicU64>,
@@ -88,7 +88,7 @@ pub struct MarketMap<T: AnchorDeserialize + Send> {
 
 impl<T> MarketMap<T>
 where
-    T: AnchorDeserialize + Clone + Send + Sync + Market + 'static,
+    T: Pod + Discriminator + Clone + Send + Sync + Market + 'static,
 {
     pub const SUBSCRIPTION_ID: &'static str = "marketmap";
 
@@ -111,7 +111,7 @@ where
     pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
         let marketmap = self.map();
         move |update: &AccountUpdate| {
-            let market = T::deserialize(&mut &update.data[8..]).expect("deser market");
+            let market = *crate::utils::deser_zero_copy::<T>(&update.data);
             let idx = market.market_index();
             marketmap.insert(
                 idx,
@@ -183,8 +183,7 @@ where
                                 idx,
                                 DataAndSlot {
                                     slot: update.slot,
-                                    data: T::deserialize(&mut &update.data.as_slice()[8..])
-                                        .expect("valid market"),
+                                    data: *crate::utils::deser_zero_copy::<T>(&update.data),
                                 },
                             );
                             on_account(update);
@@ -296,7 +295,7 @@ where
 ///     getProgramAccounts, getMultipleAccounts, lastly multiple getAccountInfo
 ///
 /// Returns deserialized accounts and retrieved slot
-pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
+pub async fn get_market_accounts_with_fallback<T: Market + Pod + Discriminator>(
     rpc: &RpcClient,
 ) -> SdkResult<(Vec<T>, Slot)> {
     let mut markets = Vec::<T>::default();
@@ -325,8 +324,7 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
     if let Ok(OptionalContext::Context(accounts)) = response {
         for account in accounts.value {
             let market_data = account.account.data.decode().expect("Market data");
-            let data = T::deserialize(&mut &market_data[8..]).expect("deserializes Market");
-            markets.push(data);
+            markets.push(*crate::utils::deser_zero_copy::<T>(&market_data));
         }
         return Ok((markets, accounts.context.slot));
     }
@@ -369,10 +367,7 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
                 for market in data.value {
                     match market {
                         Some(market) => {
-                            markets.push(
-                                T::deserialize(&mut &market.data.as_slice()[8..])
-                                    .expect("market deserializes"),
-                            );
+                            markets.push(*crate::utils::deser_zero_copy::<T>(&market.data));
                         }
                         None => {
                             log::warn!(
@@ -409,8 +404,7 @@ pub async fn get_market_accounts_with_fallback<T: Market + AnchorDeserialize>(
     while let Some(market_response) = market_requests.next().await {
         match market_response {
             Ok(data) => {
-                markets
-                    .push(T::deserialize(&mut &data.as_slice()[8..]).expect("market deserializes"));
+                markets.push(*crate::utils::deser_zero_copy::<T>(&data));
             }
             Err(err) => {
                 log::warn!("failed to fetch market account: {err:?}");

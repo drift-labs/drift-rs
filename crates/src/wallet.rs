@@ -11,7 +11,7 @@ use crate::solana_sdk::{
 
 use crate::{
     constants::{self},
-    types::{accounts::SpotMarket, SdkError, SdkResult},
+    types::{accounts::SpotMarket, SdkError, SdkResult, SpotMarketExt},
     utils,
 };
 

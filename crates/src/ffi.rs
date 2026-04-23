@@ -8,23 +8,27 @@ use crate::solana_sdk::{clock::Slot, pubkey::Pubkey};
 use anchor_lang::{prelude::AccountInfo, Discriminator};
 
 pub use self::abi_types::*;
+// ffi.rs operates entirely in drift_idl types: those are the C-ABI types
+// drift-ffi-sys exports. drift native types flow in/out via transmute at the
+// boundary (layouts match because both are `#[repr(C)]`-identical IDL-derived
+// structs).
 use crate::{
     constants::{high_leverage_mode_account, PROGRAM_ID},
     drift_idl::{
-        accounts,
+        accounts::{self, HighLeverageModeConfig, PerpMarket},
         errors::ErrorCode,
-        types::{self, ContractType, MarginRequirementType, OracleSource},
+        types::{
+            self, ContractTier, ContractType, FeeTier, MarginRequirementType, OracleSource, Order,
+            OrderParams, OrderType, PositionDirection, RevenueShareOrder, SpotBalanceType,
+            ValidityGuardRails,
+        },
     },
     market_state::MarketState,
     math::{
         constants::{BID_ASK_SPREAD_PRECISION_I64, PERCENTAGE_PRECISION_I128, QUOTE_PRECISION_I64},
         standardize_price_i64,
     },
-    types::{
-        accounts::{HighLeverageModeConfig, PerpMarket},
-        ContractTier, FeeTier, Order, OrderParams, OrderType, PositionDirection,
-        ProtectedMakerParams, RevenueShareOrder, SdkError, SpotBalanceType, ValidityGuardRails,
-    },
+    types::{ProtectedMakerParams, SdkError},
     SdkResult,
 };
 
@@ -354,7 +358,10 @@ pub fn simulate_place_perp_order<'a>(
     max_margin_ratio: Option<u16>,
     revenue_share_order: &mut Option<&mut RevenueShareOrder>,
 ) -> SdkResult<bool> {
-    if order_params.high_leverage_mode() && high_leverage_mode_config.is_none() {
+    const HIGH_LEVERAGE_MODE_FLAG: u8 = 0b0000_0010;
+    if (order_params.bit_flags & HIGH_LEVERAGE_MODE_FLAG) != 0
+        && high_leverage_mode_config.is_none()
+    {
         return Err(SdkError::Generic(
             "HLM config account must be provided".to_owned(),
         ));
@@ -482,8 +489,16 @@ impl types::OrderParams {
                     };
 
                     Some((
-                        standardize_price_i64(auction_start_price, tick_size, self.direction),
-                        standardize_price_i64(auction_end_price, tick_size, self.direction),
+                        standardize_price_i64(
+                            auction_start_price,
+                            tick_size,
+                            crate::types::idl_conv::position_direction_from_idl(self.direction),
+                        ),
+                        standardize_price_i64(
+                            auction_end_price,
+                            tick_size,
+                            crate::types::idl_conv::position_direction_from_idl(self.direction),
+                        ),
                         auction_duration,
                     ))
                 }
@@ -503,8 +518,16 @@ impl types::OrderParams {
             };
 
         Some((
-            standardize_price_i64(auction_start_price, tick_size, self.direction),
-            standardize_price_i64(auction_end_price, tick_size, self.direction),
+            standardize_price_i64(
+                auction_start_price,
+                tick_size,
+                crate::types::idl_conv::position_direction_from_idl(self.direction),
+            ),
+            standardize_price_i64(
+                auction_end_price,
+                tick_size,
+                crate::types::idl_conv::position_direction_from_idl(self.direction),
+            ),
             auction_duration,
         ))
     }
@@ -1033,7 +1056,8 @@ pub mod abi_types {
     //! cross-boundary FFI types
     use crate::solana_sdk::{account::Account as SolanaAccount, clock::Slot, pubkey::Pubkey};
 
-    use crate::{drift_idl::types::MarginRequirementType, types::OracleValidity, OracleGuardRails};
+    use crate::drift_idl::types::{MarginRequirementType, OracleGuardRails};
+    use crate::types::OracleValidity;
 
     /// `#[repr(C)]` account for a stable field layout across compiler versions.
     ///

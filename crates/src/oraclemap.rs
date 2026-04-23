@@ -18,10 +18,9 @@ use log::warn;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 
 use crate::{
-    drift_idl::types::OracleSource,
     ffi::{get_oracle_price, OraclePriceData},
     grpc::AccountUpdate as GrpcAccountUpdate,
-    types::{AccountUpdate, MapOf, EMPTY_ACCOUNT_CALLBACK},
+    types::{AccountUpdate, MapOf, OracleSource, EMPTY_ACCOUNT_CALLBACK},
     websocket_account_subscriber::WebsocketAccountSubscriber,
     MarketId, SdkError, SdkResult, UnsubHandle,
 };
@@ -292,7 +291,7 @@ impl OracleMap {
                         oracle_pubkey
                     );
                     let price_data = get_oracle_price(
-                        oracle_source,
+                        crate::types::idl_conv::oracle_source_to_idl(oracle_source),
                         &mut (*oracle_pubkey, oracle_account.clone().into()),
                         latest_slot,
                     )
@@ -310,7 +309,7 @@ impl OracleMap {
                         oracle_pubkey
                     );
                     let price_data = get_oracle_price(
-                        oracle_source,
+                        crate::types::idl_conv::oracle_source_to_idl(oracle_source),
                         &mut (*oracle_pubkey, oracle_account.clone().into()),
                         latest_slot,
                     )
@@ -415,7 +414,7 @@ fn update_handler_grpc(
     let lamports = update.lamports;
     let slot = update.slot;
     match get_oracle_price(
-        oracle_source,
+        crate::types::idl_conv::oracle_source_to_idl(oracle_source),
         &mut (
             update.pubkey,
             FfiAccount {
@@ -430,7 +429,10 @@ fn update_handler_grpc(
     ) {
         Ok(price_data) => {
             oracle_map
-                .entry((update.pubkey, oracle_source as u8))
+                .entry((
+                    update.pubkey,
+                    crate::types::idl_conv::oracle_source_to_idl(oracle_source) as u8,
+                ))
                 .and_modify(|o| {
                     o.data = price_data;
                     o.slot = slot;
@@ -460,7 +462,7 @@ fn update_handler(
     let oracle_pubkey = update.pubkey;
     let lamports = update.lamports;
     match get_oracle_price(
-        oracle_source,
+        crate::types::idl_conv::oracle_source_to_idl(oracle_source),
         &mut (
             oracle_pubkey,
             FfiAccount {

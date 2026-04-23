@@ -168,8 +168,8 @@ impl Orderbook {
             .as_secs();
 
         let filter_fn = move |x: &MarketOrder, orderbook: &mut Orders<LimitOrder>, is_bid: bool| {
-            if Order::is_auction_complete(slot, x.slot, x.duration) {
-                if Order::is_expired(x.max_ts, now) {
+            if crate::dlob::types::order_is_auction_complete(slot, x.slot, x.duration) {
+                if crate::dlob::types::order_is_expired(x.max_ts, now) {
                     log::trace!(target: TARGET, "auction expired: {}@{}", x.id, slot);
                     false
                 } else if x.is_limit {
@@ -192,8 +192,8 @@ impl Orderbook {
 
         let filter_fn =
             move |x: &OracleOrder, orderbook: &mut Orders<FloatingLimitOrder>, is_bid: bool| {
-                if Order::is_auction_complete(slot, x.slot, x.duration) {
-                    if Order::is_expired(x.max_ts, now) {
+                if crate::dlob::types::order_is_auction_complete(slot, x.slot, x.duration) {
+                    if crate::dlob::types::order_is_expired(x.max_ts, now) {
                         log::trace!(target: TARGET, "auction expired: {}@{}", x.id, slot);
                         false
                     } else if x.is_limit {

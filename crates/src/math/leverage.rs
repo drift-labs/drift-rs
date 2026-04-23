@@ -4,22 +4,35 @@ use super::{
     account_list_builder::AccountsListBuilder,
     constants::{AMM_RESERVE_PRECISION, BASE_PRECISION, MARGIN_PRECISION, PRICE_PRECISION},
 };
+// Public API takes drift native types; internals transmute to IDL types
+// (byte-compatible `#[repr(C)]` layouts) to call FFI wrappers that Phase 3
+// will replace with direct drift-program calls.
 use crate::{
     accounts::PerpMarket,
+    drift_idl::accounts::{PerpMarket as IdlPerpMarket, User as IdlUser},
     ffi::{
         calculate_margin_requirement_and_total_collateral_and_liability_info, MarginCalculation,
         MarginContextMode,
     },
     types::accounts::User,
-    ContractType, DriftClient, MarginMode, MarginRequirementType, MarketId, PositionDirection,
-    SdkError, SdkResult,
+    ContractType, DriftClient, MarginRequirementType, MarketId, PositionDirection, SdkError,
+    SdkResult,
 };
+
+#[inline]
+fn user_as_idl(user: &User) -> &IdlUser {
+    unsafe { &*(user as *const User as *const IdlUser) }
+}
+#[inline]
+fn perp_market_as_idl(m: &PerpMarket) -> &IdlPerpMarket {
+    unsafe { &*(m as *const PerpMarket as *const IdlPerpMarket) }
+}
 
 pub fn get_leverage(client: &DriftClient, user: &User) -> SdkResult<u128> {
     let mut builder = AccountsListBuilder::default();
     let mut accounts = builder.try_build(client, user, &[])?;
     let margin_calculation = calculate_margin_requirement_and_total_collateral_and_liability_info(
-        user,
+        user_as_idl(user),
         &mut accounts,
         MarginContextMode::StandardMaintenance,
     )?;
@@ -50,7 +63,7 @@ pub fn get_spot_asset_value(client: &DriftClient, user: &User) -> SdkResult<i128
     let mut accounts = builder.try_build(client, user, &[])?;
 
     let margin_calculation = calculate_margin_requirement_and_total_collateral_and_liability_info(
-        user,
+        user_as_idl(user),
         &mut accounts,
         MarginContextMode::StandardMaintenance,
     )?;

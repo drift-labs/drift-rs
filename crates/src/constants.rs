@@ -3,8 +3,10 @@ use std::sync::OnceLock;
 use crate::solana_sdk::{message::AddressLookupTableAccount, pubkey::Pubkey};
 
 use crate::{
-    drift_idl::accounts::{PerpMarket, SpotMarket},
-    types::{accounts::State, Context},
+    types::{
+        accounts::{PerpMarket, SpotMarket, State},
+        Context,
+    },
     MarketId, MarketType, OracleSource,
 };
 
@@ -267,8 +269,8 @@ pub fn oracle_source_to_owner(context: Context, source: OracleSource) -> Pubkey 
         | OracleSource::Pyth1KPull
         | OracleSource::Pyth1MPull
         | OracleSource::PythStableCoinPull => ids::drift_oracle_receiver_program::ID,
-        OracleSource::Switchboard => ids::switchboard_program::ID,
-        OracleSource::SwitchboardOnDemand => ids::switchboard_on_demand::ID,
+        OracleSource::DeprecatedSwitchboard => ids::switchboard_program::ID,
+        OracleSource::DeprecatedSwitchboardOnDemand => ids::switchboard_on_demand::ID,
         OracleSource::QuoteAsset => DEFAULT_PUBKEY,
         OracleSource::Prelaunch
         | OracleSource::PythLazer

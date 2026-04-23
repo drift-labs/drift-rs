@@ -8,6 +8,8 @@ use solana_pubkey::Pubkey;
 
 use crate::{
     dlob::{Direction, OrderDelta},
+    drift_idl::accounts::PerpMarket as IdlPerpMarket,
+    drift_idl::types::{Order as IdlOrder, OrderType as IdlOrderType},
     ffi::{calculate_auction_price, OraclePriceData},
     math::standardize_price,
     types::{
@@ -85,9 +87,9 @@ impl TakerOrder {
         Self {
             price,
             size: order.base_asset_amount,
-            direction: order.direction,
+            direction: crate::types::idl_conv::position_direction_from_idl(order.direction),
             market_index: order.market_index,
-            market_type: order.market_type,
+            market_type: crate::types::idl_conv::market_type_from_idl(order.market_type),
         }
     }
 }
@@ -345,22 +347,44 @@ impl TriggerOrder {
         //     order.add_bit_flag(OrderBitFlag::SafeTriggerOrder);
         // }
         if let Some(market) = perp_market {
-            let mut order = Order {
+            // FFI (Phase 3) expects IDL-generated `Order`; build an IDL value and
+            // transmute `market` to the byte-compatible IDL representation.
+            let mut order = IdlOrder {
                 slot, // slot is the current slot (i.e simulate trigger and place)
-                direction: self.direction,
-                order_type: self.kind,
+                direction: crate::types::idl_conv::position_direction_to_idl(self.direction),
+                order_type: match self.kind {
+                    OrderType::Market => IdlOrderType::Market,
+                    OrderType::Limit => IdlOrderType::Limit,
+                    OrderType::TriggerMarket => IdlOrderType::TriggerMarket,
+                    OrderType::TriggerLimit => IdlOrderType::TriggerLimit,
+                    OrderType::Oracle => IdlOrderType::Oracle,
+                },
                 market_index: market.market_index,
-                market_type: MarketType::Perp,
+                market_type: crate::drift_idl::types::MarketType::Perp,
                 base_asset_amount: self.size,
-                status: OrderStatus::Open,
+                status: crate::drift_idl::types::OrderStatus::Open,
                 trigger_condition: match self.condition {
-                    OrderTriggerCondition::Above => OrderTriggerCondition::TriggeredAbove,
-                    OrderTriggerCondition::Below => OrderTriggerCondition::TriggeredBelow,
-                    _ => self.condition,
+                    OrderTriggerCondition::Above => {
+                        crate::drift_idl::types::OrderTriggerCondition::TriggeredAbove
+                    }
+                    OrderTriggerCondition::Below => {
+                        crate::drift_idl::types::OrderTriggerCondition::TriggeredBelow
+                    }
+                    other => match other {
+                        OrderTriggerCondition::TriggeredAbove => {
+                            crate::drift_idl::types::OrderTriggerCondition::TriggeredAbove
+                        }
+                        OrderTriggerCondition::TriggeredBelow => {
+                            crate::drift_idl::types::OrderTriggerCondition::TriggeredBelow
+                        }
+                        _ => crate::drift_idl::types::OrderTriggerCondition::Above,
+                    },
                 },
                 bit_flags: self.bit_flags,
                 ..Default::default()
             };
+            let idl_market: &IdlPerpMarket =
+                unsafe { &*(market as *const PerpMarket as *const IdlPerpMarket) };
             let (auction_duration, auction_start, auction_end) =
                 crate::ffi::calculate_auction_params_for_trigger_order(
                     &order,
@@ -371,15 +395,16 @@ impl TriggerOrder {
                         has_sufficient_number_of_data_points: true,
                         sequence_id: None,
                     },
-                    Some(market),
+                    Some(idl_market),
                 )
                 .unwrap();
             order.auction_duration = auction_duration;
             order.auction_start_price = auction_start;
             order.auction_end_price = auction_end;
 
-            if matches!(order.order_type, OrderType::TriggerMarket) {
-                order.bit_flags |= Order::ORACLE_TRIGGER_MARKET_FLAG;
+            const IDL_ORACLE_TRIGGER_MARKET_FLAG: u8 = 0b0000_0010;
+            if matches!(order.order_type, IdlOrderType::TriggerMarket) {
+                order.bit_flags |= IDL_ORACLE_TRIGGER_MARKET_FLAG;
             }
 
             return calculate_auction_price(
@@ -403,7 +428,7 @@ impl DynamicPrice for MarketOrder {
     ///
     /// A value of None indicates the order will use the fallback/vamm price
     fn get_price(&self, slot: u64, _oracle_price: u64, tick_size: u64) -> Option<u64> {
-        if Order::is_auction_complete(slot, self.slot, self.duration)
+        if crate::dlob::types::order_is_auction_complete(slot, self.slot, self.duration)
             && (self.start_price != 0 || self.end_price != 0)
         {
             return if self.price == 0 {
@@ -759,13 +784,12 @@ impl L3Order {
     }
 }
 
-impl Order {
-    /// Check if order has expired
-    pub fn is_expired(max_ts: u64, now_unix_seconds: u64) -> bool {
-        max_ts != 0 && max_ts < now_unix_seconds
-    }
-    /// Check if order's auction is complete
-    pub fn is_auction_complete(current_slot: u64, order_slot: u64, auction_duration: u8) -> bool {
-        auction_duration == 0 || current_slot.saturating_sub(order_slot) > auction_duration as u64
-    }
+// Standalone free fns (orphan rule blocks an inherent `impl Order`).
+/// Check if order has expired.
+pub fn order_is_expired(max_ts: u64, now_unix_seconds: u64) -> bool {
+    max_ts != 0 && max_ts < now_unix_seconds
+}
+/// Check if order's auction is complete.
+pub fn order_is_auction_complete(current_slot: u64, order_slot: u64, auction_duration: u8) -> bool {
+    auction_duration == 0 || current_slot.saturating_sub(order_slot) > auction_duration as u64
 }
