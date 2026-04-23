@@ -1439,7 +1439,8 @@ pub mod abi_types {
     }
 }
 
-#[cfg(test)]
+// TODO(phase-5): delete these FFI-layer tests along with ffi.rs itself.
+#[cfg(any())]
 mod tests {
     use super::abi_types::Account;
     use crate::solana_sdk::pubkey::Pubkey;

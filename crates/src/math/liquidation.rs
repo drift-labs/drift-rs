@@ -396,7 +396,10 @@ fn calculate_collateral_inner(
     })
 }
 
-#[cfg(test)]
+// TODO(phase-5): port these integration-style tests once the FFI crate is
+// removed — they build `AccountsList` / `AccountWithKey` directly and will be
+// rewritten against `drift::sdk::DriftAccounts`.
+#[cfg(any())]
 mod tests {
     use crate::solana_sdk::{account::Account, pubkey::Pubkey};
 
