@@ -3,12 +3,12 @@ use std::sync::{
     Arc,
 };
 
-use crate::ffi::abi_types::Account as FfiAccount;
 use crate::solana_sdk::{
     account::Account, clock::Slot, commitment_config::CommitmentConfig, pubkey::Pubkey,
 };
 use ahash::HashSet;
 use dashmap::{DashMap, ReadOnlyView};
+use drift::sdk::{oracle_price as sdk_oracle_price, OwnedAccount};
 use drift_pubsub_client::PubsubClient;
 use futures_util::{
     stream::{FuturesOrdered, FuturesUnordered},
@@ -18,14 +18,31 @@ use log::warn;
 use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 
 use crate::{
-    ffi::{get_oracle_price, OraclePriceData},
     grpc::AccountUpdate as GrpcAccountUpdate,
-    types::{AccountUpdate, MapOf, OracleSource, EMPTY_ACCOUNT_CALLBACK},
+    types::{AccountUpdate, MapOf, OracleSource, OraclePriceData, EMPTY_ACCOUNT_CALLBACK},
     websocket_account_subscriber::WebsocketAccountSubscriber,
     MarketId, SdkError, SdkResult, UnsubHandle,
 };
 
 const LOG_TARGET: &str = "oraclemap";
+
+fn to_owned(account: &Account) -> OwnedAccount {
+    OwnedAccount {
+        lamports: account.lamports,
+        data: account.data.clone(),
+        owner: account.owner,
+        executable: account.executable,
+    }
+}
+
+fn owned_from_parts(owner: Pubkey, data: Vec<u8>, lamports: u64) -> OwnedAccount {
+    OwnedAccount {
+        lamports,
+        data,
+        owner,
+        executable: false,
+    }
+}
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
@@ -290,9 +307,9 @@ impl OracleMap {
                         oracle_source,
                         oracle_pubkey
                     );
-                    let price_data = get_oracle_price(
-                        crate::types::idl_conv::oracle_source_to_idl(oracle_source),
-                        &mut (*oracle_pubkey, oracle_account.clone().into()),
+                    let price_data = sdk_oracle_price(
+                        &oracle_source,
+                        &mut (*oracle_pubkey, to_owned(oracle_account)),
                         latest_slot,
                     )
                     .expect("valid oracle data");
@@ -308,9 +325,9 @@ impl OracleMap {
                         oracle_source,
                         oracle_pubkey
                     );
-                    let price_data = get_oracle_price(
-                        crate::types::idl_conv::oracle_source_to_idl(oracle_source),
-                        &mut (*oracle_pubkey, oracle_account.clone().into()),
+                    let price_data = sdk_oracle_price(
+                        &oracle_source,
+                        &mut (*oracle_pubkey, to_owned(oracle_account)),
                         latest_slot,
                     )
                     .expect("valid oracle data");
@@ -413,26 +430,17 @@ fn update_handler_grpc(
 ) {
     let lamports = update.lamports;
     let slot = update.slot;
-    match get_oracle_price(
-        crate::types::idl_conv::oracle_source_to_idl(oracle_source),
+    match sdk_oracle_price(
+        &oracle_source,
         &mut (
             update.pubkey,
-            FfiAccount {
-                owner: update.owner,
-                data: update.data.to_vec(),
-                lamports,
-                executable: false,
-                rent_epoch: u64::MAX,
-            },
+            owned_from_parts(update.owner, update.data.to_vec(), lamports),
         ),
         slot,
     ) {
         Ok(price_data) => {
             oracle_map
-                .entry((
-                    update.pubkey,
-                    crate::types::idl_conv::oracle_source_to_idl(oracle_source) as u8,
-                ))
+                .entry((update.pubkey, oracle_source as u8))
                 .and_modify(|o| {
                     o.data = price_data;
                     o.slot = slot;
@@ -461,16 +469,11 @@ fn update_handler(
 ) {
     let oracle_pubkey = update.pubkey;
     let lamports = update.lamports;
-    match get_oracle_price(
-        crate::types::idl_conv::oracle_source_to_idl(oracle_source),
+    match sdk_oracle_price(
+        &oracle_source,
         &mut (
             oracle_pubkey,
-            FfiAccount {
-                owner: update.owner,
-                data: update.data.clone(),
-                lamports,
-                ..Default::default()
-            },
+            owned_from_parts(update.owner, update.data.clone(), lamports),
         ),
         update.slot,
     ) {

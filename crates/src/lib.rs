@@ -28,7 +28,6 @@ use crate::{
         SYSVAR_INSTRUCTIONS_PUBKEY, SYSVAR_RENT_PUBKEY,
     },
     drift_idl::traits::ToAccountMetas,
-    ffi::OraclePriceData,
     grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, GeyserSubscribeOpts},
     jupiter::JupiterSwapInfo,
     marketmap::MarketMap,
@@ -961,25 +960,16 @@ impl DriftClient {
         let perp_market = self.try_get_perp_market_account(market_index)?;
         let oracle_validity_guard_rails = self.state_account().unwrap().oracle_guard_rails.validity;
 
-        // FFI returns `abi_types::OraclePriceData`; layouts match drift's native
-        // `OraclePriceData` (both `#[repr(C)]` with identical fields). Transmute
-        // until Phase 3 replaces FFI get_oracle_price with a direct drift call.
-        let drift_oracle_data: drift::state::oracle::OraclePriceData = unsafe {
-            std::mem::transmute_copy::<ffi::abi_types::OraclePriceData, _>(&oracle_data.data)
-        };
         let drift_validity_guard_rails: drift::state::state::ValidityGuardRails = unsafe {
             std::mem::transmute_copy::<_, _>(&oracle_validity_guard_rails)
         };
         perp_market
             .get_mm_oracle_price_data(
-                drift_oracle_data,
+                oracle_data.data,
                 current_slot,
                 &drift_validity_guard_rails,
             )
             .map(|x| x.get_safe_oracle_price_data())
-            .map(|d| unsafe {
-                std::mem::transmute_copy::<drift::state::oracle::OraclePriceData, _>(&d)
-            })
             .map_err(|e| SdkError::Anchor(Box::new(e.into())))
     }
 
@@ -1761,11 +1751,20 @@ impl DriftClientBackend {
                 }
             };
             let (account_data, slot) = self.get_account_with_slot_raw(&oracle).await?;
-            let oracle_price_data = ffi::get_oracle_price(
-                crate::types::idl_conv::oracle_source_to_idl(oracle_source),
-                &mut (oracle, account_data.clone().into()),
+            let oracle_price_data = drift::sdk::oracle_price(
+                &oracle_source,
+                &mut (
+                    oracle,
+                    drift::sdk::OwnedAccount {
+                        lamports: account_data.lamports,
+                        data: account_data.data.clone(),
+                        owner: account_data.owner,
+                        executable: account_data.executable,
+                    },
+                ),
                 slot,
-            )?;
+            )
+            .map_err(|e| SdkError::Anchor(Box::new(e.into())))?;
 
             Ok(Oracle {
                 pubkey: oracle,

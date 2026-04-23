@@ -5,11 +5,12 @@
 use std::ops::Neg;
 
 use super::get_oracle_normalization_factor;
+use drift::{
+    sdk::{calculate_margin, oracle_price as sdk_oracle_price, DriftAccounts, OwnedAccount},
+    state::margin_calculation::MarginContext,
+};
+
 use crate::{
-    ffi::{
-        self, calculate_margin_requirement_and_total_collateral_and_liability_info, AccountsList,
-        MarginContextMode,
-    },
     math::{
         account_list_builder::AccountsListBuilder,
         constants::{
@@ -22,7 +23,7 @@ use crate::{
         accounts::{PerpMarket, SpotMarket, User},
         MarginRequirementType, PerpPosition,
     },
-    DriftClient, MarginMode, MarketId, SdkError, SdkResult, SpotPosition,
+    DriftClient, MarketId, SdkError, SdkResult, SpotPosition,
 };
 
 /// Info on a position's liquidation price and unrealized PnL
@@ -54,19 +55,20 @@ pub async fn calculate_liquidation_price_and_unrealized_pnl(
 
     // build a list of all user positions for margin calculations
     let mut builder = AccountsListBuilder::default();
-    let mut accounts_list = builder.build(client, user, &[]).await?;
+    let accounts_list = builder.build(client, user, &[]).await?;
 
-    let oracle = accounts_list
+    let (oracle_key, oracle_data) = accounts_list
         .oracles
         .iter()
-        .find(|o| o.key == perp_market.amm.oracle)
+        .find(|(key, _)| *key == perp_market.amm.oracle)
         .expect("oracle loaded");
     let oracle_source = perp_market.amm.oracle_source;
-    let oracle_price = ffi::get_oracle_price(
-        crate::types::idl_conv::oracle_source_to_idl(oracle_source),
-        &mut (oracle.key, oracle.account.clone()),
+    let oracle_price = sdk_oracle_price(
+        &oracle_source,
+        &mut (*oracle_key, oracle_data.clone()),
         accounts_list.latest_slot,
-    )?
+    )
+    .map_err(|e| SdkError::Anchor(Box::new(e.into())))?
     .price;
 
     // matching spot market e.g. sol-perp => SOL spot
@@ -83,7 +85,7 @@ pub async fn calculate_liquidation_price_and_unrealized_pnl(
             perp_market,
             spot_market,
             oracle_price,
-            &mut accounts_list,
+            accounts_list,
         )?,
         oracle_price,
     })
@@ -127,7 +129,7 @@ pub async fn calculate_liquidation_price(
     market_index: u16,
 ) -> SdkResult<i64> {
     let mut accounts_builder = AccountsListBuilder::default();
-    let mut account_maps = accounts_builder.build(client, user, &[]).await?;
+    let account_maps = accounts_builder.build(client, user, &[]).await?;
     let perp_market = client
         .program_data()
         .perp_market_config_by_index(market_index)
@@ -149,7 +151,7 @@ pub async fn calculate_liquidation_price(
         perp_market,
         spot_market,
         oracle.data.price,
-        &mut account_maps,
+        account_maps,
     )
 }
 
@@ -165,15 +167,14 @@ pub fn calculate_liquidation_price_inner(
     perp_market: &PerpMarket,
     spot_market: Option<&SpotMarket>,
     oracle_price: i64,
-    accounts: &mut AccountsList,
+    accounts: &mut DriftAccounts,
 ) -> SdkResult<i64> {
-    let user_idl: &crate::drift_idl::accounts::User =
-        unsafe { &*(user as *const User as *const crate::drift_idl::accounts::User) };
-    let margin_calculation = calculate_margin_requirement_and_total_collateral_and_liability_info(
-        user_idl,
+    let margin_calculation = calculate_margin(
+        user,
         accounts,
-        MarginContextMode::StandardMaintenance,
-    )?;
+        MarginContext::standard(MarginRequirementType::Maintenance),
+    )
+    .map_err(|e| SdkError::Anchor(Box::new(e.into())))?;
 
     // calculate perp free collateral delta
     let perp_position = user
@@ -203,7 +204,9 @@ pub fn calculate_liquidation_price_inner(
 
     // calculate liquidation price
     // what price delta causes free collateral == 0
-    let free_collateral = margin_calculation.get_free_collateral();
+    let free_collateral = margin_calculation
+        .get_cross_free_collateral()
+        .map_err(|e| SdkError::Anchor(Box::new(e.into())))?;
     let free_collateral_delta = perp_free_collateral_delta + spot_free_collateral_delta;
     if free_collateral_delta == 0 {
         return Ok(-1);
@@ -295,30 +298,28 @@ pub fn calculate_margin_requirements(
     client: &DriftClient,
     user: &User,
 ) -> SdkResult<MarginRequirementInfo> {
-    calculate_margin_requirements_inner(
-        user,
-        &mut AccountsListBuilder::default().try_build(client, user, &[])?,
-    )
+    let mut builder = AccountsListBuilder::default();
+    calculate_margin_requirements_inner(user, builder.try_build(client, user, &[])?)
 }
 
 /// Calculate the margin requirements of `user` (internal)
 fn calculate_margin_requirements_inner(
     user: &User,
-    accounts: &mut AccountsList,
+    accounts: &mut DriftAccounts,
 ) -> SdkResult<MarginRequirementInfo> {
-    let user_idl: &crate::drift_idl::accounts::User =
-        unsafe { &*(user as *const User as *const crate::drift_idl::accounts::User) };
-    let maintenance_result = calculate_margin_requirement_and_total_collateral_and_liability_info(
-        user_idl,
+    let maintenance_result = calculate_margin(
+        user,
         accounts,
-        MarginContextMode::StandardMaintenance,
-    )?;
+        MarginContext::standard(MarginRequirementType::Maintenance),
+    )
+    .map_err(|e| SdkError::Anchor(Box::new(e.into())))?;
 
-    let initial_result = calculate_margin_requirement_and_total_collateral_and_liability_info(
-        user_idl,
+    let initial_result = calculate_margin(
+        user,
         accounts,
-        MarginContextMode::StandardInitial,
-    )?;
+        MarginContext::standard(MarginRequirementType::Initial),
+    )
+    .map_err(|e| SdkError::Anchor(Box::new(e.into())))?;
 
     Ok(MarginRequirementInfo {
         maintenance: maintenance_result.margin_requirement,
@@ -371,31 +372,27 @@ pub fn calculate_collateral(
     margin_requirement_type: MarginRequirementType,
 ) -> SdkResult<CollateralInfo> {
     let mut accounts_builder = AccountsListBuilder::default();
-    calculate_collateral_inner(
-        user,
-        &mut accounts_builder.try_build(client, user, &[])?,
-        margin_requirement_type,
-    )
+    let accounts = accounts_builder.try_build(client, user, &[])?;
+    calculate_collateral_inner(user, accounts, margin_requirement_type)
 }
 
 fn calculate_collateral_inner(
     user: &User,
-    accounts: &mut AccountsList,
+    accounts: &mut DriftAccounts,
     margin_requirement_type: MarginRequirementType,
 ) -> SdkResult<CollateralInfo> {
-    let user_idl: &crate::drift_idl::accounts::User =
-        unsafe { &*(user as *const User as *const crate::drift_idl::accounts::User) };
-    let mr_idl: crate::drift_idl::types::MarginRequirementType =
-        unsafe { std::mem::transmute(margin_requirement_type) };
-    let result = calculate_margin_requirement_and_total_collateral_and_liability_info(
-        user_idl,
+    let result = calculate_margin(
+        user,
         accounts,
-        MarginContextMode::StandardCustom(mr_idl),
-    )?;
+        MarginContext::standard(margin_requirement_type),
+    )
+    .map_err(|e| SdkError::Anchor(Box::new(e.into())))?;
 
     Ok(CollateralInfo {
         total: result.total_collateral,
-        free: result.get_free_collateral() as i128,
+        free: result
+            .get_cross_free_collateral()
+            .map_err(|e| SdkError::Anchor(Box::new(e.into())))? as i128,
     })
 }
 

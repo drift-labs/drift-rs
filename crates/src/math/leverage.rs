@@ -1,41 +1,30 @@
 use solana_pubkey::Pubkey;
 
+use drift::{
+    sdk::calculate_margin,
+    state::margin_calculation::{MarginCalculation, MarginContext},
+};
+
 use super::{
     account_list_builder::AccountsListBuilder,
     constants::{AMM_RESERVE_PRECISION, BASE_PRECISION, MARGIN_PRECISION, PRICE_PRECISION},
 };
-// Public API takes drift native types; internals transmute to IDL types
-// (byte-compatible `#[repr(C)]` layouts) to call FFI wrappers that Phase 3
-// will replace with direct drift-program calls.
 use crate::{
     accounts::PerpMarket,
-    drift_idl::accounts::{PerpMarket as IdlPerpMarket, User as IdlUser},
-    ffi::{
-        calculate_margin_requirement_and_total_collateral_and_liability_info, MarginCalculation,
-        MarginContextMode,
-    },
     types::accounts::User,
     ContractType, DriftClient, MarginRequirementType, MarketId, PositionDirection, SdkError,
     SdkResult,
 };
 
-#[inline]
-fn user_as_idl(user: &User) -> &IdlUser {
-    unsafe { &*(user as *const User as *const IdlUser) }
-}
-#[inline]
-fn perp_market_as_idl(m: &PerpMarket) -> &IdlPerpMarket {
-    unsafe { &*(m as *const PerpMarket as *const IdlPerpMarket) }
-}
-
 pub fn get_leverage(client: &DriftClient, user: &User) -> SdkResult<u128> {
     let mut builder = AccountsListBuilder::default();
-    let mut accounts = builder.try_build(client, user, &[])?;
-    let margin_calculation = calculate_margin_requirement_and_total_collateral_and_liability_info(
-        user_as_idl(user),
-        &mut accounts,
-        MarginContextMode::StandardMaintenance,
-    )?;
+    let accounts = builder.try_build(client, user, &[])?;
+    let margin_calculation = calculate_margin(
+        user,
+        accounts,
+        MarginContext::standard(MarginRequirementType::Maintenance),
+    )
+    .map_err(|e| SdkError::Anchor(Box::new(e.into())))?;
 
     let net_asset_value = calculate_net_asset_value(
         margin_calculation.total_collateral,
@@ -60,13 +49,14 @@ pub fn get_leverage(client: &DriftClient, user: &User) -> SdkResult<u128> {
 
 pub fn get_spot_asset_value(client: &DriftClient, user: &User) -> SdkResult<i128> {
     let mut builder = AccountsListBuilder::default();
-    let mut accounts = builder.try_build(client, user, &[])?;
+    let accounts = builder.try_build(client, user, &[])?;
 
-    let margin_calculation = calculate_margin_requirement_and_total_collateral_and_liability_info(
-        user_as_idl(user),
-        &mut accounts,
-        MarginContextMode::StandardMaintenance,
-    )?;
+    let margin_calculation = calculate_margin(
+        user,
+        accounts,
+        MarginContext::standard(MarginRequirementType::Maintenance),
+    )
+    .map_err(|e| SdkError::Anchor(Box::new(e.into())))?;
 
     Ok(margin_calculation.total_spot_asset_value
         - margin_calculation.total_spot_liability_value as i128)
@@ -124,12 +114,13 @@ pub trait UserMargin {
 impl UserMargin for DriftClient {
     fn calculate_margin_info(&self, user: &User) -> SdkResult<MarginCalculation> {
         let mut builder = AccountsListBuilder::default();
-        let mut accounts = builder.try_build(self, user, &[])?;
-        calculate_margin_requirement_and_total_collateral_and_liability_info(
-            user_as_idl(user),
-            &mut accounts,
-            MarginContextMode::StandardMaintenance,
+        let accounts = builder.try_build(self, user, &[])?;
+        calculate_margin(
+            user,
+            accounts,
+            MarginContext::standard(MarginRequirementType::Maintenance),
         )
+        .map_err(|e| SdkError::Anchor(Box::new(e.into())))
     }
     fn max_trade_size(
         &self,
@@ -195,7 +186,8 @@ impl UserMargin for DriftClient {
 
         let margin_info = self.calculate_margin_info(user)?;
         let free_collateral = margin_info
-            .get_free_collateral()
+            .get_cross_free_collateral()
+            .map_err(|e| SdkError::Anchor(Box::new(e.into())))?
             .checked_sub(collateral_buffer as u128)
             .ok_or(SdkError::MathError("underflow"))?;
 

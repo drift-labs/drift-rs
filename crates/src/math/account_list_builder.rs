@@ -1,11 +1,11 @@
-use crate::solana_sdk::{account::Account, pubkey::Pubkey};
+use crate::solana_sdk::pubkey::Pubkey;
 use ahash::{HashMap, HashMapExt};
-use arrayvec::ArrayVec;
+
+use drift::sdk::{DriftAccounts, OwnedAccount};
 
 use crate::{
     accounts::State,
     constants::{self, oracle_source_to_owner, state_account},
-    ffi::{AccountWithKey, AccountsList},
     types::accounts::User,
     utils::zero_account_to_bytes,
     DriftClient, MarketId, SdkError, SdkResult,
@@ -13,32 +13,40 @@ use crate::{
 
 /// Builds a list of users's associated spot, perp, and oracle accounts
 ///
+/// Produces a `drift::sdk::DriftAccounts` ready to pass into
+/// `drift::sdk::calculate_margin` (or any other drift-sdk entry that takes
+/// owned account data).
+///
 /// ```example(no_run)
 /// let mut builder = AccountsListBuilder::default();
-/// let accounts_list = builder.try_build(client, user).expect("build accounts");
+/// let accounts = builder.try_build(client, user, &[]).expect("build accounts");
+/// let margin = drift::sdk::calculate_margin(user, &mut accounts, ctx);
 /// ```
 #[derive(Default)]
 pub struct AccountsListBuilder {
-    /// placeholder account values populated with real market & oracle account data
-    perp_accounts: ArrayVec<AccountWithKey, 16>,
-    spot_accounts: ArrayVec<AccountWithKey, 16>,
-    oracle_accounts: ArrayVec<AccountWithKey, 32>,
+    accounts: DriftAccounts,
+}
+
+fn into_owned(owner: Pubkey, data: Vec<u8>) -> OwnedAccount {
+    OwnedAccount {
+        lamports: 0,
+        data,
+        owner,
+        executable: false,
+    }
 }
 
 impl AccountsListBuilder {
     /// Constructs an accounts list from `user` positions sync
     ///
-    /// * `client` - drift client instance
-    /// * `user` - the account to build against
-    /// * `force_markets` - additional market accounts that should be included in the account list
-    ///
-    /// It relies on the `client` being subscribed to all the necessary markets and oracles
+    /// Relies on the `client` being subscribed to all the necessary markets
+    /// and oracles — no network I/O.
     pub fn try_build(
         &mut self,
         client: &DriftClient,
         user: &User,
         force_markets: &[MarketId],
-    ) -> SdkResult<AccountsList<'_>> {
+    ) -> SdkResult<&mut DriftAccounts> {
         let mut oracle_markets = HashMap::<Pubkey, MarketId>::with_capacity(16);
         let drift_state_account = client.try_get_account::<State>(state_account())?;
 
@@ -59,17 +67,11 @@ impl AccountsListBuilder {
         for idx in spot_market_idxs {
             let market = client.try_get_spot_market_account(idx)?;
             oracle_markets.insert(market.oracle, MarketId::spot(market.market_index));
-            self.spot_accounts.push(
-                (
-                    market.pubkey,
-                    Account {
-                        data: zero_account_to_bytes(market),
-                        owner: constants::PROGRAM_ID,
-                        ..Default::default()
-                    },
-                )
-                    .into(),
-            );
+            let pubkey = market.pubkey;
+            self.accounts.spot_markets.push((
+                pubkey,
+                into_owned(constants::PROGRAM_ID, zero_account_to_bytes(market)),
+            ));
         }
 
         let force_perp_iter = force_markets
@@ -87,17 +89,11 @@ impl AccountsListBuilder {
         for idx in perp_market_idxs {
             let market = client.try_get_perp_market_account(idx)?;
             oracle_markets.insert(market.amm.oracle, MarketId::perp(market.market_index));
-            self.perp_accounts.push(
-                (
-                    market.pubkey,
-                    Account {
-                        data: zero_account_to_bytes(market),
-                        owner: constants::PROGRAM_ID,
-                        ..Default::default()
-                    },
-                )
-                    .into(),
-            );
+            let pubkey = market.pubkey;
+            self.accounts.perp_markets.push((
+                pubkey,
+                into_owned(constants::PROGRAM_ID, zero_account_to_bytes(market)),
+            ));
         }
 
         let mut latest_oracle_slot = 0;
@@ -108,47 +104,31 @@ impl AccountsListBuilder {
 
             latest_oracle_slot = oracle.slot.max(latest_oracle_slot);
             let oracle_owner = oracle_source_to_owner(client.context, oracle.source);
-            self.oracle_accounts.push(
-                (
-                    *oracle_key,
-                    Account {
-                        data: oracle.raw,
-                        owner: oracle_owner,
-                        ..Default::default()
-                    },
-                )
-                    .into(),
-            );
+            self.accounts
+                .oracles
+                .push((*oracle_key, into_owned(oracle_owner, oracle.raw)));
         }
 
-        Ok(AccountsList {
-            perp_markets: self.perp_accounts.as_mut_slice(),
-            spot_markets: self.spot_accounts.as_mut_slice(),
-            oracles: self.oracle_accounts.as_mut_slice(),
-            oracle_guard_rails: Some(drift_state_account.oracle_guard_rails),
-            latest_slot: latest_oracle_slot,
-        })
+        self.accounts.latest_slot = latest_oracle_slot;
+        self.accounts.oracle_guard_rails = Some(unsafe {
+            std::mem::transmute_copy::<_, drift::state::state::OracleGuardRails>(
+                &drift_state_account.oracle_guard_rails,
+            )
+        });
+
+        Ok(&mut self.accounts)
     }
 
-    /// Constructs an accounts list from `user` positions
-    /// fetching from RPC as necessary
-    ///
-    /// * `client` - drift client instance
-    /// * `user` - the account to build against
-    /// * `force_markets` - additional market accounts that should be included in the account list
-    ///
-    /// like `try_build` but will fall back to network queries to fetch market/oracle accounts as required
-    /// if the client is already subscribed to necessary market/oracles then no network requests are made.
+    /// Like `try_build` but falls back to RPC to fetch missing markets/oracles.
     pub async fn build(
         &mut self,
         client: &DriftClient,
         user: &User,
         force_markets: &[MarketId],
-    ) -> SdkResult<AccountsList<'_>> {
+    ) -> SdkResult<&mut DriftAccounts> {
         let mut oracle_markets = HashMap::<Pubkey, MarketId>::with_capacity(16);
         let drift_state_account = client.try_get_account::<State>(state_account())?;
 
-        // TODO: could batch the requests
         let force_spot_iter = force_markets
             .iter()
             .filter(|m| m.is_spot())
@@ -165,18 +145,11 @@ impl AccountsListBuilder {
         for market_idx in spot_market_idxs.iter() {
             let market = client.get_spot_market_account(*market_idx).await?;
             oracle_markets.insert(market.oracle, MarketId::spot(market.market_index));
-
-            self.spot_accounts.push(
-                (
-                    market.pubkey,
-                    Account {
-                        data: zero_account_to_bytes(market),
-                        owner: constants::PROGRAM_ID,
-                        ..Default::default()
-                    },
-                )
-                    .into(),
-            );
+            let pubkey = market.pubkey;
+            self.accounts.spot_markets.push((
+                pubkey,
+                into_owned(constants::PROGRAM_ID, zero_account_to_bytes(market)),
+            ));
         }
 
         let force_perp_iter = force_markets
@@ -194,18 +167,11 @@ impl AccountsListBuilder {
         for market_idx in perp_market_idxs.iter() {
             let market = client.get_perp_market_account(*market_idx).await?;
             oracle_markets.insert(market.amm.oracle, MarketId::perp(market.market_index));
-
-            self.perp_accounts.push(
-                (
-                    market.pubkey,
-                    Account {
-                        data: zero_account_to_bytes(market),
-                        owner: constants::PROGRAM_ID,
-                        ..Default::default()
-                    },
-                )
-                    .into(),
-            );
+            let pubkey = market.pubkey;
+            self.accounts.perp_markets.push((
+                pubkey,
+                into_owned(constants::PROGRAM_ID, zero_account_to_bytes(market)),
+            ));
         }
 
         let mut latest_oracle_slot = 0;
@@ -214,25 +180,18 @@ impl AccountsListBuilder {
 
             latest_oracle_slot = oracle.slot.max(latest_oracle_slot);
             let oracle_owner = oracle_source_to_owner(client.context, oracle.source);
-            self.oracle_accounts.push(
-                (
-                    *oracle_key,
-                    Account {
-                        data: oracle.raw,
-                        owner: oracle_owner,
-                        ..Default::default()
-                    },
-                )
-                    .into(),
-            );
+            self.accounts
+                .oracles
+                .push((*oracle_key, into_owned(oracle_owner, oracle.raw)));
         }
 
-        Ok(AccountsList {
-            perp_markets: self.perp_accounts.as_mut_slice(),
-            spot_markets: self.spot_accounts.as_mut_slice(),
-            oracles: self.oracle_accounts.as_mut_slice(),
-            oracle_guard_rails: Some(drift_state_account.oracle_guard_rails),
-            latest_slot: latest_oracle_slot,
-        })
+        self.accounts.latest_slot = latest_oracle_slot;
+        self.accounts.oracle_guard_rails = Some(unsafe {
+            std::mem::transmute_copy::<_, drift::state::state::OracleGuardRails>(
+                &drift_state_account.oracle_guard_rails,
+            )
+        });
+
+        Ok(&mut self.accounts)
     }
 }
