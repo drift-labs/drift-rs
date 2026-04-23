@@ -91,7 +91,7 @@ impl SignedOrderType {
     /// DEV: Swift clients do not encode or decode the enum byte
     pub fn to_borsh(&self) -> Vec<u8> {
         // max variant size +8 (anchor discriminator len)
-        let mut buf = Vec::with_capacity(SignedDelegateOrder::INIT_SPACE + 8);
+        let mut buf = Vec::with_capacity(std::mem::size_of::<SignedDelegateOrder>() + 8);
         match self {
             Self::Authority { ref raw, ref inner } => {
                 if let Some(raw) = raw {
@@ -194,7 +194,7 @@ pub struct SignedOrderInfo {
 impl SignedOrderInfo {
     /// Slot number when user signed the order
     pub fn slot(&self) -> Slot {
-        match self.order {
+        match &self.order {
             SignedOrderType::Authority { inner, .. } => inner.slot,
             SignedOrderType::Delegated { inner, .. } => inner.slot,
         }
@@ -205,14 +205,14 @@ impl SignedOrderInfo {
     }
     /// The order's UUID (raw)
     pub fn order_uuid(&self) -> [u8; 8] {
-        match self.order {
+        match &self.order {
             SignedOrderType::Authority { inner, .. } => inner.uuid,
             SignedOrderType::Delegated { inner, .. } => inner.uuid,
         }
     }
     /// The drift order params of the message
     pub fn order_params(&self) -> OrderParams {
-        match self.order {
+        match &self.order {
             SignedOrderType::Authority { inner, .. } => inner.signed_msg_order_params,
             SignedOrderType::Delegated { inner, .. } => inner.signed_msg_order_params,
         }
@@ -221,7 +221,7 @@ impl SignedOrderInfo {
     ///
     /// `taker_authority` - the Authority pubkey of the taker's sub-account
     pub fn taker_subaccount(&self) -> Pubkey {
-        match self.order {
+        match &self.order {
             SignedOrderType::Authority { inner, .. } => {
                 Wallet::derive_user_account(&self.taker_authority, inner.sub_account_id)
             }
@@ -238,7 +238,7 @@ impl SignedOrderInfo {
                 if let Some(raw) = raw {
                     raw.as_bytes().into()
                 } else {
-                    let mut buf = Vec::with_capacity(SignedOrder::INIT_SPACE + 8);
+                    let mut buf = Vec::with_capacity(std::mem::size_of::<SignedOrder>() + 8);
                     (SWIFT_MSG_PREFIX).serialize(&mut buf).unwrap();
                     inner.serialize(&mut buf).unwrap();
                     hex::encode(buf).into()
@@ -248,7 +248,7 @@ impl SignedOrderInfo {
                 if let Some(raw) = raw {
                     raw.as_bytes().into()
                 } else {
-                    let mut buf = Vec::with_capacity(SignedDelegateOrder::INIT_SPACE + 8);
+                    let mut buf = Vec::with_capacity(std::mem::size_of::<SignedDelegateOrder>() + 8);
                     (SWIFT_DELEGATE_MSG_PREFIX).serialize(&mut buf).unwrap();
                     inner.serialize(&mut buf).unwrap();
                     hex::encode(buf).into()
@@ -606,7 +606,7 @@ where
     }
 
     // decode expecting the largest possible variant
-    let mut borsh_buf = [0u8; SignedDelegateOrder::INIT_SPACE + 8];
+    let mut borsh_buf = [0u8; std::mem::size_of::<SignedDelegateOrder>() + 8];
     hex::decode_to_slice(payload.as_bytes(), &mut borsh_buf[..payload.len() / 2])
         .map_err(serde::de::Error::custom)?;
 
@@ -729,7 +729,7 @@ mod tests {
         let mut payload = hex::decode(&ix.signed_msg_order_params_message_bytes[98..]).unwrap();
         dbg!(payload[..8] == SWIFT_MSG_PREFIX);
 
-        payload.resize(SignedOrder::INIT_SPACE, 0);
+        payload.resize(std::mem::size_of::<SignedOrder>(), 0);
         let res: SignedOrder = AnchorDeserialize::deserialize(&mut &payload[8..]).unwrap();
         dbg!(res);
         dbg!(core::str::from_utf8(&res.uuid).unwrap());

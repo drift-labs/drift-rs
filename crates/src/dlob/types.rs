@@ -90,9 +90,9 @@ impl TakerOrder {
         Self {
             price,
             size: order.base_asset_amount,
-            direction: crate::types::idl_conv::position_direction_from_idl(order.direction),
+            direction: order.direction,
             market_index: order.market_index,
-            market_type: crate::types::idl_conv::market_type_from_idl(order.market_type),
+            market_type: order.market_type,
         }
     }
 }

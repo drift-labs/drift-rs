@@ -95,19 +95,17 @@ pub use drift::state::user::{
     AssetType, MarketType, Order, OrderStatus, OrderTriggerCondition, OrderType, PerpPosition,
     SpotPosition, UserStatus,
 };
-// IDL-only fallbacks kept in the public API until Phase 4 rewires instruction
-// building onto anchor 1.0's derived builders.
-// - OrderParams, ModifyOrderParams, SignedMsgOrderParams* are Borsh-serialized
-//   into instruction data; drift native versions would require conversion at
-//   every tx-building site.
-// - MarginMode, HighLeverageModeConfig, ModifyOrderPolicy, SwapReduceOnly are
-//   deprecated upstream (no drift equivalent).
-// - SpotFulfillmentMethod is IDL-only; drift has PerpFulfillmentMethod only.
-// - Padding, Signature are plumbing helpers.
+pub use drift::state::order_params::{
+    ModifyOrderParams, ModifyOrderPolicy, OrderParams, SignedMsgOrderParamsDelegateMessage,
+    SignedMsgOrderParamsMessage,
+};
+// SwapReduceOnly is IDL-only from drift-rs's perspective — drift puts it
+// under `instructions::user` which is not `pub mod`-visible externally.
+pub use crate::drift_idl::types::SwapReduceOnly;
+// IDL-only holdovers still referenced by the public surface (serde events,
+// deprecated configs, plumbing structs with no drift-native equivalent).
 pub use crate::drift_idl::types::{
-    MarginMode, ModifyOrderParams, ModifyOrderPolicy, OrderParams, Padding, Signature,
-    SignedMsgOrderParamsDelegateMessage, SignedMsgOrderParamsMessage, SpotFulfillmentMethod,
-    SpotFulfillmentType, SwapReduceOnly,
+    MarginMode, Padding, Signature, SpotFulfillmentMethod, SpotFulfillmentType,
 };
 use crate::{
     accounts::UserStats,
@@ -394,17 +392,13 @@ impl From<(u16, crate::drift_idl::types::MarketType)> for MarketId {
 }
 
 /// Provides builder API for Orders.
-///
-/// Uses IDL-generated types internally so the produced `OrderParams` matches
-/// what `TransactionBuilder`'s instruction builders expect. Converts to/from
-/// drift native at the external boundaries.
 #[derive(Default)]
 pub struct NewOrder {
-    order_type: crate::drift_idl::types::OrderType,
-    direction: crate::drift_idl::types::PositionDirection,
+    order_type: OrderType,
+    direction: PositionDirection,
     reduce_only: bool,
     market_id: MarketId,
-    post_only: crate::drift_idl::types::PostOnlyParam,
+    post_only: PostOnlyParam,
     ioc: u8,
     amount: u64,
     price: u64,
@@ -415,7 +409,7 @@ impl NewOrder {
     /// Create a market order
     pub fn market(market_id: MarketId) -> Self {
         Self {
-            order_type: crate::drift_idl::types::OrderType::Market,
+            order_type: OrderType::Market,
             market_id,
             ..Default::default()
         }
@@ -423,7 +417,7 @@ impl NewOrder {
     /// Create an oracle order
     pub fn oracle(market_id: MarketId) -> Self {
         Self {
-            order_type: crate::drift_idl::types::OrderType::Oracle,
+            order_type: OrderType::Oracle,
             market_id,
             ..Default::default()
         }
@@ -431,7 +425,7 @@ impl NewOrder {
     /// Create a limit order
     pub fn limit(market_id: MarketId) -> Self {
         Self {
-            order_type: crate::drift_idl::types::OrderType::Limit,
+            order_type: OrderType::Limit,
             market_id,
             ..Default::default()
         }
@@ -441,9 +435,9 @@ impl NewOrder {
     /// A sub-zero amount indicates a short
     pub fn amount(mut self, amount: i64) -> Self {
         self.direction = if amount >= 0 {
-            crate::drift_idl::types::PositionDirection::Long
+            PositionDirection::Long
         } else {
-            crate::drift_idl::types::PositionDirection::Short
+            PositionDirection::Short
         };
         self.amount = amount.unsigned_abs();
 
@@ -466,13 +460,7 @@ impl NewOrder {
     }
     /// Set post-only (default: None)
     pub fn post_only(mut self, value: PostOnlyParam) -> Self {
-        use crate::drift_idl::types::PostOnlyParam as IdlPostOnly;
-        self.post_only = match value {
-            PostOnlyParam::None => IdlPostOnly::None,
-            PostOnlyParam::MustPostOnly => IdlPostOnly::MustPostOnly,
-            PostOnlyParam::TryPostOnly => IdlPostOnly::TryPostOnly,
-            PostOnlyParam::Slide => IdlPostOnly::Slide,
-        };
+        self.post_only = value;
         self
     }
     /// Set user order id
@@ -485,10 +473,7 @@ impl NewOrder {
         OrderParams {
             order_type: self.order_type,
             market_index: self.market_id.index,
-            market_type: match self.market_id.kind {
-                MarketType::Perp => crate::drift_idl::types::MarketType::Perp,
-                MarketType::Spot => crate::drift_idl::types::MarketType::Spot,
-            },
+            market_type: self.market_id.kind,
             price: self.price,
             base_asset_amount: self.amount,
             reduce_only: self.reduce_only,

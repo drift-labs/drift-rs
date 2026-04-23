@@ -27,7 +27,6 @@ use crate::{
         state_account, MarketExt, ProgramData, DEFAULT_PUBKEY, PYTH_LAZER_STORAGE_ACCOUNT_KEY,
         SYSVAR_INSTRUCTIONS_PUBKEY, SYSVAR_RENT_PUBKEY,
     },
-    drift_idl::traits::ToAccountMetas,
     grpc::grpc_subscriber::{AccountFilter, DriftGrpcClient, GeyserSubscribeOpts},
     jupiter::JupiterSwapInfo,
     marketmap::MarketMap,
@@ -40,7 +39,7 @@ use crate::{
     utils::{get_http_url, get_ws_url},
 };
 pub use crate::{grpc::GrpcSubscribeOpts, types::Context, wallet::Wallet};
-use anchor_lang::{AccountDeserialize, Discriminator, InstructionData};
+use anchor_lang::{AccountDeserialize, Discriminator, InstructionData, ToAccountMetas};
 use bytemuck::Pod;
 use constants::{
     high_leverage_mode_account, ASSOCIATED_TOKEN_PROGRAM_ID, PROGRAM_ID, SYSTEM_PROGRAM_ID,
@@ -1993,7 +1992,7 @@ impl<'a> TransactionBuilder<'a> {
             .expect("spot markets syncd");
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::TransferIsolatedPerpPositionDeposit {
+            drift::accounts::TransferIsolatedPerpPositionDeposit {
                 state: *state_account(),
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.owner()),
@@ -2014,7 +2013,7 @@ impl<'a> TransactionBuilder<'a> {
             program_id: constants::PROGRAM_ID,
             accounts,
             data: InstructionData::data(
-                &drift_idl::instructions::TransferIsolatedPerpPositionDeposit {
+                &drift::instruction::TransferIsolatedPerpPositionDeposit {
                     perp_market_index: market_index,
                     spot_market_index: quote_spot_market.market_index,
                     amount,
@@ -2049,7 +2048,7 @@ impl<'a> TransactionBuilder<'a> {
             .expect("spot markets syncd");
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::Deposit {
+            drift::accounts::Deposit {
                 state: *state_account(),
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.owner()),
@@ -2076,7 +2075,7 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::Deposit {
+            data: InstructionData::data(&drift::instruction::Deposit {
                 market_index,
                 amount,
                 reduce_only: reduce_only.unwrap_or(false),
@@ -2110,7 +2109,7 @@ impl<'a> TransactionBuilder<'a> {
             .expect("spot markets syncd");
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::Withdraw {
+            drift::accounts::Withdraw {
                 state: *state_account(),
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.owner()),
@@ -2140,7 +2139,7 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::Withdraw {
+            data: InstructionData::data(&drift::instruction::Withdraw {
                 market_index,
                 amount,
                 reduce_only: reduce_only.unwrap_or(false),
@@ -2164,7 +2163,7 @@ impl<'a> TransactionBuilder<'a> {
 
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::PlaceOrders {
+            drift::accounts::PlaceOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -2183,7 +2182,7 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::PlaceOrders { params: orders }),
+            data: InstructionData::data(&drift::instruction::PlaceOrders { params: orders }),
         };
 
         self.ixs.push(ix);
@@ -2195,7 +2194,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn cancel_all_orders(mut self) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::CancelOrder {
+            drift::accounts::CancelOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -2208,7 +2207,7 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::CancelOrders {
+            data: InstructionData::data(&drift::instruction::CancelOrders {
                 market_index: None,
                 market_type: None,
                 direction: None,
@@ -2231,7 +2230,7 @@ impl<'a> TransactionBuilder<'a> {
         let (idx, r#type) = market;
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::CancelOrder {
+            drift::accounts::CancelOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -2246,10 +2245,10 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::CancelOrders {
+            data: InstructionData::data(&drift::instruction::CancelOrders {
                 market_index: Some(idx),
-                market_type: Some(crate::types::idl_conv::market_type_to_idl(r#type)),
-                direction: direction.map(crate::types::idl_conv::position_direction_to_idl),
+                market_type: Some(r#type),
+                direction: direction,
             }),
         };
         self.ixs.push(ix);
@@ -2261,7 +2260,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn cancel_orders_by_id(mut self, order_ids: Vec<u32>) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::CancelOrder {
+            drift::accounts::CancelOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -2274,7 +2273,7 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::CancelOrdersByIds { order_ids }),
+            data: InstructionData::data(&drift::instruction::CancelOrdersByIds { order_ids }),
         };
         self.ixs.push(ix);
 
@@ -2285,7 +2284,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn cancel_orders_by_user_id(mut self, user_order_ids: Vec<u8>) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::CancelOrder {
+            drift::accounts::CancelOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -2299,7 +2298,7 @@ impl<'a> TransactionBuilder<'a> {
             let ix = Instruction {
                 program_id: constants::PROGRAM_ID,
                 accounts: accounts.clone(),
-                data: InstructionData::data(&drift_idl::instructions::CancelOrderByUserId {
+                data: InstructionData::data(&drift::instruction::CancelOrderByUserId {
                     user_order_id,
                 }),
             };
@@ -2313,7 +2312,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn modify_orders(mut self, orders: &[(u32, ModifyOrderParams)]) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::ModifyOrder {
+            drift::accounts::CancelOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -2327,9 +2326,9 @@ impl<'a> TransactionBuilder<'a> {
             let ix = Instruction {
                 program_id: constants::PROGRAM_ID,
                 accounts: accounts.clone(),
-                data: InstructionData::data(&drift_idl::instructions::ModifyOrder {
+                data: InstructionData::data(&drift::instruction::ModifyOrder {
                     order_id: Some(*order_id),
-                    modify_order_params: *params,
+                    modify_order_params: params.clone(),
                 }),
             };
             self.ixs.push(ix);
@@ -2342,7 +2341,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn modify_orders_by_user_id(mut self, orders: &[(u8, ModifyOrderParams)]) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::PlaceOrders {
+            drift::accounts::PlaceOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -2356,9 +2355,9 @@ impl<'a> TransactionBuilder<'a> {
             let ix = Instruction {
                 program_id: constants::PROGRAM_ID,
                 accounts: accounts.clone(),
-                data: InstructionData::data(&drift_idl::instructions::ModifyOrderByUserId {
+                data: InstructionData::data(&drift::instruction::ModifyOrderByUserId {
                     user_order_id: *user_order_id,
-                    modify_order_params: *params,
+                    modify_order_params: params.clone(),
                 }),
             };
             self.ixs.push(ix);
@@ -2383,12 +2382,12 @@ impl<'a> TransactionBuilder<'a> {
         fulfillment_type: Option<SpotFulfillmentType>,
     ) -> Self {
         let (taker, taker_account) = taker_info;
-        let is_perp = order.market_type == crate::drift_idl::types::MarketType::Perp;
+        let is_perp = order.market_type == MarketType::Perp;
         let perp_writable = [MarketId::perp(order.market_index)];
         let spot_writable = [MarketId::spot(order.market_index), MarketId::QUOTE_SPOT];
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::PlaceAndMakePerpOrder {
+            drift::accounts::PlaceAndMake {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -2420,25 +2419,15 @@ impl<'a> TransactionBuilder<'a> {
             accounts.push(AccountMeta::new(referrer, false));
         }
 
-        let ix = if order.market_type == crate::drift_idl::types::MarketType::Perp {
-            Instruction {
-                program_id: constants::PROGRAM_ID,
-                accounts,
-                data: InstructionData::data(&drift_idl::instructions::PlaceAndMakePerpOrder {
-                    params: order,
-                    taker_order_id,
-                }),
-            }
-        } else {
-            Instruction {
-                program_id: constants::PROGRAM_ID,
-                accounts,
-                data: InstructionData::data(&drift_idl::instructions::PlaceAndMakeSpotOrder {
-                    params: order,
-                    taker_order_id,
-                    fulfillment_type,
-                }),
-            }
+        // Spot variant removed upstream; perp-only.
+        let _ = fulfillment_type;
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift::instruction::PlaceAndMakePerpOrder {
+                params: order,
+                taker_order_id,
+            }),
         };
 
         self.ixs.push(ix);
@@ -2465,13 +2454,13 @@ impl<'a> TransactionBuilder<'a> {
             user_accounts.push(maker_account);
         }
 
-        let is_perp = order.market_type == crate::drift_idl::types::MarketType::Perp;
+        let is_perp = order.market_type == MarketType::Perp;
         let perp_writable = [MarketId::perp(order.market_index)];
         let spot_writable = [MarketId::spot(order.market_index), MarketId::QUOTE_SPOT];
 
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::PlaceAndTakePerpOrder {
+            drift::accounts::PlaceAndTake {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -2509,25 +2498,14 @@ impl<'a> TransactionBuilder<'a> {
             ));
         }
 
-        let ix = if is_perp {
-            Instruction {
-                program_id: constants::PROGRAM_ID,
-                accounts,
-                data: InstructionData::data(&drift_idl::instructions::PlaceAndTakePerpOrder {
-                    params: order,
-                    success_condition,
-                }),
-            }
-        } else {
-            Instruction {
-                program_id: constants::PROGRAM_ID,
-                accounts,
-                data: InstructionData::data(&drift_idl::instructions::PlaceAndTakeSpotOrder {
-                    params: order,
-                    maker_order_id: None,
-                    fulfillment_type,
-                }),
-            }
+        let _ = (is_perp, fulfillment_type);
+        let ix = Instruction {
+            program_id: constants::PROGRAM_ID,
+            accounts,
+            data: InstructionData::data(&drift::instruction::PlaceAndTakePerpOrder {
+                params: order,
+                success_condition,
+            }),
         };
 
         self.ixs.push(ix);
@@ -2550,7 +2528,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let order_params = signed_order_info.order_params();
         assert!(
-            order_params.market_type == crate::drift_idl::types::MarketType::Perp,
+            order_params.market_type == MarketType::Perp,
             "only swift perps are supported"
         );
         self = self.place_swift_order(signed_order_info, taker_account);
@@ -2558,7 +2536,7 @@ impl<'a> TransactionBuilder<'a> {
         let perp_writable = [MarketId::perp(order_params.market_index)];
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::PlaceAndMakeSignedMsgPerpOrder {
+            drift::accounts::PlaceAndMakeSignedMsg {
                 state: *state_account(),
                 authority: self.authority,
                 user: self.sub_account,
@@ -2594,7 +2572,7 @@ impl<'a> TransactionBuilder<'a> {
         self.ixs.push(Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::PlaceAndMakeSignedMsgPerpOrder {
+            data: InstructionData::data(&drift::instruction::PlaceAndMakeSignedMsgPerpOrder {
                 params: maker_order,
                 signed_msg_order_uuid: signed_order_info.order_uuid(),
             }),
@@ -2619,7 +2597,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let order_params = signed_order_info.order_params();
         assert!(
-            order_params.market_type == crate::drift_idl::types::MarketType::Perp,
+            order_params.market_type == MarketType::Perp,
             "only swift perps are supported"
         );
 
@@ -2630,7 +2608,7 @@ impl<'a> TransactionBuilder<'a> {
         let perp_readable = [MarketId::perp(order_params.market_index)];
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::PlaceSignedMsgTakerOrder {
+            drift::accounts::PlaceSignedMsgTakerOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: signed_order_info.taker_subaccount(),
@@ -2670,7 +2648,7 @@ impl<'a> TransactionBuilder<'a> {
         let place_swift_ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::PlaceSignedMsgTakerOrder {
+            data: InstructionData::data(&drift::instruction::PlaceSignedMsgTakerOrder {
                 signed_msg_order_params_message_bytes: swift_taker_ix_data,
                 is_delegate_signer: signed_order_info.using_delegate_signing(),
             }),
@@ -2693,7 +2671,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn set_max_initial_margin_ratio(mut self, margin_ratio: u32, sub_account_id: u16) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::UpdateUserCustomMarginRatio {
+            drift::accounts::UpdateUser {
                 authority: self.authority,
                 user: self.sub_account,
             },
@@ -2704,8 +2682,8 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::UpdateUserCustomMarginRatio {
-                sub_account_id,
+            data: InstructionData::data(&drift::instruction::UpdateUserCustomMarginRatio {
+                _sub_account_id: sub_account_id,
                 margin_ratio,
             }),
         };
@@ -2730,7 +2708,7 @@ impl<'a> TransactionBuilder<'a> {
 
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::BeginSwap {
+            drift::accounts::Swap {
                 state: *state_account(),
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.owner()),
@@ -2764,7 +2742,7 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::BeginSwap {
+            data: InstructionData::data(&drift::instruction::BeginSwap {
                 in_market_index: in_market.market_index,
                 out_market_index: out_market.market_index,
                 amount_in,
@@ -2792,7 +2770,7 @@ impl<'a> TransactionBuilder<'a> {
 
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::EndSwap {
+            drift::accounts::Swap {
                 state: *state_account(),
                 user: self.sub_account,
                 user_stats: Wallet::derive_stats_account(&self.owner()),
@@ -2826,11 +2804,13 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::EndSwap {
+            data: InstructionData::data(&drift::instruction::EndSwap {
                 in_market_index: in_market.market_index,
                 out_market_index: out_market.market_index,
                 limit_price,
-                reduce_only,
+                reduce_only: reduce_only.map(|r| unsafe {
+                    std::mem::transmute::<_, drift::instructions::SwapReduceOnly>(r)
+                }),
             }),
         };
         self.ixs.push(ix);
@@ -3217,7 +3197,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::SettlePnl {
+            drift::accounts::SettlePNL {
                 state: *state_account(),
                 user: target_pubkey.copied().unwrap_or(self.sub_account),
                 authority: self.authority,
@@ -3243,7 +3223,7 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::SettlePnl { market_index }),
+            data: InstructionData::data(&drift::instruction::SettlePnl { market_index }),
         };
 
         self.ixs.push(ix);
@@ -3268,7 +3248,7 @@ impl<'a> TransactionBuilder<'a> {
         let perp_iter: Vec<MarketId> = markets.iter().map(|i| MarketId::perp(*i)).collect();
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::SettlePnl {
+            drift::accounts::SettlePNL {
                 state: *state_account(),
                 user: target_pubkey.copied().unwrap_or(self.sub_account),
                 authority: self.authority,
@@ -3296,12 +3276,9 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::SettleMultiplePnls {
+            data: InstructionData::data(&drift::instruction::SettleMultiplePnls {
                 market_indexes: markets.to_vec(),
-                mode: match mode {
-                    SettlePnlMode::MustSettle => drift_idl::types::SettlePnlMode::MustSettle,
-                    SettlePnlMode::TrySettle => drift_idl::types::SettlePnlMode::TrySettle,
-                },
+                mode,
             }),
         };
 
@@ -3338,7 +3315,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::FillPerpOrder {
+            drift::accounts::FillOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user: taker,
@@ -3390,9 +3367,9 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::FillPerpOrder {
+            data: InstructionData::data(&drift::instruction::FillPerpOrder {
                 order_id: taker_order_id,
-                maker_order_id: None,
+                _maker_order_id: None,
             }),
         };
 
@@ -3419,7 +3396,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::TriggerOrder {
+            drift::accounts::TriggerOrder {
                 state: *state_account(),
                 authority: self.authority,
                 user,
@@ -3433,7 +3410,7 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::TriggerOrder { order_id }),
+            data: InstructionData::data(&drift::instruction::TriggerOrder { order_id }),
         };
 
         self.ixs.push(ix);
@@ -3447,7 +3424,7 @@ impl<'a> TransactionBuilder<'a> {
     pub fn initialize_swift_account(mut self) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::InitializeSignedMsgUserOrders {
+            drift::accounts::InitializeSignedMsgUserOrders {
                 signed_msg_user_orders: Wallet::derive_swift_order_account(&self.authority),
                 authority: self.authority,
                 payer: self.authority,
@@ -3462,7 +3439,7 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::InitializeSignedMsgUserOrders {
+            data: InstructionData::data(&drift::instruction::InitializeSignedMsgUserOrders {
                 num_orders: 16,
             }),
         };
@@ -3506,7 +3483,7 @@ impl<'a> TransactionBuilder<'a> {
         if sub_account_id == 0 {
             let ix = Instruction {
                 program_id: constants::PROGRAM_ID,
-                accounts: types::accounts::InitializeUserStats {
+                accounts: drift::accounts::InitializeUserStats {
                     state: *state_account(),
                     authority: self.authority,
                     user_stats: Wallet::derive_stats_account(&self.owner()),
@@ -3514,13 +3491,13 @@ impl<'a> TransactionBuilder<'a> {
                     rent: SYSVAR_RENT_PUBKEY,
                     system_program: SYSTEM_PROGRAM_ID,
                 }
-                .to_account_metas(),
-                data: InstructionData::data(&drift_idl::instructions::InitializeUserStats {}),
+                .to_account_metas(None),
+                data: InstructionData::data(&drift::instruction::InitializeUserStats {}),
             };
             self.ixs.push(ix);
         }
 
-        let mut accounts = types::accounts::InitializeUser {
+        let mut accounts = drift::accounts::InitializeUser {
             state: *state_account(),
             authority: self.authority,
             user: Wallet::derive_user_account(&self.authority, sub_account_id),
@@ -3529,7 +3506,7 @@ impl<'a> TransactionBuilder<'a> {
             rent: SYSVAR_RENT_PUBKEY,
             system_program: SYSTEM_PROGRAM_ID,
         }
-        .to_account_metas();
+        .to_account_metas(None);
         if let Some(referrer) = referrer {
             accounts.extend_from_slice(&[
                 AccountMeta::new(Wallet::derive_user_account(&referrer, 0), false),
@@ -3549,7 +3526,7 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::InitializeUser {
+            data: InstructionData::data(&drift::instruction::InitializeUser {
                 sub_account_id,
                 name: name_padded.as_bytes()[..32].try_into().unwrap(),
             }),
@@ -3583,7 +3560,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::LiquidateSpot {
+            drift::accounts::LiquidateSpot {
                 state: *state_account(),
                 authority: self.authority,
                 user: Wallet::derive_user_account(
@@ -3606,7 +3583,7 @@ impl<'a> TransactionBuilder<'a> {
         let liquidate_ix = Instruction {
             program_id: PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::LiquidateSpot {
+            data: InstructionData::data(&drift::instruction::LiquidateSpot {
                 asset_market_index,
                 liability_market_index,
                 liquidator_max_liability_transfer: liquidator_max_liability_transfer.into(),
@@ -3649,7 +3626,7 @@ impl<'a> TransactionBuilder<'a> {
 
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::LiquidateSpotWithSwapBegin {
+            drift::accounts::LiquidateSpotWithSwap {
                 state: *state_account(),
                 authority: self.authority,
                 liquidator: self.sub_account,
@@ -3685,7 +3662,7 @@ impl<'a> TransactionBuilder<'a> {
         let liquidate_ix = Instruction {
             program_id: PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::LiquidateSpotWithSwapBegin {
+            data: InstructionData::data(&drift::instruction::LiquidateSpotWithSwapBegin {
                 asset_market_index,
                 liability_market_index,
                 swap_amount,
@@ -3726,7 +3703,7 @@ impl<'a> TransactionBuilder<'a> {
 
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::LiquidateSpotWithSwapEnd {
+            drift::accounts::LiquidateSpotWithSwap {
                 state: *state_account(),
                 authority: self.authority,
                 liquidator: self.sub_account,
@@ -3762,7 +3739,7 @@ impl<'a> TransactionBuilder<'a> {
         let liquidate_ix = Instruction {
             program_id: PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::LiquidateSpotWithSwapEnd {
+            data: InstructionData::data(&drift::instruction::LiquidateSpotWithSwapEnd {
                 asset_market_index,
                 liability_market_index,
             }),
@@ -3794,7 +3771,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::LiquidatePerp {
+            drift::accounts::LiquidatePerp {
                 state: *state_account(),
                 authority: self.authority,
                 user: Wallet::derive_user_account(
@@ -3813,7 +3790,7 @@ impl<'a> TransactionBuilder<'a> {
         let liquidate_ix = Instruction {
             program_id: PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::LiquidatePerp {
+            data: InstructionData::data(&drift::instruction::LiquidatePerp {
                 market_index,
                 liquidator_max_base_asset_amount,
                 limit_price,
@@ -3845,7 +3822,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::LiquidatePerpWithFill {
+            drift::accounts::LiquidatePerp {
                 state: *state_account(),
                 authority: self.authority,
                 user: Wallet::derive_user_account(&liquidatee.authority, liquidatee.sub_account_id),
@@ -3871,7 +3848,7 @@ impl<'a> TransactionBuilder<'a> {
         let liquidate_ix = Instruction {
             program_id: PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::LiquidatePerpWithFill {
+            data: InstructionData::data(&drift::instruction::LiquidatePerpWithFill {
                 market_index,
             }),
         };
@@ -3904,7 +3881,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::LiquidatePerpPnlForDeposit {
+            drift::accounts::LiquidatePerpPnlForDeposit {
                 state: *state_account(),
                 authority: self.authority,
                 liquidator: self.sub_account,
@@ -3924,7 +3901,7 @@ impl<'a> TransactionBuilder<'a> {
         let liquidate_ix = Instruction {
             program_id: PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::LiquidatePerpPnlForDeposit {
+            data: InstructionData::data(&drift::instruction::LiquidatePerpPnlForDeposit {
                 perp_market_index,
                 spot_market_index,
                 liquidator_max_pnl_transfer: liquidator_max_pnl_transfer.into(),
@@ -3960,7 +3937,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let accounts = build_accounts(
             self.program_data,
-            types::accounts::LiquidateBorrowForPerpPnl {
+            drift::accounts::LiquidateBorrowForPerpPnl {
                 state: *state_account(),
                 authority: self.authority,
                 liquidator: self.sub_account,
@@ -3980,7 +3957,7 @@ impl<'a> TransactionBuilder<'a> {
         let liquidate_ix = Instruction {
             program_id: PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::LiquidateBorrowForPerpPnl {
+            data: InstructionData::data(&drift::instruction::LiquidateBorrowForPerpPnl {
                 perp_market_index,
                 spot_market_index,
                 liquidator_max_liability_transfer: liquidator_max_liability_transfer.into(),
@@ -4010,7 +3987,7 @@ impl<'a> TransactionBuilder<'a> {
 
         let mut accounts = build_accounts(
             self.program_data,
-            types::accounts::PostPythLazerOracleUpdate {
+            drift::accounts::UpdatePythLazerOracle {
                 keeper: self.authority,
                 pyth_lazer_storage: PYTH_LAZER_STORAGE_ACCOUNT_KEY,
                 ix_sysvar: SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -4026,7 +4003,7 @@ impl<'a> TransactionBuilder<'a> {
         let pyth_update_ix = Instruction {
             program_id: PROGRAM_ID,
             accounts,
-            data: InstructionData::data(&drift_idl::instructions::PostPythLazerOracleUpdate {
+            data: InstructionData::data(&drift::instruction::PostPythLazerOracleUpdate {
                 pyth_message: pyth_message.to_vec(),
             }),
         };
@@ -4037,35 +4014,6 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
-    pub fn disable_user_hlm(
-        mut self,
-        user: Pubkey,
-        user_account_data: &User,
-        disable_maintenance: bool,
-    ) -> Self {
-        let accounts = build_accounts(
-            self.program_data,
-            types::accounts::DisableUserHighLeverageMode {
-                authority: self.authority,
-                state: *state_account(),
-                user,
-                high_leverage_mode_config: *high_leverage_mode_account(),
-            },
-            [user_account_data].into_iter(),
-            std::iter::empty(),
-            std::iter::empty(),
-        );
-        let ix = Instruction {
-            program_id: PROGRAM_ID,
-            accounts,
-            data: InstructionData::data(&drift_idl::instructions::DisableUserHighLeverageMode {
-                disable_maintenance,
-            }),
-        };
-
-        self.ixs.push(ix);
-        self
-    }
 
     /// Build the transaction message ready for signing and sending
     pub fn build(self) -> VersionedMessage {
@@ -4106,7 +4054,7 @@ impl<'a> TransactionBuilder<'a> {
     ) -> Self {
         let accounts = build_accounts(
             self.program_data(),
-            drift_idl::accounts::UpdateUserPerpPositionCustomMarginRatio {
+            drift::accounts::UpdateUserPerpPositionCustomMarginRatio {
                 user: self.sub_account,
                 authority: self.owner(),
             },
@@ -4118,8 +4066,8 @@ impl<'a> TransactionBuilder<'a> {
             program_id: PROGRAM_ID,
             accounts,
             data: InstructionData::data(
-                &drift_idl::instructions::UpdateUserPerpPositionCustomMarginRatio {
-                    sub_account_id: self.account_data.sub_account_id,
+                &drift::instruction::UpdateUserPerpPositionCustomMarginRatio {
+                    _sub_account_id: self.account_data.sub_account_id,
                     perp_market_index: market_index,
                     margin_ratio,
                 },
@@ -4140,7 +4088,7 @@ impl<'a> TransactionBuilder<'a> {
 ///  if the user has positions in an unknown market (i.e unsupported by the SDK)
 pub fn build_accounts<'a>(
     program_data: &ProgramData,
-    base_accounts: impl ToAccountMetas,
+    base_accounts: impl anchor_lang::ToAccountMetas,
     users: impl Iterator<Item = &'a User>,
     markets_readable: impl Iterator<Item = &'a MarketId>,
     markets_writable: impl Iterator<Item = &'a MarketId>,
@@ -4204,7 +4152,7 @@ pub fn build_accounts<'a>(
         include_market(MarketId::QUOTE_SPOT.index(), MarketType::Spot, false);
     }
 
-    let mut account_metas = base_accounts.to_account_metas();
+    let mut account_metas = base_accounts.to_account_metas(None);
     account_metas.extend(accounts.into_iter().map(Into::into));
     account_metas
 }
@@ -4222,7 +4170,7 @@ mod tests {
         request::RpcRequest,
         response::{Response, RpcResponseContext},
     };
-    use types::accounts::PerpMarket;
+    use drift::state::perp_market::PerpMarket;
 
     use super::*;
 
@@ -4388,7 +4336,7 @@ mod tests {
 
         let orders = vec![OrderParams {
             market_index: 0,
-            market_type: crate::drift_idl::types::MarketType::Perp,
+            market_type: MarketType::Perp,
             direction: crate::drift_idl::types::PositionDirection::Long,
             order_type: crate::drift_idl::types::OrderType::Limit,
             bit_flags: OrderParams::HIGH_LEVERAGE_MODE_FLAG,

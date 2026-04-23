@@ -259,10 +259,10 @@ impl JitProxyClient {
         let market_type = signed_order_info_params.market_type;
 
         let writable_markets = match market_type {
-            drift_idl::types::MarketType::Perp => {
+            MarketType::Perp => {
                 vec![MarketId::perp(market_index)]
             }
-            drift_idl::types::MarketType::Spot => {
+            MarketType::Spot => {
                 vec![MarketId::spot(market_index), MarketId::QUOTE_SPOT]
             }
         };
@@ -291,7 +291,7 @@ impl JitProxyClient {
             accounts.push(AccountMeta::new(referrer_info.referrer_stats(), false));
         }
 
-        if market_type == drift_idl::types::MarketType::Spot {
+        if market_type == MarketType::Spot {
             let spot_market_vault = self
                 .drift_client
                 .try_get_spot_market_account(market_index)?
@@ -516,7 +516,6 @@ pub mod accounts {
     use crate::solana_sdk::instruction::AccountMeta;
 
     use super::*;
-    use crate::drift_idl::traits::ToAccountMetas;
 
     /// this is generated from `#[derive(Accounts)]` from `__client_accounts_jit`
     #[derive(anchor_lang::AnchorSerialize)]
@@ -529,9 +528,8 @@ pub mod accounts {
         pub authority: Pubkey,
         pub drift_program: Pubkey,
     }
-    #[automatically_derived]
-    impl ToAccountMetas for Jit {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
+    impl anchor_lang::ToAccountMetas for Jit {
+        fn to_account_metas(&self, _is_signer: Option<bool>) -> Vec<AccountMeta> {
             vec![
                 AccountMeta::new_readonly(self.state, false),
                 AccountMeta::new(self.user, false),
@@ -554,9 +552,8 @@ pub mod accounts {
         pub authority: Pubkey,
         pub drift_program: Pubkey,
     }
-    #[automatically_derived]
-    impl ToAccountMetas for JitSignedMsg {
-        fn to_account_metas(&self) -> Vec<AccountMeta> {
+    impl anchor_lang::ToAccountMetas for JitSignedMsg {
+        fn to_account_metas(&self, _is_signer: Option<bool>) -> Vec<AccountMeta> {
             vec![
                 AccountMeta::new_readonly(self.state, false),
                 AccountMeta::new(self.user, false),
