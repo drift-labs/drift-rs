@@ -750,8 +750,8 @@ mod tests {
     #[tokio::test]
     async fn test_oracle_map() {
         use crate::{
-            drift_idl::accounts::{PerpMarket, SpotMarket},
             marketmap::MarketMap,
+            types::accounts::{PerpMarket, SpotMarket},
         };
         let commitment = CommitmentConfig::processed();
 

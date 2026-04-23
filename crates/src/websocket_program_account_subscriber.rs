@@ -134,7 +134,7 @@ impl WebsocketProgramAccountSubscriber {
 mod tests {
     use super::*;
     use crate::{
-        drift_idl::accounts::User,
+        types::accounts::User,
         memcmp::{get_non_idle_user_filter, get_user_filter},
         utils::test_envs::mainnet_endpoint,
     };

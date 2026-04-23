@@ -1,15 +1,16 @@
+use drift::error::ErrorCode;
+
 use crate::{
-    drift_idl::{
-        errors::ErrorCode,
-        types::{MarginCalculationMode, MarginRequirementType, MarketIdentifier},
-    },
     math::constants::{
         BASE_PRECISION, LIQUIDATION_FEE_ADJUST_GRACE_PERIOD_SLOTS,
         LIQUIDATION_FEE_INCREASE_PER_SLOT, LIQUIDATION_FEE_PRECISION_U128,
         LIQUIDATION_FEE_TO_MARGIN_PRECISION_RATIO, PRICE_PRECISION,
         PRICE_TIMES_AMM_TO_QUOTE_PRECISION_RATIO,
     },
-    types::{OracleSource, PositionDirection, SdkError, SdkResult},
+    types::{
+        MarginCalculationMode, MarginRequirementType, MarketIdentifier, OracleSource,
+        PositionDirection, SdkError, SdkResult,
+    },
 };
 
 pub mod account_list_builder;

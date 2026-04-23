@@ -21,7 +21,7 @@ use solana_rpc_client_api::{
 
 use crate::{
     constants,
-    drift_idl::accounts::User,
+    types::accounts::User,
     memcmp::{get_non_idle_user_filter, get_user_filter},
     utils::get_ws_url,
     websocket_program_account_subscriber::{

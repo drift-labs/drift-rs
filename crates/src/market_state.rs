@@ -3,7 +3,7 @@
 use fxhash::FxBuildHasher;
 
 use crate::{
-    drift_idl::accounts::{PerpMarket, SpotMarket},
+    types::accounts::{PerpMarket, SpotMarket},
     OraclePriceData,
 };
 use std::{

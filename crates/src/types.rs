@@ -62,7 +62,6 @@ pub mod events {
 pub mod errors {
     pub use drift::error::ErrorCode;
 }
-pub use crate::drift_idl::instructions::{self};
 pub use drift::controller::position::PositionDirection;
 pub use drift::error::ErrorCode;
 pub use drift::math::margin::MarginRequirementType;
