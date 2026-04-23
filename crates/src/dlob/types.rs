@@ -6,11 +6,14 @@ use std::{
 use arrayvec::ArrayVec;
 use solana_pubkey::Pubkey;
 
+use drift::{
+    math::auction::{calculate_auction_params_for_trigger_order, calculate_auction_price},
+    state::oracle::OraclePriceData,
+    state::user::{Order as DriftOrder, OrderBitFlag},
+};
+
 use crate::{
     dlob::{Direction, OrderDelta},
-    drift_idl::accounts::PerpMarket as IdlPerpMarket,
-    drift_idl::types::{Order as IdlOrder, OrderType as IdlOrderType},
-    ffi::{calculate_auction_price, OraclePriceData},
     math::standardize_price,
     types::{
         accounts::PerpMarket, MarketId, MarketType, Order, OrderParams, OrderStatus,
@@ -347,46 +350,26 @@ impl TriggerOrder {
         //     order.add_bit_flag(OrderBitFlag::SafeTriggerOrder);
         // }
         if let Some(market) = perp_market {
-            // FFI (Phase 3) expects IDL-generated `Order`; build an IDL value and
-            // transmute `market` to the byte-compatible IDL representation.
-            let mut order = IdlOrder {
-                slot, // slot is the current slot (i.e simulate trigger and place)
-                direction: crate::types::idl_conv::position_direction_to_idl(self.direction),
-                order_type: match self.kind {
-                    OrderType::Market => IdlOrderType::Market,
-                    OrderType::Limit => IdlOrderType::Limit,
-                    OrderType::TriggerMarket => IdlOrderType::TriggerMarket,
-                    OrderType::TriggerLimit => IdlOrderType::TriggerLimit,
-                    OrderType::Oracle => IdlOrderType::Oracle,
-                },
+            let mut order = DriftOrder {
+                slot, // current slot (i.e simulate trigger-and-place)
+                direction: self.direction,
+                order_type: self.kind,
                 market_index: market.market_index,
-                market_type: crate::drift_idl::types::MarketType::Perp,
+                market_type: drift::state::user::MarketType::Perp,
                 base_asset_amount: self.size,
-                status: crate::drift_idl::types::OrderStatus::Open,
+                status: drift::state::user::OrderStatus::Open,
                 trigger_condition: match self.condition {
-                    OrderTriggerCondition::Above => {
-                        crate::drift_idl::types::OrderTriggerCondition::TriggeredAbove
-                    }
-                    OrderTriggerCondition::Below => {
-                        crate::drift_idl::types::OrderTriggerCondition::TriggeredBelow
-                    }
-                    other => match other {
-                        OrderTriggerCondition::TriggeredAbove => {
-                            crate::drift_idl::types::OrderTriggerCondition::TriggeredAbove
-                        }
-                        OrderTriggerCondition::TriggeredBelow => {
-                            crate::drift_idl::types::OrderTriggerCondition::TriggeredBelow
-                        }
-                        _ => crate::drift_idl::types::OrderTriggerCondition::Above,
-                    },
+                    OrderTriggerCondition::Above => OrderTriggerCondition::TriggeredAbove,
+                    OrderTriggerCondition::Below => OrderTriggerCondition::TriggeredBelow,
+                    other @ (OrderTriggerCondition::TriggeredAbove
+                    | OrderTriggerCondition::TriggeredBelow) => other,
+                    _ => OrderTriggerCondition::Above,
                 },
                 bit_flags: self.bit_flags,
                 ..Default::default()
             };
-            let idl_market: &IdlPerpMarket =
-                unsafe { &*(market as *const PerpMarket as *const IdlPerpMarket) };
             let (auction_duration, auction_start, auction_end) =
-                crate::ffi::calculate_auction_params_for_trigger_order(
+                calculate_auction_params_for_trigger_order(
                     &order,
                     &OraclePriceData {
                         price: oracle_price as i64,
@@ -395,16 +378,16 @@ impl TriggerOrder {
                         has_sufficient_number_of_data_points: true,
                         sequence_id: None,
                     },
-                    Some(idl_market),
+                    drift::math::margin::MarginRequirementType::Maintenance as u8,
+                    Some(market),
                 )
                 .unwrap();
             order.auction_duration = auction_duration;
             order.auction_start_price = auction_start;
             order.auction_end_price = auction_end;
 
-            const IDL_ORACLE_TRIGGER_MARKET_FLAG: u8 = 0b0000_0010;
-            if matches!(order.order_type, IdlOrderType::TriggerMarket) {
-                order.bit_flags |= IDL_ORACLE_TRIGGER_MARKET_FLAG;
+            if matches!(order.order_type, OrderType::TriggerMarket) {
+                order.bit_flags |= OrderBitFlag::OracleTriggerMarket as u8;
             }
 
             return calculate_auction_price(
@@ -412,8 +395,8 @@ impl TriggerOrder {
                 slot,
                 market.amm.order_tick_size,
                 Some(oracle_price as i64),
-                false,
-            );
+            )
+            .map_err(|e| crate::SdkError::Anchor(Box::new(e.into())));
         }
 
         todo!("implement spot market trigger price");

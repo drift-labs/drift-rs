@@ -1,7 +1,6 @@
 use crate::{
-    ffi::OraclePriceData,
     math::auction::{get_auction_price, is_auction_complete},
-    types::{Order, OrderType, PositionDirection},
+    types::{Order, OraclePriceData, OrderType, PositionDirection},
 };
 
 pub fn get_limit_price(
