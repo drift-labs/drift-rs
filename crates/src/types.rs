@@ -24,12 +24,15 @@ use tokio_tungstenite::tungstenite;
 // still supplies instruction-context accounts, events, and a handful of
 // deprecated/removed types (see bottom of this block).
 pub mod accounts {
-    //! Drift on-chain account types + IDL-generated instruction-context accounts
-    //! (`PlacePerpOrder`, `CancelOrder`, etc. used by TransactionBuilder until
-    //! Phase 4 swaps them for anchor 1.0's derived ix builders).
+    //! Drift on-chain account types.
     //!
-    //! Glob first so drift native state types shadow any IDL equivalents below.
-    pub use crate::drift_idl::accounts::*;
+    //! After Phase 4, TransactionBuilder uses anchor-derived context
+    //! structs from `drift::accounts::*` directly, so we no longer glob
+    //! the IDL accounts module. `State` is the only IDL holdover — drift
+    //! native's `State` is `#[account]` (Borsh) but drift-rs's
+    //! `AccountMap::account_data::<T>` wants `T: Pod`, and drift-idl-gen
+    //! emits `unsafe impl Pod for State`.
+    pub use crate::drift_idl::accounts::State;
     pub use drift::state::amm_cache::AmmCache;
     pub use drift::state::fulfillment_params::openbook_v2::OpenbookV2FulfillmentConfig;
     pub use drift::state::fulfillment_params::phoenix::PhoenixV1FulfillmentConfig;
@@ -49,11 +52,6 @@ pub mod accounts {
     pub use drift::state::signed_msg_user::{SignedMsgUserOrders, SignedMsgWsDelegates};
     pub use drift::state::spot_market::SpotMarket;
     pub use drift::state::user::{FuelOverflow, ReferrerName, User, UserStats};
-    // Note: `State` stays on IDL (supplied by the glob above). drift's State is
-    // `#[account]` (Borsh) but drift-rs's `AccountMap::account_data::<T>`
-    // requires `T: Pod`. drift-idl-gen emits an `unsafe impl Pod for State`
-    // that the existing call path relies on. Phase 3 (or an upstream PR making
-    // drift::State zero-copy) revisits this.
 }
 pub mod events {
     // Keep IDL events in public API: drift's `#[event]` types lack serde.
