@@ -19,7 +19,7 @@ use solana_rpc_client::nonblocking::rpc_client::RpcClient;
 
 use crate::{
     grpc::AccountUpdate as GrpcAccountUpdate,
-    types::{AccountUpdate, MapOf, OracleSource, OraclePriceData, EMPTY_ACCOUNT_CALLBACK},
+    types::{AccountUpdate, MapOf, OraclePriceData, OracleSource, EMPTY_ACCOUNT_CALLBACK},
     websocket_account_subscriber::WebsocketAccountSubscriber,
     MarketId, SdkError, SdkResult, UnsubHandle,
 };

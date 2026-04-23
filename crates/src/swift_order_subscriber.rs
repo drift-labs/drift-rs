@@ -248,7 +248,8 @@ impl SignedOrderInfo {
                 if let Some(raw) = raw {
                     raw.as_bytes().into()
                 } else {
-                    let mut buf = Vec::with_capacity(std::mem::size_of::<SignedDelegateOrder>() + 8);
+                    let mut buf =
+                        Vec::with_capacity(std::mem::size_of::<SignedDelegateOrder>() + 8);
                     (SWIFT_DELEGATE_MSG_PREFIX).serialize(&mut buf).unwrap();
                     inner.serialize(&mut buf).unwrap();
                     hex::encode(buf).into()
@@ -720,8 +721,8 @@ mod tests {
     #[test]
     fn deser_ix_payload() {
         let data = hex_literal::hex!("204f658b1906620f040100000a09f3447ce77b9aa6374b05c5efb667042ca0cb15ca74af8a8b97b5ad09cd68aef5bda66b38c021c42ff59afad102b7ffa31bc9c52ee85a8752b3142d62b405833d29adc5096b41d5b9d3b2d6fe46deecb286644510a70f85b95853ec628209a20063386435613635653232333466353564303430313030303038306561383232623030303030303030303030303030303030303030303030303030303030303030303030303030303030313437373930303030303131343031623065386663666666666666666666663031343737393030303030303030303030303039303062323436383231343030303030303030363235393733333936393638343133353030303000");
-        let ix = drift::instruction::PlaceSignedMsgTakerOrder::deserialize(&mut &data[8..])
-            .unwrap();
+        let ix =
+            drift::instruction::PlaceSignedMsgTakerOrder::deserialize(&mut &data[8..]).unwrap();
         // signature, pubkey, len(u16)
         let mut payload = hex::decode(&ix.signed_msg_order_params_message_bytes[98..]).unwrap();
         dbg!(payload[..8] == SWIFT_MSG_PREFIX);

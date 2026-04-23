@@ -225,9 +225,7 @@ pub fn calculate_perp_free_collateral_delta(
 ) -> i64 {
     let current_base_asset_amount = position.base_asset_amount;
 
-    let worst_case_base_amount = position
-        .worst_case_base_asset_amount(oracle_price)
-        .unwrap();
+    let worst_case_base_amount = position.worst_case_base_asset_amount(oracle_price).unwrap();
     let margin_ratio = market
         .get_margin_ratio(
             worst_case_base_amount.unsigned_abs(),
@@ -409,17 +407,14 @@ mod tests {
             ids::pyth_program,
             {self},
         },
-        types::{
-            HistoricalOracleData, MarketStatus, OracleSource, AMM,
-        },
-        SpotPosition,
         math::constants::{
             AMM_RESERVE_PRECISION, BASE_PRECISION_I64, LIQUIDATION_FEE_PRECISION, PEG_PRECISION,
             PRICE_PRECISION_I64, SPOT_BALANCE_PRECISION, SPOT_BALANCE_PRECISION_U64,
             SPOT_CUMULATIVE_INTEREST_PRECISION,
         },
+        types::{HistoricalOracleData, MarketStatus, OracleSource, AMM},
         utils::test_utils::*,
-        MarketId,
+        MarketId, SpotPosition,
     };
 
     const SOL_ORACLE: Pubkey =

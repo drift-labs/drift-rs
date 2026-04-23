@@ -75,6 +75,10 @@ pub use drift::state::oracle::{
     PrelaunchOracleParams, StrictOraclePrice,
 };
 pub use drift::state::order_params::{
+    ModifyOrderParams, ModifyOrderPolicy, OrderParams, SignedMsgOrderParamsDelegateMessage,
+    SignedMsgOrderParamsMessage,
+};
+pub use drift::state::order_params::{
     OrderParamsBitFlag, PlaceAndTakeOrderSuccessCondition, PostOnlyParam,
     SignedMsgTriggerOrderParams,
 };
@@ -90,10 +94,6 @@ pub use drift::state::state::{
 pub use drift::state::user::{
     AssetType, MarketType, Order, OrderStatus, OrderTriggerCondition, OrderType, PerpPosition,
     SpotPosition, UserStatus,
-};
-pub use drift::state::order_params::{
-    ModifyOrderParams, ModifyOrderPolicy, OrderParams, SignedMsgOrderParamsDelegateMessage,
-    SignedMsgOrderParamsMessage,
 };
 // SwapReduceOnly is IDL-only from drift-rs's perspective — drift puts it
 // under `instructions::user` which is not `pub mod`-visible externally.
@@ -141,7 +141,6 @@ pub type SdkResult<T> = Result<T, SdkError>;
 pub fn is_one_of_variant<T: PartialEq>(value: &T, variants: &[T]) -> bool {
     variants.iter().any(|variant| value == variant)
 }
-
 
 /// SDK-side helpers for drift's `SpotMarket` (extension trait — orphan rule).
 pub trait SpotMarketExt {

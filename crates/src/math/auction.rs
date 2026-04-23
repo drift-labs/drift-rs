@@ -1,8 +1,8 @@
 use std::cmp::min;
 
 use crate::{
-    types::{Order, OrderType, PositionDirection},
     is_one_of_variant,
+    types::{Order, OrderType, PositionDirection},
 };
 
 pub fn is_auction_complete(order: &Order, slot: u64) -> bool {

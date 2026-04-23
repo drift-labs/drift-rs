@@ -1,6 +1,6 @@
 use crate::{
     math::auction::{get_auction_price, is_auction_complete},
-    types::{Order, OraclePriceData, OrderType, PositionDirection},
+    types::{OraclePriceData, Order, OrderType, PositionDirection},
 };
 
 pub fn get_limit_price(

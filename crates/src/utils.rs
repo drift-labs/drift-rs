@@ -375,7 +375,6 @@ pub mod test_utils {
         bytes.extend_from_slice(data);
         bytes
     }
-
 }
 
 #[cfg(test)]

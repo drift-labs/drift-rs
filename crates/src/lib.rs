@@ -958,15 +958,10 @@ impl DriftClient {
         let perp_market = self.try_get_perp_market_account(market_index)?;
         let oracle_validity_guard_rails = self.state_account().unwrap().oracle_guard_rails.validity;
 
-        let drift_validity_guard_rails: drift::state::state::ValidityGuardRails = unsafe {
-            std::mem::transmute_copy::<_, _>(&oracle_validity_guard_rails)
-        };
+        let drift_validity_guard_rails: drift::state::state::ValidityGuardRails =
+            unsafe { std::mem::transmute_copy::<_, _>(&oracle_validity_guard_rails) };
         perp_market
-            .get_mm_oracle_price_data(
-                oracle_data.data,
-                current_slot,
-                &drift_validity_guard_rails,
-            )
+            .get_mm_oracle_price_data(oracle_data.data, current_slot, &drift_validity_guard_rails)
             .map(|x| x.get_safe_oracle_price_data())
             .map_err(|e| SdkError::Anchor(Box::new(e.into())))
     }
@@ -1007,7 +1002,6 @@ impl DriftClient {
         self.backend.account_map.unsubscribe_account(account);
         Ok(())
     }
-
 
     /// Return a reference to the internal spot market map
     #[cfg(feature = "unsafe_pub")]
@@ -2012,13 +2006,11 @@ impl<'a> TransactionBuilder<'a> {
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
-            data: InstructionData::data(
-                &drift::instruction::TransferIsolatedPerpPositionDeposit {
-                    perp_market_index: market_index,
-                    spot_market_index: quote_spot_market.market_index,
-                    amount,
-                },
-            ),
+            data: InstructionData::data(&drift::instruction::TransferIsolatedPerpPositionDeposit {
+                perp_market_index: market_index,
+                spot_market_index: quote_spot_market.market_index,
+                amount,
+            }),
         };
 
         self.ixs.push(ix);
@@ -2248,7 +2240,7 @@ impl<'a> TransactionBuilder<'a> {
             data: InstructionData::data(&drift::instruction::CancelOrders {
                 market_index: Some(idx),
                 market_type: Some(r#type),
-                direction: direction,
+                direction,
             }),
         };
         self.ixs.push(ix);
@@ -4014,7 +4006,6 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
-
     /// Build the transaction message ready for signing and sending
     pub fn build(self) -> VersionedMessage {
         let payer = self.fee_payer.unwrap_or(self.authority);
@@ -4163,6 +4154,7 @@ mod tests {
 
     use crate::solana_sdk::keypair::Keypair;
     use anchor_lang::prelude::system_instruction;
+    use drift::state::perp_market::PerpMarket;
     use serde_json::json;
     use solana_account_decoder_client_types::{UiAccount, UiAccountData, UiAccountEncoding};
     use solana_rpc_client::rpc_client::Mocks;
@@ -4170,7 +4162,6 @@ mod tests {
         request::RpcRequest,
         response::{Response, RpcResponseContext},
     };
-    use drift::state::perp_market::PerpMarket;
 
     use super::*;
 
