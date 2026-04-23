@@ -28,7 +28,8 @@ dlob_dbg = []
 [dependencies]
 abi_stable = { version = "0.11", default-features = false }
 ahash = "0.8.12"
-anchor-lang = { version = "1.0.0-rc.2", features = ["derive"] }
+anchor-lang = { version = "1.0.0", features = ["derive"] }
+drift = { path = "../protocol-v2-shadow/programs/drift", default-features = false, features = ["drift-rs", "mainnet-beta", "no-entrypoint"] }
 arrayvec = "0.7.6"
 base64 = "0.22"
 bytemuck = "1.17"
@@ -52,7 +53,7 @@ solana-instruction = "3"
 solana-keypair = "3"
 solana-message = "3"
 solana-pubkey = "3"
-solana-rpc-client = "3"
+solana-rpc-client = "3.1"
 solana-rpc-client-api = "3"
 solana-signature = "3"
 solana-signer = "3"
