@@ -4337,9 +4337,9 @@ mod tests {
         let orders = vec![OrderParams {
             market_index: 0,
             market_type: MarketType::Perp,
-            direction: crate::drift_idl::types::PositionDirection::Long,
-            order_type: crate::drift_idl::types::OrderType::Limit,
-            bit_flags: OrderParams::HIGH_LEVERAGE_MODE_FLAG,
+            direction: PositionDirection::Long,
+            order_type: OrderType::Limit,
+            bit_flags: <OrderParams as crate::types::OrderParamsExt>::HIGH_LEVERAGE_MODE_FLAG,
             ..Default::default()
         }];
 

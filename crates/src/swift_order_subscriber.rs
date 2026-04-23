@@ -634,9 +634,7 @@ mod tests {
     use super::*;
     use crate::{
         drift_idl,
-        drift_idl::types::{
-            MarketType, OrderTriggerCondition, OrderType, PositionDirection, PostOnlyParam,
-        },
+        types::{MarketType, OrderTriggerCondition, OrderType, PositionDirection, PostOnlyParam},
     };
 
     #[test]
@@ -731,7 +729,7 @@ mod tests {
 
         payload.resize(std::mem::size_of::<SignedOrder>(), 0);
         let res: SignedOrder = AnchorDeserialize::deserialize(&mut &payload[8..]).unwrap();
-        dbg!(res);
+        dbg!(&res);
         dbg!(core::str::from_utf8(&res.uuid).unwrap());
     }
 
