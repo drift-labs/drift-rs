@@ -28,6 +28,7 @@ dlob_dbg = []
 [dependencies]
 ahash = "0.8.12"
 anchor-lang = { version = "1.0.0", features = ["derive"] }
+arc-swap = "1.7"
 drift = { path = "../protocol-v2-shadow/programs/drift", default-features = false, features = ["drift-rs", "mainnet-beta", "no-entrypoint"] }
 arrayvec = "0.7.6"
 base64 = "0.22"

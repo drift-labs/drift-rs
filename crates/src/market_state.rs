@@ -1,6 +1,10 @@
-//! Unified HashMap for providing market and oracle data for margin calculations
-//! replaces the programs AccountLoader types for FFI
-use fxhash::FxBuildHasher;
+//! Market and oracle data used to drive offchain margin calculations.
+//!
+//! All inner maps are `Vec<Option<T>>` indexed by `market_index`, which is a
+//! dense small `u16`, so lookups are array indexing and clones are
+//! contiguous memcpy (no allocator per-entry traffic).
+//! [`MarketState`] holds one `ArcSwap<MarketStateData>` for lock-free reads.
+use arc_swap::ArcSwap;
 
 use drift::{
     math::{
@@ -26,158 +30,202 @@ use crate::{
     },
     OraclePriceData, SdkError, SdkResult,
 };
-use std::{
-    cmp::Ordering as CmpOrdering,
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicPtr, Ordering},
-        Arc,
-    },
-};
+use std::{cmp::Ordering as CmpOrdering, sync::Arc};
 
-/// Internal data structure for market state
+/// Market + oracle state for offchain margin calculations.
+///
+/// All inner maps are `Vec<Option<T>>` indexed by `market_index`.
 #[derive(Clone, Default)]
 pub struct MarketStateData {
-    pub spot_markets: HashMap<u16, SpotMarket, FxBuildHasher>,
-    pub perp_markets: HashMap<u16, PerpMarket, FxBuildHasher>,
-    pub spot_oracle_prices: HashMap<u16, OraclePriceData, FxBuildHasher>,
-    pub perp_oracle_prices: HashMap<u16, OraclePriceData, FxBuildHasher>,
-    pub spot_pyth_prices: HashMap<u16, i64, FxBuildHasher>, // Override spot with pyth price
-    pub perp_pyth_prices: HashMap<u16, i64, FxBuildHasher>, // Override perp with pyth price
-    pub pyth_oracle_diff_threshold_bps: u64, // Min bps diff to prefer pyth price over oracle. Defaults to 0 (always use pyth when set).
+    pub spot_markets: Vec<Option<SpotMarket>>,
+    pub perp_markets: Vec<Option<PerpMarket>>,
+    pub spot_oracle_prices: Vec<Option<OraclePriceData>>,
+    pub perp_oracle_prices: Vec<Option<OraclePriceData>>,
+    /// Override spot oracle with pyth price.
+    pub spot_pyth_prices: Vec<Option<i64>>,
+    /// Override perp oracle with pyth price.
+    pub perp_pyth_prices: Vec<Option<i64>>,
+    /// Min bps diff required to prefer pyth over oracle. `0` = always prefer pyth when set.
+    pub pyth_oracle_diff_threshold_bps: u64,
+}
+
+fn slot_mut<T>(v: &mut Vec<Option<T>>, idx: u16) -> &mut Option<T> {
+    let i = idx as usize;
+    if i >= v.len() {
+        v.resize_with(i + 1, || None);
+    }
+    &mut v[i]
+}
+
+fn slot_ref<T>(v: &[Option<T>], idx: u16) -> Option<&T> {
+    v.get(idx as usize).and_then(|s| s.as_ref())
 }
 
 impl MarketStateData {
     pub fn set_spot_market(&mut self, market: SpotMarket) {
-        self.spot_markets.insert(market.market_index, market);
+        *slot_mut(&mut self.spot_markets, market.market_index) = Some(market);
     }
 
     pub fn set_perp_market(&mut self, market: PerpMarket) {
-        self.perp_markets.insert(market.market_index, market);
+        *slot_mut(&mut self.perp_markets, market.market_index) = Some(market);
     }
 
     pub fn set_spot_oracle_price(&mut self, market_index: u16, price: OraclePriceData) {
-        self.spot_oracle_prices.insert(market_index, price);
+        *slot_mut(&mut self.spot_oracle_prices, market_index) = Some(price);
     }
 
     pub fn set_perp_oracle_price(&mut self, market_index: u16, price: OraclePriceData) {
-        self.perp_oracle_prices.insert(market_index, price);
+        *slot_mut(&mut self.perp_oracle_prices, market_index) = Some(price);
     }
 
-    pub fn set_spot_pyth_price(&mut self, market_index: u16, price_data: i64) {
-        self.spot_pyth_prices.insert(market_index, price_data);
+    pub fn set_spot_pyth_price(&mut self, market_index: u16, price: i64) {
+        *slot_mut(&mut self.spot_pyth_prices, market_index) = Some(price);
     }
 
-    pub fn set_perp_pyth_price(&mut self, market_index: u16, price_data: i64) {
-        self.perp_pyth_prices.insert(market_index, price_data);
+    pub fn set_perp_pyth_price(&mut self, market_index: u16, price: i64) {
+        *slot_mut(&mut self.perp_pyth_prices, market_index) = Some(price);
+    }
+
+    pub fn spot_market(&self, market_index: u16) -> Option<&SpotMarket> {
+        slot_ref(&self.spot_markets, market_index)
+    }
+
+    pub fn perp_market(&self, market_index: u16) -> Option<&PerpMarket> {
+        slot_ref(&self.perp_markets, market_index)
+    }
+
+    pub fn spot_oracle(&self, market_index: u16) -> Option<&OraclePriceData> {
+        slot_ref(&self.spot_oracle_prices, market_index)
+    }
+
+    pub fn perp_oracle(&self, market_index: u16) -> Option<&OraclePriceData> {
+        slot_ref(&self.perp_oracle_prices, market_index)
+    }
+
+    pub fn spot_pyth(&self, market_index: u16) -> Option<i64> {
+        slot_ref(&self.spot_pyth_prices, market_index).copied()
+    }
+
+    pub fn perp_pyth(&self, market_index: u16) -> Option<i64> {
+        slot_ref(&self.perp_pyth_prices, market_index).copied()
     }
 }
 
-/// Optimized storage for drift markets and oracles
+/// Resolve oracle vs pyth override using the threshold. Returns the price to use.
+fn resolve_oracle_price(
+    oracle: &OraclePriceData,
+    pyth: Option<i64>,
+    threshold_bps: u64,
+) -> OraclePriceData {
+    match pyth {
+        Some(pyth_price) if pyth_price != 0 && oracle.price == 0 => OraclePriceData {
+            price: pyth_price,
+            confidence: 0,
+            delay: 0,
+            has_sufficient_number_of_data_points: true,
+            sequence_id: None,
+        },
+        Some(pyth_price) if pyth_price != 0 && oracle.price != 0 => {
+            let diff_bps =
+                (pyth_price.abs_diff(oracle.price) * 10_000) / oracle.price.unsigned_abs();
+            if diff_bps > threshold_bps {
+                OraclePriceData {
+                    price: pyth_price,
+                    confidence: 0,
+                    delay: 0,
+                    has_sufficient_number_of_data_points: true,
+                    sequence_id: None,
+                }
+            } else {
+                *oracle
+            }
+        }
+        _ => *oracle,
+    }
+}
+
+/// Lock-free snapshot of market + oracle data for offchain margin calculations.
+///
+/// Readers observe a consistent snapshot via `load()`. Writers use an RCU
+/// update (clone-modify-publish). Concurrent writers are last-writer-wins
+/// internally via `ArcSwap::rcu`, which retries on contention.
 pub struct MarketState {
-    state: AtomicPtr<MarketStateData>,
+    state: ArcSwap<MarketStateData>,
 }
 
 impl MarketState {
-    /// Create a lock-free market state with initial data
     pub fn new(data: MarketStateData) -> Self {
-        let arc = Arc::new(data);
-        let ptr = Arc::into_raw(arc) as *mut _;
         Self {
-            state: AtomicPtr::new(ptr),
+            state: ArcSwap::from_pointee(data),
         }
     }
 
-    /// Get a lock-free read-only reference to the current market state
-    ///
-    /// This returns an Arc<MarketStateData> that can be safely used for calculations
-    /// without blocking writers. The Arc ensures the data remains valid even if
-    /// the state is updated concurrently.
+    /// Cheap snapshot of the current state (one atomic load on the fast path).
     pub fn load(&self) -> Arc<MarketStateData> {
-        let ptr = self.state.load(Ordering::Acquire);
-        unsafe {
-            Arc::increment_strong_count(ptr);
-            Arc::from_raw(ptr)
-        }
+        self.state.load_full()
     }
 
-    /// Atomically update the entire market state
-    ///
-    /// This creates a new Arc<MarketStateData> with the updated data and atomically
-    /// replaces the current state. All readers will see the new state on their
-    /// next load() call. The old state is properly deallocated.
-    fn store(&self, new_state: Arc<MarketStateData>) {
-        let new_ptr = Arc::into_raw(new_state) as *mut _;
-        let old_ptr = self.state.swap(new_ptr, Ordering::AcqRel);
-        unsafe {
-            Arc::from_raw(old_ptr);
-        } // decrements old Arc refcount
-    }
-
-    /// Update a single spot market
     pub fn set_spot_market(&self, market: SpotMarket) {
-        let current = self.load();
-        let mut new_data = (*current).clone();
-        new_data.set_spot_market(market);
-        self.store(Arc::new(new_data));
+        self.state.rcu(|cur| {
+            let mut next = (**cur).clone();
+            next.set_spot_market(market.clone());
+            next
+        });
     }
 
-    /// Update a single perp market
     pub fn set_perp_market(&self, market: PerpMarket) {
-        let current = self.load();
-        let mut new_data = (*current).clone();
-        new_data.set_perp_market(market);
-        self.store(Arc::new(new_data));
+        self.state.rcu(|cur| {
+            let mut next = (**cur).clone();
+            next.set_perp_market(market.clone());
+            next
+        });
     }
 
-    /// Update spot oracle price
     pub fn set_spot_oracle_price(&self, market_index: u16, price: OraclePriceData) {
-        let current = self.load();
-        let mut new_data = (*current).clone();
-        new_data.set_spot_oracle_price(market_index, price);
-        self.store(Arc::new(new_data));
+        self.state.rcu(|cur| {
+            let mut next = (**cur).clone();
+            next.set_spot_oracle_price(market_index, price);
+            next
+        });
     }
 
-    /// Update perp oracle price
     pub fn set_perp_oracle_price(&self, market_index: u16, price: OraclePriceData) {
-        let current = self.load();
-        let mut new_data = (*current).clone();
-        new_data.set_perp_oracle_price(market_index, price);
-        self.store(Arc::new(new_data));
+        self.state.rcu(|cur| {
+            let mut next = (**cur).clone();
+            next.set_perp_oracle_price(market_index, price);
+            next
+        });
     }
 
-    /// Update spot pyth price
     pub fn set_spot_pyth_price(&self, market_index: u16, price: i64) {
-        let current = self.load();
-        let mut new_data = (*current).clone();
-        new_data.set_spot_pyth_price(market_index, price);
-        self.store(Arc::new(new_data));
+        self.state.rcu(|cur| {
+            let mut next = (**cur).clone();
+            next.set_spot_pyth_price(market_index, price);
+            next
+        });
     }
 
-    /// Update perp pyth price
     pub fn set_perp_pyth_price(&self, market_index: u16, price: i64) {
-        let current = self.load();
-        let mut new_data = (*current).clone();
-        new_data.set_perp_pyth_price(market_index, price);
-        self.store(Arc::new(new_data));
+        self.state.rcu(|cur| {
+            let mut next = (**cur).clone();
+            next.set_perp_pyth_price(market_index, price);
+            next
+        });
     }
 
     pub fn get_perp_oracle_price(&self, market_index: u16) -> Option<OraclePriceData> {
-        let current = self.load();
-        current.perp_oracle_prices.get(&market_index).copied()
+        self.state.load().perp_oracle(market_index).copied()
     }
 
     pub fn get_spot_oracle_price(&self, market_index: u16) -> Option<OraclePriceData> {
-        let current = self.load();
-        current.spot_oracle_prices.get(&market_index).copied()
+        self.state.load().spot_oracle(market_index).copied()
     }
 
     pub fn get_spot_pyth_price(&self, market_index: u16) -> Option<OraclePriceData> {
-        let current = self.load();
-        current
-            .spot_pyth_prices
-            .get(&market_index)
-            .map(|&price| OraclePriceData {
+        self.state
+            .load()
+            .spot_pyth(market_index)
+            .map(|price| OraclePriceData {
                 price,
                 confidence: 0,
                 delay: 0,
@@ -187,11 +235,10 @@ impl MarketState {
     }
 
     pub fn get_perp_pyth_price(&self, market_index: u16) -> Option<OraclePriceData> {
-        let current = self.load();
-        current
-            .perp_pyth_prices
-            .get(&market_index)
-            .map(|&price| OraclePriceData {
+        self.state
+            .load()
+            .perp_pyth(market_index)
+            .map(|price| OraclePriceData {
                 price,
                 confidence: 0,
                 delay: 0,
@@ -357,10 +404,10 @@ impl MarketState {
         margin_type: MarginRequirementType,
         margin_buffer: Option<u32>,
     ) -> SdkResult<SimplifiedMarginCalculation> {
-        let state = self.load();
+        let snapshot = self.load();
         calculate_simplified_margin_requirement(
             user,
-            state.as_ref(),
+            &snapshot,
             margin_type,
             margin_buffer.unwrap_or(0),
         )
@@ -395,41 +442,21 @@ pub fn calculate_simplified_margin_requirement(
             continue;
         }
 
-        let spot_market = market_state
-            .spot_markets
-            .get(&spot_position.market_index)
-            .ok_or(SdkError::NoMarketData(crate::MarketId::spot(
-                spot_position.market_index,
-            )))?;
+        let spot_market =
+            market_state
+                .spot_market(spot_position.market_index)
+                .ok_or(SdkError::NoMarketData(crate::MarketId::spot(
+                    spot_position.market_index,
+                )))?;
         let oracle = market_state
-            .spot_oracle_prices
-            .get(&spot_position.market_index)
+            .spot_oracle(spot_position.market_index)
             .ok_or_else(|| anchor_err(drift::error::ErrorCode::OracleNotFound))?;
 
-        let pyth = market_state
-            .spot_pyth_prices
-            .get(&spot_position.market_index)
-            .map(|&price| OraclePriceData {
-                price,
-                confidence: 0,
-                delay: 0,
-                has_sufficient_number_of_data_points: true,
-                sequence_id: None,
-            });
-
-        let oracle_price = match pyth {
-            Some(p) if p.price != 0 && oracle.price == 0 => p,
-            Some(p) if p.price != 0 && oracle.price != 0 => {
-                let diff_bps =
-                    (p.price.abs_diff(oracle.price) * 10_000) / oracle.price.unsigned_abs();
-                if diff_bps > market_state.pyth_oracle_diff_threshold_bps {
-                    p
-                } else {
-                    *oracle
-                }
-            }
-            _ => *oracle,
-        };
+        let oracle_price = resolve_oracle_price(
+            oracle,
+            market_state.spot_pyth(spot_position.market_index),
+            market_state.pyth_oracle_diff_threshold_bps,
+        );
 
         let signed_token_amount = spot_position
             .get_signed_token_amount(spot_market)
@@ -533,46 +560,25 @@ pub fn calculate_simplified_margin_requirement(
             continue;
         }
 
-        let perp_market = market_state
-            .perp_markets
-            .get(&perp_position.market_index)
-            .ok_or(SdkError::NoMarketData(crate::MarketId::perp(
-                perp_position.market_index,
-            )))?;
+        let perp_market =
+            market_state
+                .perp_market(perp_position.market_index)
+                .ok_or(SdkError::NoMarketData(crate::MarketId::perp(
+                    perp_position.market_index,
+                )))?;
 
         let oracle = market_state
-            .perp_oracle_prices
-            .get(&perp_position.market_index)
+            .perp_oracle(perp_position.market_index)
             .ok_or_else(|| anchor_err(drift::error::ErrorCode::OracleNotFound))?;
-        let pyth = market_state
-            .perp_pyth_prices
-            .get(&perp_position.market_index)
-            .map(|&price| OraclePriceData {
-                price,
-                confidence: 0,
-                delay: 0,
-                has_sufficient_number_of_data_points: true,
-                sequence_id: None,
-            });
-
-        let oracle_price = match pyth {
-            Some(p) if p.price != 0 && oracle.price == 0 => p,
-            Some(p) if p.price != 0 && oracle.price != 0 => {
-                let diff_bps =
-                    (p.price.abs_diff(oracle.price) * 10_000) / oracle.price.unsigned_abs();
-                if diff_bps > market_state.pyth_oracle_diff_threshold_bps {
-                    p
-                } else {
-                    *oracle
-                }
-            }
-            _ => *oracle,
-        };
+        let oracle_price = resolve_oracle_price(
+            oracle,
+            market_state.perp_pyth(perp_position.market_index),
+            market_state.pyth_oracle_diff_threshold_bps,
+        );
 
         let strict_quote_price = {
             let quote_price_data = market_state
-                .spot_oracle_prices
-                .get(&perp_market.quote_spot_market_index)
+                .spot_oracle(perp_market.quote_spot_market_index)
                 .ok_or_else(|| anchor_err(drift::error::ErrorCode::OracleNotFound))?;
             StrictOraclePrice {
                 current: quote_price_data.price,
@@ -599,8 +605,7 @@ pub fn calculate_simplified_margin_requirement(
 
         if perp_position.is_isolated() {
             let quote_spot_market = market_state
-                .spot_markets
-                .get(&perp_market.quote_spot_market_index)
+                .spot_market(perp_market.quote_spot_market_index)
                 .ok_or(SdkError::NoMarketData(crate::MarketId::spot(
                     perp_market.quote_spot_market_index,
                 )))?;
@@ -678,17 +683,6 @@ pub fn calculate_simplified_margin_requirement(
         with_perp_isolated_liability,
         with_spot_isolated_liability,
     })
-}
-
-impl Drop for MarketState {
-    fn drop(&mut self) {
-        let ptr = self.state.load(Ordering::Acquire);
-        if !ptr.is_null() {
-            unsafe {
-                let _ = Box::from_raw(ptr);
-            }
-        }
-    }
 }
 
 #[cfg(test)]
