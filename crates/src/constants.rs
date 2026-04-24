@@ -20,7 +20,7 @@ pub const SYSVAR_RENT_PUBKEY: Pubkey =
 
 /// Drift program address
 pub const PROGRAM_ID: Pubkey =
-    solana_pubkey::pubkey!("dRiftyHA39MWEi3m9aunc5MzRF1JYuBsbn6VPcn33UH");
+    solana_pubkey::pubkey!("FGXfSBCXqSTkBX6zTQyPo8JbC11pn5DGKYm9MSbLC7P2");
 
 /// Vault program address
 pub const VAULT_PROGRAM_ID: Pubkey =
