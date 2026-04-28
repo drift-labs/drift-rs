@@ -1736,18 +1736,12 @@ impl DriftClientBackend {
                     (market.oracle, market.oracle_source)
                 }
             };
-            let (account_data, slot) = self.get_account_with_slot_raw(&oracle).await?;
+            let (mut account_data, slot) = self.get_account_with_slot_raw(&oracle).await?;
             let oracle_price_data = drift::sdk::oracle_price(
                 &oracle_source,
-                &mut (
-                    oracle,
-                    drift::sdk::OwnedAccount {
-                        lamports: account_data.lamports,
-                        data: account_data.data.clone(),
-                        owner: account_data.owner,
-                        executable: account_data.executable,
-                    },
-                ),
+                &oracle,
+                &account_data.owner,
+                &mut account_data.data,
                 slot,
             )
             .map_err(|e| SdkError::Anchor(Box::new(e.into())))?;

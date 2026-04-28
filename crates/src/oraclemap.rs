@@ -8,7 +8,7 @@ use crate::solana_sdk::{
 };
 use ahash::HashSet;
 use dashmap::{DashMap, ReadOnlyView};
-use drift::sdk::{oracle_price as sdk_oracle_price, OwnedAccount};
+use drift::sdk::oracle_price as sdk_oracle_price;
 use drift_pubsub_client::PubsubClient;
 use futures_util::{
     stream::{FuturesOrdered, FuturesUnordered},
@@ -25,24 +25,6 @@ use crate::{
 };
 
 const LOG_TARGET: &str = "oraclemap";
-
-fn to_owned(account: &Account) -> OwnedAccount {
-    OwnedAccount {
-        lamports: account.lamports,
-        data: account.data.clone(),
-        owner: account.owner,
-        executable: account.executable,
-    }
-}
-
-fn owned_from_parts(owner: Pubkey, data: Vec<u8>, lamports: u64) -> OwnedAccount {
-    OwnedAccount {
-        lamports,
-        data,
-        owner,
-        executable: false,
-    }
-}
 
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
@@ -281,7 +263,7 @@ impl OracleMap {
             oracle_sources.push(*source);
         }
 
-        let (synced_oracles, latest_slot) =
+        let (mut synced_oracles, latest_slot) =
             match get_multi_account_data_with_fallback(rpc, &oracle_pubkeys).await {
                 Ok(result) => result,
                 Err(err) => {
@@ -296,8 +278,17 @@ impl OracleMap {
         }
 
         for ((oracle_pubkey, oracle_account), oracle_source) in
-            synced_oracles.iter().zip(oracle_sources)
+            synced_oracles.iter_mut().zip(oracle_sources)
         {
+            let price_data = sdk_oracle_price(
+                &oracle_source,
+                oracle_pubkey,
+                &oracle_account.owner,
+                &mut oracle_account.data,
+                latest_slot,
+            )
+            .expect("valid oracle data");
+
             self.oraclemap
                 .entry((*oracle_pubkey, oracle_source as u8))
                 .and_modify(|o| {
@@ -307,31 +298,17 @@ impl OracleMap {
                         oracle_source,
                         oracle_pubkey
                     );
-                    let price_data = sdk_oracle_price(
-                        &oracle_source,
-                        &mut (*oracle_pubkey, to_owned(oracle_account)),
-                        latest_slot,
-                    )
-                    .expect("valid oracle data");
-
                     o.raw.clone_from(&oracle_account.data);
                     o.data = price_data;
                     o.slot = latest_slot;
                 })
-                .or_insert({
+                .or_insert_with(|| {
                     log::debug!(
                         target: LOG_TARGET,
                         "sync oracle new: {:?}/{}",
                         oracle_source,
                         oracle_pubkey
                     );
-                    let price_data = sdk_oracle_price(
-                        &oracle_source,
-                        &mut (*oracle_pubkey, to_owned(oracle_account)),
-                        latest_slot,
-                    )
-                    .expect("valid oracle data");
-
                     Oracle {
                         pubkey: *oracle_pubkey,
                         data: price_data,
@@ -428,14 +405,13 @@ fn update_handler_grpc(
     oracle_source: OracleSource,
     oracle_map: &DashMap<(Pubkey, u8), Oracle, ahash::RandomState>,
 ) {
-    let lamports = update.lamports;
     let slot = update.slot;
+    let mut data_buf = update.data.to_vec();
     match sdk_oracle_price(
         &oracle_source,
-        &mut (
-            update.pubkey,
-            owned_from_parts(update.owner, update.data.to_vec(), lamports),
-        ),
+        &update.pubkey,
+        &update.owner,
+        &mut data_buf,
         slot,
     ) {
         Ok(price_data) => {
@@ -468,13 +444,12 @@ fn update_handler(
     oracle_map: &DashMap<(Pubkey, u8), Oracle, ahash::RandomState>,
 ) {
     let oracle_pubkey = update.pubkey;
-    let lamports = update.lamports;
+    let mut data_buf = update.data.clone();
     match sdk_oracle_price(
         &oracle_source,
-        &mut (
-            oracle_pubkey,
-            owned_from_parts(update.owner, update.data.clone(), lamports),
-        ),
+        &oracle_pubkey,
+        &update.owner,
+        &mut data_buf,
         update.slot,
     ) {
         Ok(price_data) => {

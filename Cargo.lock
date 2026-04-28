@@ -1315,6 +1315,7 @@ dependencies = [
 [[package]]
 name = "drift"
 version = "2.162.0"
+source = "git+https://github.com/drift-labs/protocol-v2?branch=next#1671d3d40ad5f458dab4fe320e12b2c1143a2fa3"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
@@ -2810,6 +2811,7 @@ checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
 [[package]]
 name = "openbook-v2-light"
 version = "0.1.0"
+source = "git+https://github.com/drift-labs/protocol-v2?branch=next#1671d3d40ad5f458dab4fe320e12b2c1143a2fa3"
 dependencies = [
  "anchor-lang",
  "borsh 1.6.1",
@@ -3231,6 +3233,7 @@ checksum = "44de48029c54ec1ca570786b5baeb906b0fc2409c8e0145585e287ee7a526c72"
 [[package]]
 name = "pyth_lazer"
 version = "0.1.0"
+source = "git+https://github.com/drift-labs/protocol-v2?branch=next#1671d3d40ad5f458dab4fe320e12b2c1143a2fa3"
 dependencies = [
  "anchor-lang",
  "anyhow",

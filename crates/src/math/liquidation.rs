@@ -57,16 +57,19 @@ pub async fn calculate_liquidation_price_and_unrealized_pnl(
     let mut builder = AccountsListBuilder::default();
     let accounts_list = builder.build(client, user, &[]).await?;
 
+    let latest_slot = accounts_list.latest_slot;
     let (oracle_key, oracle_data) = accounts_list
         .oracles
-        .iter()
+        .iter_mut()
         .find(|(key, _)| *key == perp_market.amm.oracle)
         .expect("oracle loaded");
     let oracle_source = perp_market.amm.oracle_source;
     let oracle_price = sdk_oracle_price(
         &oracle_source,
-        &mut (*oracle_key, oracle_data.clone()),
-        accounts_list.latest_slot,
+        oracle_key,
+        &oracle_data.owner,
+        &mut oracle_data.data,
+        latest_slot,
     )
     .map_err(|e| SdkError::Anchor(Box::new(e.into())))?
     .price;
