@@ -65,8 +65,8 @@ titan-swap-api-client = { git = "https://github.com/drift-labs/titan-swap-api-cl
 tokio = { version = "1.48", features = ["full"] }
 tokio-stream = "0.1.17"
 tokio-tungstenite = { version = "0.28", features = ["native-tls"] }
-yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc", branch = "master" }
-yellowstone-grpc-proto = { git = "https://github.com/rpcpool/yellowstone-grpc", branch = "master" }
+yellowstone-grpc-client = { git = "https://github.com/rpcpool/yellowstone-grpc", rev = "b39a415a219e842143f97440a0d0ef04207152c2" }
+yellowstone-grpc-proto = { git = "https://github.com/rpcpool/yellowstone-grpc", rev = "b39a415a219e842143f97440a0d0ef04207152c2" }
 drift-pubsub-client = { version = "0.1.1", path = "crates/pubsub-client" }
 
 [dev-dependencies]

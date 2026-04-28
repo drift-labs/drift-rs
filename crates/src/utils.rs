@@ -52,7 +52,7 @@ pub fn read_keypair_str_multi_format(key: &str) -> SdkResult<Keypair> {
     }
 
     // decode as base58 string
-    return Ok(Keypair::from_base58_string(&key));
+    Ok(Keypair::from_base58_string(&key))
 }
 
 /// Try load a `Keypair` from a file path or given string, supports json format and base58 format.
@@ -153,8 +153,11 @@ pub fn zero_account_to_bytes<T: bytemuck::Pod + anchor_lang::Discriminator>(acco
 /// - * `data` - Anchor borsh encoded buffer (including discriminator)
 ///
 #[inline]
-pub fn deser_zero_copy<T: Discriminator + Pod>(data: &[u8]) -> &T {
-    bytemuck::from_bytes::<T>(&data[8..])
+pub fn deser_zero_copy<T: Discriminator + Pod>(data: &[u8]) -> T {
+    // `pod_read_unaligned` instead of `from_bytes` because `data` originates
+    // from `Vec<u8>`/`Arc<[u8]>` allocations that are only byte-aligned, and
+    // T may require >1-byte alignment (u64/u128 fields).
+    bytemuck::pod_read_unaligned::<T>(&data[8..])
 }
 
 /// Derive pyth lazer oracle pubkey for DriftV2 program

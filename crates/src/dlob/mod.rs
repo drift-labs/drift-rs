@@ -621,7 +621,7 @@ impl DLOB {
 
         self.with_orderbook_mut(&MarketId::new(order.market_index, order.market_type), |mut orderbook| {
             if let Some(metadata) = self.metadata.get(&order_id) {
-                let metadata_ref = metadata.clone();
+                let metadata_ref = *metadata;
                 drop(metadata); // release dashmap ref
 
                 log::trace!(target: TARGET, "remove order: {order_id} @ status: {:?}, kind: {:?}/{:?}, slot: {slot}", order.status, metadata_ref.kind, order.order_type);
@@ -1409,7 +1409,7 @@ impl L3Book {
         let mut total_orders_count = 0u32;
 
         let mut missing_fn = move |order_id: u64| {
-            missing_metadata_count = missing_metadata_count + 1;
+            missing_metadata_count += 1;
             DLOB::log_missing_order_events_helper(order_id, order_events);
             log::info!(target: TARGET, "missing order id: {:?}", order_id);
         };

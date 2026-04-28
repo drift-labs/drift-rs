@@ -644,7 +644,7 @@ impl DriftClient {
     /// * `account` - any onchain account
     ///
     /// Returns the deserialized account data (`User`)
-    pub async fn get_account_value<T: AccountDeserialize + Pod>(
+    pub async fn get_account_value<T: AccountDeserialize + Pod + Discriminator>(
         &self,
         account: &Pubkey,
     ) -> SdkResult<T> {
@@ -655,7 +655,10 @@ impl DriftClient {
     ///
     /// requires account was previously subscribed too.
     /// like `get_account_value` without async/network fallback
-    pub fn try_get_account<T: AccountDeserialize + Pod>(&self, account: &Pubkey) -> SdkResult<T> {
+    pub fn try_get_account<T: AccountDeserialize + Pod + Discriminator>(
+        &self,
+        account: &Pubkey,
+    ) -> SdkResult<T> {
         self.backend.try_get_account(account)
     }
 
@@ -1116,11 +1119,14 @@ impl DriftClientBackend {
         let lookup_tables = lut_pubkeys
             .iter()
             .zip(lut_accounts.iter())
-            .map(|(pubkey, account_data)| {
-                let data = account_data
-                    .as_ref()
-                    .ok_or_else(|| SdkError::Generic(format!("LUT account missing: {}", pubkey)))?;
-                utils::deserialize_alt(*pubkey, data).map_err(|_| SdkError::Deserializing)
+            .filter_map(|(pubkey, account_data)| match account_data.as_ref() {
+                Some(data) => {
+                    Some(utils::deserialize_alt(*pubkey, data).map_err(|_| SdkError::Deserializing))
+                }
+                None => {
+                    log::warn!("LUT account missing, skipping: {pubkey}");
+                    None
+                }
             })
             .collect::<SdkResult<Vec<_>>>()?;
 
@@ -1590,7 +1596,10 @@ impl DriftClientBackend {
     }
 
     /// Fetch `account` as an Anchor account type `T`
-    pub async fn get_account<T: AccountDeserialize + Pod>(&self, account: &Pubkey) -> SdkResult<T> {
+    pub async fn get_account<T: AccountDeserialize + Pod + Discriminator>(
+        &self,
+        account: &Pubkey,
+    ) -> SdkResult<T> {
         if let Some(value) = self.account_map.account_data(account) {
             Ok(value)
         } else {
@@ -1604,7 +1613,7 @@ impl DriftClientBackend {
     }
 
     /// Fetch `account` as an Anchor account type `T` along with the retrieved slot
-    pub async fn get_account_with_slot<T: AccountDeserialize + Pod>(
+    pub async fn get_account_with_slot<T: AccountDeserialize + Pod + Discriminator>(
         &self,
         account: &Pubkey,
     ) -> SdkResult<DataAndSlot<T>> {
@@ -1639,7 +1648,10 @@ impl DriftClientBackend {
 
     /// Try to fetch `account` as `T` using latest local value
     /// requires account was previously subscribed too.
-    pub fn try_get_account<T: AccountDeserialize + Pod>(&self, account: &Pubkey) -> SdkResult<T> {
+    pub fn try_get_account<T: AccountDeserialize + Pod + Discriminator>(
+        &self,
+        account: &Pubkey,
+    ) -> SdkResult<T> {
         self.account_map
             .account_data(account)
             .ok_or_else(|| SdkError::NoAccountData(*account))
@@ -3578,7 +3590,7 @@ impl<'a> TransactionBuilder<'a> {
             data: InstructionData::data(&drift::instruction::LiquidateSpot {
                 asset_market_index,
                 liability_market_index,
-                liquidator_max_liability_transfer: liquidator_max_liability_transfer.into(),
+                liquidator_max_liability_transfer,
                 limit_price,
             }),
         };
@@ -3896,7 +3908,7 @@ impl<'a> TransactionBuilder<'a> {
             data: InstructionData::data(&drift::instruction::LiquidatePerpPnlForDeposit {
                 perp_market_index,
                 spot_market_index,
-                liquidator_max_pnl_transfer: liquidator_max_pnl_transfer.into(),
+                liquidator_max_pnl_transfer,
                 limit_price,
             }),
         };
@@ -3952,7 +3964,7 @@ impl<'a> TransactionBuilder<'a> {
             data: InstructionData::data(&drift::instruction::LiquidateBorrowForPerpPnl {
                 perp_market_index,
                 spot_market_index,
-                liquidator_max_liability_transfer: liquidator_max_liability_transfer.into(),
+                liquidator_max_liability_transfer,
                 limit_price,
             }),
         };

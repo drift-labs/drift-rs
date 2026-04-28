@@ -599,7 +599,7 @@ where
     D: serde::Deserializer<'de>,
 {
     let payload: std::borrow::Cow<String> = serde::Deserialize::deserialize(deserializer)?;
-    if payload.len() % 2 != 0 {
+    if !payload.len().is_multiple_of(2) {
         return Err(serde::de::Error::custom("Hex string length must be even"));
     }
     if payload.is_empty() {

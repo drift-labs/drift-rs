@@ -97,11 +97,11 @@ impl<'a> DLOBBuilder<'a> {
     ) -> impl Fn(&AccountUpdate) + Send + Sync + 'b {
         let notifier = self.notifier.clone();
         move |update| {
-            let new_user = crate::utils::deser_zero_copy(update.data);
+            let new_user = crate::utils::deser_zero_copy::<User>(update.data);
             let old_user = account_map
                 .account_data_and_slot::<User>(&update.pubkey)
                 .map(|x| x.data);
-            notifier.user_update(update.pubkey, old_user.as_ref(), new_user, update.slot);
+            notifier.user_update(update.pubkey, old_user.as_ref(), &new_user, update.slot);
         }
     }
 

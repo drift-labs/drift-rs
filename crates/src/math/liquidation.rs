@@ -79,7 +79,7 @@ pub async fn calculate_liquidation_price_and_unrealized_pnl(
         .find(|x| x.oracle == perp_market.amm.oracle);
 
     Ok(LiquidationAndPnlInfo {
-        unrealized_pnl: calculate_unrealized_pnl_inner(&position, oracle_price)?,
+        unrealized_pnl: calculate_unrealized_pnl_inner(position, oracle_price)?,
         liquidation_price: calculate_liquidation_price_inner(
             user,
             perp_market,
@@ -103,7 +103,7 @@ pub async fn calculate_unrealized_pnl(
             .await
             .map(|x| x.data.price)?;
 
-        calculate_unrealized_pnl_inner(&position, oracle_price)
+        calculate_unrealized_pnl_inner(position, oracle_price)
     } else {
         Err(SdkError::NoPosition(market_index))
     }
@@ -182,7 +182,7 @@ pub fn calculate_liquidation_price_inner(
         .map_err(|_| SdkError::NoPosition(perp_market.market_index))?;
 
     let perp_free_collateral_delta =
-        calculate_perp_free_collateral_delta(&perp_position, perp_market, oracle_price);
+        calculate_perp_free_collateral_delta(perp_position, perp_market, oracle_price);
 
     // user holding spot asset case
     let mut spot_free_collateral_delta = 0;
@@ -190,7 +190,7 @@ pub fn calculate_liquidation_price_inner(
         if let Ok(spot_position) = user.get_spot_position(spot_market.market_index) {
             if !spot_position.is_available() {
                 spot_free_collateral_delta =
-                    calculate_spot_free_collateral_delta(&spot_position, spot_market);
+                    calculate_spot_free_collateral_delta(spot_position, spot_market);
                 let (numerator, denominator) = get_oracle_normalization_factor(
                     perp_market.amm.oracle_source,
                     spot_market.oracle_source,

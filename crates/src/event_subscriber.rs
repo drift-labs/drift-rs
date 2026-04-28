@@ -218,11 +218,9 @@ impl LogEventStream {
             // a drift sub-account should not interact with any other program by definition
             if let Some(event) = try_parse_log(log.as_str(), &signature, tx_idx) {
                 // unrelated events from same tx should not be emitted e.g. a filler tx which produces other fill events
-                if event.pertains_to(self.sub_account) {
-                    if self.event_tx.send(event).await.is_err() {
-                        warn!("event receiver closed");
-                        return;
-                    }
+                if event.pertains_to(self.sub_account) && self.event_tx.send(event).await.is_err() {
+                    warn!("event receiver closed");
+                    return;
                 }
             }
         }
@@ -303,11 +301,9 @@ impl GrpcLogEventStream {
         for (tx_idx, log) in logs.iter().enumerate() {
             if let Some(event) = try_parse_log(log.as_str(), &signature.to_string(), tx_idx) {
                 // unrelated events from same tx should not be emitted e.g. a filler tx which produces other fill events
-                if event.pertains_to(self.sub_account) {
-                    if self.event_tx.send(event).await.is_err() {
-                        warn!("event receiver closed");
-                        return;
-                    }
+                if event.pertains_to(self.sub_account) && self.event_tx.send(event).await.is_err() {
+                    warn!("event receiver closed");
+                    return;
                 }
             }
         }

@@ -168,7 +168,7 @@ impl MarketState {
     pub fn set_spot_market(&self, market: SpotMarket) {
         self.state.rcu(|cur| {
             let mut next = (**cur).clone();
-            next.set_spot_market(market.clone());
+            next.set_spot_market(market);
             next
         });
     }
@@ -176,7 +176,7 @@ impl MarketState {
     pub fn set_perp_market(&self, market: PerpMarket) {
         self.state.rcu(|cur| {
             let mut next = (**cur).clone();
-            next.set_perp_market(market.clone());
+            next.set_perp_market(market);
             next
         });
     }

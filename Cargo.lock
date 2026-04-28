@@ -8290,7 +8290,7 @@ dependencies = [
 [[package]]
 name = "yellowstone-grpc-client"
 version = "12.2.0"
-source = "git+https://github.com/rpcpool/yellowstone-grpc?branch=master#b39a415a219e842143f97440a0d0ef04207152c2"
+source = "git+https://github.com/rpcpool/yellowstone-grpc?rev=b39a415a219e842143f97440a0d0ef04207152c2#b39a415a219e842143f97440a0d0ef04207152c2"
 dependencies = [
  "bytes",
  "futures",
@@ -8306,7 +8306,7 @@ dependencies = [
 [[package]]
 name = "yellowstone-grpc-proto"
 version = "12.1.0"
-source = "git+https://github.com/rpcpool/yellowstone-grpc?branch=master#b39a415a219e842143f97440a0d0ef04207152c2"
+source = "git+https://github.com/rpcpool/yellowstone-grpc?rev=b39a415a219e842143f97440a0d0ef04207152c2#b39a415a219e842143f97440a0d0ef04207152c2"
 dependencies = [
  "anyhow",
  "prost",

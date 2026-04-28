@@ -111,7 +111,7 @@ where
     pub(crate) fn on_account_fn(&self) -> impl Fn(&AccountUpdate) {
         let marketmap = self.map();
         move |update: &AccountUpdate| {
-            let market = *crate::utils::deser_zero_copy::<T>(&update.data);
+            let market = crate::utils::deser_zero_copy::<T>(update.data);
             let idx = market.market_index();
             marketmap.insert(
                 idx,
@@ -183,7 +183,7 @@ where
                                 idx,
                                 DataAndSlot {
                                     slot: update.slot,
-                                    data: *crate::utils::deser_zero_copy::<T>(&update.data),
+                                    data: crate::utils::deser_zero_copy::<T>(&update.data),
                                 },
                             );
                             on_account(update);
@@ -234,7 +234,7 @@ where
     }
 
     pub fn values(&self) -> Vec<T> {
-        self.marketmap.iter().map(|x| x.data.clone()).collect()
+        self.marketmap.iter().map(|x| x.data).collect()
     }
 
     /// Returns a list of oracle info for each market
@@ -324,7 +324,7 @@ pub async fn get_market_accounts_with_fallback<T: Market + Pod + Discriminator>(
     if let Ok(OptionalContext::Context(accounts)) = response {
         for account in accounts.value {
             let market_data = account.account.data.decode().expect("Market data");
-            markets.push(*crate::utils::deser_zero_copy::<T>(&market_data));
+            markets.push(crate::utils::deser_zero_copy::<T>(&market_data));
         }
         return Ok((markets, accounts.context.slot));
     }
@@ -367,7 +367,7 @@ pub async fn get_market_accounts_with_fallback<T: Market + Pod + Discriminator>(
                 for market in data.value {
                     match market {
                         Some(market) => {
-                            markets.push(*crate::utils::deser_zero_copy::<T>(&market.data));
+                            markets.push(crate::utils::deser_zero_copy::<T>(&market.data));
                         }
                         None => {
                             log::warn!(
@@ -404,7 +404,7 @@ pub async fn get_market_accounts_with_fallback<T: Market + Pod + Discriminator>(
     while let Some(market_response) = market_requests.next().await {
         match market_response {
             Ok(data) => {
-                markets.push(*crate::utils::deser_zero_copy::<T>(&data));
+                markets.push(crate::utils::deser_zero_copy::<T>(&data));
             }
             Err(err) => {
                 log::warn!("failed to fetch market account: {err:?}");
