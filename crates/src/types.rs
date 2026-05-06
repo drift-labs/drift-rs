@@ -33,9 +33,6 @@ pub mod accounts {
     //! emits `unsafe impl Pod for State`.
     pub use crate::drift_idl::accounts::State;
     pub use drift::state::amm_cache::AmmCache;
-    pub use drift::state::fulfillment_params::openbook_v2::OpenbookV2FulfillmentConfig;
-    pub use drift::state::fulfillment_params::phoenix::PhoenixV1FulfillmentConfig;
-    pub use drift::state::fulfillment_params::serum::SerumV3FulfillmentConfig;
     pub use drift::state::if_rebalance_config::IfRebalanceConfig;
     pub use drift::state::insurance_fund_stake::{
         InsuranceFundStake, ProtocolIfSharesTransferConfig,

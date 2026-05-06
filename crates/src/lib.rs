@@ -668,6 +668,18 @@ impl DriftClient {
         self.backend.try_get_account(state_account())
     }
 
+    /// Return raw cached bytes of `account` (including 8-byte discriminator), if subscribed.
+    ///
+    /// Useful when the on-chain type isn't `Pod`-compatible — e.g. drift's
+    /// native `State` (Borsh-only) — and the caller needs to feed bytes into
+    /// `AccountDeserialize::try_deserialize` themselves.
+    pub fn account_raw(&self, account: &Pubkey) -> SdkResult<std::sync::Arc<[u8]>> {
+        self.backend
+            .account_map
+            .account_raw(account)
+            .ok_or(SdkError::NoAccountData(*account))
+    }
+
     /// Simulate the tx on remote RPC node
     pub async fn simulate_tx(
         &self,

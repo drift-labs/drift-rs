@@ -227,6 +227,13 @@ impl AccountMap {
     pub fn account_data<T: Pod + Discriminator>(&self, account: &Pubkey) -> Option<T> {
         self.account_data_and_slot(account).map(|x| x.data)
     }
+    /// Return raw bytes of the given `account` (incl. 8-byte discriminator), if it exists.
+    ///
+    /// For accounts whose drift-program type is non-`Pod` (e.g. `State`), callers
+    /// can deserialize these bytes via `anchor_lang::AccountDeserialize::try_deserialize`.
+    pub fn account_raw(&self, account: &Pubkey) -> Option<Arc<[u8]>> {
+        self.inner.get(account).map(|x| Arc::clone(&x.raw))
+    }
     /// Return data of the given `account` as T and slot, if it exists
     pub fn account_data_and_slot<T: Pod + Discriminator>(
         &self,
