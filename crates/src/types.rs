@@ -97,9 +97,7 @@ pub use drift::state::user::{
 pub use crate::drift_idl::types::SwapReduceOnly;
 // IDL-only holdovers still referenced by the public surface (serde events,
 // deprecated configs, plumbing structs with no drift-native equivalent).
-pub use crate::drift_idl::types::{
-    MarginMode, Padding, Signature, SpotFulfillmentMethod, SpotFulfillmentType,
-};
+pub use crate::drift_idl::types::{Padding, Signature, SpotFulfillmentType};
 use crate::{
     accounts::UserStats,
     constants::{ids, LUTS_DEVNET, LUTS_MAINNET, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID},

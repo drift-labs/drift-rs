@@ -1344,9 +1344,9 @@ dependencies = [
 name = "drift-idl-gen"
 version = "0.2.0"
 dependencies = [
+ "anchor-lang-idl",
  "proc-macro2",
  "quote",
- "serde",
  "serde_json",
  "sha2 0.10.9",
  "syn 2.0.117",

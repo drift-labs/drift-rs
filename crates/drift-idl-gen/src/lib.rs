@@ -1,232 +1,248 @@
 use std::{
-    fs::{self},
+    collections::{HashMap, HashSet},
+    fs,
     io::Write,
     path::Path,
     process::{Command, Stdio},
 };
 
+use anchor_lang_idl::types::{
+    Idl, IdlArrayLen, IdlDefinedFields, IdlField, IdlInstructionAccount,
+    IdlInstructionAccountItem, IdlType, IdlTypeDef, IdlTypeDefTy,
+};
 use proc_macro2::TokenStream;
 use quote::quote;
-use serde::{Deserialize, Serialize};
 use sha2::Digest;
 use syn::{Ident, Type};
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Idl {
-    version: String,
-    name: String,
-    instructions: Vec<Instruction>,
-    types: Vec<TypeDef>,
-    accounts: Vec<AccountDef>,
-    events: Vec<EventDef>,
-    errors: Vec<ErrorDef>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Instruction {
-    name: String,
-    accounts: Vec<Account>,
-    args: Vec<Arg>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Account {
-    name: String,
-    #[serde(rename = "isMut")]
-    is_mut: bool,
-    #[serde(rename = "isSigner")]
-    is_signer: bool,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct Arg {
-    name: String,
-    #[serde(rename = "type")]
-    arg_type: ArgType,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-enum ArgType {
-    Simple(String),
-    Defined { defined: String },
-    Array { array: (Box<ArgType>, usize) },
-    Option { option: Box<ArgType> },
-    Vec { vec: Box<ArgType> },
-}
-
-impl ArgType {
-    fn to_rust_type(&self) -> String {
-        match self {
-            ArgType::Simple(t) => {
-                // special cases likely from manual edits to IDL
-                if t == "publicKey" {
-                    "Pubkey".to_string()
-                } else if t == "bytes" {
-                    "Vec<u8>".to_string()
-                } else if t == "string" {
-                    "String".to_string()
-                } else {
-                    t.clone()
-                }
-            }
-            ArgType::Defined { defined } => defined.clone(),
-            ArgType::Array { array: (t, len) } => {
-                let rust_type = t.to_rust_type();
-                // this is a common signature representation
-                if *len == 64_usize && rust_type == "u8" {
-                    // [u8; 64] does not have a Default impl
+/// Lower an `IdlType` to the Rust source string we emit.
+///
+/// Defined references collapse to just `Name` — generics are not currently
+/// surfaced; if drift starts using generic types this needs revisiting.
+fn idl_type_to_rust(t: &IdlType) -> String {
+    match t {
+        IdlType::Bool => "bool".into(),
+        IdlType::U8 => "u8".into(),
+        IdlType::I8 => "i8".into(),
+        IdlType::U16 => "u16".into(),
+        IdlType::I16 => "i16".into(),
+        IdlType::U32 => "u32".into(),
+        IdlType::I32 => "i32".into(),
+        IdlType::F32 => "f32".into(),
+        IdlType::U64 => "u64".into(),
+        IdlType::I64 => "i64".into(),
+        IdlType::F64 => "f64".into(),
+        IdlType::U128 => "u128".into(),
+        IdlType::I128 => "i128".into(),
+        IdlType::U256 => "u256".into(),
+        IdlType::I256 => "i256".into(),
+        IdlType::Bytes => "Vec<u8>".into(),
+        IdlType::String => "String".into(),
+        IdlType::Pubkey => "Pubkey".into(),
+        IdlType::Option(inner) => format!("Option<{}>", idl_type_to_rust(inner)),
+        IdlType::Vec(inner) => format!("Vec<{}>", idl_type_to_rust(inner)),
+        IdlType::Array(inner, len) => match len {
+            IdlArrayLen::Value(n) => {
+                let rust = idl_type_to_rust(inner);
+                // [u8; 64] is the signature shape; alias to the Default-having `Signature` newtype.
+                if *n == 64 && rust == "u8" {
                     "Signature".into()
                 } else {
-                    format!("[{}; {}]", t.to_rust_type(), len)
+                    format!("[{}; {}]", rust, n)
                 }
             }
-            ArgType::Option { option } => format!("Option<{}>", option.to_rust_type()),
-            ArgType::Vec { vec } => format!("Vec<{}>", vec.to_rust_type()),
-        }
+            IdlArrayLen::Generic(name) => format!("[_; {name}]"),
+        },
+        IdlType::Defined { name, .. } => name.clone(),
+        IdlType::Generic(name) => name.clone(),
+        // anchor's `IdlType` is `#[non_exhaustive]`. Unreachable for current drift IDL.
+        _ => panic!("unsupported IdlType variant: {t:?}"),
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct TypeDef {
-    name: String,
-    #[serde(rename = "type")]
-    type_def: TypeData,
+/// Whether an `IdlType` is directly runtime-sized (`Vec`, `String`, `Bytes`).
+/// Seeds the transitive analysis below.
+fn idl_type_directly_dyn(t: &IdlType) -> bool {
+    match t {
+        IdlType::Vec(_) | IdlType::String | IdlType::Bytes => true,
+        IdlType::Option(inner) | IdlType::Array(inner, _) => idl_type_directly_dyn(inner),
+        _ => false,
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "kind")]
-enum TypeData {
-    #[serde(rename = "struct")]
-    Struct { fields: Vec<StructField> },
-    #[serde(rename = "enum")]
-    Enum { variants: Vec<EnumVariant> },
+/// Names of `Defined` references reachable from an `IdlType` (transitively
+/// through `Option/Array/Vec`).
+fn idl_type_collect_defined<'a>(t: &'a IdlType, out: &mut Vec<&'a str>) {
+    match t {
+        IdlType::Defined { name, .. } => out.push(name.as_str()),
+        IdlType::Option(inner) | IdlType::Array(inner, _) | IdlType::Vec(inner) => {
+            idl_type_collect_defined(inner, out)
+        }
+        _ => {}
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct StructField {
-    name: String,
-    #[serde(rename = "type")]
-    field_type: ArgType,
+fn defined_fields_iter(fields: &IdlDefinedFields) -> Box<dyn Iterator<Item = &IdlType> + '_> {
+    match fields {
+        IdlDefinedFields::Named(fs) => Box::new(fs.iter().map(|f| &f.ty)),
+        IdlDefinedFields::Tuple(ts) => Box::new(ts.iter()),
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(untagged)]
-enum EnumVariant {
-    // NB: this must come before `Simple` (harder match -> easiest match)
-    Complex {
-        name: String,
-        fields: Vec<StructField>,
-    },
-    Simple {
-        name: String,
-    },
+/// Type names that cannot derive `InitSpace` / `Copy` — they (transitively)
+/// hold a `Vec`/`String`. The IDL doesn't carry `#[max_len(N)]` annotations,
+/// so anchor's `InitSpace` derive would fail to expand.
+fn compute_dyn_sized_types(types: &[IdlTypeDef]) -> HashSet<String> {
+    let mut dyn_sized: HashSet<String> = HashSet::new();
+
+    let direct_for = |td: &IdlTypeDefTy| -> bool {
+        match td {
+            IdlTypeDefTy::Struct { fields: Some(f) } => defined_fields_iter(f).any(idl_type_directly_dyn),
+            IdlTypeDefTy::Enum { variants } => variants.iter().any(|v| {
+                v.fields
+                    .as_ref()
+                    .map(|f| defined_fields_iter(f).any(idl_type_directly_dyn))
+                    .unwrap_or(false)
+            }),
+            IdlTypeDefTy::Type { alias } => idl_type_directly_dyn(alias),
+            _ => false,
+        }
+    };
+    for t in types {
+        if direct_for(&t.ty) {
+            dyn_sized.insert(t.name.clone());
+        }
+    }
+
+    // Fixed-point: a type is dyn-sized if any of its `Defined` references is.
+    fn collect_refs<'a>(td: &'a IdlTypeDefTy, out: &mut Vec<&'a str>) {
+        match td {
+            IdlTypeDefTy::Struct { fields: Some(f) } => {
+                for ty in defined_fields_iter(f) {
+                    idl_type_collect_defined(ty, out);
+                }
+            }
+            IdlTypeDefTy::Enum { variants } => {
+                for v in variants {
+                    if let Some(f) = &v.fields {
+                        for ty in defined_fields_iter(f) {
+                            idl_type_collect_defined(ty, out);
+                        }
+                    }
+                }
+            }
+            IdlTypeDefTy::Type { alias } => idl_type_collect_defined(alias, out),
+            _ => {}
+        }
+    }
+    loop {
+        let mut changed = false;
+        for t in types {
+            if dyn_sized.contains(&t.name) {
+                continue;
+            }
+            let mut refs = Vec::new();
+            collect_refs(&t.ty, &mut refs);
+            if refs.iter().any(|r| dyn_sized.contains(*r)) {
+                dyn_sized.insert(t.name.clone());
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    dyn_sized
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct AccountDef {
-    name: String,
-    #[serde(rename = "type")]
-    account_type: AccountType,
-}
+fn rust_field(name: &str, ty: &IdlType) -> TokenStream {
+    let field_name = Ident::new(&to_snake_case(name), proc_macro2::Span::call_site());
+    let mut field_type: Type = syn::parse_str(&idl_type_to_rust(ty)).unwrap();
 
-#[derive(Debug, Serialize, Deserialize)]
-struct AccountType {
-    kind: String, // Typically "struct"
-    fields: Vec<StructField>,
-}
+    // workaround for padding types preventing outertype from deriving 'Default'
+    let mut serde_decorator = TokenStream::default();
+    let fname_str = field_name.to_string();
+    if fname_str.starts_with("padding") || fname_str.starts_with("_padding") {
+        if let IdlType::Array(_, IdlArrayLen::Value(n)) = ty {
+            field_type = syn::parse_str(&format!("Padding<{n}>")).unwrap();
+            serde_decorator = quote! {
+                #[serde(skip)]
+            };
+        }
+    }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct ErrorDef {
-    code: u32,
-    name: String,
-    msg: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct EventDef {
-    name: String,
-    fields: Vec<EventField>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct EventField {
-    name: String,
-    #[serde(rename = "type")]
-    field_type: ArgType,
-    index: bool,
+    quote! {
+        #serde_decorator
+        pub #field_name: #field_type,
+    }
 }
 
 fn generate_idl_types(idl: &Idl) -> String {
     let mut instructions_tokens = quote! {};
     let mut types_tokens = quote! {};
     let mut accounts_tokens = quote! {};
-    let mut errors_tokens = quote! {};
     let mut events_tokens = quote! {};
-    let idl_version = syn::LitStr::new(&idl.version, proc_macro2::Span::call_site());
+    let mut errors_tokens = quote! {};
+    let idl_version = syn::LitStr::new(&idl.metadata.version, proc_macro2::Span::call_site());
 
-    // Generate enums and structs from the types section
+    let types_by_name: HashMap<&str, &IdlTypeDefTy> =
+        idl.types.iter().map(|t| (t.name.as_str(), &t.ty)).collect();
+    let named_struct_fields = |name: &str| -> &[IdlField] {
+        match types_by_name.get(name) {
+            Some(IdlTypeDefTy::Struct {
+                fields: Some(IdlDefinedFields::Named(fs)),
+            }) => fs.as_slice(),
+            _ => &[],
+        }
+    };
+    let dyn_sized = compute_dyn_sized_types(&idl.types);
+    let is_dyn = |name: &str| dyn_sized.contains(name);
+
+    // ---- types ----
     for type_def in &idl.types {
-        let type_name = Ident::new(
-            &capitalize_first_letter(&type_def.name),
-            proc_macro2::Span::call_site(),
-        );
-        let type_tokens = match &type_def.type_def {
-            TypeData::Enum { variants } => {
-                let has_complex_first_variant = variants.iter().next().is_some_and(|v| match v {
-                    EnumVariant::Complex { .. } => true,
-                    _ => false,
+        let type_name = Ident::new(&type_def.name, proc_macro2::Span::call_site());
+        // `IdlTypeDefTy` is `#[non_exhaustive]`; the wildcard arm is needed for
+        // forward-compat but Rust can see all current variants are covered.
+        #[allow(unreachable_patterns)]
+        let type_tokens = match &type_def.ty {
+            IdlTypeDefTy::Enum { variants } => {
+                let has_complex_first = matches!(variants.first(), Some(v) if v.fields.is_some());
+
+                let variant_tokens = variants.iter().enumerate().map(|(i, variant)| {
+                    let variant_name =
+                        Ident::new(&variant.name, proc_macro2::Span::call_site());
+                    match &variant.fields {
+                        None => {
+                            if i == 0 {
+                                quote! { #[default] #variant_name, }
+                            } else {
+                                quote! { #variant_name, }
+                            }
+                        }
+                        Some(IdlDefinedFields::Named(fs)) => {
+                            let field_tokens = fs.iter().map(|f| rust_field(&f.name, &f.ty));
+                            if i == 0 && !has_complex_first {
+                                quote! { #[default] #variant_name { #(#field_tokens)* }, }
+                            } else {
+                                quote! { #variant_name { #(#field_tokens)* }, }
+                            }
+                        }
+                        Some(IdlDefinedFields::Tuple(ts)) => {
+                            let elems = ts.iter().map(|t| {
+                                let rt: Type = syn::parse_str(&idl_type_to_rust(t)).unwrap();
+                                quote! { #rt }
+                            });
+                            if i == 0 && !has_complex_first {
+                                quote! { #[default] #variant_name(#(#elems),*), }
+                            } else {
+                                quote! { #variant_name(#(#elems),*), }
+                            }
+                        }
+                    }
                 });
 
-                let variant_tokens =
-                    variants
-                        .iter()
-                        .enumerate()
-                        .map(|(i, variant)| match variant {
-                            EnumVariant::Simple { name } => {
-                                let variant_name = Ident::new(name, proc_macro2::Span::call_site());
-                                if i == 0 {
-                                    quote! {
-                                        #[default]
-                                        #variant_name,
-                                    }
-                                } else {
-                                    quote! {
-                                        #variant_name,
-                                    }
-                                }
-                            }
-                            EnumVariant::Complex { name, fields } => {
-                                let variant_name = Ident::new(name, proc_macro2::Span::call_site());
-                                let field_tokens = fields.iter().map(|field| {
-                                    let field_name = Ident::new(
-                                        &to_snake_case(&field.name),
-                                        proc_macro2::Span::call_site(),
-                                    );
-                                    let field_type: Type =
-                                        syn::parse_str(&field.field_type.to_rust_type()).unwrap();
-                                    quote! {
-                                        #field_name: #field_type,
-                                    }
-                                });
-                                if i == 0 && !has_complex_first_variant {
-                                    quote! {
-                                        #[default]
-                                        #variant_name {
-                                            #(#field_tokens)*
-                                        },
-                                    }
-                                } else {
-                                    quote! {
-                                        #variant_name {
-                                            #(#field_tokens)*
-                                        },
-                                    }
-                                }
-                            }
-                        });
-
-                if has_complex_first_variant {
+                if has_complex_first {
+                    // TODO: complex-first enums get no `Default`. Not currently used by drift.
                     quote! {
                         #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Serialize, Deserialize, Copy, Clone, Debug, PartialEq)]
                         pub enum #type_name {
@@ -234,7 +250,6 @@ fn generate_idl_types(idl: &Idl) -> String {
                         }
                     }
                 } else {
-                    // TODO: need more work to derive 'Default' on complex enums, not currently required
                     quote! {
                         #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Serialize, Deserialize, Copy, Clone, Default, Debug, PartialEq)]
                         pub enum #type_name {
@@ -243,40 +258,49 @@ fn generate_idl_types(idl: &Idl) -> String {
                     }
                 }
             }
-            TypeData::Struct { fields } => {
-                let struct_name =
-                    Ident::new(type_def.name.as_str(), proc_macro2::Span::call_site());
-                let struct_fields = fields.iter().map(|field| {
-                    let field_name =
-                        Ident::new(&to_snake_case(&field.name), proc_macro2::Span::call_site());
-                    let mut field_type: syn::Type =
-                        syn::parse_str(&field.field_type.to_rust_type()).unwrap();
-
-                    let mut serde_decorator = TokenStream::default();
-                    // workaround for padding types preventing outertype from deriving 'Default'
-                    if field_name.to_string().starts_with("padding") {
-                        if let ArgType::Array { array: (_t, len) } = &field.field_type {
-                            field_type = syn::parse_str(&format!("Padding<{len}>")).unwrap();
-                            serde_decorator = quote! {
-                                #[serde(skip)]
-                            };
-                        }
+            IdlTypeDefTy::Struct { fields } => {
+                let dyn_field = is_dyn(&type_def.name);
+                let struct_fields: Vec<TokenStream> = match fields {
+                    Some(IdlDefinedFields::Named(fs)) => {
+                        fs.iter().map(|f| rust_field(&f.name, &f.ty)).collect()
                     }
+                    Some(IdlDefinedFields::Tuple(ts)) => ts
+                        .iter()
+                        .enumerate()
+                        .map(|(i, t)| {
+                            let name = format!("field_{i}");
+                            rust_field(&name, t)
+                        })
+                        .collect(),
+                    None => Vec::new(),
+                };
 
+                let derives = if dyn_field {
                     quote! {
-                        #serde_decorator
-                        pub #field_name: #field_type,
+                        #[derive(AnchorSerialize, AnchorDeserialize, Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
                     }
-                });
+                } else {
+                    quote! {
+                        #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Serialize, Deserialize, Copy, Clone, Default, Debug, PartialEq)]
+                    }
+                };
 
                 quote! {
                     #[repr(C)]
-                    #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Serialize, Deserialize, Copy, Clone, Default, Debug, PartialEq)]
-                    pub struct #struct_name {
+                    #derives
+                    pub struct #type_name {
                         #(#struct_fields)*
                     }
                 }
             }
+            IdlTypeDefTy::Type { alias } => {
+                let alias_ty: Type = syn::parse_str(&idl_type_to_rust(alias)).unwrap();
+                quote! {
+                    pub type #type_name = #alias_ty;
+                }
+            }
+            // `IdlTypeDefTy` is `#[non_exhaustive]`.
+            _ => quote! {},
         };
 
         types_tokens = quote! {
@@ -285,55 +309,26 @@ fn generate_idl_types(idl: &Idl) -> String {
         };
     }
 
-    // Generate structs for accounts section
+    // ---- accounts ----
     for account in &idl.accounts {
         let struct_name = Ident::new(&account.name, proc_macro2::Span::call_site());
+        let has_dyn = is_dyn(&account.name);
+        let fields = named_struct_fields(&account.name);
+        let struct_fields: Vec<TokenStream> =
+            fields.iter().map(|f| rust_field(&f.name, &f.ty)).collect();
 
-        let mut has_vec_field = false;
-        let struct_fields: Vec<TokenStream> = account
-            .account_type
-            .fields
-            .iter()
-            .map(|field| {
-                let field_name =
-                    Ident::new(&to_snake_case(&field.name), proc_macro2::Span::call_site());
-                if let ArgType::Vec { .. } = field.field_type {
-                    has_vec_field = true;
-                }
-                let mut serde_decorator = TokenStream::new();
-                let mut field_type: Type =
-                    syn::parse_str(&field.field_type.to_rust_type()).unwrap();
-                // workaround for padding types preventing outertype from deriving 'Default'
-                if field_name.to_string().starts_with("padding") {
-                    if let ArgType::Array { array: (_t, len) } = &field.field_type {
-                        field_type = syn::parse_str(&format!("Padding<{len}>")).unwrap();
-                        serde_decorator = quote! {
-                            #[serde(skip)]
-                        };
-                    }
-                }
-
-                quote! {
-                    #serde_decorator
-                    pub #field_name: #field_type,
-                }
-            })
-            .collect();
-
-        let derive_tokens = if !has_vec_field {
+        let derive_tokens = if !has_dyn {
             quote! {
                 #[derive(AnchorSerialize, AnchorDeserialize, InitSpace, Serialize, Deserialize, Copy, Clone, Default, Debug, PartialEq)]
             }
         } else {
-            // can't derive `Copy` on accounts with `Vec` field
-            // `InitSpace` requires a 'max_len' but no point enforcing here if unset on program side
+            // can't derive `Copy`/`InitSpace` on accounts with `Vec` field
             quote! {
                 #[derive(AnchorSerialize, AnchorDeserialize, Serialize, Deserialize, Clone, Default, Debug, PartialEq)]
             }
         };
 
-        let zc_tokens = if !has_vec_field {
-            // without copy can't derive the ZeroCopy trait
+        let zc_tokens = if !has_dyn {
             quote! {
                 #[automatically_derived]
                 unsafe impl anchor_lang::__private::bytemuck::Pod for #struct_name {}
@@ -398,18 +393,14 @@ fn generate_idl_types(idl: &Idl) -> String {
         };
     }
 
-    // Generate structs for instructions
+    // ---- instructions ----
     for instr in &idl.instructions {
-        let name = capitalize_first_letter(&instr.name);
+        // anchor 1.0 emits instruction names in snake_case.
+        let name = to_pascal_case(&instr.name);
         let fn_name = to_snake_case(&instr.name);
         let struct_name = Ident::new(&name, proc_macro2::Span::call_site());
-        let fields = instr.args.iter().map(|arg| {
-            let field_name = Ident::new(&to_snake_case(&arg.name), proc_macro2::Span::call_site());
-            let field_type: Type = syn::parse_str(&arg.arg_type.to_rust_type()).unwrap();
-            quote! {
-                pub #field_name: #field_type,
-            }
-        });
+
+        let arg_fields = instr.args.iter().map(|a| rust_field(&a.name, &a.ty));
         // https://github.com/coral-xyz/anchor/blob/e48e7e60a64de77d878cdb063965cf125bec741a/lang/syn/src/codegen/program/instruction.rs#L32
         let discriminator: TokenStream = format!("{:?}", sighash("global", &fn_name))
             .parse()
@@ -417,7 +408,7 @@ fn generate_idl_types(idl: &Idl) -> String {
         let struct_def = quote! {
             #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
             pub struct #struct_name {
-                #(#fields)*
+                #(#arg_fields)*
             }
             #[automatically_derived]
             impl anchor_lang::Discriminator for #struct_name {
@@ -432,7 +423,23 @@ fn generate_idl_types(idl: &Idl) -> String {
             #struct_def
         };
 
-        let accounts = instr.accounts.iter().map(|acc| {
+        // Flatten composite account groups into a single Pubkey list, mirroring
+        // the on-chain `instruction.accounts` shape.
+        let mut flat_accounts: Vec<&IdlInstructionAccount> = Vec::new();
+        fn flatten<'a>(
+            items: &'a [IdlInstructionAccountItem],
+            out: &mut Vec<&'a IdlInstructionAccount>,
+        ) {
+            for it in items {
+                match it {
+                    IdlInstructionAccountItem::Single(a) => out.push(a),
+                    IdlInstructionAccountItem::Composite(g) => flatten(&g.accounts, out),
+                }
+            }
+        }
+        flatten(&instr.accounts, &mut flat_accounts);
+
+        let accounts = flat_accounts.iter().map(|acc| {
             let account_name =
                 Ident::new(&to_snake_case(&acc.name), proc_macro2::Span::call_site());
             quote! {
@@ -440,12 +447,11 @@ fn generate_idl_types(idl: &Idl) -> String {
             }
         });
 
-        let to_account_metas = instr.accounts.iter().map(|acc| {
-            let account_name_str = to_snake_case(&acc.name);
+        let to_account_metas = flat_accounts.iter().map(|acc| {
             let account_name =
-                Ident::new(&account_name_str, proc_macro2::Span::call_site());
-            let is_mut: TokenStream = acc.is_mut.to_string().parse().unwrap();
-            let is_signer: TokenStream = acc.is_signer.to_string().parse().unwrap();
+                Ident::new(&to_snake_case(&acc.name), proc_macro2::Span::call_site());
+            let is_mut: TokenStream = acc.writable.to_string().parse().unwrap();
+            let is_signer: TokenStream = acc.signer.to_string().parse().unwrap();
             quote! {
                 AccountMeta { pubkey: self.#account_name, is_signer: #is_signer, is_writable: #is_mut },
             }
@@ -519,10 +525,10 @@ fn generate_idl_types(idl: &Idl) -> String {
         };
     }
 
-    // Generate enum for errors
+    // ---- errors ----
     let error_variants = idl.errors.iter().map(|error| {
         let variant_name = Ident::new(&error.name, proc_macro2::Span::call_site());
-        let error_msg = &error.msg;
+        let error_msg = error.msg.clone().unwrap_or_default();
         quote! {
             #[msg(#error_msg)]
             #variant_name,
@@ -542,17 +548,12 @@ fn generate_idl_types(idl: &Idl) -> String {
         #error_enum
     };
 
-    // Generate event structs from the events section
+    // ---- events ----
     for event in &idl.events {
         let struct_name = Ident::new(&event.name, proc_macro2::Span::call_site());
-        let fields = event.fields.iter().map(|field| {
-            let field_name =
-                Ident::new(&to_snake_case(&field.name), proc_macro2::Span::call_site());
-            let field_type: Type = syn::parse_str(&field.field_type.to_rust_type()).unwrap();
-            quote! {
-                pub #field_name: #field_type,
-            }
-        });
+        let fields = named_struct_fields(&event.name)
+            .iter()
+            .map(|f| rust_field(&f.name, &f.ty));
 
         let struct_def = quote! {
             #[derive(Clone, Debug, PartialEq, Default)]
@@ -664,12 +665,22 @@ fn to_snake_case(s: &str) -> String {
     snake_case
 }
 
-fn capitalize_first_letter(s: &str) -> String {
-    let mut c = s.chars();
-    match c.next() {
-        None => String::new(),
-        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+/// Convert snake_case (anchor 1.0 instruction names) to PascalCase.
+/// Already-PascalCase input is preserved.
+fn to_pascal_case(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut upper_next = true;
+    for c in s.chars() {
+        if c == '_' {
+            upper_next = true;
+        } else if upper_next {
+            out.extend(c.to_uppercase());
+            upper_next = false;
+        } else {
+            out.push(c);
+        }
     }
+    out
 }
 
 fn format_rust_code(code: &str) -> String {
@@ -693,14 +704,8 @@ fn format_rust_code(code: &str) -> String {
 }
 
 /// Generate rust types from IDL json
-///
-/// Returns (IDL Version, IDL rs code)
 pub fn generate_rust_types(idl_path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    // Load the JSON file
     let data = fs::read_to_string(idl_path)?;
     let idl: Idl = serde_json::from_str(&data)?;
-
-    // Generate Rust structs organized into modules
-    let rust_idl_types = format_rust_code(&generate_idl_types(&idl));
-    Ok(rust_idl_types)
+    Ok(format_rust_code(&generate_idl_types(&idl)))
 }
