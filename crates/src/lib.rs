@@ -69,6 +69,7 @@ pub mod wallet;
 // constants & types
 pub mod constants;
 pub mod drift_idl;
+mod layout_check;
 pub mod types;
 
 // internal infra
