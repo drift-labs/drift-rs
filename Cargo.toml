@@ -29,7 +29,7 @@ dlob_dbg = []
 ahash = "0.8.12"
 anchor-lang = { version = "1.0.0", features = ["derive"] }
 arc-swap = "1.7"
-drift = { git = "https://github.com/drift-labs/protocol-v2", rev = "36c92ac02", default-features = false, features = ["drift-rs", "mainnet-beta", "no-entrypoint"] }
+drift = { git = "https://github.com/drift-labs/protocol-v2", rev = "36c92ac02", default-features = false, features = ["drift-rs", "mainnet-beta", "cpi"] }
 arrayvec = "0.7.6"
 base64 = "0.22"
 bytemuck = "1.17"
@@ -59,7 +59,7 @@ solana-signature = "3"
 solana-signer = "3"
 solana-transaction = "3"
 solana-transaction-status = "3"
-spl-associated-token-account = "8.0"
+spl-associated-token-account = { version = "8.0", default-features = false, features = ["no-entrypoint"] }
 thiserror = "1"
 titan-swap-api-client = { git = "https://github.com/drift-labs/titan-swap-api-client.git", optional = true }
 tokio = { version = "1.48", features = ["full"] }
