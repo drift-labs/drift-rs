@@ -4,8 +4,7 @@ use ahash::{HashMap, HashMapExt};
 use drift::sdk::{DriftAccounts, OwnedAccount};
 
 use crate::{
-    accounts::State,
-    constants::{self, oracle_source_to_owner, state_account},
+    constants::{self, oracle_source_to_owner},
     types::accounts::User,
     utils::zero_account_to_bytes,
     DriftClient, MarketId, SdkError, SdkResult,
@@ -48,7 +47,7 @@ impl AccountsListBuilder {
         force_markets: &[MarketId],
     ) -> SdkResult<&mut DriftAccounts> {
         let mut oracle_markets = HashMap::<Pubkey, MarketId>::with_capacity(16);
-        let drift_state_account = client.try_get_account::<State>(state_account())?;
+        let drift_state_account = client.state_account()?;
 
         let force_spot_iter = force_markets
             .iter()
@@ -127,7 +126,7 @@ impl AccountsListBuilder {
         force_markets: &[MarketId],
     ) -> SdkResult<&mut DriftAccounts> {
         let mut oracle_markets = HashMap::<Pubkey, MarketId>::with_capacity(16);
-        let drift_state_account = client.try_get_account::<State>(state_account())?;
+        let drift_state_account = client.state_account()?;
 
         let force_spot_iter = force_markets
             .iter()

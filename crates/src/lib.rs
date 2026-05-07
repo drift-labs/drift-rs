@@ -664,8 +664,14 @@ impl DriftClient {
 
     /// Try get the Drift `State` config account
     /// It contains various exchange level config parameters
+    ///
+    /// `State` is Borsh-only — it embeds non-`#[repr(C)]` types
+    /// (`FeeStructure` etc.) whose x86_64 layout differs from on-chain bytes,
+    /// so this routes through `AccountDeserialize` rather than the bytemuck
+    /// zero-copy path used for `Pod` accounts.
     pub fn state_account(&self) -> SdkResult<State> {
-        self.backend.try_get_account(state_account())
+        let raw = self.account_raw(state_account())?;
+        State::try_deserialize(&mut raw.as_ref()).map_err(|_| SdkError::InvalidAccount)
     }
 
     /// Return raw cached bytes of `account` (including 8-byte discriminator), if subscribed.
