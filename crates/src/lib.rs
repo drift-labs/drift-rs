@@ -2383,20 +2383,18 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
-    /// Add a place and make instruction
+    /// Add a place and make instruction (perp-only; spot variant removed upstream).
     ///
     /// * `order` - the order to place
     /// * `taker_info` - taker account address and data
     /// * `taker_order_id` - the id of the taker's order to match with
     /// * `referrer` - pubkey of the taker's referrer account, if any
-    /// * `fulfillment_type` - type of fill for spot orders, ignored for perp orders
     pub fn place_and_make(
         mut self,
         order: OrderParams,
         taker_info: &(Pubkey, User),
         taker_order_id: u32,
         referrer: Option<Pubkey>,
-        fulfillment_type: Option<SpotFulfillmentType>,
     ) -> Self {
         let (taker, taker_account) = taker_info;
         let is_perp = order.market_type == MarketType::Perp;
@@ -2436,8 +2434,6 @@ impl<'a> TransactionBuilder<'a> {
             accounts.push(AccountMeta::new(referrer, false));
         }
 
-        // Spot variant removed upstream; perp-only.
-        let _ = fulfillment_type;
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
@@ -2451,18 +2447,16 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
-    /// Add a place and take instruction
+    /// Add a place and take instruction (perp-only; spot variant removed upstream).
     ///
     /// * `order` - the order to place
     /// * `maker_info` - pubkey of the maker/counter-party(s) to take against and account data
     /// * `referrer` - pubkey of the maker's referrer account, if any
-    /// * `fulfillment_type` - type of fill for spot orders, ignored for perp orders
     pub fn place_and_take(
         mut self,
         order: OrderParams,
         maker_info: &[(Pubkey, User)],
         referrer: Option<Pubkey>,
-        fulfillment_type: Option<SpotFulfillmentType>,
         success_condition: Option<u32>,
     ) -> Self {
         let mut user_accounts = vec![self.account_data.as_ref()];
@@ -2515,7 +2509,7 @@ impl<'a> TransactionBuilder<'a> {
             ));
         }
 
-        let _ = (is_perp, fulfillment_type);
+        let _ = is_perp;
         let ix = Instruction {
             program_id: constants::PROGRAM_ID,
             accounts,
@@ -4190,8 +4184,6 @@ mod tests {
 
     use super::*;
 
-    // static account data for test/mock
-    const ACCOUNT_DATA: &str = include_str!("../../res/9Jtc.hex");
     const DEVNET_ENDPOINT: &str = "https://api.devnet.solana.com";
 
     /// Init a new `DriftClient` with provided mocked RPC responses
@@ -4280,58 +4272,69 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn get_orders() {
-        let user = Pubkey::from_str("9JtczxrJjPM4J1xooxr2rFXmRivarb4BwjNiBgXDwe2p").unwrap();
-        let account_data = hex::decode(ACCOUNT_DATA).expect("valid hex");
+    // Build an on-chain wire representation of `user` (8-byte discriminator + Pod bytes).
+    fn encode_user_account(user: &User) -> Vec<u8> {
+        use anchor_lang::Discriminator;
+        let mut bytes = Vec::with_capacity(8 + std::mem::size_of::<User>());
+        bytes.extend_from_slice(<User as Discriminator>::DISCRIMINATOR);
+        bytes.extend_from_slice(bytemuck::bytes_of(user));
+        bytes
+    }
 
-        let mut account_mocks = Mocks::default();
-        let account_response = json!(Response {
+    fn account_info_response(owner: &Pubkey, data: Vec<u8>) -> serde_json::Value {
+        json!(Response {
             context: RpcResponseContext::new(12_345),
             value: Some(UiAccount {
                 data: UiAccountData::Binary(
-                    bs58::encode(account_data).into_string(),
+                    bs58::encode(data).into_string(),
                     UiAccountEncoding::Base58
                 ),
-                owner: user.to_string(),
+                owner: owner.to_string(),
                 executable: false,
                 lamports: 0,
                 rent_epoch: 0,
                 space: None,
             })
-        });
-        account_mocks.insert(RpcRequest::GetAccountInfo, account_response.clone());
+        })
+    }
+
+    #[tokio::test]
+    async fn get_orders() {
+        let user_pda = Pubkey::from_str("9JtczxrJjPM4J1xooxr2rFXmRivarb4BwjNiBgXDwe2p").unwrap();
+        let mut user = User::default();
+        for slot in user.orders.iter_mut().take(3) {
+            slot.status = OrderStatus::Open;
+        }
+
+        let mut account_mocks = Mocks::default();
+        account_mocks.insert(
+            RpcRequest::GetAccountInfo,
+            account_info_response(&user_pda, encode_user_account(&user)),
+        );
 
         let client = setup(account_mocks, Keypair::new()).await;
 
-        let orders = client.all_orders(&user).await.unwrap();
+        let orders = client.all_orders(&user_pda).await.unwrap();
         assert_eq!(orders.len(), 3);
     }
 
     #[tokio::test]
     async fn get_positions() {
-        let user = Pubkey::from_str("9JtczxrJjPM4J1xooxr2rFXmRivarb4BwjNiBgXDwe2p").unwrap();
-        let account_data = hex::decode(ACCOUNT_DATA).expect("valid hex");
+        let user_pda = Pubkey::from_str("9JtczxrJjPM4J1xooxr2rFXmRivarb4BwjNiBgXDwe2p").unwrap();
+        let mut user = User::default();
+        // One non-available spot position (scaled_balance != 0).
+        user.spot_positions[0].scaled_balance = 1;
+        // One open perp position (base_asset_amount != 0).
+        user.perp_positions[0].base_asset_amount = 1;
 
         let mut account_mocks = Mocks::default();
-        let account_response = json!(Response {
-            context: RpcResponseContext::new(12_345),
-            value: Some(UiAccount {
-                data: UiAccountData::Binary(
-                    bs58::encode(account_data).into_string(),
-                    UiAccountEncoding::Base58
-                ),
-                owner: user.to_string(),
-                executable: false,
-                lamports: 0,
-                rent_epoch: 0,
-                space: None,
-            })
-        });
-        account_mocks.insert(RpcRequest::GetAccountInfo, account_response.clone());
+        account_mocks.insert(
+            RpcRequest::GetAccountInfo,
+            account_info_response(&user_pda, encode_user_account(&user)),
+        );
         let client = setup(account_mocks, Keypair::new()).await;
 
-        let (spot, perp) = client.all_positions(&user).await.unwrap();
+        let (spot, perp) = client.all_positions(&user_pda).await.unwrap();
         assert_eq!(spot.len(), 1);
         assert_eq!(perp.len(), 1);
     }

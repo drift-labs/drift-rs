@@ -42,12 +42,11 @@ pub mod accounts {
     };
     pub use drift::state::oracle::PrelaunchOracle;
     pub use drift::state::perp_market::PerpMarket;
-    pub use drift::state::protected_maker_mode_config::ProtectedMakerModeConfig;
     pub use drift::state::pyth_lazer_oracle::PythLazerOracle;
     pub use drift::state::revenue_share::{RevenueShare, RevenueShareEscrow};
     pub use drift::state::signed_msg_user::{SignedMsgUserOrders, SignedMsgWsDelegates};
     pub use drift::state::spot_market::SpotMarket;
-    pub use drift::state::user::{FuelOverflow, ReferrerName, User, UserStats};
+    pub use drift::state::user::{ReferrerName, User, UserStats};
 }
 pub mod events {
     // Keep IDL events in public API: drift's `#[event]` types lack serde.
@@ -97,7 +96,7 @@ pub use drift::state::user::{
 pub use crate::drift_idl::types::SwapReduceOnly;
 // IDL-only holdovers still referenced by the public surface (serde events,
 // deprecated configs, plumbing structs with no drift-native equivalent).
-pub use crate::drift_idl::types::{Padding, Signature, SpotFulfillmentType};
+pub use crate::drift_idl::types::{Padding, Signature};
 use crate::{
     accounts::UserStats,
     constants::{ids, LUTS_DEVNET, LUTS_MAINNET, TOKEN_2022_PROGRAM_ID, TOKEN_PROGRAM_ID},

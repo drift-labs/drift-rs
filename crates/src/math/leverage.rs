@@ -147,9 +147,9 @@ impl UserMargin for DriftClient {
                 market_account.contract_type == ContractType::DeprecatedPrediction,
             );
 
-            let lp_buffer = ((oracle_price as u64 * market_account.amm.order_step_size)
-                / AMM_RESERVE_PRECISION as u64)
-                * position.lp_shares.max(1);
+            // LP shares removed upstream; preserve previous behavior for non-LP positions (lp_shares=0 → multiplier=1).
+            let lp_buffer = (oracle_price as u64 * market_account.amm.order_step_size)
+                / AMM_RESERVE_PRECISION as u64;
 
             let max_position_size = self.calculate_perp_buying_power(
                 &user_account,
