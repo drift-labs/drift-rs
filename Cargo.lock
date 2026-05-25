@@ -1169,7 +1169,7 @@ dependencies = [
 [[package]]
 name = "drift"
 version = "2.162.0"
-source = "git+ssh://git@github.com/drift-labs/protocol-v2-shadow?rev=a0bdfea74bff46fae3f280acefed35f6b634dc67#a0bdfea74bff46fae3f280acefed35f6b634dc67"
+source = "git+https://github.com/drift-labs/protocol-v2?rev=a0bdfea74bff46fae3f280acefed35f6b634dc67#a0bdfea74bff46fae3f280acefed35f6b634dc67"
 dependencies = [
  "anchor-lang",
  "anchor-spl",
@@ -2883,7 +2883,7 @@ checksum = "44de48029c54ec1ca570786b5baeb906b0fc2409c8e0145585e287ee7a526c72"
 [[package]]
 name = "pyth_lazer"
 version = "0.1.0"
-source = "git+ssh://git@github.com/drift-labs/protocol-v2-shadow?rev=a0bdfea74bff46fae3f280acefed35f6b634dc67#a0bdfea74bff46fae3f280acefed35f6b634dc67"
+source = "git+https://github.com/drift-labs/protocol-v2?rev=a0bdfea74bff46fae3f280acefed35f6b634dc67#a0bdfea74bff46fae3f280acefed35f6b634dc67"
 dependencies = [
  "anchor-lang",
  "anyhow",
