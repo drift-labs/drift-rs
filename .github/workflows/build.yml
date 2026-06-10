@@ -38,20 +38,28 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out drift-rs
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: true
           path: drift-rs
+      - name: Generate protocol-v2-shadow read token
+        id: shadow-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        with:
+          app-id: ${{ vars.VELOCITY_SDK_READER_APP_ID }}
+          private-key: ${{ secrets.VELOCITY_SDK_READER_PRIVATE_KEY }}
+          owner: drift-labs
+          repositories: protocol-v2-shadow
       - name: Check out protocol-v2-shadow
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           repository: drift-labs/protocol-v2-shadow
           ref: ${{ env.SHADOW_REF }}
-          token: ${{ secrets.GH_PAT }}
+          token: ${{ steps.shadow-token.outputs.token }}
           path: protocol-v2-shadow
       - name: Cache Rust toolchain
         id: cache-rust-target-restore
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             ~/.rustup
@@ -89,7 +97,7 @@ jobs:
           TEST_MAINNET_PRIVATE_KEY: ${{ secrets.TEST_MAINNET_PRIVATE_KEY }}
           TEST_GRPC_X_TOKEN: ${{ secrets.TEST_GRPC_X_TOKEN }}
       - name: Cache Rust toolchain (save)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         if: success() || failure()
         with:
           path: |
