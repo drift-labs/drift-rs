@@ -52,8 +52,8 @@ impl Market for PerpMarket {
     fn oracle_info(&self) -> (MarketId, Pubkey, OracleSource) {
         (
             MarketId::perp(self.market_index),
-            self.amm.oracle,
-            self.amm.oracle_source,
+            self.oracle,
+            self.oracle_source,
         )
     }
 }

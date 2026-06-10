@@ -32,12 +32,12 @@ pub mod accounts {
     //! `AccountMap::account_data::<T>` wants `T: Pod`, and drift-idl-gen
     //! emits `unsafe impl Pod for State`.
     pub use crate::drift_idl::accounts::State;
-    pub use drift::state::amm_cache::AmmCache;
+    pub use drift::vlp::amm_cache::AmmCache;
     pub use drift::state::if_rebalance_config::IfRebalanceConfig;
     pub use drift::state::insurance_fund_stake::{
         InsuranceFundStake, ProtocolIfSharesTransferConfig,
     };
-    pub use drift::state::lp_pool::{
+    pub use drift::vlp::hedge::state::{
         AmmConstituentMapping, Constituent, ConstituentCorrelations, ConstituentTargetBase, LPPool,
     };
     pub use drift::state::oracle::PrelaunchOracle;
@@ -630,13 +630,13 @@ impl MarketPrecision for accounts::SpotMarket {
 
 impl MarketPrecision for accounts::PerpMarket {
     fn min_order_size(&self) -> u64 {
-        self.amm.min_order_size
+        self.market_stats.min_order_size
     }
     fn price_tick(&self) -> u64 {
-        self.amm.order_tick_size
+        self.order_tick_size
     }
     fn quantity_tick(&self) -> u64 {
-        self.amm.order_step_size
+        self.order_step_size
     }
 }
 

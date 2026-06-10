@@ -61,9 +61,9 @@ pub async fn calculate_liquidation_price_and_unrealized_pnl(
     let (oracle_key, oracle_data) = accounts_list
         .oracles
         .iter_mut()
-        .find(|(key, _)| *key == perp_market.amm.oracle)
+        .find(|(key, _)| *key == perp_market.oracle)
         .expect("oracle loaded");
-    let oracle_source = perp_market.amm.oracle_source;
+    let oracle_source = perp_market.oracle_source;
     let oracle_price = sdk_oracle_price(
         &oracle_source,
         oracle_key,
@@ -79,7 +79,7 @@ pub async fn calculate_liquidation_price_and_unrealized_pnl(
         .program_data()
         .spot_market_configs()
         .iter()
-        .find(|x| x.oracle == perp_market.amm.oracle);
+        .find(|x| x.oracle == perp_market.oracle);
 
     Ok(LiquidationAndPnlInfo {
         unrealized_pnl: calculate_unrealized_pnl_inner(position, oracle_price)?,
@@ -147,7 +147,7 @@ pub async fn calculate_liquidation_price(
         .program_data()
         .spot_market_configs()
         .iter()
-        .find(|x| x.oracle == perp_market.amm.oracle);
+        .find(|x| x.oracle == perp_market.oracle);
 
     calculate_liquidation_price_inner(
         user,
@@ -195,7 +195,7 @@ pub fn calculate_liquidation_price_inner(
                 spot_free_collateral_delta =
                     calculate_spot_free_collateral_delta(spot_position, spot_market);
                 let (numerator, denominator) = get_oracle_normalization_factor(
-                    perp_market.amm.oracle_source,
+                    perp_market.oracle_source,
                     spot_market.oracle_source,
                 );
                 spot_free_collateral_delta = (((spot_free_collateral_delta as i128)

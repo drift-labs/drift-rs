@@ -1125,6 +1125,17 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for TransferDeposit {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct TransferDepositByDelegate {
+        pub market_index: u16,
+        pub amount: u64,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for TransferDepositByDelegate {
+        const DISCRIMINATOR: &[u8] = &[141, 171, 241, 161, 17, 31, 135, 29];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for TransferDepositByDelegate {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct TransferFeeAndPnlPool {
         pub amount: u64,
         pub direction: TransferFeeAndPnlPoolDirection,
@@ -2204,6 +2215,16 @@ pub mod instructions {
     #[automatically_derived]
     impl anchor_lang::InstructionData for UpdateStateSettlementDuration {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
+    pub struct UpdateUserAllowDelegateTransfer {
+        pub allow_delegate_transfer: bool,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateUserAllowDelegateTransfer {
+        const DISCRIMINATOR: &[u8] = &[235, 106, 172, 39, 223, 238, 167, 204];
+    }
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateUserAllowDelegateTransfer {}
+    #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct UpdateUserCustomMarginRatio {
         pub _sub_account_id: u16,
         pub margin_ratio: u32,
@@ -2531,8 +2552,6 @@ pub mod types {
         PartialEq,
     )]
     pub struct AMM {
-        pub oracle: Pubkey,
-        pub historical_oracle_data: HistoricalOracleData,
         pub fee_pool: PoolBalance,
         pub base_asset_reserve: u128,
         pub quote_asset_reserve: u128,
@@ -2542,80 +2561,35 @@ pub mod types {
         pub sqrt_k: u128,
         pub peg_multiplier: u128,
         pub terminal_quote_asset_reserve: u128,
-        pub base_asset_amount_long: i128,
-        pub base_asset_amount_short: i128,
         pub base_asset_amount_with_amm: i128,
-        pub max_open_interest: u128,
-        pub quote_asset_amount: i128,
-        pub quote_entry_amount_long: i128,
-        pub quote_entry_amount_short: i128,
-        pub quote_break_even_amount_long: i128,
-        pub quote_break_even_amount_short: i128,
-        pub last_funding_rate: i64,
-        pub last_funding_rate_long: i64,
-        pub last_funding_rate_short: i64,
-        pub last_24h_avg_funding_rate: i64,
         pub total_fee: i128,
         pub total_mm_fee: i128,
-        pub total_exchange_fee: u128,
         pub total_fee_minus_distributions: i128,
         pub total_fee_withdrawn: u128,
-        pub total_liquidation_fee: u128,
-        pub cumulative_funding_rate_long: i128,
-        pub cumulative_funding_rate_short: i128,
-        pub total_social_loss: u128,
         pub ask_base_asset_reserve: u128,
         pub ask_quote_asset_reserve: u128,
         pub bid_base_asset_reserve: u128,
         pub bid_quote_asset_reserve: u128,
-        pub last_oracle_normalised_price: i64,
-        pub last_oracle_reserve_price_spread_pct: i64,
-        pub last_bid_price_twap: u64,
-        pub last_ask_price_twap: u64,
-        pub last_mark_price_twap: u64,
-        pub last_mark_price_twap_5min: u64,
         pub last_update_slot: u64,
-        pub last_oracle_conf_pct: u64,
         pub net_revenue_since_last_funding: i64,
-        pub last_funding_rate_ts: i64,
-        pub funding_period: i64,
-        pub order_step_size: u64,
-        pub order_tick_size: u64,
-        pub min_order_size: u64,
-        pub mm_oracle_slot: u64,
-        pub volume_24h: u64,
-        pub long_intensity_volume: u64,
-        pub short_intensity_volume: u64,
-        pub last_trade_ts: i64,
-        pub mark_std: u64,
-        pub oracle_std: u64,
-        pub last_mark_price_twap_ts: i64,
+        pub last_cumulative_funding_rate_long: i64,
+        pub last_cumulative_funding_rate_short: i64,
+        pub last_oracle_reserve_price_spread_pct: i64,
+        pub last_spread_update_slot: u64,
         pub base_spread: u32,
         pub max_spread: u32,
         pub long_spread: u32,
         pub short_spread: u32,
-        pub mm_oracle_price: i64,
+        pub reference_price_offset: i32,
         pub max_fill_reserve_fraction: u16,
         pub max_slippage_ratio: u16,
         pub curve_update_intensity: u8,
         pub amm_jit_intensity: u8,
-        pub oracle_source: OracleSource,
-        pub last_oracle_valid: bool,
-        pub oracle_low_risk_slot_delay_override: i8,
         pub amm_spread_adjustment: i8,
-        pub oracle_slot_delay_override: i8,
-        #[serde(skip)]
-        pub padding_pre_mm_oracle_sequence: Padding<5>,
-        pub mm_oracle_sequence_id: u64,
-        pub net_unsettled_funding_pnl: i64,
-        pub reference_price_offset: i32,
         pub amm_inventory_spread_adjustment: i8,
         pub reference_price_offset_deadband_pct: u8,
         #[serde(skip)]
-        pub padding_pre_last_funding: Padding<2>,
-        pub last_funding_oracle_twap: i64,
-        #[serde(skip)]
-        pub padding_trailing: Padding<8>,
+        pub padding_post_amm: Padding<3>,
     }
     #[repr(C)]
     #[derive(
@@ -2700,6 +2674,34 @@ pub mod types {
         #[serde(skip)]
         pub _padding: Padding<3>,
         pub weights: Vec<AmmConstituentDatum>,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct AmmCurveChanged {
+        pub ts: i64,
+        pub market_index: u16,
+        pub peg_multiplier_before: u128,
+        pub base_asset_reserve_before: u128,
+        pub quote_asset_reserve_before: u128,
+        pub sqrt_k_before: u128,
+        pub peg_multiplier_after: u128,
+        pub base_asset_reserve_after: u128,
+        pub quote_asset_reserve_after: u128,
+        pub sqrt_k_after: u128,
+        pub adjustment_cost: i128,
+        pub total_fee_minus_distributions_after: i128,
+        pub oracle_price: i64,
     }
     #[derive(
         AnchorSerialize,
@@ -2948,41 +2950,6 @@ pub mod types {
         Debug,
         PartialEq,
     )]
-    pub struct CurveRecord {
-        pub ts: i64,
-        pub record_id: u64,
-        pub peg_multiplier_before: u128,
-        pub base_asset_reserve_before: u128,
-        pub quote_asset_reserve_before: u128,
-        pub sqrt_k_before: u128,
-        pub peg_multiplier_after: u128,
-        pub base_asset_reserve_after: u128,
-        pub quote_asset_reserve_after: u128,
-        pub sqrt_k_after: u128,
-        pub base_asset_amount_long: u128,
-        pub base_asset_amount_short: u128,
-        pub base_asset_amount_with_amm: i128,
-        pub total_fee: i128,
-        pub total_fee_minus_distributions: i128,
-        pub adjustment_cost: i128,
-        pub oracle_price: i64,
-        pub fill_record: u128,
-        pub number_of_users: u32,
-        pub market_index: u16,
-    }
-    #[repr(C)]
-    #[derive(
-        AnchorSerialize,
-        AnchorDeserialize,
-        InitSpace,
-        Serialize,
-        Deserialize,
-        Copy,
-        Clone,
-        Default,
-        Debug,
-        PartialEq,
-    )]
     pub struct DeleteUserRecord {
         pub ts: i64,
         pub user_authority: Pubkey,
@@ -3076,8 +3043,8 @@ pub mod types {
     pub struct FeeStructure {
         pub fee_tiers: [FeeTier; 10],
         pub filler_reward_structure: OrderFillerRewardStructure,
-        pub referrer_reward_epoch_upper_bound: u64,
         pub flat_filler_fee: u64,
+        pub padding: u64,
     }
     #[repr(C)]
     #[derive(
@@ -3150,8 +3117,29 @@ pub mod types {
         pub cumulative_funding_rate_short: i128,
         pub oracle_price_twap: i64,
         pub mark_price_twap: u64,
-        pub period_revenue: i64,
         pub base_asset_amount_with_amm: i128,
+    }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct HedgeConfig {
+        pub pool_id: u8,
+        pub status: u8,
+        pub paused_operations: u8,
+        pub exchange_fee_exclusion_scalar: u8,
+        pub fee_transfer_scalar: u8,
+        #[serde(skip)]
+        pub padding: Padding<11>,
     }
     #[repr(C)]
     #[derive(
@@ -3751,6 +3739,45 @@ pub mod types {
         pub max_aum: Option<u128>,
         pub whitelist_mint: Option<Pubkey>,
     }
+    #[repr(C)]
+    #[derive(
+        AnchorSerialize,
+        AnchorDeserialize,
+        InitSpace,
+        Serialize,
+        Deserialize,
+        Copy,
+        Clone,
+        Default,
+        Debug,
+        PartialEq,
+    )]
+    pub struct MarketStats {
+        pub last_mark_price_twap: u64,
+        pub last_mark_price_twap_5min: u64,
+        pub last_mark_price_twap_ts: i64,
+        pub last_bid_price_twap: u64,
+        pub last_ask_price_twap: u64,
+        pub mark_std: u64,
+        pub oracle_std: u64,
+        pub last_oracle_conf_pct: u64,
+        pub volume_24h: u64,
+        pub long_intensity_volume: u64,
+        pub short_intensity_volume: u64,
+        pub last_trade_ts: i64,
+        pub last_24h_avg_funding_rate: i64,
+        pub funding_period: i64,
+        pub min_order_size: u64,
+        pub mm_oracle_price: i64,
+        pub mm_oracle_slot: u64,
+        pub mm_oracle_sequence_id: u64,
+        pub last_oracle_normalised_price: i64,
+        pub last_reference_price_offset: i32,
+        pub last_oracle_valid: bool,
+        #[serde(skip)]
+        pub padding: Padding<11>,
+        pub historical_oracle_data: HistoricalOracleData,
+    }
     #[derive(
         AnchorSerialize,
         AnchorDeserialize,
@@ -3811,7 +3838,7 @@ pub mod types {
         pub max_ts: Option<i64>,
         pub trigger_price: Option<u64>,
         pub trigger_condition: Option<OrderTriggerCondition>,
-        pub oracle_price_offset: Option<i32>,
+        pub oracle_price_offset: Option<i64>,
         pub auction_duration: Option<u8>,
         pub auction_start_price: Option<i64>,
         pub auction_end_price: Option<i64>,
@@ -3909,7 +3936,7 @@ pub mod types {
         pub auction_start_price: i64,
         pub auction_end_price: i64,
         pub max_ts: i64,
-        pub oracle_price_offset: i32,
+        pub oracle_price_offset: i64,
         pub order_id: u32,
         pub market_index: u16,
         pub status: OrderStatus,
@@ -3926,7 +3953,7 @@ pub mod types {
         pub posted_slot_tail: u8,
         pub bit_flags: u8,
         #[serde(skip)]
-        pub padding: Padding<1>,
+        pub padding: Padding<5>,
     }
     #[derive(
         AnchorSerialize,
@@ -4082,7 +4109,7 @@ pub mod types {
         pub max_ts: Option<i64>,
         pub trigger_price: Option<u64>,
         pub trigger_condition: OrderTriggerCondition,
-        pub oracle_price_offset: Option<i32>,
+        pub oracle_price_offset: Option<i64>,
         pub auction_duration: Option<u8>,
         pub auction_start_price: Option<i64>,
         pub auction_end_price: Option<i64>,
@@ -4220,16 +4247,36 @@ pub mod types {
     )]
     pub struct PerpMarket {
         pub pubkey: Pubkey,
-        pub amm: AMM,
+        pub base_asset_amount_long: i128,
+        pub base_asset_amount_short: i128,
+        pub quote_asset_amount: i128,
+        pub quote_entry_amount_long: i128,
+        pub quote_entry_amount_short: i128,
+        pub quote_break_even_amount_long: i128,
+        pub quote_break_even_amount_short: i128,
+        pub max_open_interest: u128,
+        pub total_social_loss: u128,
+        pub cumulative_funding_rate_long: i128,
+        pub cumulative_funding_rate_short: i128,
+        pub total_exchange_fee: u128,
+        pub total_liquidation_fee: u128,
+        pub oracle: Pubkey,
         pub pnl_pool: PoolBalance,
         pub name: [u8; 32],
         pub insurance_claim: InsuranceClaim,
+        pub last_funding_rate: i64,
+        pub last_funding_rate_long: i64,
+        pub last_funding_rate_short: i64,
+        pub last_funding_rate_ts: i64,
+        pub net_unsettled_funding_pnl: i64,
+        pub last_funding_oracle_twap: i64,
+        pub order_step_size: u64,
+        pub order_tick_size: u64,
         pub unrealized_pnl_max_imbalance: u64,
         pub expiry_ts: i64,
         pub expiry_price: i64,
         pub next_fill_record_id: u64,
         pub next_funding_rate_record_id: u64,
-        pub next_curve_record_id: u64,
         pub imf_factor: u32,
         pub unrealized_pnl_imf_factor: u32,
         pub liquidator_fee: u32,
@@ -4247,18 +4294,25 @@ pub mod types {
         pub paused_operations: u8,
         pub quote_spot_market_index: u16,
         pub fee_adjustment: i16,
+        #[serde(skip)]
+        pub _padding_align_lfp: Padding<6>,
         pub last_fill_price: u64,
         pub pool_id: u8,
         #[serde(skip)]
         pub _padding_pmm: Padding<2>,
-        pub lp_fee_transfer_scalar: u8,
-        pub lp_status: u8,
-        pub lp_paused_operations: u8,
-        pub lp_exchange_fee_excluscion_scalar: u8,
-        pub lp_pool_id: u8,
-        pub market_config: u8,
         #[serde(skip)]
-        pub padding: Padding<30>,
+        pub _padding_hedge: Padding<5>,
+        pub market_config: u8,
+        pub oracle_source: OracleSource,
+        pub oracle_slot_delay_override: i8,
+        pub oracle_low_risk_slot_delay_override: i8,
+        #[serde(skip)]
+        pub padding: Padding<36>,
+        pub market_stats: MarketStats,
+        #[serde(skip)]
+        pub _padding_align_amm: Padding<8>,
+        pub amm: AMM,
+        pub hedge_config: HedgeConfig,
     }
     #[repr(C)]
     #[derive(
@@ -4471,11 +4525,7 @@ pub mod types {
     pub struct RevenueShareEscrow {
         pub authority: Pubkey,
         pub referrer: Pubkey,
-        pub referrer_boost_expire_ts: u32,
-        pub referrer_reward_offset: i8,
-        pub referee_fee_numerator_offset: i8,
-        pub referrer_boost_numerator: i8,
-        pub reserved_fixed: [u8; 17],
+        pub reserved_fixed: [u8; 24],
         pub padding0: u32,
         pub orders: Vec<RevenueShareOrder>,
         pub padding1: u32,
@@ -5209,8 +5259,6 @@ pub mod types {
         pub total_fee_rebate: u64,
         pub total_token_discount: u64,
         pub total_referee_discount: u64,
-        pub total_referrer_reward: u64,
-        pub current_epoch_referrer_reward: u64,
     }
     #[repr(C)]
     #[derive(
@@ -5229,7 +5277,6 @@ pub mod types {
         pub authority: Pubkey,
         pub referrer: Pubkey,
         pub fees: UserFees,
-        pub next_epoch_ts: i64,
         pub maker_volume_30d: u64,
         pub taker_volume_30d: u64,
         pub filler_volume_30d: u64,
@@ -5243,8 +5290,9 @@ pub mod types {
         pub disable_update_perp_bid_ask_twap: u8,
         pub paused_operations: u8,
         pub if_staked_gov_token_amount: u64,
+        pub delegate_permissions: u8,
         #[serde(skip)]
-        pub padding: Padding<40>,
+        pub padding: Padding<63>,
     }
     #[repr(C)]
     #[derive(
@@ -5782,16 +5830,36 @@ pub mod accounts {
     )]
     pub struct PerpMarket {
         pub pubkey: Pubkey,
-        pub amm: AMM,
+        pub base_asset_amount_long: i128,
+        pub base_asset_amount_short: i128,
+        pub quote_asset_amount: i128,
+        pub quote_entry_amount_long: i128,
+        pub quote_entry_amount_short: i128,
+        pub quote_break_even_amount_long: i128,
+        pub quote_break_even_amount_short: i128,
+        pub max_open_interest: u128,
+        pub total_social_loss: u128,
+        pub cumulative_funding_rate_long: i128,
+        pub cumulative_funding_rate_short: i128,
+        pub total_exchange_fee: u128,
+        pub total_liquidation_fee: u128,
+        pub oracle: Pubkey,
         pub pnl_pool: PoolBalance,
         pub name: [u8; 32],
         pub insurance_claim: InsuranceClaim,
+        pub last_funding_rate: i64,
+        pub last_funding_rate_long: i64,
+        pub last_funding_rate_short: i64,
+        pub last_funding_rate_ts: i64,
+        pub net_unsettled_funding_pnl: i64,
+        pub last_funding_oracle_twap: i64,
+        pub order_step_size: u64,
+        pub order_tick_size: u64,
         pub unrealized_pnl_max_imbalance: u64,
         pub expiry_ts: i64,
         pub expiry_price: i64,
         pub next_fill_record_id: u64,
         pub next_funding_rate_record_id: u64,
-        pub next_curve_record_id: u64,
         pub imf_factor: u32,
         pub unrealized_pnl_imf_factor: u32,
         pub liquidator_fee: u32,
@@ -5809,18 +5877,25 @@ pub mod accounts {
         pub paused_operations: u8,
         pub quote_spot_market_index: u16,
         pub fee_adjustment: i16,
+        #[serde(skip)]
+        pub _padding_align_lfp: Padding<6>,
         pub last_fill_price: u64,
         pub pool_id: u8,
         #[serde(skip)]
         pub _padding_pmm: Padding<2>,
-        pub lp_fee_transfer_scalar: u8,
-        pub lp_status: u8,
-        pub lp_paused_operations: u8,
-        pub lp_exchange_fee_excluscion_scalar: u8,
-        pub lp_pool_id: u8,
-        pub market_config: u8,
         #[serde(skip)]
-        pub padding: Padding<30>,
+        pub _padding_hedge: Padding<5>,
+        pub market_config: u8,
+        pub oracle_source: OracleSource,
+        pub oracle_slot_delay_override: i8,
+        pub oracle_low_risk_slot_delay_override: i8,
+        #[serde(skip)]
+        pub padding: Padding<36>,
+        pub market_stats: MarketStats,
+        #[serde(skip)]
+        pub _padding_align_amm: Padding<8>,
+        pub amm: AMM,
+        pub hedge_config: HedgeConfig,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for PerpMarket {
@@ -6108,11 +6183,7 @@ pub mod accounts {
     pub struct RevenueShareEscrow {
         pub authority: Pubkey,
         pub referrer: Pubkey,
-        pub referrer_boost_expire_ts: u32,
-        pub referrer_reward_offset: i8,
-        pub referee_fee_numerator_offset: i8,
-        pub referrer_boost_numerator: i8,
-        pub reserved_fixed: [u8; 17],
+        pub reserved_fixed: [u8; 24],
         pub padding0: u32,
         pub orders: Vec<RevenueShareOrder>,
         pub padding1: u32,
@@ -6541,7 +6612,6 @@ pub mod accounts {
         pub authority: Pubkey,
         pub referrer: Pubkey,
         pub fees: UserFees,
-        pub next_epoch_ts: i64,
         pub maker_volume_30d: u64,
         pub taker_volume_30d: u64,
         pub filler_volume_30d: u64,
@@ -6555,8 +6625,9 @@ pub mod accounts {
         pub disable_update_perp_bid_ask_twap: u8,
         pub paused_operations: u8,
         pub if_staked_gov_token_amount: u64,
+        pub delegate_permissions: u8,
         #[serde(skip)]
-        pub padding: Padding<40>,
+        pub padding: Padding<63>,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for UserStats {
@@ -11745,9 +11816,7 @@ pub mod accounts {
         pub state: Pubkey,
         pub authority: Pubkey,
         pub liquidator: Pubkey,
-        pub liquidator_stats: Pubkey,
         pub user: Pubkey,
-        pub user_stats: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for LiquidateSpot {
@@ -11781,17 +11850,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.liquidator_stats,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
                     pubkey: self.user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.user_stats,
                     is_signer: false,
                     is_writable: true,
                 },
@@ -11833,9 +11892,7 @@ pub mod accounts {
         pub state: Pubkey,
         pub authority: Pubkey,
         pub liquidator: Pubkey,
-        pub liquidator_stats: Pubkey,
         pub user: Pubkey,
-        pub user_stats: Pubkey,
         pub liability_spot_market_vault: Pubkey,
         pub asset_spot_market_vault: Pubkey,
         pub liability_token_account: Pubkey,
@@ -11876,17 +11933,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.liquidator_stats,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
                     pubkey: self.user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.user_stats,
                     is_signer: false,
                     is_writable: true,
                 },
@@ -11963,9 +12010,7 @@ pub mod accounts {
         pub state: Pubkey,
         pub authority: Pubkey,
         pub liquidator: Pubkey,
-        pub liquidator_stats: Pubkey,
         pub user: Pubkey,
-        pub user_stats: Pubkey,
         pub liability_spot_market_vault: Pubkey,
         pub asset_spot_market_vault: Pubkey,
         pub liability_token_account: Pubkey,
@@ -12006,17 +12051,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.liquidator_stats,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
                     pubkey: self.user,
-                    is_signer: false,
-                    is_writable: true,
-                },
-                AccountMeta {
-                    pubkey: self.user_stats,
                     is_signer: false,
                     is_writable: true,
                 },
@@ -15518,6 +15553,94 @@ pub mod accounts {
     }
     #[automatically_derived]
     impl anchor_lang::AccountDeserialize for TransferDeposit {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct TransferDepositByDelegate {
+        pub from_user: Pubkey,
+        pub to_user: Pubkey,
+        pub user_stats: Pubkey,
+        pub delegate: Pubkey,
+        pub state: Pubkey,
+        pub spot_market_vault: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for TransferDepositByDelegate {
+        const DISCRIMINATOR: &[u8] = &[234, 233, 30, 145, 246, 251, 65, 185];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for TransferDepositByDelegate {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for TransferDepositByDelegate {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for TransferDepositByDelegate {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for TransferDepositByDelegate {}
+    #[automatically_derived]
+    impl ToAccountMetas for TransferDepositByDelegate {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.from_user,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.to_user,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.user_stats,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.delegate,
+                    is_signer: true,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.state,
+                    is_signer: false,
+                    is_writable: false,
+                },
+                AccountMeta {
+                    pubkey: self.spot_market_vault,
+                    is_signer: false,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for TransferDepositByDelegate {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for TransferDepositByDelegate {
         fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
             let given_disc = &buf[..8];
             if Self::DISCRIMINATOR != given_disc {
@@ -23141,6 +23264,70 @@ pub mod accounts {
     }
     #[repr(C)]
     #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
+    pub struct UpdateUserAllowDelegateTransfer {
+        pub user_stats: Pubkey,
+        pub authority: Pubkey,
+    }
+    #[automatically_derived]
+    impl anchor_lang::Discriminator for UpdateUserAllowDelegateTransfer {
+        const DISCRIMINATOR: &[u8] = &[171, 83, 1, 36, 136, 174, 2, 39];
+    }
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Pod for UpdateUserAllowDelegateTransfer {}
+    #[automatically_derived]
+    unsafe impl anchor_lang::__private::bytemuck::Zeroable for UpdateUserAllowDelegateTransfer {}
+    #[automatically_derived]
+    impl anchor_lang::ZeroCopy for UpdateUserAllowDelegateTransfer {}
+    #[automatically_derived]
+    impl anchor_lang::InstructionData for UpdateUserAllowDelegateTransfer {}
+    #[automatically_derived]
+    impl ToAccountMetas for UpdateUserAllowDelegateTransfer {
+        fn to_account_metas(&self) -> Vec<AccountMeta> {
+            vec![
+                AccountMeta {
+                    pubkey: self.user_stats,
+                    is_signer: false,
+                    is_writable: true,
+                },
+                AccountMeta {
+                    pubkey: self.authority,
+                    is_signer: true,
+                    is_writable: false,
+                },
+            ]
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountSerialize for UpdateUserAllowDelegateTransfer {
+        fn try_serialize<W: std::io::Write>(&self, writer: &mut W) -> anchor_lang::Result<()> {
+            if writer.write_all(Self::DISCRIMINATOR).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            if AnchorSerialize::serialize(self, writer).is_err() {
+                return Err(anchor_lang::error::ErrorCode::AccountDidNotSerialize.into());
+            }
+            Ok(())
+        }
+    }
+    #[automatically_derived]
+    impl anchor_lang::AccountDeserialize for UpdateUserAllowDelegateTransfer {
+        fn try_deserialize(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let given_disc = &buf[..8];
+            if Self::DISCRIMINATOR != given_disc {
+                return Err(anchor_lang::error!(
+                    anchor_lang::error::ErrorCode::AccountDiscriminatorMismatch
+                ));
+            }
+            Self::try_deserialize_unchecked(buf)
+        }
+        fn try_deserialize_unchecked(buf: &mut &[u8]) -> anchor_lang::Result<Self> {
+            let mut data: &[u8] = &buf[8..];
+            AnchorDeserialize::deserialize(&mut data)
+                .map_err(|_| anchor_lang::error::ErrorCode::AccountDidNotDeserialize.into())
+        }
+    }
+    #[repr(C)]
+    #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct UpdateUserCustomMarginRatio {
         pub user: Pubkey,
         pub authority: Pubkey,
@@ -25462,9 +25649,9 @@ pub mod events {
     }
     #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
-    pub struct CurveRecord {
+    pub struct AmmCurveChanged {
         pub ts: i64,
-        pub record_id: u64,
+        pub market_index: u16,
         pub peg_multiplier_before: u128,
         pub base_asset_reserve_before: u128,
         pub quote_asset_reserve_before: u128,
@@ -25473,16 +25660,9 @@ pub mod events {
         pub base_asset_reserve_after: u128,
         pub quote_asset_reserve_after: u128,
         pub sqrt_k_after: u128,
-        pub base_asset_amount_long: u128,
-        pub base_asset_amount_short: u128,
-        pub base_asset_amount_with_amm: i128,
-        pub total_fee: i128,
-        pub total_fee_minus_distributions: i128,
         pub adjustment_cost: i128,
+        pub total_fee_minus_distributions_after: i128,
         pub oracle_price: i64,
-        pub fill_record: u128,
-        pub number_of_users: u32,
-        pub market_index: u16,
     }
     #[derive(Clone, Debug, PartialEq, Default)]
     #[event]
@@ -25541,7 +25721,6 @@ pub mod events {
         pub cumulative_funding_rate_short: i128,
         pub oracle_price_twap: i64,
         pub mark_price_twap: u64,
-        pub period_revenue: i64,
         pub base_asset_amount_with_amm: i128,
     }
     #[derive(Clone, Debug, PartialEq, Default)]

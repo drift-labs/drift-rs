@@ -25,7 +25,7 @@ use crate::{
 type MarketOrderKey = (u64, u64);
 type OracleOrderKey = (i64, u64);
 type LimitOrderKey = (u64, u64, u64);
-type FloatingLimitOrderKey = (i32, u64, u64);
+type FloatingLimitOrderKey = (i64, u64, u64);
 type TriggerOrderKey = (u64, u64);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Copy, PartialEq)]
@@ -267,7 +267,7 @@ pub(crate) struct OracleOrder {
     pub size: u64,
     pub start_price_offset: i64,
     pub end_price_offset: i64,
-    pub oracle_price_offset: i32,
+    pub oracle_price_offset: i64,
     pub max_ts: u64,
     pub slot: u64,
     pub duration: u8,
@@ -307,7 +307,7 @@ pub(crate) struct FloatingLimitOrder {
     pub size: u64,
     pub slot: u64,
     pub max_ts: u64,
-    pub offset_price: i32,
+    pub offset_price: i64,
     pub post_only: bool,
     pub reduce_only: bool,
 }
@@ -392,7 +392,7 @@ impl TriggerOrder {
             return calculate_auction_price(
                 &order,
                 slot,
-                market.amm.order_tick_size,
+                market.order_tick_size,
                 Some(oracle_price as i64),
             )
             .map_err(|e| crate::SdkError::Anchor(Box::new(e.into())));

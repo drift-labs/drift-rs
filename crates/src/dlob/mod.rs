@@ -461,7 +461,7 @@ impl DLOB {
                 MarketType::Perp => self
                     .program_data
                     .perp_market_config_by_index(market_id.index())
-                    .map(|m| m.amm.order_tick_size)
+                    .map(|m| m.order_tick_size)
                     .unwrap_or(1),
                 MarketType::Spot => self
                     .program_data
@@ -826,9 +826,13 @@ impl DLOB {
         let (vamm_bid, vamm_ask, vamm_min_order) = if let Some(m) = perp_market {
             let r = m.amm.reserve_price().unwrap_or(0);
             (
-                m.amm.bid_price(r).ok(),
-                m.amm.ask_price(r).ok(),
-                m.amm.min_order_size,
+                m.amm
+                    .bid_price(r, m.amm.short_spread, m.amm.reference_price_offset)
+                    .ok(),
+                m.amm
+                    .ask_price(r, m.amm.long_spread, m.amm.reference_price_offset)
+                    .ok(),
+                m.market_stats.min_order_size,
             )
         } else {
             (None, None, u64::MAX)
@@ -960,14 +964,16 @@ impl DLOB {
         let is_long = taker_order.direction == PositionDirection::Long;
         let depth = depth.unwrap_or(32);
         let vamm_min_order = perp_market
-            .map(|p| p.amm.min_order_size)
+            .map(|p| p.market_stats.min_order_size)
             .unwrap_or(u64::MAX);
 
         if is_long {
             let vamm_price = perp_market
                 .and_then(|p| {
                     let r = p.amm.reserve_price().ok()?;
-                    p.amm.ask_price(r).ok()
+                    p.amm
+                        .ask_price(r, p.amm.long_spread, p.amm.reference_price_offset)
+                        .ok()
                 })
                 .unwrap_or(u64::MAX);
             self.find_crosses_for_taker_order_inner(
@@ -984,7 +990,9 @@ impl DLOB {
             let vamm_price = perp_market
                 .and_then(|p| {
                     let r = p.amm.reserve_price().ok()?;
-                    p.amm.bid_price(r).ok()
+                    p.amm
+                        .bid_price(r, p.amm.short_spread, p.amm.reference_price_offset)
+                        .ok()
                 })
                 .unwrap_or(u64::MIN);
             self.find_crosses_for_taker_order_inner(
@@ -1189,15 +1197,18 @@ impl L3Book {
                 }
 
                 if let Some(x) = v {
-                    if let Ok(liq) = drift::math::amm::calculate_amm_available_liquidity(
+                    if let Ok(liq) = drift::vlp::amm::math::amm::calculate_amm_available_liquidity(
                         &market.amm,
                         &PositionDirection::Long,
+                        market.order_step_size,
                     ) {
                         if let Ok(vamm_price) = market.amm.get_fallback_price(
+                            &market.market_stats,
                             &PositionDirection::Long,
                             liq,
                             oracle_price_for_vamm,
                             x.max_ts.saturating_sub(now) as i64,
+                            market.market_stats.min_order_size,
                         ) {
                             if vamm_price > best_price {
                                 best_src = Some(Src::Vamm);
@@ -1331,15 +1342,18 @@ impl L3Book {
                 }
 
                 if let Some(x) = v {
-                    if let Ok(liq) = drift::math::amm::calculate_amm_available_liquidity(
+                    if let Ok(liq) = drift::vlp::amm::math::amm::calculate_amm_available_liquidity(
                         &market.amm,
                         &PositionDirection::Short,
+                        market.order_step_size,
                     ) {
                         if let Ok(vamm_price) = market.amm.get_fallback_price(
+                            &market.market_stats,
                             &PositionDirection::Short,
                             liq,
                             oracle_price_for_vamm,
                             x.max_ts.saturating_sub(now) as i64,
+                            market.market_stats.min_order_size,
                         ) {
                             if vamm_price < best_price {
                                 best_src = Some(Src::Vamm);

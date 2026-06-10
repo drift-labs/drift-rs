@@ -1554,7 +1554,7 @@ impl DriftClientBackend {
 
         let program_configured_oracle = if market.is_perp() {
             let market = self.try_get_perp_market_account_and_slot(market.index())?;
-            market.data.amm.oracle
+            market.data.oracle
         } else {
             let market = self.try_get_spot_market_account_and_slot(market.index())?;
             market.data.oracle
@@ -1745,7 +1745,7 @@ impl DriftClientBackend {
                         .program_data
                         .perp_market_config_by_index(market.index())
                         .ok_or(SdkError::InvalidOracle)?;
-                    (market.amm.oracle, market.amm.oracle_source)
+                    (market.oracle, market.oracle_source)
                 }
                 MarketType::Spot => {
                     let market = self
@@ -3578,9 +3578,7 @@ impl<'a> TransactionBuilder<'a> {
                     &user_account.authority,
                     user_account.sub_account_id,
                 ),
-                user_stats: Wallet::derive_stats_account(&user_account.authority),
                 liquidator: self.sub_account,
-                liquidator_stats: Wallet::derive_stats_account(&self.owner()),
             },
             [&self.account_data, user_account].into_iter(),
             std::iter::empty(),
@@ -3641,12 +3639,10 @@ impl<'a> TransactionBuilder<'a> {
                 state: *state_account(),
                 authority: self.authority,
                 liquidator: self.sub_account,
-                liquidator_stats: Wallet::derive_stats_account(&self.owner()),
                 user: Wallet::derive_user_account(
                     &user_account.authority,
                     user_account.sub_account_id,
                 ),
-                user_stats: Wallet::derive_stats_account(&user_account.authority),
                 liability_spot_market_vault: liability_spot_market.vault,
                 asset_spot_market_vault: asset_spot_market.vault,
                 liability_token_account: Wallet::derive_associated_token_address(
@@ -3718,12 +3714,10 @@ impl<'a> TransactionBuilder<'a> {
                 state: *state_account(),
                 authority: self.authority,
                 liquidator: self.sub_account,
-                liquidator_stats: Wallet::derive_stats_account(&self.owner()),
                 user: Wallet::derive_user_account(
                     &user_account.authority,
                     user_account.sub_account_id,
                 ),
-                user_stats: Wallet::derive_stats_account(&user_account.authority),
                 liability_spot_market_vault: liability_spot_market.vault,
                 asset_spot_market_vault: asset_spot_market.vault,
                 liability_token_account: Wallet::derive_associated_token_address(
@@ -4125,7 +4119,7 @@ pub fn build_accounts<'a>(
                 )
             }
             MarketType::Perp => {
-                let PerpMarket { pubkey, amm, .. } = program_data
+                let PerpMarket { pubkey, oracle, .. } = program_data
                     .perp_market_config_by_index(market_index)
                     .expect("exists");
                 accounts.extend(
@@ -4134,7 +4128,7 @@ pub fn build_accounts<'a>(
                             pubkey: *pubkey,
                             writable,
                         },
-                        RemainingAccount::Oracle { pubkey: amm.oracle },
+                        RemainingAccount::Oracle { pubkey: *oracle },
                     ]
                     .iter(),
                 )

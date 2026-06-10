@@ -87,7 +87,7 @@ impl AccountsListBuilder {
 
         for idx in perp_market_idxs {
             let market = client.try_get_perp_market_account(idx)?;
-            oracle_markets.insert(market.amm.oracle, MarketId::perp(market.market_index));
+            oracle_markets.insert(market.oracle, MarketId::perp(market.market_index));
             let pubkey = market.pubkey;
             self.accounts.perp_markets.push((
                 pubkey,
@@ -165,7 +165,7 @@ impl AccountsListBuilder {
 
         for market_idx in perp_market_idxs.iter() {
             let market = client.get_perp_market_account(*market_idx).await?;
-            oracle_markets.insert(market.amm.oracle, MarketId::perp(market.market_index));
+            oracle_markets.insert(market.oracle, MarketId::perp(market.market_index));
             let pubkey = market.pubkey;
             self.accounts.perp_markets.push((
                 pubkey,

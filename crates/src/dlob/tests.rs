@@ -8,6 +8,7 @@ use crate::{
         OrderStatus, OrderType, AMM,
     },
 };
+use drift::state::perp_market::MarketStats;
 
 fn create_test_order(
     order_id: u32,
@@ -132,7 +133,7 @@ fn dlob_floating_limit_order_sorting() {
         .unwrap();
 
     // Verify bids are sorted highest to lowest offset
-    let bid_offsets: Vec<i32> = book
+    let bid_offsets: Vec<i64> = book
         .floating_limit_orders
         .bids
         .iter()
@@ -141,7 +142,7 @@ fn dlob_floating_limit_order_sorting() {
     assert_eq!(bid_offsets, vec![30, 20, 10]);
 
     // Verify asks are sorted lowest to highest offset
-    let ask_offsets: Vec<i32> = book
+    let ask_offsets: Vec<i64> = book
         .floating_limit_orders
         .asks
         .iter()
@@ -520,9 +521,12 @@ fn dlob_find_crosses_for_taker_order_vamm_cross() {
             short_spread: 100, // 0.01% spread
             max_base_asset_reserve: (u64::MAX as u128).into(),
             min_base_asset_reserve: 0u128.into(),
-            order_step_size: 1,
-            order_tick_size: 1,
             max_spread: 1000,
+            ..Default::default()
+        },
+        order_step_size: 1,
+        order_tick_size: 1,
+        market_stats: MarketStats {
             min_order_size: 10, // Set min_order_size to 10
             historical_oracle_data: HistoricalOracleData {
                 last_oracle_price: (oracle_price as i64) * 1_000_000, // Scale to PRICE_PRECISION
@@ -545,7 +549,13 @@ fn dlob_find_crosses_for_taker_order_vamm_cross() {
     let vamm_ask_price = perp_market
         .amm
         .reserve_price()
-        .and_then(|r| perp_market.amm.ask_price(r))
+        .and_then(|r| {
+            perp_market.amm.ask_price(
+                r,
+                perp_market.amm.long_spread,
+                perp_market.amm.reference_price_offset,
+            )
+        })
         .unwrap_or(0);
     // Use a price that's definitely higher than VAMM ask price
     // Add a large buffer to account for any unit differences
@@ -1267,9 +1277,12 @@ fn dlob_find_crosses_for_auctions_vamm_min_order_size() {
             short_spread: 100, // 0.01% spread
             max_base_asset_reserve: (u64::MAX as u128).into(),
             min_base_asset_reserve: 0u128.into(),
-            order_step_size: 1,
-            order_tick_size: 1,
             max_spread: 1000,
+            ..Default::default()
+        },
+        order_step_size: 1,
+        order_tick_size: 1,
+        market_stats: MarketStats {
             min_order_size: 20, // Set min_order_size to 20
             historical_oracle_data: HistoricalOracleData {
                 last_oracle_price: (oracle_price as i64) * 1_000_000, // Scale to PRICE_PRECISION
@@ -1285,7 +1298,13 @@ fn dlob_find_crosses_for_auctions_vamm_min_order_size() {
     let vamm_ask_price = perp_market
         .amm
         .reserve_price()
-        .and_then(|r| perp_market.amm.ask_price(r))
+        .and_then(|r| {
+            perp_market.amm.ask_price(
+                r,
+                perp_market.amm.long_spread,
+                perp_market.amm.reference_price_offset,
+            )
+        })
         .unwrap_or(0);
     let taker_price = vamm_ask_price.saturating_add(1_000_000_000).max(10_000_000);
     let taker_price_i64 = taker_price.min(i64::MAX as u64) as i64;
@@ -2855,9 +2874,12 @@ fn l3book_vamm_orders_sorted_correctly() {
             short_spread: 100, // 1% spread
             max_base_asset_reserve: (u64::MAX as u128).into(),
             min_base_asset_reserve: 0u128.into(),
-            order_step_size: 1,
-            order_tick_size: 1,
             max_spread: 1000,
+            ..Default::default()
+        },
+        order_step_size: 1,
+        order_tick_size: 1,
+        market_stats: MarketStats {
             historical_oracle_data: HistoricalOracleData {
                 last_oracle_price: (oracle_price as i64) * 1_000_000, // Scale to PRICE_PRECISION
                 ..Default::default()
@@ -3448,9 +3470,12 @@ fn dlob_l3_trigger_orders_by_price() {
             short_spread: 100,
             max_base_asset_reserve: (u64::MAX as u128).into(),
             min_base_asset_reserve: 0u128.into(),
-            order_step_size: 1,
-            order_tick_size: 1,
             max_spread: 1000,
+            ..Default::default()
+        },
+        order_step_size: 1,
+        order_tick_size: 1,
+        market_stats: MarketStats {
             historical_oracle_data: HistoricalOracleData {
                 last_oracle_price: (oracle_price as i64) * 1_000_000,
                 ..Default::default()
