@@ -113,7 +113,7 @@ pub fn derive_spot_market_vault(market_index: u16) -> Pubkey {
 
 /// calculate the PDA for the drift signer
 pub fn derive_drift_signer() -> Pubkey {
-    let (account, _seed) = Pubkey::find_program_address(&[&b"drift_signer"[..]], &PROGRAM_ID);
+    let (account, _seed) = Pubkey::find_program_address(&[&b"velocity_signer"[..]], &PROGRAM_ID);
     account
 }
 

@@ -1,7 +1,7 @@
 use crate::solana_sdk::pubkey::Pubkey;
 use ahash::{HashMap, HashMapExt};
 
-use drift::sdk::{DriftAccounts, OwnedAccount};
+use drift::sdk::{VelocityAccounts, OwnedAccount};
 
 use crate::{
     constants::{self, oracle_source_to_owner},
@@ -12,7 +12,7 @@ use crate::{
 
 /// Builds a list of users's associated spot, perp, and oracle accounts
 ///
-/// Produces a `drift::sdk::DriftAccounts` ready to pass into
+/// Produces a `drift::sdk::VelocityAccounts` ready to pass into
 /// `drift::sdk::calculate_margin` (or any other drift-sdk entry that takes
 /// owned account data).
 ///
@@ -23,7 +23,7 @@ use crate::{
 /// ```
 #[derive(Default)]
 pub struct AccountsListBuilder {
-    accounts: DriftAccounts,
+    accounts: VelocityAccounts,
 }
 
 fn into_owned(owner: Pubkey, data: Vec<u8>) -> OwnedAccount {
@@ -45,7 +45,7 @@ impl AccountsListBuilder {
         client: &DriftClient,
         user: &User,
         force_markets: &[MarketId],
-    ) -> SdkResult<&mut DriftAccounts> {
+    ) -> SdkResult<&mut VelocityAccounts> {
         let mut oracle_markets = HashMap::<Pubkey, MarketId>::with_capacity(16);
         let drift_state_account = client.state_account()?;
 
@@ -124,7 +124,7 @@ impl AccountsListBuilder {
         client: &DriftClient,
         user: &User,
         force_markets: &[MarketId],
-    ) -> SdkResult<&mut DriftAccounts> {
+    ) -> SdkResult<&mut VelocityAccounts> {
         let mut oracle_markets = HashMap::<Pubkey, MarketId>::with_capacity(16);
         let drift_state_account = client.state_account()?;
 

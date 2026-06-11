@@ -1,7 +1,7 @@
 {
   "address": "vELoC1audYbSYVRXn1vPaV8Axoa9oU6BYmNGZZBDZ1P",
   "metadata": {
-    "name": "drift",
+    "name": "velocity",
     "version": "2.162.0",
     "spec": "0.1.0",
     "description": "Created with Anchor"
@@ -250,7 +250,7 @@
           }
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "user_token_account",
@@ -537,7 +537,7 @@
           "name": "token_program"
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         }
       ],
       "args": [
@@ -662,7 +662,7 @@
           "name": "token_program"
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "instructions",
@@ -934,7 +934,7 @@
           "name": "token_program"
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "instructions",
@@ -1534,7 +1534,7 @@
           }
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "token_program"
@@ -1958,7 +1958,7 @@
           "name": "token_program"
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         }
       ],
       "args": [
@@ -2087,7 +2087,7 @@
           "writable": true
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "quote_spot_market",
@@ -2450,7 +2450,7 @@
           "name": "token_program"
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "instructions",
@@ -2714,7 +2714,7 @@
           "name": "token_program"
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "instructions",
@@ -2873,7 +2873,7 @@
           "signer": true
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         }
       ],
       "args": []
@@ -2884,11 +2884,11 @@
         "Devnet-only escape hatch: cleans up accounts stranded by a layout-breaking",
         "program upgrade (or by a partial re-init). For each account passed via",
         "`remaining_accounts`:",
-        "- drift-owned PDA → drain lamports (runtime GCs at end of tx)",
-        "- token-program owned vault (drift_signer close-authority) → CPI",
+        "- velocity-owned PDA → drain lamports (runtime GCs at end of tx)",
+        "- token-program owned vault (velocity_signer close-authority) → CPI",
         "`close_account`, rent refunded to admin",
         "Admin gate reads State's first pubkey field at raw offset 8..40 so it",
-        "works regardless of the State layout currently on chain. `drift_signer_nonce`",
+        "works regardless of the State layout currently on chain. `velocity_signer_nonce`",
         "must match `State.signer_nonce`; mismatch fails the token CPI signature.",
         "Stripped from mainnet builds via `mainnet-beta`."
       ],
@@ -2915,7 +2915,7 @@
           ]
         },
         {
-          "name": "drift_signer",
+          "name": "velocity_signer",
           "docs": [
             "at CPI time when closing token vaults; ignored otherwise."
           ]
@@ -2926,7 +2926,7 @@
       ],
       "args": [
         {
-          "name": "drift_signer_nonce",
+          "name": "velocity_signer_nonce",
           "type": "u8"
         }
       ]
@@ -2957,11 +2957,14 @@
               {
                 "kind": "const",
                 "value": [
-                  100,
-                  114,
+                  118,
+                  101,
+                  108,
+                  111,
+                  99,
                   105,
-                  102,
                   116,
+                  121,
                   95,
                   115,
                   116,
@@ -2977,7 +2980,7 @@
           "name": "quote_asset_mint"
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "rent",
@@ -4552,7 +4555,7 @@
           }
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "state",
@@ -5187,7 +5190,7 @@
           "name": "token_program"
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "instructions",
@@ -5320,7 +5323,7 @@
           "name": "token_program"
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "instructions",
@@ -5552,7 +5555,7 @@
           "name": "state"
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "lp_pool",
@@ -6851,7 +6854,7 @@
           }
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "user_token_account",
@@ -7276,7 +7279,7 @@
           }
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "token_program"
@@ -7385,7 +7388,7 @@
           }
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "token_program"
@@ -7510,7 +7513,7 @@
           }
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "token_program"
@@ -7879,7 +7882,7 @@
           "name": "token_program"
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         }
       ],
       "args": []
@@ -8031,7 +8034,7 @@
           }
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "insurance_fund_vault",
@@ -8690,7 +8693,7 @@
           }
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         }
       ],
       "args": [
@@ -8824,7 +8827,7 @@
           "name": "token_program"
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         }
       ],
       "args": [
@@ -13583,7 +13586,7 @@
       ],
       "accounts": [
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "state"
@@ -13767,7 +13770,7 @@
           }
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "user_token_account",
@@ -13859,7 +13862,7 @@
           }
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "user_token_account",
@@ -13906,7 +13909,7 @@
           "signer": true
         },
         {
-          "name": "drift_signer"
+          "name": "velocity_signer"
         },
         {
           "name": "constituent",
@@ -15945,7 +15948,7 @@
     {
       "code": 6274,
       "name": "OracleWrongWriteAuthority",
-      "msg": "Oracle post update atomic price feed account must be drift program"
+      "msg": "Oracle post update atomic price feed account must be velocity program"
     },
     {
       "code": 6275,
@@ -16398,7 +16401,7 @@
           {
             "name": "sqrt_k",
             "docs": [
-              "`sqrt(k)` in constant product mm formula (x * y = k). stored to avoid drift caused by integer math issues",
+              "`sqrt(k)` in constant product mm formula (x * y = k). stored to avoid velocity caused by integer math issues",
               "precision: AMM_RESERVE_PRECISION"
             ],
             "type": "u128"
@@ -24165,7 +24168,7 @@
     {
       "name": "_SignedMsgOrderParamsExport",
       "docs": [
-        "unusued placeholder event to force include signed msg types into drift IDL"
+        "unusued placeholder event to force include signed msg types into velocity IDL"
       ],
       "type": {
         "kind": "struct",

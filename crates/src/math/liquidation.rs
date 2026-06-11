@@ -6,7 +6,7 @@ use std::ops::Neg;
 
 use super::get_oracle_normalization_factor;
 use drift::{
-    sdk::{calculate_margin, oracle_price as sdk_oracle_price, DriftAccounts},
+    sdk::{calculate_margin, oracle_price as sdk_oracle_price, VelocityAccounts},
     state::margin_calculation::MarginContext,
 };
 
@@ -170,7 +170,7 @@ pub fn calculate_liquidation_price_inner(
     perp_market: &PerpMarket,
     spot_market: Option<&SpotMarket>,
     oracle_price: i64,
-    accounts: &mut DriftAccounts,
+    accounts: &mut VelocityAccounts,
 ) -> SdkResult<i64> {
     let margin_calculation = calculate_margin(
         user,
@@ -306,7 +306,7 @@ pub fn calculate_margin_requirements(
 /// Calculate the margin requirements of `user` (internal)
 fn calculate_margin_requirements_inner(
     user: &User,
-    accounts: &mut DriftAccounts,
+    accounts: &mut VelocityAccounts,
 ) -> SdkResult<MarginRequirementInfo> {
     let maintenance_result = calculate_margin(
         user,
@@ -379,7 +379,7 @@ pub fn calculate_collateral(
 
 fn calculate_collateral_inner(
     user: &User,
-    accounts: &mut DriftAccounts,
+    accounts: &mut VelocityAccounts,
     margin_requirement_type: MarginRequirementType,
 ) -> SdkResult<CollateralInfo> {
     let result = calculate_margin(
@@ -399,7 +399,7 @@ fn calculate_collateral_inner(
 
 // TODO(phase-5): port these integration-style tests once the FFI crate is
 // removed — they build `AccountsList` / `AccountWithKey` directly and will be
-// rewritten against `drift::sdk::DriftAccounts`.
+// rewritten against `drift::sdk::VelocityAccounts`.
 #[cfg(any())]
 mod tests {
     use crate::solana_sdk::{account::Account, pubkey::Pubkey};

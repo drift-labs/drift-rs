@@ -391,7 +391,7 @@ pub mod instructions {
     impl anchor_lang::InstructionData for ForceDeleteUser {}
     #[derive(AnchorSerialize, AnchorDeserialize, Clone, Default)]
     pub struct ForceWipeAccountsDevnet {
-        pub drift_signer_nonce: u8,
+        pub velocity_signer_nonce: u8,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ForceWipeAccountsDevnet {
@@ -6766,7 +6766,7 @@ pub mod accounts {
         pub authority: Pubkey,
         pub spot_market_vault: Pubkey,
         pub insurance_fund_vault: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub user_token_account: Pubkey,
         pub token_program: Pubkey,
     }
@@ -6822,7 +6822,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -7123,7 +7123,7 @@ pub mod accounts {
         pub insurance_fund_vault: Pubkey,
         pub recipient_token_account: Pubkey,
         pub token_program: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for AdminWithdrawFromInsuranceFundVault {
@@ -7172,7 +7172,7 @@ pub mod accounts {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -7219,7 +7219,7 @@ pub mod accounts {
         pub in_token_account: Pubkey,
         pub if_rebalance_config: Pubkey,
         pub token_program: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub instructions: Pubkey,
     }
     #[automatically_derived]
@@ -7279,7 +7279,7 @@ pub mod accounts {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -7450,7 +7450,7 @@ pub mod accounts {
         pub out_token_account: Pubkey,
         pub in_token_account: Pubkey,
         pub token_program: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub instructions: Pubkey,
     }
     #[automatically_derived]
@@ -7515,7 +7515,7 @@ pub mod accounts {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -8212,7 +8212,7 @@ pub mod accounts {
         pub spot_market: Pubkey,
         pub spot_market_vault: Pubkey,
         pub insurance_fund_vault: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub token_program: Pubkey,
     }
     #[automatically_derived]
@@ -8257,7 +8257,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -8626,7 +8626,7 @@ pub mod accounts {
         pub insurance_fund_vault: Pubkey,
         pub user_token_account: Pubkey,
         pub token_program: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for DepositIntoInsuranceFundStake {
@@ -8690,7 +8690,7 @@ pub mod accounts {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -8827,7 +8827,7 @@ pub mod accounts {
         pub perp_market: Pubkey,
         pub admin: Pubkey,
         pub source_vault: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub quote_spot_market: Pubkey,
         pub spot_market_vault: Pubkey,
         pub token_program: Pubkey,
@@ -8869,7 +8869,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -9213,7 +9213,7 @@ pub mod accounts {
         pub in_token_account: Pubkey,
         pub if_rebalance_config: Pubkey,
         pub token_program: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub instructions: Pubkey,
     }
     #[automatically_derived]
@@ -9273,7 +9273,7 @@ pub mod accounts {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -9444,7 +9444,7 @@ pub mod accounts {
         pub out_token_account: Pubkey,
         pub in_token_account: Pubkey,
         pub token_program: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub instructions: Pubkey,
     }
     #[automatically_derived]
@@ -9509,7 +9509,7 @@ pub mod accounts {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -9722,7 +9722,7 @@ pub mod accounts {
         pub state: Pubkey,
         pub authority: Pubkey,
         pub keeper: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for ForceDeleteUser {
@@ -9766,7 +9766,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -9807,7 +9807,7 @@ pub mod accounts {
     pub struct ForceWipeAccountsDevnet {
         pub admin: Pubkey,
         pub state: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub token_program: Pubkey,
     }
     #[automatically_derived]
@@ -9837,7 +9837,7 @@ pub mod accounts {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -9884,7 +9884,7 @@ pub mod accounts {
         pub admin: Pubkey,
         pub state: Pubkey,
         pub quote_asset_mint: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub rent: Pubkey,
         pub system_program: Pubkey,
         pub token_program: Pubkey,
@@ -9921,7 +9921,7 @@ pub mod accounts {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -11165,7 +11165,7 @@ pub mod accounts {
         pub spot_market_mint: Pubkey,
         pub spot_market_vault: Pubkey,
         pub insurance_fund_vault: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub state: Pubkey,
         pub oracle: Pubkey,
         pub admin: Pubkey,
@@ -11210,7 +11210,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -11898,7 +11898,7 @@ pub mod accounts {
         pub liability_token_account: Pubkey,
         pub asset_token_account: Pubkey,
         pub token_program: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub instructions: Pubkey,
     }
     #[automatically_derived]
@@ -11963,7 +11963,7 @@ pub mod accounts {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -12016,7 +12016,7 @@ pub mod accounts {
         pub liability_token_account: Pubkey,
         pub asset_token_account: Pubkey,
         pub token_program: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub instructions: Pubkey,
     }
     #[automatically_derived]
@@ -12081,7 +12081,7 @@ pub mod accounts {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -12320,7 +12320,7 @@ pub mod accounts {
     #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct LpPoolRemoveLiquidity {
         pub state: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub lp_pool: Pubkey,
         pub authority: Pubkey,
         pub out_market_mint: Pubkey,
@@ -12357,7 +12357,7 @@ pub mod accounts {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -13901,7 +13901,7 @@ pub mod accounts {
         pub user_stats: Pubkey,
         pub authority: Pubkey,
         pub insurance_fund_vault: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub user_token_account: Pubkey,
         pub token_program: Pubkey,
     }
@@ -13952,7 +13952,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -14401,7 +14401,7 @@ pub mod accounts {
         pub user_stats: Pubkey,
         pub spot_market_vault: Pubkey,
         pub insurance_fund_vault: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub token_program: Pubkey,
     }
     #[automatically_derived]
@@ -14461,7 +14461,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -14509,7 +14509,7 @@ pub mod accounts {
         pub authority: Pubkey,
         pub spot_market_vault: Pubkey,
         pub insurance_fund_vault: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub token_program: Pubkey,
     }
     #[automatically_derived]
@@ -14549,7 +14549,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -14601,7 +14601,7 @@ pub mod accounts {
         pub user_stats: Pubkey,
         pub spot_market_vault: Pubkey,
         pub insurance_fund_vault: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub token_program: Pubkey,
     }
     #[automatically_derived]
@@ -14661,7 +14661,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -15146,7 +15146,7 @@ pub mod accounts {
         pub constituent_quote_token_account: Pubkey,
         pub quote_token_vault: Pubkey,
         pub token_program: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for SettlePerpToLpPool {
@@ -15210,7 +15210,7 @@ pub mod accounts {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -15328,7 +15328,7 @@ pub mod accounts {
         pub state: Pubkey,
         pub spot_market: Pubkey,
         pub spot_market_vault: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub insurance_fund_vault: Pubkey,
         pub token_program: Pubkey,
     }
@@ -15364,7 +15364,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -15920,7 +15920,7 @@ pub mod accounts {
         pub deposit_to_spot_market_vault: Pubkey,
         pub borrow_from_spot_market_vault: Pubkey,
         pub borrow_to_spot_market_vault: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for TransferPools {
@@ -15984,7 +15984,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -16029,7 +16029,7 @@ pub mod accounts {
         pub spot_market_vault: Pubkey,
         pub if_rebalance_config: Pubkey,
         pub token_program: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
     }
     #[automatically_derived]
     impl anchor_lang::Discriminator for TransferProtocolIfSharesToRevenuePool {
@@ -16078,7 +16078,7 @@ pub mod accounts {
                     is_writable: false,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -24421,7 +24421,7 @@ pub mod accounts {
     #[repr(C)]
     #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize, Serialize, Deserialize)]
     pub struct ViewLpPoolSwapFees {
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub state: Pubkey,
         pub lp_pool: Pubkey,
         pub constituent_target_base: Pubkey,
@@ -24450,7 +24450,7 @@ pub mod accounts {
         fn to_account_metas(&self) -> Vec<AccountMeta> {
             vec![
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -24544,7 +24544,7 @@ pub mod accounts {
         pub user_stats: Pubkey,
         pub authority: Pubkey,
         pub spot_market_vault: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub user_token_account: Pubkey,
         pub token_program: Pubkey,
     }
@@ -24590,7 +24590,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -24644,7 +24644,7 @@ pub mod accounts {
         pub user_stats: Pubkey,
         pub authority: Pubkey,
         pub spot_market_vault: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub user_token_account: Pubkey,
         pub token_program: Pubkey,
     }
@@ -24690,7 +24690,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -24741,7 +24741,7 @@ pub mod accounts {
     pub struct WithdrawFromProgramVault {
         pub state: Pubkey,
         pub admin: Pubkey,
-        pub drift_signer: Pubkey,
+        pub velocity_signer: Pubkey,
         pub constituent: Pubkey,
         pub constituent_token_account: Pubkey,
         pub spot_market: Pubkey,
@@ -24777,7 +24777,7 @@ pub mod accounts {
                     is_writable: true,
                 },
                 AccountMeta {
-                    pubkey: self.drift_signer,
+                    pubkey: self.velocity_signer,
                     is_signer: false,
                     is_writable: false,
                 },
@@ -25473,7 +25473,7 @@ pub mod errors {
         OracleDeserializeMessageFailed,
         #[msg("Wrong guardian set owner in update price atomic")]
         OracleWrongGuardianSetOwner,
-        #[msg("Oracle post update atomic price feed account must be drift program")]
+        #[msg("Oracle post update atomic price feed account must be velocity program")]
         OracleWrongWriteAuthority,
         #[msg("Oracle vaa owner must be wormhole program")]
         OracleWrongVaaOwner,
