@@ -35,14 +35,14 @@ jobs:
       CARGO_DRIFT_FFI_PATH: /usr/lib
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Update IDL
         run: |
           curl -H 'Accept: application/vnd.github.v3.raw' 'https://api.github.com/repos/drift-labs/protocol-v2/contents/sdk/src/idl/drift.json?ref=tags/${{ needs.check-version.outputs.idl_version }}' > res/drift.json
 
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af # v1
         with:
           profile: minimal
           toolchain: stable
