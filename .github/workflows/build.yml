@@ -51,7 +51,7 @@ jobs:
         run: |
           # NB: this will break historic CI jobs (if breaking program changes happen)
           # better to ensure latest version works
-          SO_URL=$(curl -s https://api.github.com/repos/drift-labs/drift-ffi-sys/releases/latest | jq -r '.assets[] | select(.name=="libdrift_ffi_sys.so") | .browser_download_url')
+          SO_URL=$(curl -s https://api.github.com/repos/velocity-exchange/drift-ffi-sys/releases/latest | jq -r '.assets[] | select(.name=="libdrift_ffi_sys.so") | .browser_download_url')
           echo "downloading libdrift: $SO_URL"
           curl -L -o libdrift_ffi_sys.so "$SO_URL"
           sudo cp libdrift_ffi_sys.so $CARGO_DRIFT_FFI_PATH

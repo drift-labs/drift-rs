@@ -1,1 +1,1 @@
- curl -H 'Accept: application/vnd.github.v3.raw' 'https://api.github.com/repos/drift-labs/protocol-v2/contents/sdk/src/idl/drift.json' > res/drift.json
+ curl -H 'Accept: application/vnd.github.v3.raw' 'https://api.github.com/repos/velocity-exchange/protocol-v2/contents/sdk/src/idl/drift.json' > res/drift.json

@@ -19,9 +19,9 @@ See the official [docs](https://docs.rs/drift-rs/latest/drift_rs/)
 
 ## Install
 ```toml
-drift-rs = { git = "https://github.com/drift-labs/drift-rs", tag = "v1.0.0" }
+drift-rs = { git = "https://github.com/velocity-exchange/drift-rs", tag = "v1.0.0" }
 ```
-_*_ crates.io requires [libdrift](https://github.com/drift-labs/drift-ffi-sys/?tab=readme-ov-file#from-source) is installed and linked locally
+_*_ crates.io requires [libdrift](https://github.com/velocity-exchange/drift-ffi-sys/?tab=readme-ov-file#from-source) is installed and linked locally
 
 
 ## Use
@@ -100,11 +100,11 @@ rustup override set 1.85.0-x86_64-unknown-linux-gnu
 ⚠️ the non-x86_64 toolchains are incompatible due to memory layout differences between solana program (BPF) and aarch64 and will fail at runtime with deserialization errors like: `InvalidSize`.
 
 ## Local Development
-drift-rs links to the drift program crate via FFI, build from source (default) by cloning git submodule or dynamically link with a version from [drift-ffi-sys](https://github.com/drift-labs/drift-ffi-sys/releases)
+drift-rs links to the drift program crate via FFI, build from source (default) by cloning git submodule or dynamically link with a version from [drift-ffi-sys](https://github.com/velocity-exchange/drift-ffi-sys/releases)
 
 **clone repo and submodules**
 ```bash
-git clone https://github.com/drift-labs/drift-rs &&\
+git clone https://github.com/velocity-exchange/drift-rs &&\
 cd drift-rs &&\
 git submodule update --init --recursive
 ```
