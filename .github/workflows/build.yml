@@ -27,7 +27,7 @@ defaults:
 
 env:
   CARGO_DRIFT_FFI_PATH: /usr/lib
-  # The `drift` crate is consumed as a path dep on protocol-v2-shadow, which is
+  # The `drift` crate is consumed as a path dep on velocity-v1, which is
   # checked out as a sibling of this repo (see Cargo.toml). SHADOW_REF pins
   # which shadow commit CI builds against.
   SHADOW_REF: master
@@ -42,21 +42,21 @@ jobs:
         with:
           submodules: true
           path: drift-rs
-      - name: Generate protocol-v2-shadow read token
+      - name: Generate velocity-v1 read token
         id: shadow-token
         uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
         with:
           app-id: ${{ vars.VELOCITY_SDK_READER_APP_ID }}
           private-key: ${{ secrets.VELOCITY_SDK_READER_PRIVATE_KEY }}
-          owner: drift-labs
-          repositories: protocol-v2-shadow
-      - name: Check out protocol-v2-shadow
+          owner: velocity-exchange
+          repositories: velocity-v1
+      - name: Check out velocity-v1
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          repository: drift-labs/protocol-v2-shadow
+          repository: velocity-exchange/velocity-v1
           ref: ${{ env.SHADOW_REF }}
           token: ${{ steps.shadow-token.outputs.token }}
-          path: protocol-v2-shadow
+          path: velocity-v1
       - name: Cache Rust toolchain
         id: cache-rust-target-restore
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
